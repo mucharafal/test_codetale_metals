@@ -1,0 +1,12 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "tdas"
+    },
+    "body": "add extra line here.\n",
+    "commit": "7cc31ca0c05ee41c1fa25d8701bbf5a0e1e5a975",
+    "createdAt": "2014-07-21T22:07:14Z",
+    "diffHunk": "@@ -236,6 +236,36 @@ class InputStreamsSuite extends TestSuiteBase with BeforeAndAfter {\n     assert(output.sum === numTotalRecords)\n   }\n \n+  /**\n+   * Test to ensure callbacks are called when the store which has a callback specified is called.\n+   */\n+  test(\"receiver with callbacks\") {\n+    val limit = 100\n+    val testReceiver = new CallbackReceiver(limit)\n+    // set up the network stream using the test receiver\n+    val ssc = new StreamingContext(conf, batchDuration)\n+    val networkStream = ssc.receiverStream[AnyVal](testReceiver)\n+    val outputBuffer = new ArrayBuffer[Seq[AnyVal]]\n+    val outputStream = new TestOutputStream(networkStream, outputBuffer)\n+    def output = outputBuffer.flatten\n+    outputStream.register()\n+    ssc.start()\n+\n+    // Let the data from the receiver be received\n+    val clock = ssc.scheduler.clock.asInstanceOf[ManualClock]\n+    val startTime = System.currentTimeMillis()\n+    while((output.size < limit * 2) &&\n+      System.currentTimeMillis() - startTime < 5000) {\n+      Thread.sleep(50)\n+      clock.addToTime(batchDuration.milliseconds)\n+    }\n+    Thread.sleep(1000)\n+    logInfo(\"Stopping context\")\n+    assert(output.size === limit * 2)\n+    // Sum would be (sum(1..limit)) * 2 since each number appears twice.\n+    assert(output.asInstanceOf[ArrayBuffer[Int]].sum === limit * (limit + 1))\n+    ssc.stop()\n+  }\n   test(\"queue input stream - oneAtATime=true\") {"
+  }],
+  "prId": 1195
+}]

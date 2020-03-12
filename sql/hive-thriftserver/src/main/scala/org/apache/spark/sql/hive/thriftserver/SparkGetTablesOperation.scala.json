@@ -1,0 +1,24 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "juliuszsompolski"
+    },
+    "body": "in the proposed api, this would call `catalog.listTables(dbName, tablePattern, false)` as local temp views are handled elswhere.",
+    "commit": "1d7e89926287ff6d4e017dbbbcc906c69e500b58",
+    "createdAt": "2019-06-26T17:20:19Z",
+    "diffHunk": "@@ -72,29 +74,49 @@ private[hive] class SparkGetTablesOperation(\n       authorizeMetaGets(HiveOperationType.GET_TABLES, privObjs, cmdStr)\n     }\n \n-    val tablePattern = convertIdentifierPattern(tableName, true)\n+    // Tables and views\n     matchingDbs.foreach { dbName =>\n       catalog.getTablesByName(catalog.listTables(dbName, tablePattern)).foreach { catalogTable =>"
+  }],
+  "prId": 24972
+}, {
+  "comments": [{
+    "author": {
+      "login": "juliuszsompolski"
+    },
+    "body": "+1 to splitting this addToRowSet function in the ops. Thanks.",
+    "commit": "1d7e89926287ff6d4e017dbbbcc906c69e500b58",
+    "createdAt": "2019-06-26T17:29:53Z",
+    "diffHunk": "@@ -72,29 +74,49 @@ private[hive] class SparkGetTablesOperation(\n       authorizeMetaGets(HiveOperationType.GET_TABLES, privObjs, cmdStr)\n     }\n \n-    val tablePattern = convertIdentifierPattern(tableName, true)\n+    // Tables and views\n     matchingDbs.foreach { dbName =>\n       catalog.getTablesByName(catalog.listTables(dbName, tablePattern)).foreach { catalogTable =>\n         val tableType = tableTypeString(catalogTable.tableType)\n         if (tableTypes == null || tableTypes.isEmpty || tableTypes.contains(tableType)) {\n-          val rowData = Array[AnyRef](\n-            \"\",\n-            catalogTable.database,\n-            catalogTable.identifier.table,\n-            tableType,\n-            catalogTable.comment.getOrElse(\"\"))\n-          // Since HIVE-7575(Hive 2.0.0), adds 5 additional columns to the ResultSet of GetTables.\n-          if (HiveUtils.isHive23) {\n-            rowSet.addRow(rowData ++ Array(null, null, null, null, null))\n-          } else {\n-            rowSet.addRow(rowData)\n-          }\n+          addToRowSet(\n+            catalogTable.database, catalogTable.identifier.table, tableType, catalogTable.comment)\n+        }\n+      }\n+    }\n+\n+    // Temporary views and global temporary views\n+    if (tableTypes == null || tableTypes.isEmpty || tableTypes.contains(VIEW.name)) {\n+      val globalTempViewDb = catalog.globalTempViewManager.database\n+      val databasePattern = Pattern.compile(CLIServiceUtils.patternToRegex(schemaName))\n+      if (databasePattern.matcher(globalTempViewDb).matches()) {\n+        catalog.listTempViews(globalTempViewDb, tablePattern).foreach { views =>\n+          addToRowSet(globalTempViewDb, views.identifier, VIEW.name, None)\n         }\n       }\n     }\n     setState(OperationState.FINISHED)\n   }\n \n+  private def addToRowSet(",
+    "line": 62
+  }],
+  "prId": 24972
+}]

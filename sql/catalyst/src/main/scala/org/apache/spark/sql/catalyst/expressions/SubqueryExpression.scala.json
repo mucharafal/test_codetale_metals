@@ -1,0 +1,127 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "marmbrus"
+    },
+    "body": "Can you document what the arguments are here?  It's not clear to me why we need `exp` (i.e., why can we just get it from the output of `child`.  Also, style-wise I'd avoid abbreviation when not necessary and `child` is kind of an odd name given that its a different type of tree.  Finally, should this be a `LeafExpression`.\n",
+    "commit": "7653eee3d8ded847ceeb3a03e11a507b827c5066",
+    "createdAt": "2014-12-02T00:20:34Z",
+    "diffHunk": "@@ -0,0 +1,32 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst.expressions\n+\n+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan\n+\n+case class SubqueryExpression(exp: Expression, child: LogicalPlan) extends Expression {"
+  }, {
+    "author": {
+      "login": "ravipesala"
+    },
+    "body": "Thank you for your comments.\nHere `exp` is like predicate value. For example\n`SELECT * FROM src a WHERE a.key in (SELECT b.key FROM src b)` . In this `exp` is `a.key` and `child` is subquery.\nNow I have updated the names of them and added the documentation.\n",
+    "commit": "7653eee3d8ded847ceeb3a03e11a507b827c5066",
+    "createdAt": "2014-12-03T11:31:16Z",
+    "diffHunk": "@@ -0,0 +1,32 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst.expressions\n+\n+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan\n+\n+case class SubqueryExpression(exp: Expression, child: LogicalPlan) extends Expression {"
+  }],
+  "prId": 3249
+}, {
+  "comments": [{
+    "author": {
+      "login": "marmbrus"
+    },
+    "body": "Why do we need both the `value` and the `subquery`.  Could we do something like subquery.output.head.dataType?\n",
+    "commit": "7653eee3d8ded847ceeb3a03e11a507b827c5066",
+    "createdAt": "2014-12-17T21:27:42Z",
+    "diffHunk": "@@ -0,0 +1,40 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst.expressions\n+\n+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan\n+\n+/**\n+ * Evaluates whether `subquery` result contains `value`. \n+ * For example : 'SELECT * FROM src a WHERE a.key in (SELECT b.key FROM src b)'\n+ * @param value   In the above example 'a.key' is 'value'\n+ * @param subquery  In the above example 'SELECT b.key FROM src b' is 'subquery'\n+ */\n+case class SubqueryExpression(value: Expression, subquery: LogicalPlan) extends Expression {"
+  }, {
+    "author": {
+      "login": "marmbrus"
+    },
+    "body": "Oh sorry, I see.\n\nInstead I'd consider having this new expression only represent the subquery itself, and then have the logical plan be `In('a.key, SubqueryExpression(...))`\n",
+    "commit": "7653eee3d8ded847ceeb3a03e11a507b827c5066",
+    "createdAt": "2014-12-17T21:29:14Z",
+    "diffHunk": "@@ -0,0 +1,40 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst.expressions\n+\n+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan\n+\n+/**\n+ * Evaluates whether `subquery` result contains `value`. \n+ * For example : 'SELECT * FROM src a WHERE a.key in (SELECT b.key FROM src b)'\n+ * @param value   In the above example 'a.key' is 'value'\n+ * @param subquery  In the above example 'SELECT b.key FROM src b' is 'subquery'\n+ */\n+case class SubqueryExpression(value: Expression, subquery: LogicalPlan) extends Expression {"
+  }, {
+    "author": {
+      "login": "ravipesala"
+    },
+    "body": "Ok. Added like `In('a.key, SubqueryExpression(...))`\n",
+    "commit": "7653eee3d8ded847ceeb3a03e11a507b827c5066",
+    "createdAt": "2014-12-21T17:31:52Z",
+    "diffHunk": "@@ -0,0 +1,40 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst.expressions\n+\n+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan\n+\n+/**\n+ * Evaluates whether `subquery` result contains `value`. \n+ * For example : 'SELECT * FROM src a WHERE a.key in (SELECT b.key FROM src b)'\n+ * @param value   In the above example 'a.key' is 'value'\n+ * @param subquery  In the above example 'SELECT b.key FROM src b' is 'subquery'\n+ */\n+case class SubqueryExpression(value: Expression, subquery: LogicalPlan) extends Expression {"
+  }],
+  "prId": 3249
+}, {
+  "comments": [{
+    "author": {
+      "login": "marmbrus"
+    },
+    "body": "I think that `SubqueryExpression`s, at least as they are currently implemented, are always unresolved.  This is because they can't actually be executed and instead must be converted away by analysis.\n",
+    "commit": "7653eee3d8ded847ceeb3a03e11a507b827c5066",
+    "createdAt": "2014-12-17T21:30:33Z",
+    "diffHunk": "@@ -0,0 +1,40 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst.expressions\n+\n+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan\n+\n+/**\n+ * Evaluates whether `subquery` result contains `value`. \n+ * For example : 'SELECT * FROM src a WHERE a.key in (SELECT b.key FROM src b)'\n+ * @param value   In the above example 'a.key' is 'value'\n+ * @param subquery  In the above example 'SELECT b.key FROM src b' is 'subquery'\n+ */\n+case class SubqueryExpression(value: Expression, subquery: LogicalPlan) extends Expression {\n+\n+  type EvaluatedType = Any\n+  def dataType = value.dataType\n+  override def foldable = value.foldable\n+  def nullable = value.nullable\n+  override def toString = s\"SubqueryExpression($value, $subquery)\"\n+  override lazy val resolved = childrenResolved"
+  }, {
+    "author": {
+      "login": "ravipesala"
+    },
+    "body": "Yes, it is always unresolved. It will only be converted not executed\n",
+    "commit": "7653eee3d8ded847ceeb3a03e11a507b827c5066",
+    "createdAt": "2014-12-21T17:33:05Z",
+    "diffHunk": "@@ -0,0 +1,40 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst.expressions\n+\n+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan\n+\n+/**\n+ * Evaluates whether `subquery` result contains `value`. \n+ * For example : 'SELECT * FROM src a WHERE a.key in (SELECT b.key FROM src b)'\n+ * @param value   In the above example 'a.key' is 'value'\n+ * @param subquery  In the above example 'SELECT b.key FROM src b' is 'subquery'\n+ */\n+case class SubqueryExpression(value: Expression, subquery: LogicalPlan) extends Expression {\n+\n+  type EvaluatedType = Any\n+  def dataType = value.dataType\n+  override def foldable = value.foldable\n+  def nullable = value.nullable\n+  override def toString = s\"SubqueryExpression($value, $subquery)\"\n+  override lazy val resolved = childrenResolved"
+  }],
+  "prId": 3249
+}, {
+  "comments": [{
+    "author": {
+      "login": "marmbrus"
+    },
+    "body": "I also think they can never be folded.\n",
+    "commit": "7653eee3d8ded847ceeb3a03e11a507b827c5066",
+    "createdAt": "2014-12-17T21:31:15Z",
+    "diffHunk": "@@ -0,0 +1,40 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst.expressions\n+\n+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan\n+\n+/**\n+ * Evaluates whether `subquery` result contains `value`. \n+ * For example : 'SELECT * FROM src a WHERE a.key in (SELECT b.key FROM src b)'\n+ * @param value   In the above example 'a.key' is 'value'\n+ * @param subquery  In the above example 'SELECT b.key FROM src b' is 'subquery'\n+ */\n+case class SubqueryExpression(value: Expression, subquery: LogicalPlan) extends Expression {\n+\n+  type EvaluatedType = Any\n+  def dataType = value.dataType\n+  override def foldable = value.foldable"
+  }],
+  "prId": 3249
+}, {
+  "comments": [{
+    "author": {
+      "login": "marmbrus"
+    },
+    "body": "I think it is always nullable as well?  Or at least this needs to be based on the subquery too.\n",
+    "commit": "7653eee3d8ded847ceeb3a03e11a507b827c5066",
+    "createdAt": "2014-12-17T21:32:24Z",
+    "diffHunk": "@@ -0,0 +1,40 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst.expressions\n+\n+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan\n+\n+/**\n+ * Evaluates whether `subquery` result contains `value`. \n+ * For example : 'SELECT * FROM src a WHERE a.key in (SELECT b.key FROM src b)'\n+ * @param value   In the above example 'a.key' is 'value'\n+ * @param subquery  In the above example 'SELECT b.key FROM src b' is 'subquery'\n+ */\n+case class SubqueryExpression(value: Expression, subquery: LogicalPlan) extends Expression {\n+\n+  type EvaluatedType = Any\n+  def dataType = value.dataType\n+  override def foldable = value.foldable\n+  def nullable = value.nullable"
+  }, {
+    "author": {
+      "login": "ravipesala"
+    },
+    "body": "Yes. I guess it is nullable\n",
+    "commit": "7653eee3d8ded847ceeb3a03e11a507b827c5066",
+    "createdAt": "2014-12-21T17:33:48Z",
+    "diffHunk": "@@ -0,0 +1,40 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst.expressions\n+\n+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan\n+\n+/**\n+ * Evaluates whether `subquery` result contains `value`. \n+ * For example : 'SELECT * FROM src a WHERE a.key in (SELECT b.key FROM src b)'\n+ * @param value   In the above example 'a.key' is 'value'\n+ * @param subquery  In the above example 'SELECT b.key FROM src b' is 'subquery'\n+ */\n+case class SubqueryExpression(value: Expression, subquery: LogicalPlan) extends Expression {\n+\n+  type EvaluatedType = Any\n+  def dataType = value.dataType\n+  override def foldable = value.foldable\n+  def nullable = value.nullable"
+  }],
+  "prId": 3249
+}, {
+  "comments": [{
+    "author": {
+      "login": "marmbrus"
+    },
+    "body": "This doesn't print nicely since `subquery` has newlines in it.  Perhaps just `${subquery.output.mkString(\",\")}`\n",
+    "commit": "7653eee3d8ded847ceeb3a03e11a507b827c5066",
+    "createdAt": "2014-12-30T21:29:33Z",
+    "diffHunk": "@@ -0,0 +1,39 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst.expressions\n+\n+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan\n+\n+/**\n+ * Evaluates whether `subquery` result contains `value`. \n+ * For example : 'SELECT * FROM src a WHERE a.key in (SELECT b.key FROM src b)'\n+ * @param subquery  In the above example 'SELECT b.key FROM src b' is 'subquery'\n+ */\n+case class SubqueryExpression(subquery: LogicalPlan) extends Expression {\n+\n+  type EvaluatedType = Any\n+  def dataType = subquery.output.head.dataType\n+  override def foldable = false\n+  def nullable = true\n+  override def toString = s\"SubqueryExpression($subquery)\""
+  }, {
+    "author": {
+      "login": "ravipesala"
+    },
+    "body": "Ok. I will change\n",
+    "commit": "7653eee3d8ded847ceeb3a03e11a507b827c5066",
+    "createdAt": "2015-01-05T06:40:07Z",
+    "diffHunk": "@@ -0,0 +1,39 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst.expressions\n+\n+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan\n+\n+/**\n+ * Evaluates whether `subquery` result contains `value`. \n+ * For example : 'SELECT * FROM src a WHERE a.key in (SELECT b.key FROM src b)'\n+ * @param subquery  In the above example 'SELECT b.key FROM src b' is 'subquery'\n+ */\n+case class SubqueryExpression(subquery: LogicalPlan) extends Expression {\n+\n+  type EvaluatedType = Any\n+  def dataType = subquery.output.head.dataType\n+  override def foldable = false\n+  def nullable = true\n+  override def toString = s\"SubqueryExpression($subquery)\""
+  }],
+  "prId": 3249
+}, {
+  "comments": [{
+    "author": {
+      "login": "chenghao-intel"
+    },
+    "body": "Instead of making the Subquery as a fake expression, a better idea probably create a new logical plan like \n\n```\nSubQueryIn(left: LogicalPlan, nested: LogicalPlan, isNotIn:Boolean)\n```\n\nThat's also how I implement the `EXISTS` at https://github.com/apache/spark/pull/4812/files#diff-9a11e98e8f4bd1c4bb18ca6a7a7b8948R262\n",
+    "commit": "7653eee3d8ded847ceeb3a03e11a507b827c5066",
+    "createdAt": "2015-02-28T01:16:42Z",
+    "diffHunk": "@@ -0,0 +1,39 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst.expressions\n+\n+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan\n+\n+/**\n+ * Evaluates whether `subquery` result contains `value`. \n+ * For example : 'SELECT * FROM src a WHERE a.key in (SELECT b.key FROM src b)'\n+ * @param subquery  In the above example 'SELECT b.key FROM src b' is 'subquery'\n+ */\n+case class SubqueryExpression(subquery: LogicalPlan) extends Expression {",
+    "line": 27
+  }],
+  "prId": 3249
+}]

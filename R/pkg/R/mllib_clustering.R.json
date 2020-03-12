@@ -1,0 +1,40 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "yanboliang"
+    },
+    "body": "I'd like to know why you convert ```seed``` to integer first and then convert to character? AFAIK, the type of ```seed``` in MLlib is ```Long``` whose max value is ```9223372036854775807```. ```as.integer``` will return ```NA``` if it's beyond the scope of integer. Should we support consistent range for ```seed``` across languages? It looks like R support for ```Long``` is not very well, if we only support integer, do we need to convert the integer to character? \r\ncc @felixcheung   ",
+    "commit": "1c27df4d8e9ed405ef5a9705cffd67f9d3adc4ff",
+    "createdAt": "2017-01-10T14:07:53Z",
+    "diffHunk": "@@ -204,11 +208,16 @@ setMethod(\"write.ml\", signature(object = \"GaussianMixtureModel\", path = \"charact\n #' @note spark.kmeans since 2.0.0\n #' @seealso \\link{predict}, \\link{read.ml}, \\link{write.ml}\n setMethod(\"spark.kmeans\", signature(data = \"SparkDataFrame\", formula = \"formula\"),\n-          function(data, formula, k = 2, maxIter = 20, initMode = c(\"k-means||\", \"random\")) {\n+          function(data, formula, k = 2, maxIter = 20, initMode = c(\"k-means||\", \"random\"),\n+                   seed = NULL, initSteps = 2, tol = 1E-4) {\n             formula <- paste(deparse(formula), collapse = \"\")\n             initMode <- match.arg(initMode)\n+            if (!is.null(seed)) {\n+              seed <- as.character(as.integer(seed))",
+    "line": 21
+  }, {
+    "author": {
+      "login": "wangmiao1981"
+    },
+    "body": "I followed one example in the file. Let me investigate more about this issue.",
+    "commit": "1c27df4d8e9ed405ef5a9705cffd67f9d3adc4ff",
+    "createdAt": "2017-01-10T18:45:36Z",
+    "diffHunk": "@@ -204,11 +208,16 @@ setMethod(\"write.ml\", signature(object = \"GaussianMixtureModel\", path = \"charact\n #' @note spark.kmeans since 2.0.0\n #' @seealso \\link{predict}, \\link{read.ml}, \\link{write.ml}\n setMethod(\"spark.kmeans\", signature(data = \"SparkDataFrame\", formula = \"formula\"),\n-          function(data, formula, k = 2, maxIter = 20, initMode = c(\"k-means||\", \"random\")) {\n+          function(data, formula, k = 2, maxIter = 20, initMode = c(\"k-means||\", \"random\"),\n+                   seed = NULL, initSteps = 2, tol = 1E-4) {\n             formula <- paste(deparse(formula), collapse = \"\")\n             initMode <- match.arg(initMode)\n+            if (!is.null(seed)) {\n+              seed <- as.character(as.integer(seed))",
+    "line": 21
+  }, {
+    "author": {
+      "login": "felixcheung"
+    },
+    "body": "as you call out, R does not natively support 64bit integer. I think we are pretty much stuck here since the user won't be able to pass in a 64bit integer. We could explore making this a string but I really think that is hard to use.\r\n\r\nthe reason this is a string on the JVM side is because we want to support default seed value when it is unset (which is passed as NULL)",
+    "commit": "1c27df4d8e9ed405ef5a9705cffd67f9d3adc4ff",
+    "createdAt": "2017-01-10T18:59:05Z",
+    "diffHunk": "@@ -204,11 +208,16 @@ setMethod(\"write.ml\", signature(object = \"GaussianMixtureModel\", path = \"charact\n #' @note spark.kmeans since 2.0.0\n #' @seealso \\link{predict}, \\link{read.ml}, \\link{write.ml}\n setMethod(\"spark.kmeans\", signature(data = \"SparkDataFrame\", formula = \"formula\"),\n-          function(data, formula, k = 2, maxIter = 20, initMode = c(\"k-means||\", \"random\")) {\n+          function(data, formula, k = 2, maxIter = 20, initMode = c(\"k-means||\", \"random\"),\n+                   seed = NULL, initSteps = 2, tol = 1E-4) {\n             formula <- paste(deparse(formula), collapse = \"\")\n             initMode <- match.arg(initMode)\n+            if (!is.null(seed)) {\n+              seed <- as.character(as.integer(seed))",
+    "line": 21
+  }, {
+    "author": {
+      "login": "yanboliang"
+    },
+    "body": "Thanks for the clarification, it's reasonable, let's leave it as is.",
+    "commit": "1c27df4d8e9ed405ef5a9705cffd67f9d3adc4ff",
+    "createdAt": "2017-01-11T14:22:42Z",
+    "diffHunk": "@@ -204,11 +208,16 @@ setMethod(\"write.ml\", signature(object = \"GaussianMixtureModel\", path = \"charact\n #' @note spark.kmeans since 2.0.0\n #' @seealso \\link{predict}, \\link{read.ml}, \\link{write.ml}\n setMethod(\"spark.kmeans\", signature(data = \"SparkDataFrame\", formula = \"formula\"),\n-          function(data, formula, k = 2, maxIter = 20, initMode = c(\"k-means||\", \"random\")) {\n+          function(data, formula, k = 2, maxIter = 20, initMode = c(\"k-means||\", \"random\"),\n+                   seed = NULL, initSteps = 2, tol = 1E-4) {\n             formula <- paste(deparse(formula), collapse = \"\")\n             initMode <- match.arg(initMode)\n+            if (!is.null(seed)) {\n+              seed <- as.character(as.integer(seed))",
+    "line": 21
+  }],
+  "prId": 16523
+}]

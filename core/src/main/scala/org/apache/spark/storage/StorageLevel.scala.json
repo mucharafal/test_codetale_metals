@@ -1,0 +1,53 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "mateiz"
+    },
+    "body": "Here you are breaking the old API, you should add back an `apply` that takes only 3 booleans as before and passes useTachyon = false.\n",
+    "commit": "72b7768c0e289618834b74e9ab85082e8aea4c90",
+    "createdAt": "2014-03-27T00:43:15Z",
+    "diffHunk": "@@ -113,21 +122,23 @@ class StorageLevel private(\n  * new storage levels.\n  */\n object StorageLevel {\n-  val NONE = new StorageLevel(false, false, false)\n-  val DISK_ONLY = new StorageLevel(true, false, false)\n-  val DISK_ONLY_2 = new StorageLevel(true, false, false, 2)\n-  val MEMORY_ONLY = new StorageLevel(false, true, true)\n-  val MEMORY_ONLY_2 = new StorageLevel(false, true, true, 2)\n-  val MEMORY_ONLY_SER = new StorageLevel(false, true, false)\n-  val MEMORY_ONLY_SER_2 = new StorageLevel(false, true, false, 2)\n-  val MEMORY_AND_DISK = new StorageLevel(true, true, true)\n-  val MEMORY_AND_DISK_2 = new StorageLevel(true, true, true, 2)\n-  val MEMORY_AND_DISK_SER = new StorageLevel(true, true, false)\n-  val MEMORY_AND_DISK_SER_2 = new StorageLevel(true, true, false, 2)\n-\n+  val NONE = new StorageLevel(false, false, false, false)\n+  val DISK_ONLY = new StorageLevel(true, false, false, false)\n+  val DISK_ONLY_2 = new StorageLevel(true, false, false, false, 2)\n+  val MEMORY_ONLY = new StorageLevel(false, true, false, true)\n+  val MEMORY_ONLY_2 = new StorageLevel(false, true, false, true, 2)\n+  val MEMORY_ONLY_SER = new StorageLevel(false, true, false, false)\n+  val MEMORY_ONLY_SER_2 = new StorageLevel(false, true, false, false, 2)\n+  val MEMORY_AND_DISK = new StorageLevel(true, true, false, true)\n+  val MEMORY_AND_DISK_2 = new StorageLevel(true, true, false, true, 2)\n+  val MEMORY_AND_DISK_SER = new StorageLevel(true, true, false, false)\n+  val MEMORY_AND_DISK_SER_2 = new StorageLevel(true, true, false, false, 2)\n+  val TACHYON = new StorageLevel(false, false, true, false)\n+  \n   /** Create a new StorageLevel object */\n-  def apply(useDisk: Boolean, useMemory: Boolean, deserialized: Boolean, replication: Int = 1) =\n-    getCachedStorageLevel(new StorageLevel(useDisk, useMemory, deserialized, replication))\n+  def apply(useDisk: Boolean, useMemory: Boolean, useTachyon: Boolean, \n+    deserialized: Boolean, replication: Int = 1) = getCachedStorageLevel(\n+      new StorageLevel(useDisk, useMemory, useTachyon, deserialized, replication))"
+  }],
+  "prId": 158
+}, {
+  "comments": [{
+    "author": {
+      "login": "mateiz"
+    },
+    "body": "Rename `useTachyon` to `useOffHeap` here to match the storage level's name (unfortunately parameter names are part of the public interface in Scala because you can pass the parameter values by name instead of by position)\n",
+    "commit": "72b7768c0e289618834b74e9ab85082e8aea4c90",
+    "createdAt": "2014-04-02T01:40:48Z",
+    "diffHunk": "@@ -113,21 +122,28 @@ class StorageLevel private(\n  * new storage levels.\n  */\n object StorageLevel {\n-  val NONE = new StorageLevel(false, false, false)\n-  val DISK_ONLY = new StorageLevel(true, false, false)\n-  val DISK_ONLY_2 = new StorageLevel(true, false, false, 2)\n-  val MEMORY_ONLY = new StorageLevel(false, true, true)\n-  val MEMORY_ONLY_2 = new StorageLevel(false, true, true, 2)\n-  val MEMORY_ONLY_SER = new StorageLevel(false, true, false)\n-  val MEMORY_ONLY_SER_2 = new StorageLevel(false, true, false, 2)\n-  val MEMORY_AND_DISK = new StorageLevel(true, true, true)\n-  val MEMORY_AND_DISK_2 = new StorageLevel(true, true, true, 2)\n-  val MEMORY_AND_DISK_SER = new StorageLevel(true, true, false)\n-  val MEMORY_AND_DISK_SER_2 = new StorageLevel(true, true, false, 2)\n-\n+  val NONE = new StorageLevel(false, false, false, false)\n+  val DISK_ONLY = new StorageLevel(true, false, false, false)\n+  val DISK_ONLY_2 = new StorageLevel(true, false, false, false, 2)\n+  val MEMORY_ONLY = new StorageLevel(false, true, false, true)\n+  val MEMORY_ONLY_2 = new StorageLevel(false, true, false, true, 2)\n+  val MEMORY_ONLY_SER = new StorageLevel(false, true, false, false)\n+  val MEMORY_ONLY_SER_2 = new StorageLevel(false, true, false, false, 2)\n+  val MEMORY_AND_DISK = new StorageLevel(true, true, false, true)\n+  val MEMORY_AND_DISK_2 = new StorageLevel(true, true, false, true, 2)\n+  val MEMORY_AND_DISK_SER = new StorageLevel(true, true, false, false)\n+  val MEMORY_AND_DISK_SER_2 = new StorageLevel(true, true, false, false, 2)\n+  val OFF_HEAP = new StorageLevel(false, false, true, false)\n+  \n+  /** Create a new StorageLevel object without setting useTachyon*/\n+  def apply(useDisk: Boolean, useMemory: Boolean, useTachyon: Boolean, "
+  }],
+  "prId": 158
+}, {
+  "comments": [{
+    "author": {
+      "login": "mateiz"
+    },
+    "body": "Call this useOffHeap\n",
+    "commit": "72b7768c0e289618834b74e9ab85082e8aea4c90",
+    "createdAt": "2014-04-02T01:42:50Z",
+    "diffHunk": "@@ -30,45 +31,51 @@ import java.io.{Externalizable, IOException, ObjectInput, ObjectOutput}\n class StorageLevel private(\n     private var useDisk_ : Boolean,\n     private var useMemory_ : Boolean,\n+    private var useTachyon_ : Boolean,\n     private var deserialized_ : Boolean,\n     private var replication_ : Int = 1)\n   extends Externalizable {\n \n   // TODO: Also add fields for caching priority, dataset ID, and flushing.\n   private def this(flags: Int, replication: Int) {\n-    this((flags & 4) != 0, (flags & 2) != 0, (flags & 1) != 0, replication)\n+    this((flags & 8) != 0, (flags & 4) != 0, (flags & 2) != 0, (flags & 1) != 0, replication)\n   }\n \n-  def this() = this(false, true, false)  // For deserialization\n+  def this() = this(false, true, false, false)  // For deserialization\n \n   def useDisk = useDisk_\n   def useMemory = useMemory_\n+  def useTachyon = useTachyon_"
+  }],
+  "prId": 158
+}, {
+  "comments": [{
+    "author": {
+      "login": "aarondav"
+    },
+    "body": "Let's make this a require() since it should always be performed at runtime. We also don't support using disk, memory, or deserialized when offheap is set, so I think a fuller check would look something like\n\n```\nif (useOffheap) {\n  require(useDisk == false, \"Off-heap storage level does not support using disk\")\n  require(useMemory == false, \"Off-heap storage level does not support using heap memory\")\n  require(deserialized == false, \"Off-heap storage level does not support deserialized storage\")\n  require(replication == 1, \"Off-heap storage level does not support multiple replication\")\n}\n```\n\nand we can remove some of these in the future when they're actually supported.\n",
+    "commit": "72b7768c0e289618834b74e9ab85082e8aea4c90",
+    "createdAt": "2014-04-04T19:01:52Z",
+    "diffHunk": "@@ -30,45 +31,54 @@ import java.io.{Externalizable, IOException, ObjectInput, ObjectOutput}\n class StorageLevel private(\n     private var useDisk_ : Boolean,\n     private var useMemory_ : Boolean,\n+    private var useOffHeap_ : Boolean,\n     private var deserialized_ : Boolean,\n     private var replication_ : Int = 1)\n   extends Externalizable {\n \n   // TODO: Also add fields for caching priority, dataset ID, and flushing.\n   private def this(flags: Int, replication: Int) {\n-    this((flags & 4) != 0, (flags & 2) != 0, (flags & 1) != 0, replication)\n+    this((flags & 8) != 0, (flags & 4) != 0, (flags & 2) != 0, (flags & 1) != 0, replication)\n   }\n \n-  def this() = this(false, true, false)  // For deserialization\n+  def this() = this(false, true, false, false)  // For deserialization\n \n   def useDisk = useDisk_\n   def useMemory = useMemory_\n+  def useOffHeap = useOffHeap_\n   def deserialized = deserialized_\n   def replication = replication_\n \n   assert(replication < 40, \"Replication restricted to be less than 40 for calculating hashcodes\")\n+  \n+  assert(!(useOffHeap && (replication > 1)), "
+  }, {
+    "author": {
+      "login": "mateiz"
+    },
+    "body": "I like this suggestion\n",
+    "commit": "72b7768c0e289618834b74e9ab85082e8aea4c90",
+    "createdAt": "2014-04-04T19:23:05Z",
+    "diffHunk": "@@ -30,45 +31,54 @@ import java.io.{Externalizable, IOException, ObjectInput, ObjectOutput}\n class StorageLevel private(\n     private var useDisk_ : Boolean,\n     private var useMemory_ : Boolean,\n+    private var useOffHeap_ : Boolean,\n     private var deserialized_ : Boolean,\n     private var replication_ : Int = 1)\n   extends Externalizable {\n \n   // TODO: Also add fields for caching priority, dataset ID, and flushing.\n   private def this(flags: Int, replication: Int) {\n-    this((flags & 4) != 0, (flags & 2) != 0, (flags & 1) != 0, replication)\n+    this((flags & 8) != 0, (flags & 4) != 0, (flags & 2) != 0, (flags & 1) != 0, replication)\n   }\n \n-  def this() = this(false, true, false)  // For deserialization\n+  def this() = this(false, true, false, false)  // For deserialization\n \n   def useDisk = useDisk_\n   def useMemory = useMemory_\n+  def useOffHeap = useOffHeap_\n   def deserialized = deserialized_\n   def replication = replication_\n \n   assert(replication < 40, \"Replication restricted to be less than 40 for calculating hashcodes\")\n+  \n+  assert(!(useOffHeap && (replication > 1)), "
+  }],
+  "prId": 158
+}]

@@ -1,0 +1,179 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Nit: I wouldn't import this library just to make an ArrayList. In Java 8, just: `List<ByteBuf> retained = new ArrayList<>();` which is no more complex.",
+    "commit": "6ca6f714d689a136679fda32484eaf92f30089e9",
+    "createdAt": "2019-01-29T15:03:47Z",
+    "diffHunk": "@@ -22,6 +22,7 @@\n import java.util.Random;\n import java.util.concurrent.atomic.AtomicInteger;\n \n+import com.google.common.collect.Lists;"
+  }, {
+    "author": {
+      "login": "liupc"
+    },
+    "body": "Ok, I will update.",
+    "commit": "6ca6f714d689a136679fda32484eaf92f30089e9",
+    "createdAt": "2019-01-30T07:04:08Z",
+    "diffHunk": "@@ -22,6 +22,7 @@\n import java.util.Random;\n import java.util.concurrent.atomic.AtomicInteger;\n \n+import com.google.common.collect.Lists;"
+  }],
+  "prId": 23602
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Is the goal here to have a test or a realistic benchmark?\r\n\r\nIf it's a test, I'd have more randomized write sizes. Have a target number of bytes and keep on writing until you reach that. That's better to try to exercise corner cases.\r\n\r\nIf it's a benchmark, I'd probably choose a smaller write buffer; either 32k or 64k. That's probably going to be closer to what you see when reading a large shuffle over the network.\r\n\r\n",
+    "commit": "6ca6f714d689a136679fda32484eaf92f30089e9",
+    "createdAt": "2019-02-09T00:31:36Z",
+    "diffHunk": "@@ -47,6 +47,76 @@ public void testFrameDecoding() throws Exception {\n     verifyAndCloseDecoder(decoder, ctx, data);\n   }\n \n+  @Test\n+  public void testConsolidationForDecodingNonFullyWrittenByteBuf() {\n+    TransportFrameDecoder decoder = new TransportFrameDecoder();\n+    ChannelHandlerContext ctx = mock(ChannelHandlerContext.class);\n+    List<ByteBuf> retained = new ArrayList<>();\n+    when(ctx.fireChannelRead(any())).thenAnswer(in -> {\n+      ByteBuf buf = (ByteBuf) in.getArguments()[0];\n+      retained.add(buf);\n+      return null;\n+    });\n+    ByteBuf data1 = Unpooled.buffer(1024 * 1024);\n+    data1.writeLong(1024 * 1024 + 8);\n+    data1.writeByte(127);\n+    ByteBuf data2 = Unpooled.buffer(1024 * 1024);\n+    for (int i = 0; i < 1024 * 1024 - 1; i++) {\n+      data2.writeByte(128);\n+    }\n+    int orignalCapacity = data1.capacity() + data2.capacity();\n+    try {\n+      decoder.channelRead(ctx, data1);\n+      decoder.channelRead(ctx, data2);\n+      assertEquals(1, retained.size());\n+      assert(retained.get(0).capacity() < orignalCapacity);\n+    } catch (Exception e) {\n+      release(data1);\n+      release(data2);\n+    }\n+  }\n+\n+  @Test\n+  public void testConsolidationPerf() throws Exception {\n+    long[] testingConsolidateThresholds = new long[] {\n+        1024 * 1024, 5 * 1024 * 1024, 10 * 1024 * 1024, 20 * 1024 * 1024,\n+        30 * 1024 * 1024, 50 * 1024 * 1024, 80 * 1024 * 1024, 100 * 1024 * 1024,\n+        300 * 1024 * 1024, 500 * 1024 * 1024, Long.MAX_VALUE };\n+    for (long threshold : testingConsolidateThresholds) {\n+      TransportFrameDecoder decoder = new TransportFrameDecoder(threshold);\n+      ChannelHandlerContext ctx = mock(ChannelHandlerContext.class);\n+      List<ByteBuf> retained = new ArrayList<>();\n+      when(ctx.fireChannelRead(any())).thenAnswer(in -> {\n+        ByteBuf buf = (ByteBuf) in.getArguments()[0];\n+        retained.add(buf);\n+        return null;\n+      });\n+\n+      try {\n+        long start = System.currentTimeMillis();\n+        ByteBuf buf = Unpooled.buffer(8);\n+        buf.writeLong(8 + 1024 * 1024 * 1000);\n+        decoder.channelRead(ctx, buf);\n+        for (int i = 0; i < 1000; i++) {"
+  }, {
+    "author": {
+      "login": "liupc"
+    },
+    "body": "I will follow your second suggestion and adjust the write buffer size to 32k.",
+    "commit": "6ca6f714d689a136679fda32484eaf92f30089e9",
+    "createdAt": "2019-02-09T02:51:51Z",
+    "diffHunk": "@@ -47,6 +47,76 @@ public void testFrameDecoding() throws Exception {\n     verifyAndCloseDecoder(decoder, ctx, data);\n   }\n \n+  @Test\n+  public void testConsolidationForDecodingNonFullyWrittenByteBuf() {\n+    TransportFrameDecoder decoder = new TransportFrameDecoder();\n+    ChannelHandlerContext ctx = mock(ChannelHandlerContext.class);\n+    List<ByteBuf> retained = new ArrayList<>();\n+    when(ctx.fireChannelRead(any())).thenAnswer(in -> {\n+      ByteBuf buf = (ByteBuf) in.getArguments()[0];\n+      retained.add(buf);\n+      return null;\n+    });\n+    ByteBuf data1 = Unpooled.buffer(1024 * 1024);\n+    data1.writeLong(1024 * 1024 + 8);\n+    data1.writeByte(127);\n+    ByteBuf data2 = Unpooled.buffer(1024 * 1024);\n+    for (int i = 0; i < 1024 * 1024 - 1; i++) {\n+      data2.writeByte(128);\n+    }\n+    int orignalCapacity = data1.capacity() + data2.capacity();\n+    try {\n+      decoder.channelRead(ctx, data1);\n+      decoder.channelRead(ctx, data2);\n+      assertEquals(1, retained.size());\n+      assert(retained.get(0).capacity() < orignalCapacity);\n+    } catch (Exception e) {\n+      release(data1);\n+      release(data2);\n+    }\n+  }\n+\n+  @Test\n+  public void testConsolidationPerf() throws Exception {\n+    long[] testingConsolidateThresholds = new long[] {\n+        1024 * 1024, 5 * 1024 * 1024, 10 * 1024 * 1024, 20 * 1024 * 1024,\n+        30 * 1024 * 1024, 50 * 1024 * 1024, 80 * 1024 * 1024, 100 * 1024 * 1024,\n+        300 * 1024 * 1024, 500 * 1024 * 1024, Long.MAX_VALUE };\n+    for (long threshold : testingConsolidateThresholds) {\n+      TransportFrameDecoder decoder = new TransportFrameDecoder(threshold);\n+      ChannelHandlerContext ctx = mock(ChannelHandlerContext.class);\n+      List<ByteBuf> retained = new ArrayList<>();\n+      when(ctx.fireChannelRead(any())).thenAnswer(in -> {\n+        ByteBuf buf = (ByteBuf) in.getArguments()[0];\n+        retained.add(buf);\n+        return null;\n+      });\n+\n+      try {\n+        long start = System.currentTimeMillis();\n+        ByteBuf buf = Unpooled.buffer(8);\n+        buf.writeLong(8 + 1024 * 1024 * 1000);\n+        decoder.channelRead(ctx, buf);\n+        for (int i = 0; i < 1000; i++) {"
+  }],
+  "prId": 23602
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "s/costTime/elapsedTime\r\n\r\nAlso to be super nitpicky, this should be done before the asserts.",
+    "commit": "6ca6f714d689a136679fda32484eaf92f30089e9",
+    "createdAt": "2019-02-09T00:32:22Z",
+    "diffHunk": "@@ -47,6 +47,76 @@ public void testFrameDecoding() throws Exception {\n     verifyAndCloseDecoder(decoder, ctx, data);\n   }\n \n+  @Test\n+  public void testConsolidationForDecodingNonFullyWrittenByteBuf() {\n+    TransportFrameDecoder decoder = new TransportFrameDecoder();\n+    ChannelHandlerContext ctx = mock(ChannelHandlerContext.class);\n+    List<ByteBuf> retained = new ArrayList<>();\n+    when(ctx.fireChannelRead(any())).thenAnswer(in -> {\n+      ByteBuf buf = (ByteBuf) in.getArguments()[0];\n+      retained.add(buf);\n+      return null;\n+    });\n+    ByteBuf data1 = Unpooled.buffer(1024 * 1024);\n+    data1.writeLong(1024 * 1024 + 8);\n+    data1.writeByte(127);\n+    ByteBuf data2 = Unpooled.buffer(1024 * 1024);\n+    for (int i = 0; i < 1024 * 1024 - 1; i++) {\n+      data2.writeByte(128);\n+    }\n+    int orignalCapacity = data1.capacity() + data2.capacity();\n+    try {\n+      decoder.channelRead(ctx, data1);\n+      decoder.channelRead(ctx, data2);\n+      assertEquals(1, retained.size());\n+      assert(retained.get(0).capacity() < orignalCapacity);\n+    } catch (Exception e) {\n+      release(data1);\n+      release(data2);\n+    }\n+  }\n+\n+  @Test\n+  public void testConsolidationPerf() throws Exception {\n+    long[] testingConsolidateThresholds = new long[] {\n+        1024 * 1024, 5 * 1024 * 1024, 10 * 1024 * 1024, 20 * 1024 * 1024,\n+        30 * 1024 * 1024, 50 * 1024 * 1024, 80 * 1024 * 1024, 100 * 1024 * 1024,\n+        300 * 1024 * 1024, 500 * 1024 * 1024, Long.MAX_VALUE };\n+    for (long threshold : testingConsolidateThresholds) {\n+      TransportFrameDecoder decoder = new TransportFrameDecoder(threshold);\n+      ChannelHandlerContext ctx = mock(ChannelHandlerContext.class);\n+      List<ByteBuf> retained = new ArrayList<>();\n+      when(ctx.fireChannelRead(any())).thenAnswer(in -> {\n+        ByteBuf buf = (ByteBuf) in.getArguments()[0];\n+        retained.add(buf);\n+        return null;\n+      });\n+\n+      try {\n+        long start = System.currentTimeMillis();\n+        ByteBuf buf = Unpooled.buffer(8);\n+        buf.writeLong(8 + 1024 * 1024 * 1000);\n+        decoder.channelRead(ctx, buf);\n+        for (int i = 0; i < 1000; i++) {\n+          buf = Unpooled.buffer(1024 * 1024 * 2);\n+          ByteBuf writtenBuf = Unpooled.buffer(1024 * 1024).writerIndex(1024 * 1024);\n+          buf.writeBytes(writtenBuf);\n+          writtenBuf.release();\n+          decoder.channelRead(ctx, buf);\n+        }\n+        assertEquals(1, retained.size());\n+        assertEquals(1024 * 1024 * 1000, retained.get(0).capacity());\n+        long costTime = System.currentTimeMillis() - start;"
+  }],
+  "prId": 23602
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "You're not overflowing here, but you're multiplying ints, so that could be an issue if you were getting close to Integer.MAX_VALUE.\r\n\r\nFor readability, one per line, and I'd suggest using `ByteUnit` for the calculation.",
+    "commit": "6ca6f714d689a136679fda32484eaf92f30089e9",
+    "createdAt": "2019-02-09T00:41:08Z",
+    "diffHunk": "@@ -47,6 +47,76 @@ public void testFrameDecoding() throws Exception {\n     verifyAndCloseDecoder(decoder, ctx, data);\n   }\n \n+  @Test\n+  public void testConsolidationForDecodingNonFullyWrittenByteBuf() {\n+    TransportFrameDecoder decoder = new TransportFrameDecoder();\n+    ChannelHandlerContext ctx = mock(ChannelHandlerContext.class);\n+    List<ByteBuf> retained = new ArrayList<>();\n+    when(ctx.fireChannelRead(any())).thenAnswer(in -> {\n+      ByteBuf buf = (ByteBuf) in.getArguments()[0];\n+      retained.add(buf);\n+      return null;\n+    });\n+    ByteBuf data1 = Unpooled.buffer(1024 * 1024);\n+    data1.writeLong(1024 * 1024 + 8);\n+    data1.writeByte(127);\n+    ByteBuf data2 = Unpooled.buffer(1024 * 1024);\n+    for (int i = 0; i < 1024 * 1024 - 1; i++) {\n+      data2.writeByte(128);\n+    }\n+    int orignalCapacity = data1.capacity() + data2.capacity();\n+    try {\n+      decoder.channelRead(ctx, data1);\n+      decoder.channelRead(ctx, data2);\n+      assertEquals(1, retained.size());\n+      assert(retained.get(0).capacity() < orignalCapacity);\n+    } catch (Exception e) {\n+      release(data1);\n+      release(data2);\n+    }\n+  }\n+\n+  @Test\n+  public void testConsolidationPerf() throws Exception {\n+    long[] testingConsolidateThresholds = new long[] {\n+        1024 * 1024, 5 * 1024 * 1024, 10 * 1024 * 1024, 20 * 1024 * 1024,"
+  }, {
+    "author": {
+      "login": "liupc"
+    },
+    "body": "Good suggestion, I will update.",
+    "commit": "6ca6f714d689a136679fda32484eaf92f30089e9",
+    "createdAt": "2019-02-09T02:24:40Z",
+    "diffHunk": "@@ -47,6 +47,76 @@ public void testFrameDecoding() throws Exception {\n     verifyAndCloseDecoder(decoder, ctx, data);\n   }\n \n+  @Test\n+  public void testConsolidationForDecodingNonFullyWrittenByteBuf() {\n+    TransportFrameDecoder decoder = new TransportFrameDecoder();\n+    ChannelHandlerContext ctx = mock(ChannelHandlerContext.class);\n+    List<ByteBuf> retained = new ArrayList<>();\n+    when(ctx.fireChannelRead(any())).thenAnswer(in -> {\n+      ByteBuf buf = (ByteBuf) in.getArguments()[0];\n+      retained.add(buf);\n+      return null;\n+    });\n+    ByteBuf data1 = Unpooled.buffer(1024 * 1024);\n+    data1.writeLong(1024 * 1024 + 8);\n+    data1.writeByte(127);\n+    ByteBuf data2 = Unpooled.buffer(1024 * 1024);\n+    for (int i = 0; i < 1024 * 1024 - 1; i++) {\n+      data2.writeByte(128);\n+    }\n+    int orignalCapacity = data1.capacity() + data2.capacity();\n+    try {\n+      decoder.channelRead(ctx, data1);\n+      decoder.channelRead(ctx, data2);\n+      assertEquals(1, retained.size());\n+      assert(retained.get(0).capacity() < orignalCapacity);\n+    } catch (Exception e) {\n+      release(data1);\n+      release(data2);\n+    }\n+  }\n+\n+  @Test\n+  public void testConsolidationPerf() throws Exception {\n+    long[] testingConsolidateThresholds = new long[] {\n+        1024 * 1024, 5 * 1024 * 1024, 10 * 1024 * 1024, 20 * 1024 * 1024,"
+  }],
+  "prId": 23602
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "A shorter message would read better: \"Writing blah with consolidation of blah took blah.\"\r\n\r\nI'm a little torn on keeping this, though, since very few people will see it, and for those who do, it will be more annoying than useful. Perhaps writing to the log instead of stdout.",
+    "commit": "6ca6f714d689a136679fda32484eaf92f30089e9",
+    "createdAt": "2019-02-09T00:42:14Z",
+    "diffHunk": "@@ -47,6 +47,76 @@ public void testFrameDecoding() throws Exception {\n     verifyAndCloseDecoder(decoder, ctx, data);\n   }\n \n+  @Test\n+  public void testConsolidationForDecodingNonFullyWrittenByteBuf() {\n+    TransportFrameDecoder decoder = new TransportFrameDecoder();\n+    ChannelHandlerContext ctx = mock(ChannelHandlerContext.class);\n+    List<ByteBuf> retained = new ArrayList<>();\n+    when(ctx.fireChannelRead(any())).thenAnswer(in -> {\n+      ByteBuf buf = (ByteBuf) in.getArguments()[0];\n+      retained.add(buf);\n+      return null;\n+    });\n+    ByteBuf data1 = Unpooled.buffer(1024 * 1024);\n+    data1.writeLong(1024 * 1024 + 8);\n+    data1.writeByte(127);\n+    ByteBuf data2 = Unpooled.buffer(1024 * 1024);\n+    for (int i = 0; i < 1024 * 1024 - 1; i++) {\n+      data2.writeByte(128);\n+    }\n+    int orignalCapacity = data1.capacity() + data2.capacity();\n+    try {\n+      decoder.channelRead(ctx, data1);\n+      decoder.channelRead(ctx, data2);\n+      assertEquals(1, retained.size());\n+      assert(retained.get(0).capacity() < orignalCapacity);\n+    } catch (Exception e) {\n+      release(data1);\n+      release(data2);\n+    }\n+  }\n+\n+  @Test\n+  public void testConsolidationPerf() throws Exception {\n+    long[] testingConsolidateThresholds = new long[] {\n+        1024 * 1024, 5 * 1024 * 1024, 10 * 1024 * 1024, 20 * 1024 * 1024,\n+        30 * 1024 * 1024, 50 * 1024 * 1024, 80 * 1024 * 1024, 100 * 1024 * 1024,\n+        300 * 1024 * 1024, 500 * 1024 * 1024, Long.MAX_VALUE };\n+    for (long threshold : testingConsolidateThresholds) {\n+      TransportFrameDecoder decoder = new TransportFrameDecoder(threshold);\n+      ChannelHandlerContext ctx = mock(ChannelHandlerContext.class);\n+      List<ByteBuf> retained = new ArrayList<>();\n+      when(ctx.fireChannelRead(any())).thenAnswer(in -> {\n+        ByteBuf buf = (ByteBuf) in.getArguments()[0];\n+        retained.add(buf);\n+        return null;\n+      });\n+\n+      try {\n+        long start = System.currentTimeMillis();\n+        ByteBuf buf = Unpooled.buffer(8);\n+        buf.writeLong(8 + 1024 * 1024 * 1000);\n+        decoder.channelRead(ctx, buf);\n+        for (int i = 0; i < 1000; i++) {\n+          buf = Unpooled.buffer(1024 * 1024 * 2);\n+          ByteBuf writtenBuf = Unpooled.buffer(1024 * 1024).writerIndex(1024 * 1024);\n+          buf.writeBytes(writtenBuf);\n+          writtenBuf.release();\n+          decoder.channelRead(ctx, buf);\n+        }\n+        assertEquals(1, retained.size());\n+        assertEquals(1024 * 1024 * 1000, retained.get(0).capacity());\n+        long costTime = System.currentTimeMillis() - start;\n+        System.out.println(\"Build frame buf with consolidation threshold \" + threshold"
+  }],
+  "prId": 23602
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "nit: space after `)`",
+    "commit": "6ca6f714d689a136679fda32484eaf92f30089e9",
+    "createdAt": "2019-02-13T19:27:00Z",
+    "diffHunk": "@@ -47,6 +51,88 @@ public void testFrameDecoding() throws Exception {\n     verifyAndCloseDecoder(decoder, ctx, data);\n   }\n \n+  @Test\n+  public void testConsolidationForDecodingNonFullyWrittenByteBuf() {\n+    TransportFrameDecoder decoder = new TransportFrameDecoder();\n+    ChannelHandlerContext ctx = mock(ChannelHandlerContext.class);\n+    List<ByteBuf> retained = new ArrayList<>();\n+    when(ctx.fireChannelRead(any())).thenAnswer(in -> {\n+      ByteBuf buf = (ByteBuf) in.getArguments()[0];\n+      retained.add(buf);\n+      return null;\n+    });\n+    ByteBuf data1 = Unpooled.buffer(1024 * 1024);\n+    data1.writeLong(1024 * 1024 + 8);\n+    data1.writeByte(127);\n+    ByteBuf data2 = Unpooled.buffer(1024 * 1024);\n+    for (int i = 0; i < 1024 * 1024 - 1; i++) {\n+      data2.writeByte(128);\n+    }\n+    int orignalCapacity = data1.capacity() + data2.capacity();\n+    try {\n+      decoder.channelRead(ctx, data1);\n+      decoder.channelRead(ctx, data2);\n+      assertEquals(1, retained.size());\n+      assert(retained.get(0).capacity() < orignalCapacity);\n+    } catch (Exception e) {\n+      release(data1);\n+      release(data2);\n+    }\n+  }\n+\n+  @Test\n+  public void testConsolidationPerf() throws Exception {\n+    long[] testingConsolidateThresholds = new long[] {\n+        ByteUnit.MiB.toBytes(1),\n+        ByteUnit.MiB.toBytes(5),\n+        ByteUnit.MiB.toBytes(10),\n+        ByteUnit.MiB.toBytes(20),\n+        ByteUnit.MiB.toBytes(30),\n+        ByteUnit.MiB.toBytes(50),\n+        ByteUnit.MiB.toBytes(80),\n+        ByteUnit.MiB.toBytes(100),\n+        ByteUnit.MiB.toBytes(300),\n+        ByteUnit.MiB.toBytes(500),\n+        Long.MAX_VALUE };\n+    for (long threshold : testingConsolidateThresholds) {\n+      TransportFrameDecoder decoder = new TransportFrameDecoder(threshold);\n+      ChannelHandlerContext ctx = mock(ChannelHandlerContext.class);\n+      List<ByteBuf> retained = new ArrayList<>();\n+      when(ctx.fireChannelRead(any())).thenAnswer(in -> {\n+        ByteBuf buf = (ByteBuf) in.getArguments()[0];\n+        retained.add(buf);\n+        return null;\n+      });\n+\n+      try {\n+        long start = System.currentTimeMillis();\n+        ByteBuf buf = Unpooled.buffer(8);\n+        long targetBytes = ByteUnit.GiB.toBytes(1);\n+        int pieceBytes = (int)ByteUnit.KiB.toBytes(32);"
+  }],
+  "prId": 23602
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "If I understand correctly, this is testing that consolidation is reducing the amount of memory needed to hold a frame? But since you're writing just 1 MB to the decoder, that's not triggering consolidation, is it? \r\n\r\nPlaying with `CompositeByteBuf`, it adjusts the internal capacity based on the readable bytes of the components, but the component buffers remain unchanged, so still holding on to the original amount of memory:\r\n\r\n```\r\nscala> cb.numComponents()\r\nres4: Int = 2\r\n\r\nscala> cb.capacity()\r\nres5: Int = 8\r\n\r\nscala> cb.component(0).capacity()\r\nres6: Int = 1048576\r\n```\r\n\r\nSo I'm not sure this test is testing anything useful.\r\n\r\nAlso it would be nice not to use so many magic numbers.",
+    "commit": "6ca6f714d689a136679fda32484eaf92f30089e9",
+    "createdAt": "2019-02-13T19:39:22Z",
+    "diffHunk": "@@ -47,6 +51,88 @@ public void testFrameDecoding() throws Exception {\n     verifyAndCloseDecoder(decoder, ctx, data);\n   }\n \n+  @Test\n+  public void testConsolidationForDecodingNonFullyWrittenByteBuf() {"
+  }, {
+    "author": {
+      "login": "liupc"
+    },
+    "body": "@vanzin I think the test should be refined. but I was quesion about your test.\r\nCompositeByteBuf.capacity returns the last component endOffset, I think use the capacity for testing is ok.\r\nhttps://github.com/netty/netty/blob/8fecbab2c56d3f49d0353d58ee1681f3e6d3feca/buffer/src/main/java/io/netty/buffer/CompositeByteBuf.java#L730",
+    "commit": "6ca6f714d689a136679fda32484eaf92f30089e9",
+    "createdAt": "2019-02-14T14:17:06Z",
+    "diffHunk": "@@ -47,6 +51,88 @@ public void testFrameDecoding() throws Exception {\n     verifyAndCloseDecoder(decoder, ctx, data);\n   }\n \n+  @Test\n+  public void testConsolidationForDecodingNonFullyWrittenByteBuf() {"
+  }, {
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Maybe my question wasn't clear. I'm asking what part of Spark code is this test testing.\r\n\r\nAs far as I can see, it's testing netty code, and these are not netty unit tests.",
+    "commit": "6ca6f714d689a136679fda32484eaf92f30089e9",
+    "createdAt": "2019-02-14T15:27:16Z",
+    "diffHunk": "@@ -47,6 +51,88 @@ public void testFrameDecoding() throws Exception {\n     verifyAndCloseDecoder(decoder, ctx, data);\n   }\n \n+  @Test\n+  public void testConsolidationForDecodingNonFullyWrittenByteBuf() {"
+  }, {
+    "author": {
+      "login": "liupc"
+    },
+    "body": "@vanzin it think this test is a little duplicate of `testConsolidationPerf`, we can just remove it. I will update soon. Sorry for that.",
+    "commit": "6ca6f714d689a136679fda32484eaf92f30089e9",
+    "createdAt": "2019-02-15T03:08:17Z",
+    "diffHunk": "@@ -47,6 +51,88 @@ public void testFrameDecoding() throws Exception {\n     verifyAndCloseDecoder(decoder, ctx, data);\n   }\n \n+  @Test\n+  public void testConsolidationForDecodingNonFullyWrittenByteBuf() {"
+  }],
+  "prId": 23602
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "finally",
+    "commit": "6ca6f714d689a136679fda32484eaf92f30089e9",
+    "createdAt": "2019-02-13T19:39:28Z",
+    "diffHunk": "@@ -47,6 +51,88 @@ public void testFrameDecoding() throws Exception {\n     verifyAndCloseDecoder(decoder, ctx, data);\n   }\n \n+  @Test\n+  public void testConsolidationForDecodingNonFullyWrittenByteBuf() {\n+    TransportFrameDecoder decoder = new TransportFrameDecoder();\n+    ChannelHandlerContext ctx = mock(ChannelHandlerContext.class);\n+    List<ByteBuf> retained = new ArrayList<>();\n+    when(ctx.fireChannelRead(any())).thenAnswer(in -> {\n+      ByteBuf buf = (ByteBuf) in.getArguments()[0];\n+      retained.add(buf);\n+      return null;\n+    });\n+    ByteBuf data1 = Unpooled.buffer(1024 * 1024);\n+    data1.writeLong(1024 * 1024 + 8);\n+    data1.writeByte(127);\n+    ByteBuf data2 = Unpooled.buffer(1024 * 1024);\n+    for (int i = 0; i < 1024 * 1024 - 1; i++) {\n+      data2.writeByte(128);\n+    }\n+    int orignalCapacity = data1.capacity() + data2.capacity();\n+    try {\n+      decoder.channelRead(ctx, data1);\n+      decoder.channelRead(ctx, data2);\n+      assertEquals(1, retained.size());\n+      assert(retained.get(0).capacity() < orignalCapacity);\n+    } catch (Exception e) {"
+  }],
+  "prId": 23602
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Does this mean this test now requires 3GB of memory just to store the data it's checking?\r\n\r\nThat seems wasteful. Either change the test to do checks after each separate message is written, or lower the size of the messages.",
+    "commit": "6ca6f714d689a136679fda32484eaf92f30089e9",
+    "createdAt": "2019-02-19T20:49:04Z",
+    "diffHunk": "@@ -47,6 +51,67 @@ public void testFrameDecoding() throws Exception {\n     verifyAndCloseDecoder(decoder, ctx, data);\n   }\n \n+  @Test\n+  public void testConsolidationPerf() throws Exception {\n+    long[] testingConsolidateThresholds = new long[] {\n+        ByteUnit.MiB.toBytes(1),\n+        ByteUnit.MiB.toBytes(5),\n+        ByteUnit.MiB.toBytes(10),\n+        ByteUnit.MiB.toBytes(20),\n+        ByteUnit.MiB.toBytes(30),\n+        ByteUnit.MiB.toBytes(50),\n+        ByteUnit.MiB.toBytes(80),\n+        ByteUnit.MiB.toBytes(100),\n+        ByteUnit.MiB.toBytes(300),\n+        ByteUnit.MiB.toBytes(500),\n+        Long.MAX_VALUE };\n+    for (long threshold : testingConsolidateThresholds) {\n+      TransportFrameDecoder decoder = new TransportFrameDecoder(threshold);\n+      ChannelHandlerContext ctx = mock(ChannelHandlerContext.class);\n+      List<ByteBuf> retained = new ArrayList<>();\n+      when(ctx.fireChannelRead(any())).thenAnswer(in -> {\n+        ByteBuf buf = (ByteBuf) in.getArguments()[0];\n+        retained.add(buf);\n+        return null;\n+      });\n+\n+      // Testing multiple messages\n+      int numMessages = 3;\n+      long targetBytes = ByteUnit.GiB.toBytes(1);\n+      int pieceBytes = (int) ByteUnit.KiB.toBytes(32);\n+      for (int i = 0; i < numMessages; i++) {\n+        try {\n+          long start = System.currentTimeMillis();\n+          long writtenBytes = 0;\n+          ByteBuf buf = Unpooled.buffer(8);\n+          buf.writeLong(8 + ByteUnit.GiB.toBytes(1));\n+          decoder.channelRead(ctx, buf);\n+          while (writtenBytes < targetBytes) {\n+            buf = Unpooled.buffer(pieceBytes * 2);\n+            ByteBuf writtenBuf = Unpooled.buffer(pieceBytes).writerIndex(pieceBytes);\n+            buf.writeBytes(writtenBuf);\n+            writtenBuf.release();\n+            decoder.channelRead(ctx, buf);\n+            writtenBytes += pieceBytes;\n+          }\n+          long elapsedTime = System.currentTimeMillis() - start;\n+          logger.info(\"Writing 1GiB frame buf with consolidation of threshold \" + threshold\n+              + \" took \" + elapsedTime + \" milis\");\n+        } finally {\n+          for (ByteBuf buf : retained) {\n+            release(buf);\n+          }\n+        }\n+      }\n+      long totalBytesGot = 0;\n+      for (ByteBuf buf : retained) {\n+        totalBytesGot += buf.capacity();\n+      }\n+      assertEquals(numMessages, retained.size());\n+      assertEquals(targetBytes * numMessages, totalBytesGot);",
+    "line": 79
+  }, {
+    "author": {
+      "login": "liupc"
+    },
+    "body": "Done!",
+    "commit": "6ca6f714d689a136679fda32484eaf92f30089e9",
+    "createdAt": "2019-02-20T13:09:33Z",
+    "diffHunk": "@@ -47,6 +51,67 @@ public void testFrameDecoding() throws Exception {\n     verifyAndCloseDecoder(decoder, ctx, data);\n   }\n \n+  @Test\n+  public void testConsolidationPerf() throws Exception {\n+    long[] testingConsolidateThresholds = new long[] {\n+        ByteUnit.MiB.toBytes(1),\n+        ByteUnit.MiB.toBytes(5),\n+        ByteUnit.MiB.toBytes(10),\n+        ByteUnit.MiB.toBytes(20),\n+        ByteUnit.MiB.toBytes(30),\n+        ByteUnit.MiB.toBytes(50),\n+        ByteUnit.MiB.toBytes(80),\n+        ByteUnit.MiB.toBytes(100),\n+        ByteUnit.MiB.toBytes(300),\n+        ByteUnit.MiB.toBytes(500),\n+        Long.MAX_VALUE };\n+    for (long threshold : testingConsolidateThresholds) {\n+      TransportFrameDecoder decoder = new TransportFrameDecoder(threshold);\n+      ChannelHandlerContext ctx = mock(ChannelHandlerContext.class);\n+      List<ByteBuf> retained = new ArrayList<>();\n+      when(ctx.fireChannelRead(any())).thenAnswer(in -> {\n+        ByteBuf buf = (ByteBuf) in.getArguments()[0];\n+        retained.add(buf);\n+        return null;\n+      });\n+\n+      // Testing multiple messages\n+      int numMessages = 3;\n+      long targetBytes = ByteUnit.GiB.toBytes(1);\n+      int pieceBytes = (int) ByteUnit.KiB.toBytes(32);\n+      for (int i = 0; i < numMessages; i++) {\n+        try {\n+          long start = System.currentTimeMillis();\n+          long writtenBytes = 0;\n+          ByteBuf buf = Unpooled.buffer(8);\n+          buf.writeLong(8 + ByteUnit.GiB.toBytes(1));\n+          decoder.channelRead(ctx, buf);\n+          while (writtenBytes < targetBytes) {\n+            buf = Unpooled.buffer(pieceBytes * 2);\n+            ByteBuf writtenBuf = Unpooled.buffer(pieceBytes).writerIndex(pieceBytes);\n+            buf.writeBytes(writtenBuf);\n+            writtenBuf.release();\n+            decoder.channelRead(ctx, buf);\n+            writtenBytes += pieceBytes;\n+          }\n+          long elapsedTime = System.currentTimeMillis() - start;\n+          logger.info(\"Writing 1GiB frame buf with consolidation of threshold \" + threshold\n+              + \" took \" + elapsedTime + \" milis\");\n+        } finally {\n+          for (ByteBuf buf : retained) {\n+            release(buf);\n+          }\n+        }\n+      }\n+      long totalBytesGot = 0;\n+      for (ByteBuf buf : retained) {\n+        totalBytesGot += buf.capacity();\n+      }\n+      assertEquals(numMessages, retained.size());\n+      assertEquals(targetBytes * numMessages, totalBytesGot);",
+    "line": 79
+  }],
+  "prId": 23602
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Just wanted to point out you're counting this allocation time in your performance measurement, which isn't optimal.",
+    "commit": "6ca6f714d689a136679fda32484eaf92f30089e9",
+    "createdAt": "2019-02-19T20:50:37Z",
+    "diffHunk": "@@ -47,6 +51,67 @@ public void testFrameDecoding() throws Exception {\n     verifyAndCloseDecoder(decoder, ctx, data);\n   }\n \n+  @Test\n+  public void testConsolidationPerf() throws Exception {\n+    long[] testingConsolidateThresholds = new long[] {\n+        ByteUnit.MiB.toBytes(1),\n+        ByteUnit.MiB.toBytes(5),\n+        ByteUnit.MiB.toBytes(10),\n+        ByteUnit.MiB.toBytes(20),\n+        ByteUnit.MiB.toBytes(30),\n+        ByteUnit.MiB.toBytes(50),\n+        ByteUnit.MiB.toBytes(80),\n+        ByteUnit.MiB.toBytes(100),\n+        ByteUnit.MiB.toBytes(300),\n+        ByteUnit.MiB.toBytes(500),\n+        Long.MAX_VALUE };\n+    for (long threshold : testingConsolidateThresholds) {\n+      TransportFrameDecoder decoder = new TransportFrameDecoder(threshold);\n+      ChannelHandlerContext ctx = mock(ChannelHandlerContext.class);\n+      List<ByteBuf> retained = new ArrayList<>();\n+      when(ctx.fireChannelRead(any())).thenAnswer(in -> {\n+        ByteBuf buf = (ByteBuf) in.getArguments()[0];\n+        retained.add(buf);\n+        return null;\n+      });\n+\n+      // Testing multiple messages\n+      int numMessages = 3;\n+      long targetBytes = ByteUnit.GiB.toBytes(1);\n+      int pieceBytes = (int) ByteUnit.KiB.toBytes(32);\n+      for (int i = 0; i < numMessages; i++) {\n+        try {\n+          long start = System.currentTimeMillis();\n+          long writtenBytes = 0;\n+          ByteBuf buf = Unpooled.buffer(8);\n+          buf.writeLong(8 + ByteUnit.GiB.toBytes(1));\n+          decoder.channelRead(ctx, buf);\n+          while (writtenBytes < targetBytes) {\n+            buf = Unpooled.buffer(pieceBytes * 2);\n+            ByteBuf writtenBuf = Unpooled.buffer(pieceBytes).writerIndex(pieceBytes);",
+    "line": 57
+  }, {
+    "author": {
+      "login": "liupc"
+    },
+    "body": "Done, thank you @vanzin ",
+    "commit": "6ca6f714d689a136679fda32484eaf92f30089e9",
+    "createdAt": "2019-02-20T13:10:03Z",
+    "diffHunk": "@@ -47,6 +51,67 @@ public void testFrameDecoding() throws Exception {\n     verifyAndCloseDecoder(decoder, ctx, data);\n   }\n \n+  @Test\n+  public void testConsolidationPerf() throws Exception {\n+    long[] testingConsolidateThresholds = new long[] {\n+        ByteUnit.MiB.toBytes(1),\n+        ByteUnit.MiB.toBytes(5),\n+        ByteUnit.MiB.toBytes(10),\n+        ByteUnit.MiB.toBytes(20),\n+        ByteUnit.MiB.toBytes(30),\n+        ByteUnit.MiB.toBytes(50),\n+        ByteUnit.MiB.toBytes(80),\n+        ByteUnit.MiB.toBytes(100),\n+        ByteUnit.MiB.toBytes(300),\n+        ByteUnit.MiB.toBytes(500),\n+        Long.MAX_VALUE };\n+    for (long threshold : testingConsolidateThresholds) {\n+      TransportFrameDecoder decoder = new TransportFrameDecoder(threshold);\n+      ChannelHandlerContext ctx = mock(ChannelHandlerContext.class);\n+      List<ByteBuf> retained = new ArrayList<>();\n+      when(ctx.fireChannelRead(any())).thenAnswer(in -> {\n+        ByteBuf buf = (ByteBuf) in.getArguments()[0];\n+        retained.add(buf);\n+        return null;\n+      });\n+\n+      // Testing multiple messages\n+      int numMessages = 3;\n+      long targetBytes = ByteUnit.GiB.toBytes(1);\n+      int pieceBytes = (int) ByteUnit.KiB.toBytes(32);\n+      for (int i = 0; i < numMessages; i++) {\n+        try {\n+          long start = System.currentTimeMillis();\n+          long writtenBytes = 0;\n+          ByteBuf buf = Unpooled.buffer(8);\n+          buf.writeLong(8 + ByteUnit.GiB.toBytes(1));\n+          decoder.channelRead(ctx, buf);\n+          while (writtenBytes < targetBytes) {\n+            buf = Unpooled.buffer(pieceBytes * 2);\n+            ByteBuf writtenBuf = Unpooled.buffer(pieceBytes).writerIndex(pieceBytes);",
+    "line": 57
+  }],
+  "prId": 23602
+}]

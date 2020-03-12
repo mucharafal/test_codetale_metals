@@ -1,0 +1,23 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "Loading and testing the model should go under `try`, not `finally`.\n",
+    "commit": "41b31ebbd8fe5743fc212c9db74c75c1b577bf67",
+    "createdAt": "2016-01-04T22:00:08Z",
+    "diffHunk": "@@ -69,4 +71,43 @@ public void runFPGrowth() {\n       long freq = itemset.freq();\n     }\n   }\n+\n+  @Test\n+  public void runFPGrowthSaveLoad() {\n+\n+    @SuppressWarnings(\"unchecked\")\n+    JavaRDD<List<String>> rdd = sc.parallelize(Arrays.asList(\n+      Arrays.asList(\"r z h k p\".split(\" \")),\n+      Arrays.asList(\"z y x w v u t s\".split(\" \")),\n+      Arrays.asList(\"s x o n r\".split(\" \")),\n+      Arrays.asList(\"x z y m t s q e\".split(\" \")),\n+      Arrays.asList(\"z\".split(\" \")),\n+      Arrays.asList(\"x z y r q t p\".split(\" \"))), 2);\n+\n+    FPGrowthModel<String> model = new FPGrowth()\n+      .setMinSupport(0.5)\n+      .setNumPartitions(2)\n+      .run(rdd);\n+\n+    File tempDir = Utils.createTempDir(\n+      System.getProperty(\"java.io.tmpdir\"), \"JavaFPGrowthSuite\");\n+    String outputPath = tempDir.getPath();\n+\n+    try {\n+      model.save(sc.sc(), outputPath);\n+    } finally {\n+      FPGrowthModel newModel = FPGrowthModel.load(sc.sc(), outputPath);"
+  }],
+  "prId": 9267
+}, {
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "Just this line needs to be in `finally`\n",
+    "commit": "41b31ebbd8fe5743fc212c9db74c75c1b577bf67",
+    "createdAt": "2016-01-04T22:00:10Z",
+    "diffHunk": "@@ -69,4 +71,43 @@ public void runFPGrowth() {\n       long freq = itemset.freq();\n     }\n   }\n+\n+  @Test\n+  public void runFPGrowthSaveLoad() {\n+\n+    @SuppressWarnings(\"unchecked\")\n+    JavaRDD<List<String>> rdd = sc.parallelize(Arrays.asList(\n+      Arrays.asList(\"r z h k p\".split(\" \")),\n+      Arrays.asList(\"z y x w v u t s\".split(\" \")),\n+      Arrays.asList(\"s x o n r\".split(\" \")),\n+      Arrays.asList(\"x z y m t s q e\".split(\" \")),\n+      Arrays.asList(\"z\".split(\" \")),\n+      Arrays.asList(\"x z y r q t p\".split(\" \"))), 2);\n+\n+    FPGrowthModel<String> model = new FPGrowth()\n+      .setMinSupport(0.5)\n+      .setNumPartitions(2)\n+      .run(rdd);\n+\n+    File tempDir = Utils.createTempDir(\n+      System.getProperty(\"java.io.tmpdir\"), \"JavaFPGrowthSuite\");\n+    String outputPath = tempDir.getPath();\n+\n+    try {\n+      model.save(sc.sc(), outputPath);\n+    } finally {\n+      FPGrowthModel newModel = FPGrowthModel.load(sc.sc(), outputPath);\n+      List<FPGrowth.FreqItemset<String>> freqItemsets = newModel.freqItemsets().toJavaRDD()\n+        .collect();\n+      assertEquals(18, freqItemsets.size());\n+\n+      for (FPGrowth.FreqItemset<String> itemset: freqItemsets) {\n+        // Test return types.\n+        List<String> items = itemset.javaItems();\n+        long freq = itemset.freq();\n+      }\n+\n+      Utils.deleteRecursively(tempDir);"
+  }],
+  "prId": 9267
+}]

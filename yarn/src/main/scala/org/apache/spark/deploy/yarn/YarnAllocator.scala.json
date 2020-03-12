@@ -1,0 +1,42 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "`sparkConf.getInt()`\n\nThough it's a little weird, because `SparkConf.getInt()` takes a default value. But `spark.executor.instances` should always be set after these changes, so any dummy default should do.\n",
+    "commit": "7f3e1ffcc2a5a3db839ccb96143b6d82d160e1e5",
+    "createdAt": "2015-08-05T01:48:58Z",
+    "diffHunk": "@@ -86,7 +86,7 @@ private[yarn] class YarnAllocator(\n   private var executorIdCounter = 0\n   @volatile private var numExecutorsFailed = 0\n \n-  @volatile private var targetNumExecutors = args.numExecutors\n+  @volatile private var targetNumExecutors = sparkConf.get(\"spark.executor.instances\").toInt"
+  }],
+  "prId": 7657
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "nit: should use `YarnSparkHadoopUtil.DEFAULT_NUMBER_EXECUTORS`.\n",
+    "commit": "7f3e1ffcc2a5a3db839ccb96143b6d82d160e1e5",
+    "createdAt": "2015-08-10T19:39:40Z",
+    "diffHunk": "@@ -86,7 +86,7 @@ private[yarn] class YarnAllocator(\n   private var executorIdCounter = 0\n   @volatile private var numExecutorsFailed = 0\n \n-  @volatile private var targetNumExecutors = args.numExecutors\n+  @volatile private var targetNumExecutors = sparkConf.getInt(\"spark.executor.instances\", 2)"
+  }, {
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Actually, this code is not right after your changes. The value of `spark.executor.instances`, previously, was either the value set by the user (if dynamic allocation is disabled), or the value of `spark.dynamicAllocation.initialExecutors` if dynamic allocation is enabled (see `ClientArguments.loadEnvironmentArgs`).\n\nSo, instead, it should check both cases. Something like:\n\n```\n@volatile private var targetNumExecutors = \n  if (Utils.isDynamicAllocationEnabled(sparkConf)) {\n    sparkConf.getInt(\"spark.dynamicAllocation.initialExecutors\", 0)\n  } else {\n    sparkConf.getInt(\"spark.executor.instances\", YarnSparkHadoopUtil.DEFAULT_NUMBER_EXECUTORS)\n  }\n```\n\nThe way these options are propagate is still a little confusing (and the lack of tests doesn't help), so I hope that's enough. There might be some other cleanup possible, but I'm not gonna ask you to go there.\n",
+    "commit": "7f3e1ffcc2a5a3db839ccb96143b6d82d160e1e5",
+    "createdAt": "2015-08-10T19:49:35Z",
+    "diffHunk": "@@ -86,7 +86,7 @@ private[yarn] class YarnAllocator(\n   private var executorIdCounter = 0\n   @volatile private var numExecutorsFailed = 0\n \n-  @volatile private var targetNumExecutors = args.numExecutors\n+  @volatile private var targetNumExecutors = sparkConf.getInt(\"spark.executor.instances\", 2)"
+  }],
+  "prId": 7657
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Seems like you missed my previous comment so I'll just paste it here, since github makes it hard to find otherwise:\n\nActually, this code is not right after your changes. The value of spark.executor.instances, previously, was either the value set by the user (if dynamic allocation is disabled), or the value of spark.dynamicAllocation.initialExecutors if dynamic allocation is enabled (see ClientArguments.loadEnvironmentArgs).\n\nSo, instead, it should check both cases. Something like:\n\n```\n@volatile private var targetNumExecutors = \n  if (Utils.isDynamicAllocationEnabled(sparkConf)) {\n    sparkConf.getInt(\"spark.dynamicAllocation.initialExecutors\", 0)\n  } else {\n    sparkConf.getInt(\"spark.executor.instances\", YarnSparkHadoopUtil.DEFAULT_NUMBER_EXECUTORS)\n  }\n```\n\nThe way these options are propagate is still a little confusing (and the lack of tests doesn't help), so I hope that's enough. There might be some other cleanup possible, but I'm not gonna ask you to go there.\n",
+    "commit": "7f3e1ffcc2a5a3db839ccb96143b6d82d160e1e5",
+    "createdAt": "2015-08-10T21:39:19Z",
+    "diffHunk": "@@ -86,7 +86,7 @@ private[yarn] class YarnAllocator(\n   private var executorIdCounter = 0\n   @volatile private var numExecutorsFailed = 0\n \n-  @volatile private var targetNumExecutors = args.numExecutors\n+  @volatile private var targetNumExecutors = YarnSparkHadoopUtil.DEFAULT_NUMBER_EXECUTORS"
+  }],
+  "prId": 7657
+}]

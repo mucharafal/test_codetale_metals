@@ -1,0 +1,45 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "yhuai"
+    },
+    "body": "Let's also mention that DetermineHiveSerde will fill in default values based on the file format. ",
+    "commit": "08ec4a7e0d4d25da2e5c40fbf497ce7d067a82c5",
+    "createdAt": "2017-01-05T01:16:44Z",
+    "diffHunk": "@@ -0,0 +1,90 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.hive.execution\n+\n+import org.apache.spark.sql.catalyst.util.CaseInsensitiveMap\n+\n+/**\n+ * Options for the Hive data source.\n+ */\n+class HiveOptions(@transient private val parameters: CaseInsensitiveMap) extends Serializable {"
+  }],
+  "prId": 16296
+}, {
+  "comments": [{
+    "author": {
+      "login": "yhuai"
+    },
+    "body": "file format?",
+    "commit": "08ec4a7e0d4d25da2e5c40fbf497ce7d067a82c5",
+    "createdAt": "2017-01-05T01:19:16Z",
+    "diffHunk": "@@ -0,0 +1,90 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.hive.execution\n+\n+import org.apache.spark.sql.catalyst.util.CaseInsensitiveMap\n+\n+/**\n+ * Options for the Hive data source.\n+ */\n+class HiveOptions(@transient private val parameters: CaseInsensitiveMap) extends Serializable {\n+  import HiveOptions._\n+\n+  def this(parameters: Map[String, String]) = this(new CaseInsensitiveMap(parameters))\n+\n+  val format = parameters.get(FORMAT).map(_.toLowerCase)"
+  }],
+  "prId": 16296
+}, {
+  "comments": [{
+    "author": {
+      "login": "yhuai"
+    },
+    "body": "maybe using if is easier to read?",
+    "commit": "08ec4a7e0d4d25da2e5c40fbf497ce7d067a82c5",
+    "createdAt": "2017-01-05T01:22:16Z",
+    "diffHunk": "@@ -0,0 +1,90 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.hive.execution\n+\n+import org.apache.spark.sql.catalyst.util.CaseInsensitiveMap\n+\n+/**\n+ * Options for the Hive data source.\n+ */\n+class HiveOptions(@transient private val parameters: CaseInsensitiveMap) extends Serializable {\n+  import HiveOptions._\n+\n+  def this(parameters: Map[String, String]) = this(new CaseInsensitiveMap(parameters))\n+\n+  val format = parameters.get(FORMAT).map(_.toLowerCase)\n+  val inputFormat = parameters.get(INPUT_FORMAT)\n+  val outputFormat = parameters.get(OUTPUT_FORMAT)\n+\n+  if (inputFormat.isDefined != outputFormat.isDefined) {\n+    throw new IllegalArgumentException(\"Cannot specify only inputFormat or outputFormat, you \" +\n+      \"have to specify both of them.\")\n+  }\n+\n+  if (format.isDefined && inputFormat.isDefined) {\n+    throw new IllegalArgumentException(\"Cannot specify format and inputFormat/outputFormat \" +\n+      \"together for Hive data source.\")\n+  }\n+\n+  val serde = parameters.get(SERDE)\n+\n+  for (f <- format if serde.isDefined) {"
+  }],
+  "prId": 16296
+}, {
+  "comments": [{
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "Add one more check? The `DELIMITED` clause cannot be used with a custom serde. Previously, it is blocked by our parser. \r\n```\r\nrow_format\r\n  : DELIMITED [FIELDS TERMINATED BY char [ESCAPED BY char]] [COLLECTION ITEMS TERMINATED BY char]\r\n        [MAP KEYS TERMINATED BY char] [LINES TERMINATED BY char]\r\n        [NULL DEFINED AS char]   -- (Note: Available in Hive 0.13 and later)\r\n  | SERDE serde_name [WITH SERDEPROPERTIES (property_name=property_value, property_name=property_value, ...)]\r\n```",
+    "commit": "08ec4a7e0d4d25da2e5c40fbf497ce7d067a82c5",
+    "createdAt": "2017-01-05T01:23:33Z",
+    "diffHunk": "@@ -0,0 +1,90 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.hive.execution\n+\n+import org.apache.spark.sql.catalyst.util.CaseInsensitiveMap\n+\n+/**\n+ * Options for the Hive data source.\n+ */\n+class HiveOptions(@transient private val parameters: CaseInsensitiveMap) extends Serializable {\n+  import HiveOptions._\n+\n+  def this(parameters: Map[String, String]) = this(new CaseInsensitiveMap(parameters))\n+\n+  val format = parameters.get(FORMAT).map(_.toLowerCase)\n+  val inputFormat = parameters.get(INPUT_FORMAT)\n+  val outputFormat = parameters.get(OUTPUT_FORMAT)\n+\n+  if (inputFormat.isDefined != outputFormat.isDefined) {\n+    throw new IllegalArgumentException(\"Cannot specify only inputFormat or outputFormat, you \" +\n+      \"have to specify both of them.\")\n+  }\n+\n+  if (format.isDefined && inputFormat.isDefined) {\n+    throw new IllegalArgumentException(\"Cannot specify format and inputFormat/outputFormat \" +\n+      \"together for Hive data source.\")\n+  }\n+\n+  val serde = parameters.get(SERDE)\n+\n+  for (f <- format if serde.isDefined) {\n+    if (!Set(\"sequencefile\", \"textfile\", \"rcfile\").contains(f)) {\n+      throw new IllegalArgumentException(s\"format '$f' already specifies a serde.\")\n+    }\n+  }\n+\n+  val containsDelimiters = delimiterOptions.keys.exists(parameters.contains)"
+  }],
+  "prId": 16296
+}]

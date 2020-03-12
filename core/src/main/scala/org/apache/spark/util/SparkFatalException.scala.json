@@ -1,0 +1,48 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "Will this change impact https://github.com/apache/spark/blob/master/core/src/main/scala/org/apache/spark/util/SparkUncaughtExceptionHandler.scala#L42 ? cc @zsxwing @JoshRosen ",
+    "commit": "f5a5a812ee32994244d29a27ddeb5730748cd212",
+    "createdAt": "2018-05-21T15:37:13Z",
+    "diffHunk": "@@ -0,0 +1,24 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+package org.apache.spark.util\n+\n+/**\n+ * SPARK-24294: To bypass scala bug: https://github.com/scala/bug/issues/9554, we catch\n+ * fatal throwable in {@link scala.concurrent.Future}'s body, and re-throw\n+ * SparkFatalException, which wraps the fatal throwable inside.\n+ */\n+private[spark] final class SparkFatalException(val throwable: Throwable) extends Exception"
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "I believe it will not. The `SparkFatalException` has a short life cycle: it is created inside `Future {}` and then caught and stripped by `ThreadUtils.awaitResult`.",
+    "commit": "f5a5a812ee32994244d29a27ddeb5730748cd212",
+    "createdAt": "2018-05-21T15:54:16Z",
+    "diffHunk": "@@ -0,0 +1,24 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+package org.apache.spark.util\n+\n+/**\n+ * SPARK-24294: To bypass scala bug: https://github.com/scala/bug/issues/9554, we catch\n+ * fatal throwable in {@link scala.concurrent.Future}'s body, and re-throw\n+ * SparkFatalException, which wraps the fatal throwable inside.\n+ */\n+private[spark] final class SparkFatalException(val throwable: Throwable) extends Exception"
+  }, {
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "Are there places where we fetch results from Futures without going through the `ThreadUtils.awaitResult`? In other words, is that a narrow waist? Would it make sense to add a second redundant layer of unwrapping at the top of `SparkUncaughtExceptionHandler` to handle that case? Not sure yet, but just thinking aloud here.",
+    "commit": "f5a5a812ee32994244d29a27ddeb5730748cd212",
+    "createdAt": "2018-05-22T01:07:46Z",
+    "diffHunk": "@@ -0,0 +1,24 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+package org.apache.spark.util\n+\n+/**\n+ * SPARK-24294: To bypass scala bug: https://github.com/scala/bug/issues/9554, we catch\n+ * fatal throwable in {@link scala.concurrent.Future}'s body, and re-throw\n+ * SparkFatalException, which wraps the fatal throwable inside.\n+ */\n+private[spark] final class SparkFatalException(val throwable: Throwable) extends Exception"
+  }, {
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "OTOH I guess we're actually only using this in one place right now, so I think things are correct as written, but I was just kind of abstractly worrying about potential future pitfalls in case people start using this pattern in new code without also noticing the `ThreadUtils.awayResult` requirement.",
+    "commit": "f5a5a812ee32994244d29a27ddeb5730748cd212",
+    "createdAt": "2018-05-22T01:13:58Z",
+    "diffHunk": "@@ -0,0 +1,24 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+package org.apache.spark.util\n+\n+/**\n+ * SPARK-24294: To bypass scala bug: https://github.com/scala/bug/issues/9554, we catch\n+ * fatal throwable in {@link scala.concurrent.Future}'s body, and re-throw\n+ * SparkFatalException, which wraps the fatal throwable inside.\n+ */\n+private[spark] final class SparkFatalException(val throwable: Throwable) extends Exception"
+  }],
+  "prId": 21342
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "let's also mention that, we must use `ThreadUtil.awaitResult` to run the Future, catch this exception and re-throw the original exception.",
+    "commit": "f5a5a812ee32994244d29a27ddeb5730748cd212",
+    "createdAt": "2018-05-22T13:44:43Z",
+    "diffHunk": "@@ -0,0 +1,24 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+package org.apache.spark.util\n+\n+/**\n+ * SPARK-24294: To bypass scala bug: https://github.com/scala/bug/issues/9554, we catch\n+ * fatal throwable in {@link scala.concurrent.Future}'s body, and re-throw\n+ * SparkFatalException, which wraps the fatal throwable inside.",
+    "line": 22
+  }],
+  "prId": 21342
+}]

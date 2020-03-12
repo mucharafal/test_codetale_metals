@@ -1,0 +1,49 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "maropu"
+    },
+    "body": "Don't need this `.collect()` to cactch the `RuntimeException`? btw, IMHO `AnalysisException` is better than `RuntimeException` in this case? Can't we?",
+    "commit": "43972ef4461451b346a0a4ba7191a8c7ed00afb9",
+    "createdAt": "2018-09-03T02:46:15Z",
+    "diffHunk": "@@ -308,4 +308,27 @@ class DataFramePivotSuite extends QueryTest with SharedSQLContext {\n \n     assert(exception.getMessage.contains(\"aggregate functions are not allowed\"))\n   }\n+\n+  test(\"pivoting column list with values\") {\n+    val expected = Row(2012, 10000.0, null) :: Row(2013, 48000.0, 30000.0) :: Nil\n+    val df = trainingSales\n+      .groupBy($\"sales.year\")\n+      .pivot(struct(lower($\"sales.course\"), $\"training\"), Seq(\n+        struct(lit(\"dotnet\"), lit(\"Experts\")),\n+        struct(lit(\"java\"), lit(\"Dummies\")))\n+      ).agg(sum($\"sales.earnings\"))\n+\n+    checkAnswer(df, expected)\n+  }\n+\n+  test(\"pivoting column list\") {\n+    val exception = intercept[RuntimeException] {\n+      trainingSales\n+        .groupBy($\"sales.year\")\n+        .pivot(struct(lower($\"sales.course\"), $\"training\"))\n+        .agg(sum($\"sales.earnings\"))\n+        .collect()",
+    "line": 23
+  }, {
+    "author": {
+      "login": "MaxGekk"
+    },
+    "body": "My changes don't throw the exception. It is thrown in the collect() : https://github.com/apache/spark/blob/41c2227a2318029709553a588e44dee28f106350/sql/core/src/main/scala/org/apache/spark/sql/RelationalGroupedDataset.scala#L385\r\n\r\n@maropu Do you propose to catch `RuntimeException` and replace it by `AnalysisException`?",
+    "commit": "43972ef4461451b346a0a4ba7191a8c7ed00afb9",
+    "createdAt": "2018-09-03T15:31:23Z",
+    "diffHunk": "@@ -308,4 +308,27 @@ class DataFramePivotSuite extends QueryTest with SharedSQLContext {\n \n     assert(exception.getMessage.contains(\"aggregate functions are not allowed\"))\n   }\n+\n+  test(\"pivoting column list with values\") {\n+    val expected = Row(2012, 10000.0, null) :: Row(2013, 48000.0, 30000.0) :: Nil\n+    val df = trainingSales\n+      .groupBy($\"sales.year\")\n+      .pivot(struct(lower($\"sales.course\"), $\"training\"), Seq(\n+        struct(lit(\"dotnet\"), lit(\"Experts\")),\n+        struct(lit(\"java\"), lit(\"Dummies\")))\n+      ).agg(sum($\"sales.earnings\"))\n+\n+    checkAnswer(df, expected)\n+  }\n+\n+  test(\"pivoting column list\") {\n+    val exception = intercept[RuntimeException] {\n+      trainingSales\n+        .groupBy($\"sales.year\")\n+        .pivot(struct(lower($\"sales.course\"), $\"training\"))\n+        .agg(sum($\"sales.earnings\"))\n+        .collect()",
+    "line": 23
+  }, {
+    "author": {
+      "login": "maropu"
+    },
+    "body": "I tried in your branch;\r\n```\r\nscala> df.show\r\n+--------+--------------------+\r\n|training|               sales|\r\n+--------+--------------------+\r\n| Experts|[dotNET, 2012, 10...|\r\n| Experts|[JAVA, 2012, 2000...|\r\n| Dummies|[dotNet, 2012, 50...|\r\n| Experts|[dotNET, 2013, 48...|\r\n| Dummies|[Java, 2013, 3000...|\r\n+--------+--------------------+\r\n\r\nscala> df.groupBy($\"sales.year\").pivot(struct(lower($\"sales.course\"), $\"training\")).agg(sum($\"sales.earnings\"))\r\njava.lang.RuntimeException: Unsupported literal type class org.apache.spark.sql.catalyst.expressions.GenericRowWithSchema [dotnet,Dummies]\r\n  at org.apache.spark.sql.catalyst.expressions.Literal$.apply(literals.scala:78)\r\n  at org.apache.spark.sql.catalyst.expressions.Literal$$anonfun$create$2.apply(literals.scala:164)\r\n  at org.apache.spark.sql.catalyst.expressions.Literal$$anonfun$create$2.apply(literals.scala:164)\r\n  at scala.util.Try.getOrElse(Try.scala:79)\r\n  at org.apache.spark.sql.catalyst.expressions.Literal$.create(literals.scala:163)\r\n  at org.apache.spark.sql.functions$.typedLit(functions.scala:127)\r\n```\r\nI miss something?",
+    "commit": "43972ef4461451b346a0a4ba7191a8c7ed00afb9",
+    "createdAt": "2018-09-03T23:15:37Z",
+    "diffHunk": "@@ -308,4 +308,27 @@ class DataFramePivotSuite extends QueryTest with SharedSQLContext {\n \n     assert(exception.getMessage.contains(\"aggregate functions are not allowed\"))\n   }\n+\n+  test(\"pivoting column list with values\") {\n+    val expected = Row(2012, 10000.0, null) :: Row(2013, 48000.0, 30000.0) :: Nil\n+    val df = trainingSales\n+      .groupBy($\"sales.year\")\n+      .pivot(struct(lower($\"sales.course\"), $\"training\"), Seq(\n+        struct(lit(\"dotnet\"), lit(\"Experts\")),\n+        struct(lit(\"java\"), lit(\"Dummies\")))\n+      ).agg(sum($\"sales.earnings\"))\n+\n+    checkAnswer(df, expected)\n+  }\n+\n+  test(\"pivoting column list\") {\n+    val exception = intercept[RuntimeException] {\n+      trainingSales\n+        .groupBy($\"sales.year\")\n+        .pivot(struct(lower($\"sales.course\"), $\"training\"))\n+        .agg(sum($\"sales.earnings\"))\n+        .collect()",
+    "line": 23
+  }, {
+    "author": {
+      "login": "MaxGekk"
+    },
+    "body": "> I miss something?\r\n\r\nNo, you don't. The exception for sure is thrown inside of `lit` because `collect()` returns a complex value which cannot be \"wrapped\" by lit. This is exactly checked in the test which I added to show existing behavior.\r\n\r\n> btw, IMHO AnalysisException is better than RuntimeException in this case?\r\n\r\n@maropu Could you explain, please, why do you think `AnalysisException` is better for the error occurs in run-time?\r\n\r\nJust in case, in the PR, I don't aim to change behavior of existing method: `def pivot(pivotColumn: Column): RelationalGroupedDataset`. I believe it should be discussed separately regarding to needs for changing user visible behavior.  The PR aims to improve `def pivot(pivotColumn: Column, values: Seq[Any]): RelationalGroupedDataset` to allow users to specify `struct` literals in particular. Please, see the description.",
+    "commit": "43972ef4461451b346a0a4ba7191a8c7ed00afb9",
+    "createdAt": "2018-09-04T09:14:01Z",
+    "diffHunk": "@@ -308,4 +308,27 @@ class DataFramePivotSuite extends QueryTest with SharedSQLContext {\n \n     assert(exception.getMessage.contains(\"aggregate functions are not allowed\"))\n   }\n+\n+  test(\"pivoting column list with values\") {\n+    val expected = Row(2012, 10000.0, null) :: Row(2013, 48000.0, 30000.0) :: Nil\n+    val df = trainingSales\n+      .groupBy($\"sales.year\")\n+      .pivot(struct(lower($\"sales.course\"), $\"training\"), Seq(\n+        struct(lit(\"dotnet\"), lit(\"Experts\")),\n+        struct(lit(\"java\"), lit(\"Dummies\")))\n+      ).agg(sum($\"sales.earnings\"))\n+\n+    checkAnswer(df, expected)\n+  }\n+\n+  test(\"pivoting column list\") {\n+    val exception = intercept[RuntimeException] {\n+      trainingSales\n+        .groupBy($\"sales.year\")\n+        .pivot(struct(lower($\"sales.course\"), $\"training\"))\n+        .agg(sum($\"sales.earnings\"))\n+        .collect()",
+    "line": 23
+  }, {
+    "author": {
+      "login": "maropu"
+    },
+    "body": "I think invalid queries basically throw `AnalysisException. But, yea, indeed, we'd better to keep the current behaivour. Thanks!",
+    "commit": "43972ef4461451b346a0a4ba7191a8c7ed00afb9",
+    "createdAt": "2018-09-04T12:29:58Z",
+    "diffHunk": "@@ -308,4 +308,27 @@ class DataFramePivotSuite extends QueryTest with SharedSQLContext {\n \n     assert(exception.getMessage.contains(\"aggregate functions are not allowed\"))\n   }\n+\n+  test(\"pivoting column list with values\") {\n+    val expected = Row(2012, 10000.0, null) :: Row(2013, 48000.0, 30000.0) :: Nil\n+    val df = trainingSales\n+      .groupBy($\"sales.year\")\n+      .pivot(struct(lower($\"sales.course\"), $\"training\"), Seq(\n+        struct(lit(\"dotnet\"), lit(\"Experts\")),\n+        struct(lit(\"java\"), lit(\"Dummies\")))\n+      ).agg(sum($\"sales.earnings\"))\n+\n+    checkAnswer(df, expected)\n+  }\n+\n+  test(\"pivoting column list\") {\n+    val exception = intercept[RuntimeException] {\n+      trainingSales\n+        .groupBy($\"sales.year\")\n+        .pivot(struct(lower($\"sales.course\"), $\"training\"))\n+        .agg(sum($\"sales.earnings\"))\n+        .collect()",
+    "line": 23
+  }],
+  "prId": 22316
+}]

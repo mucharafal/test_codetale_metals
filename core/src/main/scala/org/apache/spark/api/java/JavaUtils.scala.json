@@ -1,0 +1,57 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "You can remove `this()` since you have already copying the codes.\n",
+    "commit": "8586bb9c72047e378366fa429d4e1e75a44c0d63",
+    "createdAt": "2014-12-04T02:52:36Z",
+    "diffHunk": "@@ -32,7 +33,65 @@ private[spark] object JavaUtils {\n   def mapAsSerializableJavaMap[A, B](underlying: collection.Map[A, B]) =\n     new SerializableMapWrapper(underlying)\n \n+  // Implementation is copied from scala.collection.convert.Wrappers.MapWrapper,\n+  // but implements java.io.Serializable and adds a no-arg constructor\n   class SerializableMapWrapper[A, B](underlying: collection.Map[A, B])\n-    extends MapWrapper(underlying) with java.io.Serializable\n+    extends ju.AbstractMap[A, B] with java.io.Serializable { self =>\n \n+    // Add no-arg constructor just for serialization\n+    def this() = this(null)"
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "It won't have a no-arg constructor in addition to its main one arg constructor otherwise right? This is the point of this change.\n",
+    "commit": "8586bb9c72047e378366fa429d4e1e75a44c0d63",
+    "createdAt": "2014-12-04T04:23:54Z",
+    "diffHunk": "@@ -32,7 +33,65 @@ private[spark] object JavaUtils {\n   def mapAsSerializableJavaMap[A, B](underlying: collection.Map[A, B]) =\n     new SerializableMapWrapper(underlying)\n \n+  // Implementation is copied from scala.collection.convert.Wrappers.MapWrapper,\n+  // but implements java.io.Serializable and adds a no-arg constructor\n   class SerializableMapWrapper[A, B](underlying: collection.Map[A, B])\n-    extends MapWrapper(underlying) with java.io.Serializable\n+    extends ju.AbstractMap[A, B] with java.io.Serializable { self =>\n \n+    // Add no-arg constructor just for serialization\n+    def this() = this(null)"
+  }, {
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "I ran your unit test after removing the no-arg constructor, and it worked fine.\n",
+    "commit": "8586bb9c72047e378366fa429d4e1e75a44c0d63",
+    "createdAt": "2014-12-04T05:07:38Z",
+    "diffHunk": "@@ -32,7 +33,65 @@ private[spark] object JavaUtils {\n   def mapAsSerializableJavaMap[A, B](underlying: collection.Map[A, B]) =\n     new SerializableMapWrapper(underlying)\n \n+  // Implementation is copied from scala.collection.convert.Wrappers.MapWrapper,\n+  // but implements java.io.Serializable and adds a no-arg constructor\n   class SerializableMapWrapper[A, B](underlying: collection.Map[A, B])\n-    extends MapWrapper(underlying) with java.io.Serializable\n+    extends ju.AbstractMap[A, B] with java.io.Serializable { self =>\n \n+    // Add no-arg constructor just for serialization\n+    def this() = this(null)"
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Hm, so it does. Maybe I misunderstood the original error. It's complaining about the _superclass_ (`MapWrapper`) not having a no-arg constructor? So copying the class works, since we no longer subclass `MapWrapper`, but the copy in `SerializableMapWrapper` need not define a no-arg constructor. OK, that line can be removed.\n",
+    "commit": "8586bb9c72047e378366fa429d4e1e75a44c0d63",
+    "createdAt": "2014-12-05T15:27:49Z",
+    "diffHunk": "@@ -32,7 +33,65 @@ private[spark] object JavaUtils {\n   def mapAsSerializableJavaMap[A, B](underlying: collection.Map[A, B]) =\n     new SerializableMapWrapper(underlying)\n \n+  // Implementation is copied from scala.collection.convert.Wrappers.MapWrapper,\n+  // but implements java.io.Serializable and adds a no-arg constructor\n   class SerializableMapWrapper[A, B](underlying: collection.Map[A, B])\n-    extends MapWrapper(underlying) with java.io.Serializable\n+    extends ju.AbstractMap[A, B] with java.io.Serializable { self =>\n \n+    // Add no-arg constructor just for serialization\n+    def this() = this(null)"
+  }],
+  "prId": 3587
+}, {
+  "comments": [{
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "Does this create any licensing issues?  Do we need to add a separate header somewhere?\n",
+    "commit": "8586bb9c72047e378366fa429d4e1e75a44c0d63",
+    "createdAt": "2014-12-05T02:59:52Z",
+    "diffHunk": "@@ -32,7 +33,65 @@ private[spark] object JavaUtils {\n   def mapAsSerializableJavaMap[A, B](underlying: collection.Map[A, B]) =\n     new SerializableMapWrapper(underlying)\n \n+  // Implementation is copied from scala.collection.convert.Wrappers.MapWrapper,",
+    "line": 14
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Good question. It appears to be licensed just like the rest of the Scala code (http://www.scala-lang.org/license.html)  Spark already integrates some Scala code and has the proper entries in `LICENSE` as a result. I can modify the text to clearly call out that part of `MapWrapper` was copied, for good measure.\n",
+    "commit": "8586bb9c72047e378366fa429d4e1e75a44c0d63",
+    "createdAt": "2014-12-05T13:59:54Z",
+    "diffHunk": "@@ -32,7 +33,65 @@ private[spark] object JavaUtils {\n   def mapAsSerializableJavaMap[A, B](underlying: collection.Map[A, B]) =\n     new SerializableMapWrapper(underlying)\n \n+  // Implementation is copied from scala.collection.convert.Wrappers.MapWrapper,",
+    "line": 14
+  }],
+  "prId": 3587
+}]

@@ -1,0 +1,40 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "Hm, from my understanding, we didn't quite like such approach though like analysis barrier. Scope here is small so might be fine but this doesn't particularly look like a good fix. ",
+    "commit": "f255c8ed5f22fa10acdf12994867303596ee696e",
+    "createdAt": "2019-07-09T03:30:22Z",
+    "diffHunk": "@@ -116,7 +124,7 @@ object NormalizeFloatingNumbers extends Rule[LogicalPlan] {\n       CreateMap(children.map(normalize))\n \n     case _ if expr.dataType == FloatType || expr.dataType == DoubleType =>\n-      NormalizeNaNAndZero(expr)\n+      KnownFloatingPointNormalized(NormalizeNaNAndZero(expr))",
+    "line": 56
+  }, {
+    "author": {
+      "login": "yeshengm"
+    },
+    "body": "The problem is from `TransformArray`, since we can't easily tell whether a `TransformArray` is for FP normalization or not.  Otherwise we can just check for `NormalizeNaNAndZero`.",
+    "commit": "f255c8ed5f22fa10acdf12994867303596ee696e",
+    "createdAt": "2019-07-09T03:38:46Z",
+    "diffHunk": "@@ -116,7 +124,7 @@ object NormalizeFloatingNumbers extends Rule[LogicalPlan] {\n       CreateMap(children.map(normalize))\n \n     case _ if expr.dataType == FloatType || expr.dataType == DoubleType =>\n-      NormalizeNaNAndZero(expr)\n+      KnownFloatingPointNormalized(NormalizeNaNAndZero(expr))",
+    "line": 56
+  }, {
+    "author": {
+      "login": "yeshengm"
+    },
+    "body": "And we don't want to add a new kind of `TransformArray` node in the final logical plan either (and related logic)... I can't really think of an elegant approach.",
+    "commit": "f255c8ed5f22fa10acdf12994867303596ee696e",
+    "createdAt": "2019-07-09T03:42:20Z",
+    "diffHunk": "@@ -116,7 +124,7 @@ object NormalizeFloatingNumbers extends Rule[LogicalPlan] {\n       CreateMap(children.map(normalize))\n \n     case _ if expr.dataType == FloatType || expr.dataType == DoubleType =>\n-      NormalizeNaNAndZero(expr)\n+      KnownFloatingPointNormalized(NormalizeNaNAndZero(expr))",
+    "line": 56
+  }, {
+    "author": {
+      "login": "rednaxelafx"
+    },
+    "body": "This has a much less impact than the `AnalysisBarrier` -- this only applies to expressions whereas the `AnalysisBarrier` applied to plans.\r\nWe'd to leave markers in place in case a plan gets re-optimized after the initial optimization, and we have to have something that provides such information persisted in the plan.\r\n\r\nThe alternative for providing this information would be something like having a new dedicated expression type for floating point array normalization, which would also be disruptive to the expression tree structure. In terms of code reuse and semantic clarity, I'd say Yesheng's current design strikes the best balance.",
+    "commit": "f255c8ed5f22fa10acdf12994867303596ee696e",
+    "createdAt": "2019-07-09T22:26:56Z",
+    "diffHunk": "@@ -116,7 +124,7 @@ object NormalizeFloatingNumbers extends Rule[LogicalPlan] {\n       CreateMap(children.map(normalize))\n \n     case _ if expr.dataType == FloatType || expr.dataType == DoubleType =>\n-      NormalizeNaNAndZero(expr)\n+      KnownFloatingPointNormalized(NormalizeNaNAndZero(expr))",
+    "line": 56
+  }],
+  "prId": 25080
+}]

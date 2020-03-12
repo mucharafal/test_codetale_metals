@@ -1,0 +1,92 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "My first concern is the test case coverage. Below is just an example. Does this impl support all these scenario?\r\n\r\n- https://github.com/postgres/postgres/blob/master/src/test/regress/sql/with.sql",
+    "commit": "949a80359bf6858d3e8cafbbb9b1e567ddac9fa3",
+    "createdAt": "2019-01-17T05:09:50Z",
+    "diffHunk": "@@ -0,0 +1,291 @@\n+-- List of configuration the test suite is run against:"
+  }, {
+    "author": {
+      "login": "peter-toth"
+    },
+    "body": "Thank you @gatorsmile @mgaido91 @viirya for the feedback.\r\n\r\nWhat I will try to add in this PR is maybe a bit limited compared to what other DBs offer, but I hope it will be a still useful new feature of Spark SQL. And maybe we can extend it in follow up tickets.\r\n\r\nI found this nice presentation: https://www.percona.com/live/plam16/sites/default/files/slides/CTEs_in_MariaDB_10.2.pdf\r\nwhere you can find some slides about linear (SQL standard) and non-linear recursion which allows much more but not compatible with the standard.\r\n\r\nI will try to look into the `with.sql` tests of postgres, provide some more tests and find the features still missing and then we can decide which ones are must have in this PR if that works for you. \r\n\r\ncc @mgaido91 @viirya \r\n",
+    "commit": "949a80359bf6858d3e8cafbbb9b1e567ddac9fa3",
+    "createdAt": "2019-01-17T08:03:38Z",
+    "diffHunk": "@@ -0,0 +1,291 @@\n+-- List of configuration the test suite is run against:"
+  }, {
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "Recursive CTE is a very important feature for SQL users. We need to clearly understand the scope, restriction and gap, compared with ANSI SQL. Before starting the review, I would first add these test cases to the PR and we can know whether it works as expected. ",
+    "commit": "949a80359bf6858d3e8cafbbb9b1e567ddac9fa3",
+    "createdAt": "2019-01-17T22:12:10Z",
+    "diffHunk": "@@ -0,0 +1,291 @@\n+-- List of configuration the test suite is run against:"
+  }, {
+    "author": {
+      "login": "peter-toth"
+    },
+    "body": "I've merged the recursion related tests cases. Some of them required minor changes to get it working, some can't be merged because Spark SQL lacks these features:\r\n\r\n1. Column alias in CTE declaration:\r\n    ```\r\n    WITH RECURSIVE t(n) AS (\r\n      VALUES (1)\r\n      UNION ALL\r\n      SELECT n + 1 FROM t WHERE n < 100\r\n    )\r\n    SELECT SUM(n) FROM t\r\n    ```\r\n    - not related to recursion\r\n    - this is a good feature and can be addressed in a follow up PR\r\n2. CREATE RECURSIVE VIEW statements \r\n    ```\r\n    CREATE RECURSIVE VIEW nums (n) AS\r\n      VALUES (1)\r\n    UNION ALL\r\n      SELECT n + 1 FROM nums WHERE n < 5\r\n    ```\r\n    - `CREATE VIEW ... AS WITH RECURSIVE ...` form does work instead\r\n    - can be addressed in a follow up PR if required\r\n3. UNION combinator in CTE\r\n    ```\r\n    -- This is an infinite loop with UNION ALL, but not with UNION\r\n    WITH RECURSIVE t(n) AS (\r\n      SELECT 1\r\n      UNION\r\n      SELECT 10 - n FROM t\r\n    )\r\n    SELECT * FROM t\r\n    ```\r\n    - this PR supports UNION ALL only\r\n    - the same effect is possible with UNION ALL but requires helper columns\r\n    - I think this is a nice feature, can be addressed in a follow up PR\r\n4. ~~LIMIT pushdown~~\r\n    ```\r\n    -- This'd be an infinite loop, but outside query reads only as much as needed\r\n    WITH RECURSIVE t AS (\r\n      VALUES (1) AS T(n)\r\n      UNION ALL\r\n      SELECT n + 1 FROM t\r\n    )\r\n    SELECT * FROM t LIMIT 10\r\n    ```\r\n    - added to this PR with some limitations\r\n5. Different type of anchor and recursive terms\r\n    ```\r\n    WITH RECURSIVE t AS (\r\n      SELECT '7' AS n\r\n      UNION ALL\r\n      SELECT n + 1 FROM t WHERE n < 10\r\n    )\r\n    SELECT n FROM t\r\n    ```\r\n    - I don't think this is important in this PR, can be added in a follow up if required\r\n6. WITH in subquery \r\n    ```\r\n    SELECT count(*) FROM (\r\n      WITH RECURSIVE t AS (\r\n        SELECT 1 AS n UNION ALL SELECT n + 1 FROM t WHERE n < 500\r\n      )\r\n      SELECT * FROM t\r\n    ) AS t \r\n    WHERE n < (\r\n      SELECT count(*) FROM (\r\n        WITH RECURSIVE t AS (\r\n          SELECT 1 AS n UNION ALL SELECT n + 1 FROM t WHERE n < 100\r\n        )\r\n        SELECT * FROM t WHERE n < 50000\r\n      ) AS t WHERE n < 100\r\n    )\r\n    ```\r\n    - not related to recursion\r\n    - WITH can be moved to the front to get it working\r\n    - I think it can be addressed in a follow up PR\r\n7. Forward reference\r\n    ```\r\n    WITH RECURSIVE\r\n      x(id) AS (SELECT * FROM y UNION ALL SELECT id+1 FROM x WHERE id < 5),\r\n      y(id) AS (values (1)\r\n    )\r\n    SELECT * FROM x\r\n    ```\r\n    - I don't think this is important, can be added in a follow up if required\r\n\r\nI left a few TODOs in the PR, will fix them soon.",
+    "commit": "949a80359bf6858d3e8cafbbb9b1e567ddac9fa3",
+    "createdAt": "2019-01-22T21:34:12Z",
+    "diffHunk": "@@ -0,0 +1,291 @@\n+-- List of configuration the test suite is run against:"
+  }, {
+    "author": {
+      "login": "mgaido91"
+    },
+    "body": "I am not sure about your approach to LIMIT. I see that you put the TODO for it in the execution. I think instead we are just missing the pushdown which should be done in the analysis/optimization phase. Have you tried this way/or did you foresee issues for which you discarded this approach? I'd consider very bad starting handling specific case at execution phase.",
+    "commit": "949a80359bf6858d3e8cafbbb9b1e567ddac9fa3",
+    "createdAt": "2019-01-23T10:49:31Z",
+    "diffHunk": "@@ -0,0 +1,291 @@\n+-- List of configuration the test suite is run against:"
+  }, {
+    "author": {
+      "login": "peter-toth"
+    },
+    "body": "I think LIMIT pushdown is a good idea as `RecursiveTable` is kind of an `Union` but a constant limit in the recursive term will not stop the recursion.\r\nI've just added a commit where I push the limit through `RecursiveTableExec` which is useful for limiting the anchor especially. But I also record the limit into `RecursiveTableExec` so as to insert adjusted `GlobalLimitExec`s into each iteration of the recursive term.\r\nWhat do you think?",
+    "commit": "949a80359bf6858d3e8cafbbb9b1e567ddac9fa3",
+    "createdAt": "2019-01-23T12:49:26Z",
+    "diffHunk": "@@ -0,0 +1,291 @@\n+-- List of configuration the test suite is run against:"
+  }, {
+    "author": {
+      "login": "mgaido91"
+    },
+    "body": "I don't think we should do anything specific to LIMIT. So adding a `GlobalLimitExec` I think is not an acceptable approach. We can rather duplicate the LIMIT in the pushdown: so push it down and also keep it outside (if needed).",
+    "commit": "949a80359bf6858d3e8cafbbb9b1e567ddac9fa3",
+    "createdAt": "2019-01-23T12:54:10Z",
+    "diffHunk": "@@ -0,0 +1,291 @@\n+-- List of configuration the test suite is run against:"
+  }, {
+    "author": {
+      "login": "peter-toth"
+    },
+    "body": "Ok, removed `GlobalLimitExec` but I still need the number of rows limit as a field in `RecursiveTable` to stop the recursion if the recursion generated enough rows.\r\nA Limit outside of `RecursiveTable` doesn't work. (It would work if `RecursiveTable` were implemented as mapPartitions but I don't think that is possible.)",
+    "commit": "949a80359bf6858d3e8cafbbb9b1e567ddac9fa3",
+    "createdAt": "2019-01-23T13:14:10Z",
+    "diffHunk": "@@ -0,0 +1,291 @@\n+-- List of configuration the test suite is run against:"
+  }, {
+    "author": {
+      "login": "peter-toth"
+    },
+    "body": "@gatorsmile @mgaido91 @viirya We have ~80 test cases in the PR now. Most of them came from Postgre SQL. I still left one TODO regarding looking into a test case where I get stack overflow and will do it next week. Please let me know your thoughts to move this PR forward.",
+    "commit": "949a80359bf6858d3e8cafbbb9b1e567ddac9fa3",
+    "createdAt": "2019-01-25T08:08:50Z",
+    "diffHunk": "@@ -0,0 +1,291 @@\n+-- List of configuration the test suite is run against:"
+  }, {
+    "author": {
+      "login": "mgaido91"
+    },
+    "body": "> I still need the number of rows limit as a field in RecursiveTable to stop the recursion if the recursion generated enough rows.\r\n\r\nyes, I think it is not trivial at all finding another way. I was thinking also about creating a custom RDD for this case, but it is hard since we cannot know in advance how may partitions there will be unless we do the count as it is done here.\r\nI'd keep it as it is for the moment and we can eventually get back to this in a followup PR if a better idea comes up IMHO.",
+    "commit": "949a80359bf6858d3e8cafbbb9b1e567ddac9fa3",
+    "createdAt": "2019-01-25T09:27:16Z",
+    "diffHunk": "@@ -0,0 +1,291 @@\n+-- List of configuration the test suite is run against:"
+  }, {
+    "author": {
+      "login": "peter-toth"
+    },
+    "body": "I've fixed all remaining todos.",
+    "commit": "949a80359bf6858d3e8cafbbb9b1e567ddac9fa3",
+    "createdAt": "2019-01-31T13:21:16Z",
+    "diffHunk": "@@ -0,0 +1,291 @@\n+-- List of configuration the test suite is run against:"
+  }],
+  "prId": 23531
+}]

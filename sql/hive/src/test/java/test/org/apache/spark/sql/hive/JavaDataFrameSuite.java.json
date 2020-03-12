@@ -1,0 +1,13 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "yhuai"
+    },
+    "body": "@rxin This is how we call a UDAF in java.\n",
+    "commit": "0cc228726b2200de2d359c71f9807ed2a9e83889",
+    "createdAt": "2015-08-06T01:27:42Z",
+    "diffHunk": "@@ -77,4 +81,26 @@ public void saveTableAndQueryIt() {\n         \"      ROWS BETWEEN 1 preceding and 1 following) \" +\n         \"FROM window_table\").collectAsList());\n   }\n+\n+  @Test\n+  public void testUDAF() {\n+    DataFrame df = hc.range(0, 100).unionAll(hc.range(0, 100)).select(col(\"id\").as(\"value\"));\n+    UserDefinedAggregateFunction udaf = new MyDoubleSum();\n+    UserDefinedAggregateFunction registeredUDAF = hc.udf().register(\"mydoublesum\", udaf);\n+    // Create Columns for the UDAF. For now, callUDF does not take an argument to specific if\n+    // we want to use distinct aggregation.\n+    DataFrame aggregatedDF =\n+      df.groupBy()\n+        .agg(\n+          udaf.apply(true, col(\"value\")),\n+          udaf.apply(col(\"value\")),\n+          registeredUDAF.apply(col(\"value\")),\n+          callUDF(\"mydoublesum\", col(\"value\")));\n+\n+    List<Row> expectedResult = new ArrayList<Row>();\n+    expectedResult.add(RowFactory.create(4950.0, 9900.0, 9900.0, 9900.0));\n+    checkAnswer(\n+      aggregatedDF,\n+      expectedResult);\n+  }",
+    "line": 38
+  }],
+  "prId": 7982
+}]

@@ -1,0 +1,58 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "We shouldn't define attributes in an object. `AttributeReference` will be assigned a unique ID when created, and in general we should create new attributes when creating a new logical plan.\r\n\r\nFor example, if you do `df1 = sql(\"desc table t1\"); df2 = sql(\"desc table \");`, `df1.join(df2)` would fail.",
+    "commit": "cff78a16e691917e812b4cd63bf7544a54af4742",
+    "createdAt": "2019-07-12T09:14:54Z",
+    "diffHunk": "@@ -0,0 +1,35 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst.plans\n+\n+import org.apache.spark.sql.catalyst.expressions.AttributeReference\n+import org.apache.spark.sql.types.{MetadataBuilder, StringType, StructField, StructType}\n+\n+private[sql] object DescribeTableSchemas {\n+  val DESCRIBE_TABLE_ATTRIBUTES = Seq("
+  }, {
+    "author": {
+      "login": "rdblue"
+    },
+    "body": "Can you join the results of `DESCRIBE`?",
+    "commit": "cff78a16e691917e812b4cd63bf7544a54af4742",
+    "createdAt": "2019-07-16T17:03:21Z",
+    "diffHunk": "@@ -0,0 +1,35 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst.plans\n+\n+import org.apache.spark.sql.catalyst.expressions.AttributeReference\n+import org.apache.spark.sql.types.{MetadataBuilder, StringType, StructField, StructType}\n+\n+private[sql] object DescribeTableSchemas {\n+  val DESCRIBE_TABLE_ATTRIBUTES = Seq("
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "```\r\nscala> val df1 = sql(\"desc t1\")\r\ndf1: org.apache.spark.sql.DataFrame = [col_name: string, data_type: string ... 1 more field]\r\n\r\nscala> val df2 = sql(\"desc t2\")\r\ndf2: org.apache.spark.sql.DataFrame = [col_name: string, data_type: string ... 1 more field]\r\n\r\nscala> df1.crossJoin(df2).show\r\n+--------+---------+-------+--------+---------+-------+\r\n|col_name|data_type|comment|col_name|data_type|comment|\r\n+--------+---------+-------+--------+---------+-------+\r\n|       i|      int|   null|       j|      int|   null|\r\n+--------+---------+-------+--------+---------+-------+\r\n```\r\n\r\nThis is not a common use case but we don't have to break it.",
+    "commit": "cff78a16e691917e812b4cd63bf7544a54af4742",
+    "createdAt": "2019-07-17T14:46:01Z",
+    "diffHunk": "@@ -0,0 +1,35 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst.plans\n+\n+import org.apache.spark.sql.catalyst.expressions.AttributeReference\n+import org.apache.spark.sql.types.{MetadataBuilder, StringType, StructField, StructType}\n+\n+private[sql] object DescribeTableSchemas {\n+  val DESCRIBE_TABLE_ATTRIBUTES = Seq("
+  }, {
+    "author": {
+      "login": "mccheah"
+    },
+    "body": "Changed this from a value to a method, so it will generate new identifiers every time while still being shared amongst multiple contexts.",
+    "commit": "cff78a16e691917e812b4cd63bf7544a54af4742",
+    "createdAt": "2019-07-23T22:39:06Z",
+    "diffHunk": "@@ -0,0 +1,35 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst.plans\n+\n+import org.apache.spark.sql.catalyst.expressions.AttributeReference\n+import org.apache.spark.sql.types.{MetadataBuilder, StringType, StructField, StructType}\n+\n+private[sql] object DescribeTableSchemas {\n+  val DESCRIBE_TABLE_ATTRIBUTES = Seq("
+  }],
+  "prId": 25040
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "nit: `StructType.fromAttributes(DESCRIBE_TABLE_ATTRIBUTES)`",
+    "commit": "cff78a16e691917e812b4cd63bf7544a54af4742",
+    "createdAt": "2019-07-12T09:53:23Z",
+    "diffHunk": "@@ -0,0 +1,35 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst.plans\n+\n+import org.apache.spark.sql.catalyst.expressions.AttributeReference\n+import org.apache.spark.sql.types.{MetadataBuilder, StringType, StructField, StructType}\n+\n+private[sql] object DescribeTableSchemas {\n+  val DESCRIBE_TABLE_ATTRIBUTES = Seq(\n+    AttributeReference(\"col_name\", StringType, nullable = false,\n+      new MetadataBuilder().putString(\"comment\", \"name of the column\").build())(),\n+    AttributeReference(\"data_type\", StringType, nullable = false,\n+      new MetadataBuilder().putString(\"comment\", \"data type of the column\").build())(),\n+    AttributeReference(\"comment\", StringType, nullable = true,\n+      new MetadataBuilder().putString(\"comment\", \"comment of the column\").build())()\n+  )\n+\n+  val DESCRIBE_TABLE_SCHEMA = StructType(\n+    DESCRIBE_TABLE_ATTRIBUTES.map(attr => StructField(attr.name, attr.dataType, attr.nullable)))"
+  }],
+  "prId": 25040
+}, {
+  "comments": [{
+    "author": {
+      "login": "imback82"
+    },
+    "body": "Singular, `DescribeTableSchema`?",
+    "commit": "cff78a16e691917e812b4cd63bf7544a54af4742",
+    "createdAt": "2019-07-27T05:55:03Z",
+    "diffHunk": "@@ -0,0 +1,31 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst.plans\n+\n+import org.apache.spark.sql.catalyst.expressions.AttributeReference\n+import org.apache.spark.sql.types.{MetadataBuilder, StringType, StructField, StructType}\n+\n+private[sql] object DescribeTableSchemas {"
+  }],
+  "prId": 25040
+}]

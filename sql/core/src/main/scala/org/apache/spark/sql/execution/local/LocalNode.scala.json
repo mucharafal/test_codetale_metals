@@ -1,0 +1,144 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "shall we just use `tungstenEnabled` here?\n",
+    "commit": "fcec2975d74710f9d1604a01b806566e1f47f1a1",
+    "createdAt": "2015-09-01T14:50:39Z",
+    "diffHunk": "@@ -29,10 +31,18 @@ import org.apache.spark.sql.types.StructType\n  * Before consuming the iterator, open function must be called.\n  * After consuming the iterator, close function must be called.\n  */\n-abstract class LocalNode extends TreeNode[LocalNode] {\n+abstract class LocalNode(conf: SQLConf) extends TreeNode[LocalNode] with Logging {\n+\n+  val codegenEnabled: Boolean = conf.codegenEnabled\n+\n+  val unsafeEnabled: Boolean = conf.unsafeEnabled"
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "and the `ProjectNode` always uses unsafe projection, should we control that by this config?\n",
+    "commit": "fcec2975d74710f9d1604a01b806566e1f47f1a1",
+    "createdAt": "2015-09-01T14:53:57Z",
+    "diffHunk": "@@ -29,10 +31,18 @@ import org.apache.spark.sql.types.StructType\n  * Before consuming the iterator, open function must be called.\n  * After consuming the iterator, close function must be called.\n  */\n-abstract class LocalNode extends TreeNode[LocalNode] {\n+abstract class LocalNode(conf: SQLConf) extends TreeNode[LocalNode] with Logging {\n+\n+  val codegenEnabled: Boolean = conf.codegenEnabled\n+\n+  val unsafeEnabled: Boolean = conf.unsafeEnabled"
+  }, {
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "> and the ProjectNode always uses unsafe projection, should we control that by this config?\n\nAgreed.\n",
+    "commit": "fcec2975d74710f9d1604a01b806566e1f47f1a1",
+    "createdAt": "2015-09-01T15:26:57Z",
+    "diffHunk": "@@ -29,10 +31,18 @@ import org.apache.spark.sql.types.StructType\n  * Before consuming the iterator, open function must be called.\n  * After consuming the iterator, close function must be called.\n  */\n-abstract class LocalNode extends TreeNode[LocalNode] {\n+abstract class LocalNode(conf: SQLConf) extends TreeNode[LocalNode] with Logging {\n+\n+  val codegenEnabled: Boolean = conf.codegenEnabled\n+\n+  val unsafeEnabled: Boolean = conf.unsafeEnabled"
+  }, {
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "> shall we just use tungstenEnabled here?\n\nJust followed SparkPlan.\n",
+    "commit": "fcec2975d74710f9d1604a01b806566e1f47f1a1",
+    "createdAt": "2015-09-01T15:28:34Z",
+    "diffHunk": "@@ -29,10 +31,18 @@ import org.apache.spark.sql.types.StructType\n  * Before consuming the iterator, open function must be called.\n  * After consuming the iterator, close function must be called.\n  */\n-abstract class LocalNode extends TreeNode[LocalNode] {\n+abstract class LocalNode(conf: SQLConf) extends TreeNode[LocalNode] with Logging {\n+\n+  val codegenEnabled: Boolean = conf.codegenEnabled\n+\n+  val unsafeEnabled: Boolean = conf.unsafeEnabled"
+  }],
+  "prId": 8535
+}, {
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "line too long\n",
+    "commit": "fcec2975d74710f9d1604a01b806566e1f47f1a1",
+    "createdAt": "2015-09-09T23:31:23Z",
+    "diffHunk": "@@ -17,9 +17,11 @@\n \n package org.apache.spark.sql.execution.local\n \n-import org.apache.spark.sql.Row\n+import org.apache.spark.Logging\n+import org.apache.spark.sql.catalyst.expressions.codegen.GenerateMutableProjection\n+import org.apache.spark.sql.{SQLConf, Row}\n import org.apache.spark.sql.catalyst.{CatalystTypeConverters, InternalRow}\n-import org.apache.spark.sql.catalyst.expressions.Attribute\n+import org.apache.spark.sql.catalyst.expressions.{InterpretedMutableProjection, MutableProjection, Expression, Attribute}"
+  }],
+  "prId": 8535
+}, {
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "move after L24\n",
+    "commit": "fcec2975d74710f9d1604a01b806566e1f47f1a1",
+    "createdAt": "2015-09-09T23:31:52Z",
+    "diffHunk": "@@ -17,9 +17,11 @@\n \n package org.apache.spark.sql.execution.local\n \n-import org.apache.spark.sql.Row\n+import org.apache.spark.Logging\n+import org.apache.spark.sql.catalyst.expressions.codegen.GenerateMutableProjection"
+  }],
+  "prId": 8535
+}, {
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "space\n",
+    "commit": "fcec2975d74710f9d1604a01b806566e1f47f1a1",
+    "createdAt": "2015-09-09T23:32:12Z",
+    "diffHunk": "@@ -73,17 +83,49 @@ abstract class LocalNode extends TreeNode[LocalNode] {\n     }\n     result\n   }\n+\n+  protected def newMutableProjection(\n+      expressions: Seq[Expression],\n+      inputSchema: Seq[Attribute]): () => MutableProjection = {\n+    log.debug(\n+      s\"Creating MutableProj: $expressions, inputSchema: $inputSchema, codegen:$codegenEnabled\")\n+    if(codegenEnabled) {"
+  }],
+  "prId": 8535
+}, {
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "`NonFatal(e)`\n",
+    "commit": "fcec2975d74710f9d1604a01b806566e1f47f1a1",
+    "createdAt": "2015-09-09T23:32:21Z",
+    "diffHunk": "@@ -73,17 +83,49 @@ abstract class LocalNode extends TreeNode[LocalNode] {\n     }\n     result\n   }\n+\n+  protected def newMutableProjection(\n+      expressions: Seq[Expression],\n+      inputSchema: Seq[Attribute]): () => MutableProjection = {\n+    log.debug(\n+      s\"Creating MutableProj: $expressions, inputSchema: $inputSchema, codegen:$codegenEnabled\")\n+    if(codegenEnabled) {\n+      try {\n+        GenerateMutableProjection.generate(expressions, inputSchema)\n+      } catch {\n+        case e: Exception =>"
+  }],
+  "prId": 8535
+}, {
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "can we make these `protected` if possible?\n",
+    "commit": "fcec2975d74710f9d1604a01b806566e1f47f1a1",
+    "createdAt": "2015-09-10T01:40:12Z",
+    "diffHunk": "@@ -29,10 +31,18 @@ import org.apache.spark.sql.types.StructType\n  * Before consuming the iterator, open function must be called.\n  * After consuming the iterator, close function must be called.\n  */\n-abstract class LocalNode extends TreeNode[LocalNode] {\n+abstract class LocalNode(conf: SQLConf) extends TreeNode[LocalNode] with Logging {\n+\n+  val codegenEnabled: Boolean = conf.codegenEnabled"
+  }],
+  "prId": 8535
+}, {
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "can be lazy val\n",
+    "commit": "fcec2975d74710f9d1604a01b806566e1f47f1a1",
+    "createdAt": "2015-09-10T01:48:03Z",
+    "diffHunk": "@@ -29,10 +31,18 @@ import org.apache.spark.sql.types.StructType\n  * Before consuming the iterator, open function must be called.\n  * After consuming the iterator, close function must be called.\n  */\n-abstract class LocalNode extends TreeNode[LocalNode] {\n+abstract class LocalNode(conf: SQLConf) extends TreeNode[LocalNode] with Logging {\n+\n+  val codegenEnabled: Boolean = conf.codegenEnabled\n+\n+  val unsafeEnabled: Boolean = conf.unsafeEnabled\n+\n+  private[this] def isTesting: Boolean = sys.props.contains(\"spark.testing\")"
+  }],
+  "prId": 8535
+}, {
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "nit: can you move this above the `def`s?\n",
+    "commit": "fcec2975d74710f9d1604a01b806566e1f47f1a1",
+    "createdAt": "2015-09-10T01:48:25Z",
+    "diffHunk": "@@ -29,10 +31,18 @@ import org.apache.spark.sql.types.StructType\n  * Before consuming the iterator, open function must be called.\n  * After consuming the iterator, close function must be called.\n  */\n-abstract class LocalNode extends TreeNode[LocalNode] {\n+abstract class LocalNode(conf: SQLConf) extends TreeNode[LocalNode] with Logging {\n+\n+  val codegenEnabled: Boolean = conf.codegenEnabled\n+\n+  val unsafeEnabled: Boolean = conf.unsafeEnabled\n+\n+  private[this] def isTesting: Boolean = sys.props.contains(\"spark.testing\")\n \n   def output: Seq[Attribute]\n \n+  lazy val schema: StructType = StructType.fromAttributes(output)"
+  }],
+  "prId": 8535
+}, {
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "minor: why not just `logError`? same in L90 (just wondering)\n",
+    "commit": "fcec2975d74710f9d1604a01b806566e1f47f1a1",
+    "createdAt": "2015-09-10T01:49:21Z",
+    "diffHunk": "@@ -73,17 +83,49 @@ abstract class LocalNode extends TreeNode[LocalNode] {\n     }\n     result\n   }\n+\n+  protected def newMutableProjection(\n+      expressions: Seq[Expression],\n+      inputSchema: Seq[Attribute]): () => MutableProjection = {\n+    log.debug(\n+      s\"Creating MutableProj: $expressions, inputSchema: $inputSchema, codegen:$codegenEnabled\")\n+    if(codegenEnabled) {\n+      try {\n+        GenerateMutableProjection.generate(expressions, inputSchema)\n+      } catch {\n+        case e: Exception =>\n+          if (isTesting) {\n+            throw e\n+          } else {\n+            log.error(\"Failed to generate mutable projection, fallback to interpreted\", e)"
+  }, {
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "Not sure. I saw many places in SQL uses them so I just followed the style.\n",
+    "commit": "fcec2975d74710f9d1604a01b806566e1f47f1a1",
+    "createdAt": "2015-09-10T14:35:10Z",
+    "diffHunk": "@@ -73,17 +83,49 @@ abstract class LocalNode extends TreeNode[LocalNode] {\n     }\n     result\n   }\n+\n+  protected def newMutableProjection(\n+      expressions: Seq[Expression],\n+      inputSchema: Seq[Attribute]): () => MutableProjection = {\n+    log.debug(\n+      s\"Creating MutableProj: $expressions, inputSchema: $inputSchema, codegen:$codegenEnabled\")\n+    if(codegenEnabled) {\n+      try {\n+        GenerateMutableProjection.generate(expressions, inputSchema)\n+      } catch {\n+        case e: Exception =>\n+          if (isTesting) {\n+            throw e\n+          } else {\n+            log.error(\"Failed to generate mutable projection, fallback to interpreted\", e)"
+  }],
+  "prId": 8535
+}, {
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "we should add tests for this :) Let's do it in a follow-up patch.\n",
+    "commit": "fcec2975d74710f9d1604a01b806566e1f47f1a1",
+    "createdAt": "2015-09-10T18:24:06Z",
+    "diffHunk": "@@ -73,17 +85,78 @@ abstract class LocalNode extends TreeNode[LocalNode] {\n     }\n     result\n   }\n+\n+  protected def newMutableProjection(\n+      expressions: Seq[Expression],\n+      inputSchema: Seq[Attribute]): () => MutableProjection = {\n+    log.debug(\n+      s\"Creating MutableProj: $expressions, inputSchema: $inputSchema, codegen:$codegenEnabled\")\n+    if (codegenEnabled) {\n+      try {\n+        GenerateMutableProjection.generate(expressions, inputSchema)\n+      } catch {\n+        case NonFatal(e) =>\n+          if (isTesting) {\n+            throw e\n+          } else {\n+            log.error(\"Failed to generate mutable projection, fallback to interpreted\", e)\n+            () => new InterpretedMutableProjection(expressions, inputSchema)\n+          }\n+      }\n+    } else {\n+      () => new InterpretedMutableProjection(expressions, inputSchema)\n+    }\n+  }\n+\n }\n \n \n-abstract class LeafLocalNode extends LocalNode {\n+abstract class LeafLocalNode(conf: SQLConf) extends LocalNode(conf) {\n   override def children: Seq[LocalNode] = Seq.empty\n }\n \n \n-abstract class UnaryLocalNode extends LocalNode {\n+abstract class UnaryLocalNode(conf: SQLConf) extends LocalNode(conf) {\n \n   def child: LocalNode\n \n   override def children: Seq[LocalNode] = Seq(child)\n }\n+\n+abstract class BinaryLocalNode(conf: SQLConf) extends LocalNode(conf) {\n+\n+  def left: LocalNode\n+\n+  def right: LocalNode\n+\n+  override def children: Seq[LocalNode] = Seq(left, right)\n+}\n+\n+/**\n+ * An thin wrapper around a [[LocalNode]] that provides an `Iterator` interface.\n+ */\n+private[local] class LocalNodeIterator(localNode: LocalNode) extends Iterator[InternalRow] {",
+    "line": 89
+  }],
+  "prId": 8535
+}]

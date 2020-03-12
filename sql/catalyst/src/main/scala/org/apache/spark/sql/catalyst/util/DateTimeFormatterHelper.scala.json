@@ -1,0 +1,258 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "viirya"
+    },
+    "body": "Do we need to consider cleaning up old entries in this map?",
+    "commit": "c68778c6fbf2a30a22175150273e39e992936a8b",
+    "createdAt": "2019-01-06T03:46:22Z",
+    "diffHunk": "@@ -22,10 +22,40 @@ import java.time.chrono.IsoChronology\n import java.time.format.{DateTimeFormatter, DateTimeFormatterBuilder, ResolverStyle}\n import java.time.temporal.{ChronoField, TemporalAccessor, TemporalQueries}\n import java.util.Locale\n+import java.util.concurrent.ConcurrentHashMap\n \n trait DateTimeFormatterHelper {\n+  protected def toInstantWithZoneId(temporalAccessor: TemporalAccessor, zoneId: ZoneId): Instant = {\n+    val localTime = if (temporalAccessor.query(TemporalQueries.localTime) == null) {\n+      LocalTime.ofNanoOfDay(0)\n+    } else {\n+      LocalTime.from(temporalAccessor)\n+    }\n+    val localDate = LocalDate.from(temporalAccessor)\n+    val localDateTime = LocalDateTime.of(localDate, localTime)\n+    val zonedDateTime = ZonedDateTime.of(localDateTime, zoneId)\n+    Instant.from(zonedDateTime)\n+  }\n+}\n+\n+object DateTimeFormatterHelper {\n+  private val cache = new ConcurrentHashMap[(String, Locale), DateTimeFormatter]()"
+  }, {
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "Yea, I was wondering about that too. This combinations looks huge.",
+    "commit": "c68778c6fbf2a30a22175150273e39e992936a8b",
+    "createdAt": "2019-01-06T04:01:53Z",
+    "diffHunk": "@@ -22,10 +22,40 @@ import java.time.chrono.IsoChronology\n import java.time.format.{DateTimeFormatter, DateTimeFormatterBuilder, ResolverStyle}\n import java.time.temporal.{ChronoField, TemporalAccessor, TemporalQueries}\n import java.util.Locale\n+import java.util.concurrent.ConcurrentHashMap\n \n trait DateTimeFormatterHelper {\n+  protected def toInstantWithZoneId(temporalAccessor: TemporalAccessor, zoneId: ZoneId): Instant = {\n+    val localTime = if (temporalAccessor.query(TemporalQueries.localTime) == null) {\n+      LocalTime.ofNanoOfDay(0)\n+    } else {\n+      LocalTime.from(temporalAccessor)\n+    }\n+    val localDate = LocalDate.from(temporalAccessor)\n+    val localDateTime = LocalDateTime.of(localDate, localTime)\n+    val zonedDateTime = ZonedDateTime.of(localDateTime, zoneId)\n+    Instant.from(zonedDateTime)\n+  }\n+}\n+\n+object DateTimeFormatterHelper {\n+  private val cache = new ConcurrentHashMap[(String, Locale), DateTimeFormatter]()"
+  }, {
+    "author": {
+      "login": "MaxGekk"
+    },
+    "body": "In real life, locale is constant (`Locale.US`) and number of used date/timestamp patterns is small.",
+    "commit": "c68778c6fbf2a30a22175150273e39e992936a8b",
+    "createdAt": "2019-01-06T05:26:24Z",
+    "diffHunk": "@@ -22,10 +22,40 @@ import java.time.chrono.IsoChronology\n import java.time.format.{DateTimeFormatter, DateTimeFormatterBuilder, ResolverStyle}\n import java.time.temporal.{ChronoField, TemporalAccessor, TemporalQueries}\n import java.util.Locale\n+import java.util.concurrent.ConcurrentHashMap\n \n trait DateTimeFormatterHelper {\n+  protected def toInstantWithZoneId(temporalAccessor: TemporalAccessor, zoneId: ZoneId): Instant = {\n+    val localTime = if (temporalAccessor.query(TemporalQueries.localTime) == null) {\n+      LocalTime.ofNanoOfDay(0)\n+    } else {\n+      LocalTime.from(temporalAccessor)\n+    }\n+    val localDate = LocalDate.from(temporalAccessor)\n+    val localDateTime = LocalDateTime.of(localDate, localTime)\n+    val zonedDateTime = ZonedDateTime.of(localDateTime, zoneId)\n+    Instant.from(zonedDateTime)\n+  }\n+}\n+\n+object DateTimeFormatterHelper {\n+  private val cache = new ConcurrentHashMap[(String, Locale), DateTimeFormatter]()"
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Also answering my own question: the formatter is thread-safe, so this is fine.\r\nI agree that this cache won't grow large as I can't imagine an app using more than a handful of distinct patterns and locales.",
+    "commit": "c68778c6fbf2a30a22175150273e39e992936a8b",
+    "createdAt": "2019-01-06T14:32:06Z",
+    "diffHunk": "@@ -22,10 +22,40 @@ import java.time.chrono.IsoChronology\n import java.time.format.{DateTimeFormatter, DateTimeFormatterBuilder, ResolverStyle}\n import java.time.temporal.{ChronoField, TemporalAccessor, TemporalQueries}\n import java.util.Locale\n+import java.util.concurrent.ConcurrentHashMap\n \n trait DateTimeFormatterHelper {\n+  protected def toInstantWithZoneId(temporalAccessor: TemporalAccessor, zoneId: ZoneId): Instant = {\n+    val localTime = if (temporalAccessor.query(TemporalQueries.localTime) == null) {\n+      LocalTime.ofNanoOfDay(0)\n+    } else {\n+      LocalTime.from(temporalAccessor)\n+    }\n+    val localDate = LocalDate.from(temporalAccessor)\n+    val localDateTime = LocalDateTime.of(localDate, localTime)\n+    val zonedDateTime = ZonedDateTime.of(localDateTime, zoneId)\n+    Instant.from(zonedDateTime)\n+  }\n+}\n+\n+object DateTimeFormatterHelper {\n+  private val cache = new ConcurrentHashMap[(String, Locale), DateTimeFormatter]()"
+  }, {
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "Yea but this can be performed row-based operation as a corner case. For instance, an expression that allows different formats for each value can make this cache grows a lot. It's unlikely but pretty possible. Also, most importantly currently it doesn't look super useful for the same reason of https://github.com/apache/spark/pull/23462#issuecomment-451714252",
+    "commit": "c68778c6fbf2a30a22175150273e39e992936a8b",
+    "createdAt": "2019-01-06T14:51:57Z",
+    "diffHunk": "@@ -22,10 +22,40 @@ import java.time.chrono.IsoChronology\n import java.time.format.{DateTimeFormatter, DateTimeFormatterBuilder, ResolverStyle}\n import java.time.temporal.{ChronoField, TemporalAccessor, TemporalQueries}\n import java.util.Locale\n+import java.util.concurrent.ConcurrentHashMap\n \n trait DateTimeFormatterHelper {\n+  protected def toInstantWithZoneId(temporalAccessor: TemporalAccessor, zoneId: ZoneId): Instant = {\n+    val localTime = if (temporalAccessor.query(TemporalQueries.localTime) == null) {\n+      LocalTime.ofNanoOfDay(0)\n+    } else {\n+      LocalTime.from(temporalAccessor)\n+    }\n+    val localDate = LocalDate.from(temporalAccessor)\n+    val localDateTime = LocalDateTime.of(localDate, localTime)\n+    val zonedDateTime = ZonedDateTime.of(localDateTime, zoneId)\n+    Instant.from(zonedDateTime)\n+  }\n+}\n+\n+object DateTimeFormatterHelper {\n+  private val cache = new ConcurrentHashMap[(String, Locale), DateTimeFormatter]()"
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "True. This could wrap some weak-ref based cache if we needed to.\r\nGood point about whether this is really created a lot.",
+    "commit": "c68778c6fbf2a30a22175150273e39e992936a8b",
+    "createdAt": "2019-01-06T14:59:55Z",
+    "diffHunk": "@@ -22,10 +22,40 @@ import java.time.chrono.IsoChronology\n import java.time.format.{DateTimeFormatter, DateTimeFormatterBuilder, ResolverStyle}\n import java.time.temporal.{ChronoField, TemporalAccessor, TemporalQueries}\n import java.util.Locale\n+import java.util.concurrent.ConcurrentHashMap\n \n trait DateTimeFormatterHelper {\n+  protected def toInstantWithZoneId(temporalAccessor: TemporalAccessor, zoneId: ZoneId): Instant = {\n+    val localTime = if (temporalAccessor.query(TemporalQueries.localTime) == null) {\n+      LocalTime.ofNanoOfDay(0)\n+    } else {\n+      LocalTime.from(temporalAccessor)\n+    }\n+    val localDate = LocalDate.from(temporalAccessor)\n+    val localDateTime = LocalDateTime.of(localDate, localTime)\n+    val zonedDateTime = ZonedDateTime.of(localDateTime, zoneId)\n+    Instant.from(zonedDateTime)\n+  }\n+}\n+\n+object DateTimeFormatterHelper {\n+  private val cache = new ConcurrentHashMap[(String, Locale), DateTimeFormatter]()"
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "shall we use `com.google.common.cache.Cache`? It's used in several places inside Spark.",
+    "commit": "c68778c6fbf2a30a22175150273e39e992936a8b",
+    "createdAt": "2019-01-07T05:37:48Z",
+    "diffHunk": "@@ -22,10 +22,40 @@ import java.time.chrono.IsoChronology\n import java.time.format.{DateTimeFormatter, DateTimeFormatterBuilder, ResolverStyle}\n import java.time.temporal.{ChronoField, TemporalAccessor, TemporalQueries}\n import java.util.Locale\n+import java.util.concurrent.ConcurrentHashMap\n \n trait DateTimeFormatterHelper {\n+  protected def toInstantWithZoneId(temporalAccessor: TemporalAccessor, zoneId: ZoneId): Instant = {\n+    val localTime = if (temporalAccessor.query(TemporalQueries.localTime) == null) {\n+      LocalTime.ofNanoOfDay(0)\n+    } else {\n+      LocalTime.from(temporalAccessor)\n+    }\n+    val localDate = LocalDate.from(temporalAccessor)\n+    val localDateTime = LocalDateTime.of(localDate, localTime)\n+    val zonedDateTime = ZonedDateTime.of(localDateTime, zoneId)\n+    Instant.from(zonedDateTime)\n+  }\n+}\n+\n+object DateTimeFormatterHelper {\n+  private val cache = new ConcurrentHashMap[(String, Locale), DateTimeFormatter]()"
+  }, {
+    "author": {
+      "login": "MaxGekk"
+    },
+    "body": "If we have significant concern of infinitely cache growing, I will switch on fixed size LRU cache here. ",
+    "commit": "c68778c6fbf2a30a22175150273e39e992936a8b",
+    "createdAt": "2019-01-07T09:54:48Z",
+    "diffHunk": "@@ -22,10 +22,40 @@ import java.time.chrono.IsoChronology\n import java.time.format.{DateTimeFormatter, DateTimeFormatterBuilder, ResolverStyle}\n import java.time.temporal.{ChronoField, TemporalAccessor, TemporalQueries}\n import java.util.Locale\n+import java.util.concurrent.ConcurrentHashMap\n \n trait DateTimeFormatterHelper {\n+  protected def toInstantWithZoneId(temporalAccessor: TemporalAccessor, zoneId: ZoneId): Instant = {\n+    val localTime = if (temporalAccessor.query(TemporalQueries.localTime) == null) {\n+      LocalTime.ofNanoOfDay(0)\n+    } else {\n+      LocalTime.from(temporalAccessor)\n+    }\n+    val localDate = LocalDate.from(temporalAccessor)\n+    val localDateTime = LocalDateTime.of(localDate, localTime)\n+    val zonedDateTime = ZonedDateTime.of(localDateTime, zoneId)\n+    Instant.from(zonedDateTime)\n+  }\n+}\n+\n+object DateTimeFormatterHelper {\n+  private val cache = new ConcurrentHashMap[(String, Locale), DateTimeFormatter]()"
+  }, {
+    "author": {
+      "login": "MaxGekk"
+    },
+    "body": "I think it makes sense to restrict growing of the cache. I replaced it by Guava's cache.",
+    "commit": "c68778c6fbf2a30a22175150273e39e992936a8b",
+    "createdAt": "2019-01-07T20:32:24Z",
+    "diffHunk": "@@ -22,10 +22,40 @@ import java.time.chrono.IsoChronology\n import java.time.format.{DateTimeFormatter, DateTimeFormatterBuilder, ResolverStyle}\n import java.time.temporal.{ChronoField, TemporalAccessor, TemporalQueries}\n import java.util.Locale\n+import java.util.concurrent.ConcurrentHashMap\n \n trait DateTimeFormatterHelper {\n+  protected def toInstantWithZoneId(temporalAccessor: TemporalAccessor, zoneId: ZoneId): Instant = {\n+    val localTime = if (temporalAccessor.query(TemporalQueries.localTime) == null) {\n+      LocalTime.ofNanoOfDay(0)\n+    } else {\n+      LocalTime.from(temporalAccessor)\n+    }\n+    val localDate = LocalDate.from(temporalAccessor)\n+    val localDateTime = LocalDateTime.of(localDate, localTime)\n+    val zonedDateTime = ZonedDateTime.of(localDateTime, zoneId)\n+    Instant.from(zonedDateTime)\n+  }\n+}\n+\n+object DateTimeFormatterHelper {\n+  private val cache = new ConcurrentHashMap[(String, Locale), DateTimeFormatter]()"
+  }],
+  "prId": 23462
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "`computeIfAbsent` ought to be simpler and more efficient here, to compute the value only if it isn't already present",
+    "commit": "c68778c6fbf2a30a22175150273e39e992936a8b",
+    "createdAt": "2019-01-06T14:32:31Z",
+    "diffHunk": "@@ -22,10 +22,40 @@ import java.time.chrono.IsoChronology\n import java.time.format.{DateTimeFormatter, DateTimeFormatterBuilder, ResolverStyle}\n import java.time.temporal.{ChronoField, TemporalAccessor, TemporalQueries}\n import java.util.Locale\n+import java.util.concurrent.ConcurrentHashMap\n \n trait DateTimeFormatterHelper {\n+  protected def toInstantWithZoneId(temporalAccessor: TemporalAccessor, zoneId: ZoneId): Instant = {\n+    val localTime = if (temporalAccessor.query(TemporalQueries.localTime) == null) {\n+      LocalTime.ofNanoOfDay(0)\n+    } else {\n+      LocalTime.from(temporalAccessor)\n+    }\n+    val localDate = LocalDate.from(temporalAccessor)\n+    val localDateTime = LocalDateTime.of(localDate, localTime)\n+    val zonedDateTime = ZonedDateTime.of(localDateTime, zoneId)\n+    Instant.from(zonedDateTime)\n+  }\n+}\n+\n+object DateTimeFormatterHelper {\n+  private val cache = new ConcurrentHashMap[(String, Locale), DateTimeFormatter]()\n+\n+  def getFormatter(pattern: String, locale: Locale): DateTimeFormatter = {\n+    val key = (pattern, locale)\n+    var formatter = cache.get(key)"
+  }, {
+    "author": {
+      "login": "MaxGekk"
+    },
+    "body": "but it can block other threads during lambda computation: `...Some attempted update operations on this map by other threads may be blocked while computation is in progress, so the computation should be short and simple...` but this implementation does not.",
+    "commit": "c68778c6fbf2a30a22175150273e39e992936a8b",
+    "createdAt": "2019-01-06T14:58:15Z",
+    "diffHunk": "@@ -22,10 +22,40 @@ import java.time.chrono.IsoChronology\n import java.time.format.{DateTimeFormatter, DateTimeFormatterBuilder, ResolverStyle}\n import java.time.temporal.{ChronoField, TemporalAccessor, TemporalQueries}\n import java.util.Locale\n+import java.util.concurrent.ConcurrentHashMap\n \n trait DateTimeFormatterHelper {\n+  protected def toInstantWithZoneId(temporalAccessor: TemporalAccessor, zoneId: ZoneId): Instant = {\n+    val localTime = if (temporalAccessor.query(TemporalQueries.localTime) == null) {\n+      LocalTime.ofNanoOfDay(0)\n+    } else {\n+      LocalTime.from(temporalAccessor)\n+    }\n+    val localDate = LocalDate.from(temporalAccessor)\n+    val localDateTime = LocalDateTime.of(localDate, localTime)\n+    val zonedDateTime = ZonedDateTime.of(localDateTime, zoneId)\n+    Instant.from(zonedDateTime)\n+  }\n+}\n+\n+object DateTimeFormatterHelper {\n+  private val cache = new ConcurrentHashMap[(String, Locale), DateTimeFormatter]()\n+\n+  def getFormatter(pattern: String, locale: Locale): DateTimeFormatter = {\n+    val key = (pattern, locale)\n+    var formatter = cache.get(key)"
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Sure, but that's necessary to avoid computing it more than once right? and only is an issue if multiple threads need the value at once, the first time. if it's blocking for milliseconds that seems OK. It would be an issue if it meant every subsequent access slowed down or was unnecessarily contended.",
+    "commit": "c68778c6fbf2a30a22175150273e39e992936a8b",
+    "createdAt": "2019-01-06T15:03:00Z",
+    "diffHunk": "@@ -22,10 +22,40 @@ import java.time.chrono.IsoChronology\n import java.time.format.{DateTimeFormatter, DateTimeFormatterBuilder, ResolverStyle}\n import java.time.temporal.{ChronoField, TemporalAccessor, TemporalQueries}\n import java.util.Locale\n+import java.util.concurrent.ConcurrentHashMap\n \n trait DateTimeFormatterHelper {\n+  protected def toInstantWithZoneId(temporalAccessor: TemporalAccessor, zoneId: ZoneId): Instant = {\n+    val localTime = if (temporalAccessor.query(TemporalQueries.localTime) == null) {\n+      LocalTime.ofNanoOfDay(0)\n+    } else {\n+      LocalTime.from(temporalAccessor)\n+    }\n+    val localDate = LocalDate.from(temporalAccessor)\n+    val localDateTime = LocalDateTime.of(localDate, localTime)\n+    val zonedDateTime = ZonedDateTime.of(localDateTime, zoneId)\n+    Instant.from(zonedDateTime)\n+  }\n+}\n+\n+object DateTimeFormatterHelper {\n+  private val cache = new ConcurrentHashMap[(String, Locale), DateTimeFormatter]()\n+\n+  def getFormatter(pattern: String, locale: Locale): DateTimeFormatter = {\n+    val key = (pattern, locale)\n+    var formatter = cache.get(key)"
+  }, {
+    "author": {
+      "login": "MaxGekk"
+    },
+    "body": "I just follow implementation of FastDateFormat from Apache Commons lang3: https://github.com/apache/commons-lang/blob/8e8b8e05e4eb9aa009444c2fea3552d28b57aa98/src/main/java/org/apache/commons/lang3/time/FormatCache.java#L71-L91",
+    "commit": "c68778c6fbf2a30a22175150273e39e992936a8b",
+    "createdAt": "2019-01-06T15:07:34Z",
+    "diffHunk": "@@ -22,10 +22,40 @@ import java.time.chrono.IsoChronology\n import java.time.format.{DateTimeFormatter, DateTimeFormatterBuilder, ResolverStyle}\n import java.time.temporal.{ChronoField, TemporalAccessor, TemporalQueries}\n import java.util.Locale\n+import java.util.concurrent.ConcurrentHashMap\n \n trait DateTimeFormatterHelper {\n+  protected def toInstantWithZoneId(temporalAccessor: TemporalAccessor, zoneId: ZoneId): Instant = {\n+    val localTime = if (temporalAccessor.query(TemporalQueries.localTime) == null) {\n+      LocalTime.ofNanoOfDay(0)\n+    } else {\n+      LocalTime.from(temporalAccessor)\n+    }\n+    val localDate = LocalDate.from(temporalAccessor)\n+    val localDateTime = LocalDateTime.of(localDate, localTime)\n+    val zonedDateTime = ZonedDateTime.of(localDateTime, zoneId)\n+    Instant.from(zonedDateTime)\n+  }\n+}\n+\n+object DateTimeFormatterHelper {\n+  private val cache = new ConcurrentHashMap[(String, Locale), DateTimeFormatter]()\n+\n+  def getFormatter(pattern: String, locale: Locale): DateTimeFormatter = {\n+    val key = (pattern, locale)\n+    var formatter = cache.get(key)"
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Commons lang3 supports Java 7, so couldn't use computeIfAbsent. I presume it would if it could. I don't feel super strongly about it, but think we can take advantage of Java 8 here. It saves a second lookup, and in so doing, avoids the (fairly harmless) race condition here -- multiple threads can find the instance isn't cached and compute and try to put the result. It is still correct but not optimal.",
+    "commit": "c68778c6fbf2a30a22175150273e39e992936a8b",
+    "createdAt": "2019-01-06T15:44:13Z",
+    "diffHunk": "@@ -22,10 +22,40 @@ import java.time.chrono.IsoChronology\n import java.time.format.{DateTimeFormatter, DateTimeFormatterBuilder, ResolverStyle}\n import java.time.temporal.{ChronoField, TemporalAccessor, TemporalQueries}\n import java.util.Locale\n+import java.util.concurrent.ConcurrentHashMap\n \n trait DateTimeFormatterHelper {\n+  protected def toInstantWithZoneId(temporalAccessor: TemporalAccessor, zoneId: ZoneId): Instant = {\n+    val localTime = if (temporalAccessor.query(TemporalQueries.localTime) == null) {\n+      LocalTime.ofNanoOfDay(0)\n+    } else {\n+      LocalTime.from(temporalAccessor)\n+    }\n+    val localDate = LocalDate.from(temporalAccessor)\n+    val localDateTime = LocalDateTime.of(localDate, localTime)\n+    val zonedDateTime = ZonedDateTime.of(localDateTime, zoneId)\n+    Instant.from(zonedDateTime)\n+  }\n+}\n+\n+object DateTimeFormatterHelper {\n+  private val cache = new ConcurrentHashMap[(String, Locale), DateTimeFormatter]()\n+\n+  def getFormatter(pattern: String, locale: Locale): DateTimeFormatter = {\n+    val key = (pattern, locale)\n+    var formatter = cache.get(key)"
+  }, {
+    "author": {
+      "login": "kiszk"
+    },
+    "body": "I agree with @srowen. If the blocking frequently occurs (i.e. key does not exist), this cache does not work effectively.  \r\nIf a key frequently exists, the blocking will not occur frequently.",
+    "commit": "c68778c6fbf2a30a22175150273e39e992936a8b",
+    "createdAt": "2019-01-06T16:09:08Z",
+    "diffHunk": "@@ -22,10 +22,40 @@ import java.time.chrono.IsoChronology\n import java.time.format.{DateTimeFormatter, DateTimeFormatterBuilder, ResolverStyle}\n import java.time.temporal.{ChronoField, TemporalAccessor, TemporalQueries}\n import java.util.Locale\n+import java.util.concurrent.ConcurrentHashMap\n \n trait DateTimeFormatterHelper {\n+  protected def toInstantWithZoneId(temporalAccessor: TemporalAccessor, zoneId: ZoneId): Instant = {\n+    val localTime = if (temporalAccessor.query(TemporalQueries.localTime) == null) {\n+      LocalTime.ofNanoOfDay(0)\n+    } else {\n+      LocalTime.from(temporalAccessor)\n+    }\n+    val localDate = LocalDate.from(temporalAccessor)\n+    val localDateTime = LocalDateTime.of(localDate, localTime)\n+    val zonedDateTime = ZonedDateTime.of(localDateTime, zoneId)\n+    Instant.from(zonedDateTime)\n+  }\n+}\n+\n+object DateTimeFormatterHelper {\n+  private val cache = new ConcurrentHashMap[(String, Locale), DateTimeFormatter]()\n+\n+  def getFormatter(pattern: String, locale: Locale): DateTimeFormatter = {\n+    val key = (pattern, locale)\n+    var formatter = cache.get(key)"
+  }],
+  "prId": 23462
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "do we really need the expire policy?",
+    "commit": "c68778c6fbf2a30a22175150273e39e992936a8b",
+    "createdAt": "2019-01-08T13:08:03Z",
+    "diffHunk": "@@ -22,10 +22,34 @@ import java.time.chrono.IsoChronology\n import java.time.format.{DateTimeFormatter, DateTimeFormatterBuilder, ResolverStyle}\n import java.time.temporal.{ChronoField, TemporalAccessor, TemporalQueries}\n import java.util.Locale\n+import java.util.concurrent.{Callable, TimeUnit}\n+\n+import com.google.common.cache.CacheBuilder\n+import com.google.common.util.concurrent.{ExecutionError, UncheckedExecutionException}\n \n trait DateTimeFormatterHelper {\n+  protected def toInstantWithZoneId(temporalAccessor: TemporalAccessor, zoneId: ZoneId): Instant = {\n+    val localTime = if (temporalAccessor.query(TemporalQueries.localTime) == null) {\n+      LocalTime.ofNanoOfDay(0)\n+    } else {\n+      LocalTime.from(temporalAccessor)\n+    }\n+    val localDate = LocalDate.from(temporalAccessor)\n+    val localDateTime = LocalDateTime.of(localDate, localTime)\n+    val zonedDateTime = ZonedDateTime.of(localDateTime, zoneId)\n+    Instant.from(zonedDateTime)\n+  }\n+}\n+\n+object DateTimeFormatterHelper {\n+  private val cache = CacheBuilder.newBuilder()\n+    .initialCapacity(8)\n+    .maximumSize(128)\n+    .expireAfterAccess(1, TimeUnit.HOURS)"
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Agree, I think it has to make a thread to deal with it and it's not worth it. Min size doesn't really matter either. ",
+    "commit": "c68778c6fbf2a30a22175150273e39e992936a8b",
+    "createdAt": "2019-01-08T14:36:29Z",
+    "diffHunk": "@@ -22,10 +22,34 @@ import java.time.chrono.IsoChronology\n import java.time.format.{DateTimeFormatter, DateTimeFormatterBuilder, ResolverStyle}\n import java.time.temporal.{ChronoField, TemporalAccessor, TemporalQueries}\n import java.util.Locale\n+import java.util.concurrent.{Callable, TimeUnit}\n+\n+import com.google.common.cache.CacheBuilder\n+import com.google.common.util.concurrent.{ExecutionError, UncheckedExecutionException}\n \n trait DateTimeFormatterHelper {\n+  protected def toInstantWithZoneId(temporalAccessor: TemporalAccessor, zoneId: ZoneId): Instant = {\n+    val localTime = if (temporalAccessor.query(TemporalQueries.localTime) == null) {\n+      LocalTime.ofNanoOfDay(0)\n+    } else {\n+      LocalTime.from(temporalAccessor)\n+    }\n+    val localDate = LocalDate.from(temporalAccessor)\n+    val localDateTime = LocalDateTime.of(localDate, localTime)\n+    val zonedDateTime = ZonedDateTime.of(localDateTime, zoneId)\n+    Instant.from(zonedDateTime)\n+  }\n+}\n+\n+object DateTimeFormatterHelper {\n+  private val cache = CacheBuilder.newBuilder()\n+    .initialCapacity(8)\n+    .maximumSize(128)\n+    .expireAfterAccess(1, TimeUnit.HOURS)"
+  }],
+  "prId": 23462
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Not sure it matters but this makes a callable on every call. Java classes don't have any lazy eval. It could be saved and reused. ",
+    "commit": "c68778c6fbf2a30a22175150273e39e992936a8b",
+    "createdAt": "2019-01-08T14:37:19Z",
+    "diffHunk": "@@ -39,15 +63,17 @@ trait DateTimeFormatterHelper {\n       .withResolverStyle(ResolverStyle.STRICT)\n   }\n \n-  protected def toInstantWithZoneId(temporalAccessor: TemporalAccessor, zoneId: ZoneId): Instant = {\n-    val localTime = if (temporalAccessor.query(TemporalQueries.localTime) == null) {\n-      LocalTime.ofNanoOfDay(0)\n-    } else {\n-      LocalTime.from(temporalAccessor)\n+  def getFormatter(pattern: String, locale: Locale): DateTimeFormatter = {\n+    try {\n+      cache.get(\n+        (pattern, locale),\n+        new Callable[DateTimeFormatter]() {"
+  }, {
+    "author": {
+      "login": "MaxGekk"
+    },
+    "body": "I had to construct the lambda function in previous version too: https://github.com/apache/spark/pull/23462/commits/f08c71e2f3d61bbe9d70e528a6a022b776fafa1a#diff-3e4b85f54d2e75f1b5b845279749024eR45 This `_ => buildFormatter(pattern, locale)` creates new instance, correct?",
+    "commit": "c68778c6fbf2a30a22175150273e39e992936a8b",
+    "createdAt": "2019-01-08T15:17:34Z",
+    "diffHunk": "@@ -39,15 +63,17 @@ trait DateTimeFormatterHelper {\n       .withResolverStyle(ResolverStyle.STRICT)\n   }\n \n-  protected def toInstantWithZoneId(temporalAccessor: TemporalAccessor, zoneId: ZoneId): Instant = {\n-    val localTime = if (temporalAccessor.query(TemporalQueries.localTime) == null) {\n-      LocalTime.ofNanoOfDay(0)\n-    } else {\n-      LocalTime.from(temporalAccessor)\n+  def getFormatter(pattern: String, locale: Locale): DateTimeFormatter = {\n+    try {\n+      cache.get(\n+        (pattern, locale),\n+        new Callable[DateTimeFormatter]() {"
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "That also creates something that implement Callable, yes, and is a little cleaner, but I think the issue is that it gets instantiated every time? hardly a big deal, just wonder if this is moderately performance-sensitive.",
+    "commit": "c68778c6fbf2a30a22175150273e39e992936a8b",
+    "createdAt": "2019-01-08T15:59:49Z",
+    "diffHunk": "@@ -39,15 +63,17 @@ trait DateTimeFormatterHelper {\n       .withResolverStyle(ResolverStyle.STRICT)\n   }\n \n-  protected def toInstantWithZoneId(temporalAccessor: TemporalAccessor, zoneId: ZoneId): Instant = {\n-    val localTime = if (temporalAccessor.query(TemporalQueries.localTime) == null) {\n-      LocalTime.ofNanoOfDay(0)\n-    } else {\n-      LocalTime.from(temporalAccessor)\n+  def getFormatter(pattern: String, locale: Locale): DateTimeFormatter = {\n+    try {\n+      cache.get(\n+        (pattern, locale),\n+        new Callable[DateTimeFormatter]() {"
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "I'm not sure if there is a better way. To save the computation we must pass a \"function\" to `getOrElse`, and \"function\" in Java/Scala is an object. Another way is to sacrifice multi-thread contention a little bit:\r\n```\r\nsynchronized {\r\n  val formatter = cache.get...\r\n  if (formatter == null) {\r\n    val f = create formatter\r\n    cache.put(key, f)\r\n    f\r\n  } else {\r\n    formatter\r\n  }\r\n```",
+    "commit": "c68778c6fbf2a30a22175150273e39e992936a8b",
+    "createdAt": "2019-01-08T16:55:51Z",
+    "diffHunk": "@@ -39,15 +63,17 @@ trait DateTimeFormatterHelper {\n       .withResolverStyle(ResolverStyle.STRICT)\n   }\n \n-  protected def toInstantWithZoneId(temporalAccessor: TemporalAccessor, zoneId: ZoneId): Instant = {\n-    val localTime = if (temporalAccessor.query(TemporalQueries.localTime) == null) {\n-      LocalTime.ofNanoOfDay(0)\n-    } else {\n-      LocalTime.from(temporalAccessor)\n+  def getFormatter(pattern: String, locale: Locale): DateTimeFormatter = {\n+    try {\n+      cache.get(\n+        (pattern, locale),\n+        new Callable[DateTimeFormatter]() {"
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Nevermind, I think there isn't a better way, yes. I thought this could be defined once as a function but even that would have to produce a lambda.",
+    "commit": "c68778c6fbf2a30a22175150273e39e992936a8b",
+    "createdAt": "2019-01-08T19:12:47Z",
+    "diffHunk": "@@ -39,15 +63,17 @@ trait DateTimeFormatterHelper {\n       .withResolverStyle(ResolverStyle.STRICT)\n   }\n \n-  protected def toInstantWithZoneId(temporalAccessor: TemporalAccessor, zoneId: ZoneId): Instant = {\n-    val localTime = if (temporalAccessor.query(TemporalQueries.localTime) == null) {\n-      LocalTime.ofNanoOfDay(0)\n-    } else {\n-      LocalTime.from(temporalAccessor)\n+  def getFormatter(pattern: String, locale: Locale): DateTimeFormatter = {\n+    try {\n+      cache.get(\n+        (pattern, locale),\n+        new Callable[DateTimeFormatter]() {"
+  }, {
+    "author": {
+      "login": "MaxGekk"
+    },
+    "body": "If we suppose that patterns (and locale) are no changed frequently, and they present in cache most likely, I think it makes sense to avoid creation of `Callable` instance. If you don't mind, I will change the code to:\r\n```scala\r\nval key = (pattern, locale)\r\nvar formatter = cache.getIfPresent(key)\r\nif (formatter == null) {\r\n  formatter = buildFormatter(pattern, locale)\r\n  cache.put(key, formatter)\r\n}\r\nformatter\r\n```\r\nwithout `synchronized {...}`. In rare cases, the formatter will be created twice but I think it is ok.",
+    "commit": "c68778c6fbf2a30a22175150273e39e992936a8b",
+    "createdAt": "2019-01-08T19:20:06Z",
+    "diffHunk": "@@ -39,15 +63,17 @@ trait DateTimeFormatterHelper {\n       .withResolverStyle(ResolverStyle.STRICT)\n   }\n \n-  protected def toInstantWithZoneId(temporalAccessor: TemporalAccessor, zoneId: ZoneId): Instant = {\n-    val localTime = if (temporalAccessor.query(TemporalQueries.localTime) == null) {\n-      LocalTime.ofNanoOfDay(0)\n-    } else {\n-      LocalTime.from(temporalAccessor)\n+  def getFormatter(pattern: String, locale: Locale): DateTimeFormatter = {\n+    try {\n+      cache.get(\n+        (pattern, locale),\n+        new Callable[DateTimeFormatter]() {"
+  }],
+  "prId": 23462
+}, {
+  "comments": [{
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "How about `getOrCreateFormatter`?",
+    "commit": "c68778c6fbf2a30a22175150273e39e992936a8b",
+    "createdAt": "2019-01-08T15:06:10Z",
+    "diffHunk": "@@ -39,15 +63,17 @@ trait DateTimeFormatterHelper {\n       .withResolverStyle(ResolverStyle.STRICT)\n   }\n \n-  protected def toInstantWithZoneId(temporalAccessor: TemporalAccessor, zoneId: ZoneId): Instant = {\n-    val localTime = if (temporalAccessor.query(TemporalQueries.localTime) == null) {\n-      LocalTime.ofNanoOfDay(0)\n-    } else {\n-      LocalTime.from(temporalAccessor)\n+  def getFormatter(pattern: String, locale: Locale): DateTimeFormatter = {"
+  }, {
+    "author": {
+      "login": "MaxGekk"
+    },
+    "body": "Renamed",
+    "commit": "c68778c6fbf2a30a22175150273e39e992936a8b",
+    "createdAt": "2019-01-08T19:38:56Z",
+    "diffHunk": "@@ -39,15 +63,17 @@ trait DateTimeFormatterHelper {\n       .withResolverStyle(ResolverStyle.STRICT)\n   }\n \n-  protected def toInstantWithZoneId(temporalAccessor: TemporalAccessor, zoneId: ZoneId): Instant = {\n-    val localTime = if (temporalAccessor.query(TemporalQueries.localTime) == null) {\n-      LocalTime.ofNanoOfDay(0)\n-    } else {\n-      LocalTime.from(temporalAccessor)\n+  def getFormatter(pattern: String, locale: Locale): DateTimeFormatter = {"
+  }],
+  "prId": 23462
+}, {
+  "comments": [{
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "How about making this private, and make a function under `DateTimeFormatterHelper` trait that calls this object? In that way, we won't need \r\n\r\n```scala\r\nclass ... extends DateTimeFormatterHelper {\r\n  DateTimeFormatterHelper.getFormatter\r\n}\r\n```\r\n\r\nto\r\n\r\n```scala\r\nclass ... extends DateTimeFormatterHelper {\r\n getFormatter\r\n}\r\n```",
+    "commit": "c68778c6fbf2a30a22175150273e39e992936a8b",
+    "createdAt": "2019-01-08T15:09:05Z",
+    "diffHunk": "@@ -22,10 +22,34 @@ import java.time.chrono.IsoChronology\n import java.time.format.{DateTimeFormatter, DateTimeFormatterBuilder, ResolverStyle}\n import java.time.temporal.{ChronoField, TemporalAccessor, TemporalQueries}\n import java.util.Locale\n+import java.util.concurrent.{Callable, TimeUnit}\n+\n+import com.google.common.cache.CacheBuilder\n+import com.google.common.util.concurrent.{ExecutionError, UncheckedExecutionException}\n \n trait DateTimeFormatterHelper {\n+  protected def toInstantWithZoneId(temporalAccessor: TemporalAccessor, zoneId: ZoneId): Instant = {\n+    val localTime = if (temporalAccessor.query(TemporalQueries.localTime) == null) {\n+      LocalTime.ofNanoOfDay(0)\n+    } else {\n+      LocalTime.from(temporalAccessor)\n+    }\n+    val localDate = LocalDate.from(temporalAccessor)\n+    val localDateTime = LocalDateTime.of(localDate, localTime)\n+    val zonedDateTime = ZonedDateTime.of(localDateTime, zoneId)\n+    Instant.from(zonedDateTime)\n+  }\n+}\n+\n+object DateTimeFormatterHelper {"
+  }, {
+    "author": {
+      "login": "MaxGekk"
+    },
+    "body": "I'll move `getOrCreateFormatter` to the trait",
+    "commit": "c68778c6fbf2a30a22175150273e39e992936a8b",
+    "createdAt": "2019-01-08T19:39:48Z",
+    "diffHunk": "@@ -22,10 +22,34 @@ import java.time.chrono.IsoChronology\n import java.time.format.{DateTimeFormatter, DateTimeFormatterBuilder, ResolverStyle}\n import java.time.temporal.{ChronoField, TemporalAccessor, TemporalQueries}\n import java.util.Locale\n+import java.util.concurrent.{Callable, TimeUnit}\n+\n+import com.google.common.cache.CacheBuilder\n+import com.google.common.util.concurrent.{ExecutionError, UncheckedExecutionException}\n \n trait DateTimeFormatterHelper {\n+  protected def toInstantWithZoneId(temporalAccessor: TemporalAccessor, zoneId: ZoneId): Instant = {\n+    val localTime = if (temporalAccessor.query(TemporalQueries.localTime) == null) {\n+      LocalTime.ofNanoOfDay(0)\n+    } else {\n+      LocalTime.from(temporalAccessor)\n+    }\n+    val localDate = LocalDate.from(temporalAccessor)\n+    val localDateTime = LocalDateTime.of(localDate, localTime)\n+    val zonedDateTime = ZonedDateTime.of(localDateTime, zoneId)\n+    Instant.from(zonedDateTime)\n+  }\n+}\n+\n+object DateTimeFormatterHelper {"
+  }],
+  "prId": 23462
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "let's add a comment to say that, we intentionally drop the `synchronized` here, as the worst case is we create the same formatter more than once, which doesn't matter.\r\n\r\nwithout the comment, I'm afraid people may open PRs to add the `synchronized` later, as they don't know the context.",
+    "commit": "c68778c6fbf2a30a22175150273e39e992936a8b",
+    "createdAt": "2019-01-09T01:15:17Z",
+    "diffHunk": "@@ -23,9 +23,40 @@ import java.time.format.{DateTimeFormatter, DateTimeFormatterBuilder, ResolverSt\n import java.time.temporal.{ChronoField, TemporalAccessor, TemporalQueries}\n import java.util.Locale\n \n+import com.google.common.cache.CacheBuilder\n+\n+import org.apache.spark.sql.catalyst.util.DateTimeFormatterHelper._\n+\n trait DateTimeFormatterHelper {\n+  protected def toInstantWithZoneId(temporalAccessor: TemporalAccessor, zoneId: ZoneId): Instant = {\n+    val localTime = if (temporalAccessor.query(TemporalQueries.localTime) == null) {\n+      LocalTime.ofNanoOfDay(0)\n+    } else {\n+      LocalTime.from(temporalAccessor)\n+    }\n+    val localDate = LocalDate.from(temporalAccessor)\n+    val localDateTime = LocalDateTime.of(localDate, localTime)\n+    val zonedDateTime = ZonedDateTime.of(localDateTime, zoneId)\n+    Instant.from(zonedDateTime)\n+  }\n+\n+  def getOrCreateFormatter(pattern: String, locale: Locale): DateTimeFormatter = {\n+    val key = (pattern, locale)\n+    var formatter = cache.getIfPresent(key)\n+    if (formatter == null) {",
+    "line": 30
+  }],
+  "prId": 23462
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "`protected`",
+    "commit": "c68778c6fbf2a30a22175150273e39e992936a8b",
+    "createdAt": "2019-01-09T01:15:37Z",
+    "diffHunk": "@@ -23,9 +23,40 @@ import java.time.format.{DateTimeFormatter, DateTimeFormatterBuilder, ResolverSt\n import java.time.temporal.{ChronoField, TemporalAccessor, TemporalQueries}\n import java.util.Locale\n \n+import com.google.common.cache.CacheBuilder\n+\n+import org.apache.spark.sql.catalyst.util.DateTimeFormatterHelper._\n+\n trait DateTimeFormatterHelper {\n+  protected def toInstantWithZoneId(temporalAccessor: TemporalAccessor, zoneId: ZoneId): Instant = {\n+    val localTime = if (temporalAccessor.query(TemporalQueries.localTime) == null) {\n+      LocalTime.ofNanoOfDay(0)\n+    } else {\n+      LocalTime.from(temporalAccessor)\n+    }\n+    val localDate = LocalDate.from(temporalAccessor)\n+    val localDateTime = LocalDateTime.of(localDate, localTime)\n+    val zonedDateTime = ZonedDateTime.of(localDateTime, zoneId)\n+    Instant.from(zonedDateTime)\n+  }\n+\n+  def getOrCreateFormatter(pattern: String, locale: Locale): DateTimeFormatter = {"
+  }],
+  "prId": 23462
+}]

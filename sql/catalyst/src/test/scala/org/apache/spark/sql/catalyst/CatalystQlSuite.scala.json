@@ -1,0 +1,32 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "hvanhovell"
+    },
+    "body": "Could you test the actual plan?\n",
+    "commit": "d024fff0e729ce12b4da67cb7cf922c5bbf53186",
+    "createdAt": "2016-02-15T13:07:00Z",
+    "diffHunk": "@@ -201,4 +201,13 @@ class CatalystQlSuite extends PlanTest {\n     parser.parsePlan(\"select sum(product + 1) over (partition by (product + (1)) order by 2) \" +\n       \"from windowData\")\n   }\n+\n+  test(\"nesting UNION\") {\n+    parser.parsePlan(\"SELECT  `u_1`.`id` FROM (((SELECT  `t0`.`id` FROM `default`.`t0`) \" +"
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "Sure. I will update this.\n",
+    "commit": "d024fff0e729ce12b4da67cb7cf922c5bbf53186",
+    "createdAt": "2016-02-15T13:14:23Z",
+    "diffHunk": "@@ -201,4 +201,13 @@ class CatalystQlSuite extends PlanTest {\n     parser.parsePlan(\"select sum(product + 1) over (partition by (product + (1)) order by 2) \" +\n       \"from windowData\")\n   }\n+\n+  test(\"nesting UNION\") {\n+    parser.parsePlan(\"SELECT  `u_1`.`id` FROM (((SELECT  `t0`.`id` FROM `default`.`t0`) \" +"
+  }],
+  "prId": 11204
+}, {
+  "comments": [{
+    "author": {
+      "login": "viirya"
+    },
+    "body": "Recursively nested UNION.\n",
+    "commit": "d024fff0e729ce12b4da67cb7cf922c5bbf53186",
+    "createdAt": "2016-02-16T04:35:15Z",
+    "diffHunk": "@@ -201,4 +201,68 @@ class CatalystQlSuite extends PlanTest {\n     parser.parsePlan(\"select sum(product + 1) over (partition by (product + (1)) order by 2) \" +\n       \"from windowData\")\n   }\n+\n+  test(\"nesting UNION\") {\n+    val parsed = parser.parsePlan(\n+      \"\"\"\n+       |SELECT  `u_1`.`id` FROM (((SELECT  `t0`.`id` FROM `default`.`t0`)\n+       |UNION ALL (SELECT  `t0`.`id` FROM `default`.`t0`)) UNION ALL\n+       |(SELECT  `t0`.`id` FROM `default`.`t0`)) AS u_1\n+      \"\"\".stripMargin)\n+\n+    val expected = Project(\n+      UnresolvedAlias(UnresolvedAttribute(\"u_1.id\"), None) :: Nil,\n+      Subquery(\"u_1\",\n+        Union(\n+          Union(\n+            Project(\n+              UnresolvedAlias(UnresolvedAttribute(\"t0.id\"), None) :: Nil,\n+              UnresolvedRelation(TableIdentifier(\"t0\", Some(\"default\")), None)),\n+            Project(\n+              UnresolvedAlias(UnresolvedAttribute(\"t0.id\"), None) :: Nil,\n+              UnresolvedRelation(TableIdentifier(\"t0\", Some(\"default\")), None))),\n+          Project(\n+            UnresolvedAlias(UnresolvedAttribute(\"t0.id\"), None) :: Nil,\n+            UnresolvedRelation(TableIdentifier(\"t0\", Some(\"default\")), None)))))\n+\n+    comparePlans(parsed, expected)\n+\n+    val parsedSame = parser.parsePlan(\n+      \"\"\"\n+       |SELECT  `u_1`.`id` FROM ((SELECT  `t0`.`id` FROM `default`.`t0`)\n+       |UNION ALL (SELECT  `t0`.`id` FROM `default`.`t0`) UNION ALL\n+       |(SELECT  `t0`.`id` FROM `default`.`t0`)) AS u_1\n+      \"\"\".stripMargin)\n+\n+    comparePlans(parsedSame, expected)\n+\n+    val parsed2 = parser.parsePlan(",
+    "line": 38
+  }],
+  "prId": 11204
+}]

@@ -1,0 +1,53 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "`synchronized` is to make sure `writeObject` never write some intermediate states of `DStreamGraph`.",
+    "commit": "e51623c007b9faf2ba4fe7c92ad138b0c9c2a8c1",
+    "createdAt": "2017-01-17T07:17:10Z",
+    "diffHunk": "@@ -112,12 +112,10 @@ final private[streaming] class DStreamGraph extends Serializable with Logging {\n \n   def generateJobs(time: Time): Seq[Job] = {\n     logDebug(\"Generating jobs for time \" + time)\n-    val jobs = this.synchronized {\n-      outputStreams.flatMap { outputStream =>\n-        val jobOption = outputStream.generateJob(time)\n-        jobOption.foreach(_.setCallSite(outputStream.creationSite))\n-        jobOption\n-      }\n+    val jobs = getOutputStreams().flatMap { outputStream =>"
+  }, {
+    "author": {
+      "login": "uncleGen"
+    },
+    "body": "Yes, I have put the question to be too simple",
+    "commit": "e51623c007b9faf2ba4fe7c92ad138b0c9c2a8c1",
+    "createdAt": "2017-01-17T07:57:31Z",
+    "diffHunk": "@@ -112,12 +112,10 @@ final private[streaming] class DStreamGraph extends Serializable with Logging {\n \n   def generateJobs(time: Time): Seq[Job] = {\n     logDebug(\"Generating jobs for time \" + time)\n-    val jobs = this.synchronized {\n-      outputStreams.flatMap { outputStream =>\n-        val jobOption = outputStream.generateJob(time)\n-        jobOption.foreach(_.setCallSite(outputStream.creationSite))\n-        jobOption\n-      }\n+    val jobs = getOutputStreams().flatMap { outputStream =>"
+  }],
+  "prId": 16601
+}, {
+  "comments": [{
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "nit: add `@volatile private` ",
+    "commit": "e51623c007b9faf2ba4fe7c92ad138b0c9c2a8c1",
+    "createdAt": "2017-01-18T01:22:54Z",
+    "diffHunk": "@@ -31,12 +31,15 @@ final private[streaming] class DStreamGraph extends Serializable with Logging {\n   private val inputStreams = new ArrayBuffer[InputDStream[_]]()\n   private val outputStreams = new ArrayBuffer[DStream[_]]()\n \n+  val inputStreamNameAndID = new ArrayBuffer[(String, Int)]()\n+\n   var rememberDuration: Duration = null\n   var checkpointInProgress = false\n \n   var zeroTime: Time = null\n   var startTime: Time = null\n   var batchDuration: Duration = null\n+  var numReceivers: Int = 0"
+  }],
+  "prId": 16601
+}, {
+  "comments": [{
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "nit: change it to `@volatile private var inputStreamNameAndID: Seq[(String, Int)] = Nil` and just set it in `start`. Don't expose a mutable ArrayBuffer to the caller.",
+    "commit": "e51623c007b9faf2ba4fe7c92ad138b0c9c2a8c1",
+    "createdAt": "2017-01-18T01:24:18Z",
+    "diffHunk": "@@ -31,12 +31,15 @@ final private[streaming] class DStreamGraph extends Serializable with Logging {\n   private val inputStreams = new ArrayBuffer[InputDStream[_]]()\n   private val outputStreams = new ArrayBuffer[DStream[_]]()\n \n+  val inputStreamNameAndID = new ArrayBuffer[(String, Int)]()"
+  }],
+  "prId": 16601
+}, {
+  "comments": [{
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "nit `getNumReceivers` for consistence.",
+    "commit": "e51623c007b9faf2ba4fe7c92ad138b0c9c2a8c1",
+    "createdAt": "2017-01-18T01:25:53Z",
+    "diffHunk": "@@ -106,9 +111,9 @@ final private[streaming] class DStreamGraph extends Serializable with Logging {\n       .toArray\n   }\n \n-  def getInputStreamName(streamId: Int): Option[String] = synchronized {\n-    inputStreams.find(_.id == streamId).map(_.name)\n-  }\n+  def getReceiverNumber: Int = numReceivers"
+  }],
+  "prId": 16601
+}]

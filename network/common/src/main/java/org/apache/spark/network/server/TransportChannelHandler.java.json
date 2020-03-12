@@ -1,0 +1,12 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "rxin"
+    },
+    "body": "Channel -> Connection?\n\nquiet -> idle?\n",
+    "commit": "8699680d4f7b972487818cdd1abc5dcfdf3cad43",
+    "createdAt": "2015-04-20T03:11:03Z",
+    "diffHunk": "@@ -93,4 +103,25 @@ public void channelRead0(ChannelHandlerContext ctx, Message request) {\n       responseHandler.handle((ResponseMessage) request);\n     }\n   }\n+\n+  /** Triggered based on events from an {@link io.netty.handler.timeout.IdleStateHandler}. */\n+  @Override\n+  public void userEventTriggered(ChannelHandlerContext ctx, Object evt) throws Exception {\n+    if (evt instanceof IdleStateEvent) {\n+      IdleStateEvent e = (IdleStateEvent) evt;\n+      // See class comment for timeout semantics. In addition to ensuring we only timeout while\n+      // there are outstanding requests, we also do a secondary consistency check to ensure\n+      // there's no race between the idle timeout and incrementing the numOutstandingRequests.\n+      boolean hasInFlightRequests = responseHandler.numOutstandingRequests() > 0;\n+      boolean isActuallyOverdue =\n+        System.nanoTime() - responseHandler.getTimeOfLastRequestNs() > requestTimeoutNs;\n+      if (e.state() == IdleState.ALL_IDLE && hasInFlightRequests && isActuallyOverdue) {\n+        String address = NettyUtils.getRemoteAddress(ctx.channel());\n+        logger.error(\"Channel to {} has been quiet for {} ms while there are outstanding \" +"
+  }],
+  "prId": 5584
+}]

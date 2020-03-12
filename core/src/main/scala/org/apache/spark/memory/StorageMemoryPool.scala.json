@@ -1,0 +1,58 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "can we use `math.min` like we do in other places\n",
+    "commit": "7e9e191c76992813d9a0bdbb1de590776c4875a1",
+    "createdAt": "2015-12-08T18:39:57Z",
+    "diffHunk": "@@ -73,27 +73,31 @@ class StorageMemoryPool(lock: Object) extends MemoryPool(lock) with Logging {\n    *\n    * @param blockId the ID of the block we are acquiring storage memory for\n    * @param numBytesToAcquire the size of this block\n-   * @param numBytesToFree the size of space to be freed through evicting blocks\n+   * @param maxNumBytesToFree the maximum amount of space to be freed through evicting blocks\n    * @return whether all N bytes were successfully granted.\n    */\n   def acquireMemory(\n       blockId: BlockId,\n       numBytesToAcquire: Long,\n-      numBytesToFree: Long,\n+      maxNumBytesToFree: Long,\n       evictedBlocks: mutable.Buffer[(BlockId, BlockStatus)]): Boolean = lock.synchronized {\n     assert(numBytesToAcquire >= 0)\n-    assert(numBytesToFree >= 0)\n+    assert(maxNumBytesToFree >= 0)\n     assert(memoryUsed <= poolSize)\n-    memoryStore.ensureFreeSpace(blockId, numBytesToFree, evictedBlocks)\n-    // Register evicted blocks, if any, with the active task metrics\n-    Option(TaskContext.get()).foreach { tc =>\n-      val metrics = tc.taskMetrics()\n-      val lastUpdatedBlocks = metrics.updatedBlocks.getOrElse(Seq[(BlockId, BlockStatus)]())\n-      metrics.updatedBlocks = Some(lastUpdatedBlocks ++ evictedBlocks.toSeq)\n+    if (numBytesToAcquire > memoryFree && maxNumBytesToFree > 0) {\n+      val additionalMemoryRequired = numBytesToAcquire - memoryFree\n+      memoryStore.evictBlocksToFreeSpace(\n+        Some(blockId), Math.min(maxNumBytesToFree, additionalMemoryRequired), evictedBlocks)"
+  }, {
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "actually, to improve readability a little:\n\n```\nval additionalMemoryRequired = ...\nval numBytesToFree = math.min(maxNumBytesToFree, additionalMemoryRequired)\nmemoryStore.evictBlocksToFreeSpace(Some(blockId), numBytesToFree, evictedBlocks)\n```\n",
+    "commit": "7e9e191c76992813d9a0bdbb1de590776c4875a1",
+    "createdAt": "2015-12-08T18:40:50Z",
+    "diffHunk": "@@ -73,27 +73,31 @@ class StorageMemoryPool(lock: Object) extends MemoryPool(lock) with Logging {\n    *\n    * @param blockId the ID of the block we are acquiring storage memory for\n    * @param numBytesToAcquire the size of this block\n-   * @param numBytesToFree the size of space to be freed through evicting blocks\n+   * @param maxNumBytesToFree the maximum amount of space to be freed through evicting blocks\n    * @return whether all N bytes were successfully granted.\n    */\n   def acquireMemory(\n       blockId: BlockId,\n       numBytesToAcquire: Long,\n-      numBytesToFree: Long,\n+      maxNumBytesToFree: Long,\n       evictedBlocks: mutable.Buffer[(BlockId, BlockStatus)]): Boolean = lock.synchronized {\n     assert(numBytesToAcquire >= 0)\n-    assert(numBytesToFree >= 0)\n+    assert(maxNumBytesToFree >= 0)\n     assert(memoryUsed <= poolSize)\n-    memoryStore.ensureFreeSpace(blockId, numBytesToFree, evictedBlocks)\n-    // Register evicted blocks, if any, with the active task metrics\n-    Option(TaskContext.get()).foreach { tc =>\n-      val metrics = tc.taskMetrics()\n-      val lastUpdatedBlocks = metrics.updatedBlocks.getOrElse(Seq[(BlockId, BlockStatus)]())\n-      metrics.updatedBlocks = Some(lastUpdatedBlocks ++ evictedBlocks.toSeq)\n+    if (numBytesToAcquire > memoryFree && maxNumBytesToFree > 0) {\n+      val additionalMemoryRequired = numBytesToAcquire - memoryFree\n+      memoryStore.evictBlocksToFreeSpace(\n+        Some(blockId), Math.min(maxNumBytesToFree, additionalMemoryRequired), evictedBlocks)"
+  }],
+  "prId": 10170
+}, {
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "maybe a more readable way to write this is:\n\n```\nval spaceFreedByReleasingUnusedMemory = math.min(...)\ndecrementPoolSize(spaceFreedByReleasingUnusedMemory)\nval remainingSpaceToFree = spaceToFree - spaceFreedByReleasingUnusedMemory\nif (remainingSpaceToFree > 0) {\n  // If reclaiming free memory did not ...\n  val evictedBlocks = ...\n  memoryStore.evictBlocksToFreeSpace(None, remainingSpaceToFree, evictedBlocks)\n  ...\n} else {\n  spaceFreedByReleasingUnusedMemory\n}\n```\n",
+    "commit": "7e9e191c76992813d9a0bdbb1de590776c4875a1",
+    "createdAt": "2015-12-08T19:02:51Z",
+    "diffHunk": "@@ -128,9 +132,11 @@ class StorageMemoryPool(lock: Object) extends MemoryPool(lock) with Logging {\n     } else {\n       // If reclaiming free memory did not adequately shrink the pool, begin evicting blocks:\n       val evictedBlocks = new ArrayBuffer[(BlockId, BlockStatus)]\n-      memoryStore.ensureFreeSpace(spaceToFree - spaceFreedByReleasingUnusedMemory, evictedBlocks)\n+      memoryStore.evictBlocksToFreeSpace(\n+        None, spaceToFree - spaceFreedByReleasingUnusedMemory, evictedBlocks)"
+  }],
+  "prId": 10170
+}, {
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "after looking at the test case I think we should add a check here to do this only if there's a chance that evicting can free us enough memory, i.e.\n\n```\nval additionalMemoryRequired = math.max(0, numBytesToAcquire - memoryFree)\nval numBytesToFree = math.min(maxNumBytesToFree, additionalMemoryRequired)\n// Only evict blocks if there is a chance that doing so will grant us what we want\nif (numBytesToFree > 0 && numBytesToFree <= memoryUsed) {\n  memoryStore.evictBlocksToFreeSpace(...)\n  ...\n}\n```\n\nIf we do this then we can't have the case where we try to free 150B from evicting blocks when there are only 100B worth of blocks.\n",
+    "commit": "7e9e191c76992813d9a0bdbb1de590776c4875a1",
+    "createdAt": "2015-12-08T23:05:43Z",
+    "diffHunk": "@@ -73,27 +73,31 @@ class StorageMemoryPool(lock: Object) extends MemoryPool(lock) with Logging {\n    *\n    * @param blockId the ID of the block we are acquiring storage memory for\n    * @param numBytesToAcquire the size of this block\n-   * @param numBytesToFree the size of space to be freed through evicting blocks\n+   * @param maxNumBytesToFree the maximum amount of space to be freed through evicting blocks\n    * @return whether all N bytes were successfully granted.\n    */\n   def acquireMemory(\n       blockId: BlockId,\n       numBytesToAcquire: Long,\n-      numBytesToFree: Long,\n+      maxNumBytesToFree: Long,\n       evictedBlocks: mutable.Buffer[(BlockId, BlockStatus)]): Boolean = lock.synchronized {\n     assert(numBytesToAcquire >= 0)\n-    assert(numBytesToFree >= 0)\n+    assert(maxNumBytesToFree >= 0)\n     assert(memoryUsed <= poolSize)\n-    memoryStore.ensureFreeSpace(blockId, numBytesToFree, evictedBlocks)\n-    // Register evicted blocks, if any, with the active task metrics\n-    Option(TaskContext.get()).foreach { tc =>\n-      val metrics = tc.taskMetrics()\n-      val lastUpdatedBlocks = metrics.updatedBlocks.getOrElse(Seq[(BlockId, BlockStatus)]())\n-      metrics.updatedBlocks = Some(lastUpdatedBlocks ++ evictedBlocks.toSeq)\n+    if (numBytesToAcquire > memoryFree && maxNumBytesToFree > 0) {\n+      val additionalMemoryRequired = numBytesToAcquire - memoryFree\n+      memoryStore.evictBlocksToFreeSpace("
+  }, {
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "(I should add that I think the existing code is correct, but rewriting it would make the semantics clearer and the tests more intuitive)\n",
+    "commit": "7e9e191c76992813d9a0bdbb1de590776c4875a1",
+    "createdAt": "2015-12-08T23:06:36Z",
+    "diffHunk": "@@ -73,27 +73,31 @@ class StorageMemoryPool(lock: Object) extends MemoryPool(lock) with Logging {\n    *\n    * @param blockId the ID of the block we are acquiring storage memory for\n    * @param numBytesToAcquire the size of this block\n-   * @param numBytesToFree the size of space to be freed through evicting blocks\n+   * @param maxNumBytesToFree the maximum amount of space to be freed through evicting blocks\n    * @return whether all N bytes were successfully granted.\n    */\n   def acquireMemory(\n       blockId: BlockId,\n       numBytesToAcquire: Long,\n-      numBytesToFree: Long,\n+      maxNumBytesToFree: Long,\n       evictedBlocks: mutable.Buffer[(BlockId, BlockStatus)]): Boolean = lock.synchronized {\n     assert(numBytesToAcquire >= 0)\n-    assert(numBytesToFree >= 0)\n+    assert(maxNumBytesToFree >= 0)\n     assert(memoryUsed <= poolSize)\n-    memoryStore.ensureFreeSpace(blockId, numBytesToFree, evictedBlocks)\n-    // Register evicted blocks, if any, with the active task metrics\n-    Option(TaskContext.get()).foreach { tc =>\n-      val metrics = tc.taskMetrics()\n-      val lastUpdatedBlocks = metrics.updatedBlocks.getOrElse(Seq[(BlockId, BlockStatus)]())\n-      metrics.updatedBlocks = Some(lastUpdatedBlocks ++ evictedBlocks.toSeq)\n+    if (numBytesToAcquire > memoryFree && maxNumBytesToFree > 0) {\n+      val additionalMemoryRequired = numBytesToAcquire - memoryFree\n+      memoryStore.evictBlocksToFreeSpace("
+  }, {
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "`evictBlocksToFreeSpace` already has a form of this check internally. Even if we add the logic here, we can't drop the checks inside of `evictBlocksToFreeSpace` because when storage is evicting storage we need to handle the fact that an RDD cannot evict blocks belonging to the same RDD.\n\nIt wouldn't hurt to add the check here, I suppose, since it would save us the hassle of having to iterate over all of the blocks in the memory store.\n",
+    "commit": "7e9e191c76992813d9a0bdbb1de590776c4875a1",
+    "createdAt": "2015-12-09T00:56:13Z",
+    "diffHunk": "@@ -73,27 +73,31 @@ class StorageMemoryPool(lock: Object) extends MemoryPool(lock) with Logging {\n    *\n    * @param blockId the ID of the block we are acquiring storage memory for\n    * @param numBytesToAcquire the size of this block\n-   * @param numBytesToFree the size of space to be freed through evicting blocks\n+   * @param maxNumBytesToFree the maximum amount of space to be freed through evicting blocks\n    * @return whether all N bytes were successfully granted.\n    */\n   def acquireMemory(\n       blockId: BlockId,\n       numBytesToAcquire: Long,\n-      numBytesToFree: Long,\n+      maxNumBytesToFree: Long,\n       evictedBlocks: mutable.Buffer[(BlockId, BlockStatus)]): Boolean = lock.synchronized {\n     assert(numBytesToAcquire >= 0)\n-    assert(numBytesToFree >= 0)\n+    assert(maxNumBytesToFree >= 0)\n     assert(memoryUsed <= poolSize)\n-    memoryStore.ensureFreeSpace(blockId, numBytesToFree, evictedBlocks)\n-    // Register evicted blocks, if any, with the active task metrics\n-    Option(TaskContext.get()).foreach { tc =>\n-      val metrics = tc.taskMetrics()\n-      val lastUpdatedBlocks = metrics.updatedBlocks.getOrElse(Seq[(BlockId, BlockStatus)]())\n-      metrics.updatedBlocks = Some(lastUpdatedBlocks ++ evictedBlocks.toSeq)\n+    if (numBytesToAcquire > memoryFree && maxNumBytesToFree > 0) {\n+      val additionalMemoryRequired = numBytesToAcquire - memoryFree\n+      memoryStore.evictBlocksToFreeSpace("
+  }],
+  "prId": 10170
+}]

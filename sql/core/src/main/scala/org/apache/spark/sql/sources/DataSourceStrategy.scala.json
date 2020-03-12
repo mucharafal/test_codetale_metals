@@ -1,0 +1,98 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "zhzhan"
+    },
+    "body": "Trying to understand the logic. How does the value in partition get populated to each row?\n",
+    "commit": "5351a1b7da2bcefe310e053c280b6caa476fb148",
+    "createdAt": "2015-04-29T21:52:04Z",
+    "diffHunk": "@@ -53,6 +53,25 @@ private[sql] object DataSourceStrategy extends Strategy {\n         filters,\n         (a, _) => t.buildScan(a)) :: Nil\n \n+    case PhysicalOperation(projectList, filters, l @ LogicalRelation(t: FSBasedRelation)) =>\n+      val selectedPartitions = prunePartitions(filters, t.partitionSpec)\n+      val inputPaths = selectedPartitions.map(_.path).toArray\n+\n+      // Don't push down predicates that reference partition columns\n+      val pushedFilters = {\n+        val partitionColumnNames = t.partitionSpec.partitionColumns.map(_.name).toSet\n+        filters.filter { f =>\n+          val referencedColumnNames = f.references.map(_.name).toSet\n+          referencedColumnNames.intersect(partitionColumnNames).isEmpty\n+        }\n+      }\n+\n+      pruneFilterProject(\n+        l,\n+        projectList,\n+        pushedFilters,\n+        (a, f) => t.buildScan(a, f, inputPaths)) :: Nil"
+  }, {
+    "author": {
+      "login": "liancheng"
+    },
+    "body": "Sorry, my bad, and thanks for pointing this out! Also realized this when migrating Parquet data source. I should populate partition values here. `t.buildScan` should only accept data file paths within a single selected partition. So for a table scan operation with `N` selected partitions:\n1. `t.buildScan` is called `N` times, resulting `N` RDDs\n2. Populate partition values accordingly to each RDD\n3. Union all RDDs to form the final result\n\nThis is similar to what we've done in `HiveTableScan`.\n\nI'm updating this part.\n",
+    "commit": "5351a1b7da2bcefe310e053c280b6caa476fb148",
+    "createdAt": "2015-04-30T04:21:53Z",
+    "diffHunk": "@@ -53,6 +53,25 @@ private[sql] object DataSourceStrategy extends Strategy {\n         filters,\n         (a, _) => t.buildScan(a)) :: Nil\n \n+    case PhysicalOperation(projectList, filters, l @ LogicalRelation(t: FSBasedRelation)) =>\n+      val selectedPartitions = prunePartitions(filters, t.partitionSpec)\n+      val inputPaths = selectedPartitions.map(_.path).toArray\n+\n+      // Don't push down predicates that reference partition columns\n+      val pushedFilters = {\n+        val partitionColumnNames = t.partitionSpec.partitionColumns.map(_.name).toSet\n+        filters.filter { f =>\n+          val referencedColumnNames = f.references.map(_.name).toSet\n+          referencedColumnNames.intersect(partitionColumnNames).isEmpty\n+        }\n+      }\n+\n+      pruneFilterProject(\n+        l,\n+        projectList,\n+        pushedFilters,\n+        (a, f) => t.buildScan(a, f, inputPaths)) :: Nil"
+  }],
+  "prId": 5526
+}, {
+  "comments": [{
+    "author": {
+      "login": "zhzhan"
+    },
+    "body": "Try to confirm my understanding. If a column appears in both data file and partition, here the value will be retrieved from file.  How do you think if we make assumption that the partition value is consistent with the column value in file so that such reading can be skipped and later on it is filled by mergePartitionValues. \n",
+    "commit": "5351a1b7da2bcefe310e053c280b6caa476fb148",
+    "createdAt": "2015-04-30T22:33:51Z",
+    "diffHunk": "@@ -63,6 +101,122 @@ private[sql] object DataSourceStrategy extends Strategy {\n     case _ => Nil\n   }\n \n+  private def buildPartitionedTableScan(\n+      logicalRelation: LogicalRelation,\n+      projections: Seq[NamedExpression],\n+      filters: Seq[Expression],\n+      partitionColumns: StructType,\n+      partitions: Array[Partition]) = {\n+    val output = projections.map(_.toAttribute)\n+    val relation = logicalRelation.relation.asInstanceOf[FSBasedRelation]\n+    val dataSchema = relation.dataSchema\n+\n+    // Builds RDD[Row]s for each selected partition.\n+    val perPartitionRows = partitions.map { case Partition(partitionValues, dir) =>\n+      // Paths to all data files within this partition\n+      val dataFilePaths = {\n+        val dirPath = new Path(dir)\n+        val fs = dirPath.getFileSystem(SparkHadoopUtil.get.conf)\n+        fs.listStatus(dirPath)\n+          .map(_.getPath)\n+          .filter { path =>\n+            val name = path.getName\n+            name.startsWith(\"_\") || name.startsWith(\".\")\n+          }\n+          .map(fs.makeQualified(_).toString)\n+      }\n+\n+      // The table scan operator (PhysicalRDD) which retrieves required columns from data files.\n+      // Notice that the schema of data files, represented by `relation.dataSchema`, may contain\n+      // some partition column(s). Those partition columns that are only encoded in partition\n+      // directory paths are not covered by this table scan operator.\n+      val scan =\n+        pruneFilterProject(\n+          logicalRelation,\n+          projections,\n+          filters,\n+          (requiredColumns, filters) => {\n+            // Only columns appear in actual data, which possibly include some partition column(s)\n+            relation.buildScan(\n+              requiredColumns.filter(dataSchema.fieldNames.contains),"
+  }, {
+    "author": {
+      "login": "liancheng"
+    },
+    "body": "Good catch! Simply changing the filter condition would be enough.\n",
+    "commit": "5351a1b7da2bcefe310e053c280b6caa476fb148",
+    "createdAt": "2015-04-30T23:23:58Z",
+    "diffHunk": "@@ -63,6 +101,122 @@ private[sql] object DataSourceStrategy extends Strategy {\n     case _ => Nil\n   }\n \n+  private def buildPartitionedTableScan(\n+      logicalRelation: LogicalRelation,\n+      projections: Seq[NamedExpression],\n+      filters: Seq[Expression],\n+      partitionColumns: StructType,\n+      partitions: Array[Partition]) = {\n+    val output = projections.map(_.toAttribute)\n+    val relation = logicalRelation.relation.asInstanceOf[FSBasedRelation]\n+    val dataSchema = relation.dataSchema\n+\n+    // Builds RDD[Row]s for each selected partition.\n+    val perPartitionRows = partitions.map { case Partition(partitionValues, dir) =>\n+      // Paths to all data files within this partition\n+      val dataFilePaths = {\n+        val dirPath = new Path(dir)\n+        val fs = dirPath.getFileSystem(SparkHadoopUtil.get.conf)\n+        fs.listStatus(dirPath)\n+          .map(_.getPath)\n+          .filter { path =>\n+            val name = path.getName\n+            name.startsWith(\"_\") || name.startsWith(\".\")\n+          }\n+          .map(fs.makeQualified(_).toString)\n+      }\n+\n+      // The table scan operator (PhysicalRDD) which retrieves required columns from data files.\n+      // Notice that the schema of data files, represented by `relation.dataSchema`, may contain\n+      // some partition column(s). Those partition columns that are only encoded in partition\n+      // directory paths are not covered by this table scan operator.\n+      val scan =\n+        pruneFilterProject(\n+          logicalRelation,\n+          projections,\n+          filters,\n+          (requiredColumns, filters) => {\n+            // Only columns appear in actual data, which possibly include some partition column(s)\n+            relation.buildScan(\n+              requiredColumns.filter(dataSchema.fieldNames.contains),"
+  }],
+  "prId": 5526
+}, {
+  "comments": [{
+    "author": {
+      "login": "yhuai"
+    },
+    "body": "I feel `fs.makeQualifed` is not very safe... See https://github.com/apache/spark/pull/5353/files\n",
+    "commit": "5351a1b7da2bcefe310e053c280b6caa476fb148",
+    "createdAt": "2015-05-06T20:24:22Z",
+    "diffHunk": "@@ -53,6 +58,51 @@ private[sql] object DataSourceStrategy extends Strategy {\n         filters,\n         (a, _) => t.buildScan(a)) :: Nil\n \n+    // Scanning partitioned FSBasedRelation\n+    case PhysicalOperation(projectList, filters, l @ LogicalRelation(t: FSBasedRelation))\n+        if t.partitionSpec.partitionColumns.nonEmpty =>\n+      val selectedPartitions = prunePartitions(filters, t.partitionSpec).toArray\n+\n+      logInfo {\n+        val total = t.partitionSpec.partitions.length\n+        val selected = selectedPartitions.length\n+        val percentPruned = (1 - total.toDouble / selected.toDouble) * 100\n+        s\"Selected $selected partitions out of $total, pruned $percentPruned% partitions.\"\n+      }\n+\n+      // Only pushes down predicates that do not reference partition columns.\n+      val pushedFilters = {\n+        val partitionColumnNames = t.partitionSpec.partitionColumns.map(_.name).toSet\n+        filters.filter { f =>\n+          val referencedColumnNames = f.references.map(_.name).toSet\n+          referencedColumnNames.intersect(partitionColumnNames).isEmpty\n+        }\n+      }\n+\n+      buildPartitionedTableScan(\n+        l,\n+        projectList,\n+        pushedFilters,\n+        t.partitionSpec.partitionColumns,\n+        selectedPartitions) :: Nil\n+\n+    // Scanning non-partitioned FSBasedRelation\n+    case PhysicalOperation(projectList, filters, l @ LogicalRelation(t: FSBasedRelation)) =>\n+      val inputPaths = t.paths.map(new Path(_)).flatMap { path =>\n+        val fs = path.getFileSystem(t.sqlContext.sparkContext.hadoopConfiguration)\n+        val qualifiedPath = fs.makeQualified(path)"
+  }, {
+    "author": {
+      "login": "liancheng"
+    },
+    "body": "Thanks for pointing this out. Add the reason here for future reference: for S3, the credential part may contain `/`. `FileSystem.makeQualified` cannot process this case properly, while `Path.makeQualified` can.\n",
+    "commit": "5351a1b7da2bcefe310e053c280b6caa476fb148",
+    "createdAt": "2015-05-08T15:01:35Z",
+    "diffHunk": "@@ -53,6 +58,51 @@ private[sql] object DataSourceStrategy extends Strategy {\n         filters,\n         (a, _) => t.buildScan(a)) :: Nil\n \n+    // Scanning partitioned FSBasedRelation\n+    case PhysicalOperation(projectList, filters, l @ LogicalRelation(t: FSBasedRelation))\n+        if t.partitionSpec.partitionColumns.nonEmpty =>\n+      val selectedPartitions = prunePartitions(filters, t.partitionSpec).toArray\n+\n+      logInfo {\n+        val total = t.partitionSpec.partitions.length\n+        val selected = selectedPartitions.length\n+        val percentPruned = (1 - total.toDouble / selected.toDouble) * 100\n+        s\"Selected $selected partitions out of $total, pruned $percentPruned% partitions.\"\n+      }\n+\n+      // Only pushes down predicates that do not reference partition columns.\n+      val pushedFilters = {\n+        val partitionColumnNames = t.partitionSpec.partitionColumns.map(_.name).toSet\n+        filters.filter { f =>\n+          val referencedColumnNames = f.references.map(_.name).toSet\n+          referencedColumnNames.intersect(partitionColumnNames).isEmpty\n+        }\n+      }\n+\n+      buildPartitionedTableScan(\n+        l,\n+        projectList,\n+        pushedFilters,\n+        t.partitionSpec.partitionColumns,\n+        selectedPartitions) :: Nil\n+\n+    // Scanning non-partitioned FSBasedRelation\n+    case PhysicalOperation(projectList, filters, l @ LogicalRelation(t: FSBasedRelation)) =>\n+      val inputPaths = t.paths.map(new Path(_)).flatMap { path =>\n+        val fs = path.getFileSystem(t.sqlContext.sparkContext.hadoopConfiguration)\n+        val qualifiedPath = fs.makeQualified(path)"
+  }],
+  "prId": 5526
+}, {
+  "comments": [{
+    "author": {
+      "login": "yhuai"
+    },
+    "body": "Is there any reason we want to get paths of all files?\n",
+    "commit": "5351a1b7da2bcefe310e053c280b6caa476fb148",
+    "createdAt": "2015-05-06T20:30:40Z",
+    "diffHunk": "@@ -53,6 +58,51 @@ private[sql] object DataSourceStrategy extends Strategy {\n         filters,\n         (a, _) => t.buildScan(a)) :: Nil\n \n+    // Scanning partitioned FSBasedRelation\n+    case PhysicalOperation(projectList, filters, l @ LogicalRelation(t: FSBasedRelation))\n+        if t.partitionSpec.partitionColumns.nonEmpty =>\n+      val selectedPartitions = prunePartitions(filters, t.partitionSpec).toArray\n+\n+      logInfo {\n+        val total = t.partitionSpec.partitions.length\n+        val selected = selectedPartitions.length\n+        val percentPruned = (1 - total.toDouble / selected.toDouble) * 100\n+        s\"Selected $selected partitions out of $total, pruned $percentPruned% partitions.\"\n+      }\n+\n+      // Only pushes down predicates that do not reference partition columns.\n+      val pushedFilters = {\n+        val partitionColumnNames = t.partitionSpec.partitionColumns.map(_.name).toSet\n+        filters.filter { f =>\n+          val referencedColumnNames = f.references.map(_.name).toSet\n+          referencedColumnNames.intersect(partitionColumnNames).isEmpty\n+        }\n+      }\n+\n+      buildPartitionedTableScan(\n+        l,\n+        projectList,\n+        pushedFilters,\n+        t.partitionSpec.partitionColumns,\n+        selectedPartitions) :: Nil\n+\n+    // Scanning non-partitioned FSBasedRelation\n+    case PhysicalOperation(projectList, filters, l @ LogicalRelation(t: FSBasedRelation)) =>\n+      val inputPaths = t.paths.map(new Path(_)).flatMap { path =>\n+        val fs = path.getFileSystem(t.sqlContext.sparkContext.hadoopConfiguration)\n+        val qualifiedPath = fs.makeQualified(path)\n+        SparkHadoopUtil.get.listLeafStatuses(fs, qualifiedPath).map(_.getPath).filterNot { path =>\n+          val name = path.getName\n+          name.startsWith(\"_\") || name.startsWith(\".\")\n+        }.map(fs.makeQualified(_).toString)\n+      }",
+    "line": 70
+  }, {
+    "author": {
+      "login": "liancheng"
+    },
+    "body": "Just to ease Parquet data source implementation (the `FileStatus` cache part).\n",
+    "commit": "5351a1b7da2bcefe310e053c280b6caa476fb148",
+    "createdAt": "2015-05-08T15:07:28Z",
+    "diffHunk": "@@ -53,6 +58,51 @@ private[sql] object DataSourceStrategy extends Strategy {\n         filters,\n         (a, _) => t.buildScan(a)) :: Nil\n \n+    // Scanning partitioned FSBasedRelation\n+    case PhysicalOperation(projectList, filters, l @ LogicalRelation(t: FSBasedRelation))\n+        if t.partitionSpec.partitionColumns.nonEmpty =>\n+      val selectedPartitions = prunePartitions(filters, t.partitionSpec).toArray\n+\n+      logInfo {\n+        val total = t.partitionSpec.partitions.length\n+        val selected = selectedPartitions.length\n+        val percentPruned = (1 - total.toDouble / selected.toDouble) * 100\n+        s\"Selected $selected partitions out of $total, pruned $percentPruned% partitions.\"\n+      }\n+\n+      // Only pushes down predicates that do not reference partition columns.\n+      val pushedFilters = {\n+        val partitionColumnNames = t.partitionSpec.partitionColumns.map(_.name).toSet\n+        filters.filter { f =>\n+          val referencedColumnNames = f.references.map(_.name).toSet\n+          referencedColumnNames.intersect(partitionColumnNames).isEmpty\n+        }\n+      }\n+\n+      buildPartitionedTableScan(\n+        l,\n+        projectList,\n+        pushedFilters,\n+        t.partitionSpec.partitionColumns,\n+        selectedPartitions) :: Nil\n+\n+    // Scanning non-partitioned FSBasedRelation\n+    case PhysicalOperation(projectList, filters, l @ LogicalRelation(t: FSBasedRelation)) =>\n+      val inputPaths = t.paths.map(new Path(_)).flatMap { path =>\n+        val fs = path.getFileSystem(t.sqlContext.sparkContext.hadoopConfiguration)\n+        val qualifiedPath = fs.makeQualified(path)\n+        SparkHadoopUtil.get.listLeafStatuses(fs, qualifiedPath).map(_.getPath).filterNot { path =>\n+          val name = path.getName\n+          name.startsWith(\"_\") || name.startsWith(\".\")\n+        }.map(fs.makeQualified(_).toString)\n+      }",
+    "line": 70
+  }],
+  "prId": 5526
+}, {
+  "comments": [{
+    "author": {
+      "login": "marmbrus"
+    },
+    "body": "i think we typically omit `()` for `toString`\n",
+    "commit": "5351a1b7da2bcefe310e053c280b6caa476fb148",
+    "createdAt": "2015-05-09T18:14:50Z",
+    "diffHunk": "@@ -179,13 +364,13 @@ private[sql] object DataSourceStrategy extends Strategy {\n         translate(child).map(sources.Not)\n \n       case expressions.StartsWith(a: Attribute, Literal(v: UTF8String, StringType)) =>\n-        Some(sources.StringStartsWith(a.name, v.toString))\n+        Some(sources.StringStartsWith(a.name, v.toString()))"
+  }, {
+    "author": {
+      "login": "liancheng"
+    },
+    "body": "It's because `UTF8String.toString()` was defined with `()`, just want to keep consistent with the definition. Or we probably want remove `()` from the method definition?\n",
+    "commit": "5351a1b7da2bcefe310e053c280b6caa476fb148",
+    "createdAt": "2015-05-10T03:58:59Z",
+    "diffHunk": "@@ -179,13 +364,13 @@ private[sql] object DataSourceStrategy extends Strategy {\n         translate(child).map(sources.Not)\n \n       case expressions.StartsWith(a: Attribute, Literal(v: UTF8String, StringType)) =>\n-        Some(sources.StringStartsWith(a.name, v.toString))\n+        Some(sources.StringStartsWith(a.name, v.toString()))"
+  }],
+  "prId": 5526
+}]

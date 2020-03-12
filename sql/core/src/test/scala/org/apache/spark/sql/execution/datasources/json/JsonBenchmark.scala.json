@@ -1,0 +1,55 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "@MaxGekk . This is another benchmark case, isn't it?\r\nWe should have different benchmark cases for these.",
+    "commit": "4ecc7e03dac6148047608af3b0199348302fce74",
+    "createdAt": "2018-11-01T14:26:13Z",
+    "diffHunk": "@@ -86,6 +86,7 @@ object JSONBenchmark extends SqlBasedBenchmark {\n         spark.read\n           .schema(schema)\n           .json(path.getAbsolutePath)\n+          .filter((_: Row) => true)"
+  }, {
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "This is not a follow-up. Please create another JIRA to add these test cases.",
+    "commit": "4ecc7e03dac6148047608af3b0199348302fce74",
+    "createdAt": "2018-11-01T14:26:51Z",
+    "diffHunk": "@@ -86,6 +86,7 @@ object JSONBenchmark extends SqlBasedBenchmark {\n         spark.read\n           .schema(schema)\n           .json(path.getAbsolutePath)\n+          .filter((_: Row) => true)"
+  }, {
+    "author": {
+      "login": "MaxGekk"
+    },
+    "body": "> This is another benchmark case, isn't it?\r\n\r\nOriginally I added the benchmark to check how specifying of `encoding` impacts on performance (see https://github.com/apache/spark/pull/20937). This worked well till #21909 . Currently the benchmark just test how fast JSON datasource can create empty rows (in the case of `count()`) which is checked by another benchmark. \r\n\r\nI believe this PR is just follow up of #21909 which must include the changes proposed in the PR. ",
+    "commit": "4ecc7e03dac6148047608af3b0199348302fce74",
+    "createdAt": "2018-11-01T15:58:37Z",
+    "diffHunk": "@@ -86,6 +86,7 @@ object JSONBenchmark extends SqlBasedBenchmark {\n         spark.read\n           .schema(schema)\n           .json(path.getAbsolutePath)\n+          .filter((_: Row) => true)"
+  }, {
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "@MaxGekk . In your PR (#21909), you already showed the effect via benchmark .\r\n\r\nWhat I mean is both test cases are meaningful and worth to have. :) And, we need to compare both results in the future release.\r\n\r\nIn any way, please create new different benchmark cases for this PR.",
+    "commit": "4ecc7e03dac6148047608af3b0199348302fce74",
+    "createdAt": "2018-11-01T17:56:07Z",
+    "diffHunk": "@@ -86,6 +86,7 @@ object JSONBenchmark extends SqlBasedBenchmark {\n         spark.read\n           .schema(schema)\n           .json(path.getAbsolutePath)\n+          .filter((_: Row) => true)"
+  }, {
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "BTW, how do you want to call old and new test cases?\r\n- For old case, we can give a new name.\r\n- For new case, `JSON per-line parsing:` looks not a little bit accurate because we have filters now.",
+    "commit": "4ecc7e03dac6148047608af3b0199348302fce74",
+    "createdAt": "2018-11-01T18:00:34Z",
+    "diffHunk": "@@ -86,6 +86,7 @@ object JSONBenchmark extends SqlBasedBenchmark {\n         spark.read\n           .schema(schema)\n           .json(path.getAbsolutePath)\n+          .filter((_: Row) => true)"
+  }],
+  "prId": 22920
+}, {
+  "comments": [{
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "Thank you for updating, @MaxGekk .\r\nDo we have a reason to decrease this value from 3 to 2 in this PR?\r\nIf this is for reducing the running time, let's keep the original value. \r\nThis benchmark is not executed frequently.",
+    "commit": "4ecc7e03dac6148047608af3b0199348302fce74",
+    "createdAt": "2018-11-03T06:08:40Z",
+    "diffHunk": "@@ -158,26 +166,78 @@ object JSONBenchmark extends SqlBasedBenchmark {\n \n       val ds = spark.read.schema(schema).json(path.getAbsolutePath)\n \n-      benchmark.addCase(s\"Select $colsNum columns + count()\", 3) { _ =>\n+      benchmark.addCase(s\"Select $colsNum columns + count()\", numIters) { _ =>\n         ds.select(\"*\").filter((_: Row) => true).count()\n       }\n-      benchmark.addCase(s\"Select 1 column + count()\", 3) { _ =>\n+      benchmark.addCase(s\"Select 1 column + count()\", numIters) { _ =>\n         ds.select($\"col1\").filter((_: Row) => true).count()\n       }\n-      benchmark.addCase(s\"count()\", 3) { _ =>\n+      benchmark.addCase(s\"count()\", numIters) { _ =>\n         ds.count()\n       }\n \n       benchmark.run()\n     }\n   }\n \n+  def jsonParserCreation(rowsNum: Int, numIters: Int): Unit = {\n+    val benchmark = new Benchmark(\"creation of JSON parser per line\", rowsNum, output = output)\n+\n+    withTempPath { path =>\n+      prepareDataInfo(benchmark)\n+\n+      val shortColumnPath = path.getAbsolutePath + \"/short\"\n+      val shortSchema = writeShortColumn(shortColumnPath, rowsNum)\n+\n+      val wideColumnPath = path.getAbsolutePath + \"/wide\"\n+      val wideSchema = writeWideColumn(wideColumnPath, rowsNum)\n+\n+      benchmark.addCase(\"Short column without encoding\", numIters) { _ =>\n+        spark.read\n+          .schema(shortSchema)\n+          .json(shortColumnPath)\n+          .filter((_: Row) => true)\n+          .count()\n+      }\n+\n+      benchmark.addCase(\"Short column with UTF-8\", numIters) { _ =>\n+        spark.read\n+          .option(\"encoding\", \"UTF-8\")\n+          .schema(shortSchema)\n+          .json(shortColumnPath)\n+          .filter((_: Row) => true)\n+          .count()\n+      }\n+\n+      benchmark.addCase(\"Wide column without encoding\", numIters) { _ =>\n+        spark.read\n+          .schema(wideSchema)\n+          .json(wideColumnPath)\n+          .filter((_: Row) => true)\n+          .count()\n+      }\n+\n+      benchmark.addCase(\"Wide column with UTF-8\", numIters) { _ =>\n+        spark.read\n+          .option(\"encoding\", \"UTF-8\")\n+          .schema(wideSchema)\n+          .json(wideColumnPath)\n+          .filter((_: Row) => true)\n+          .count()\n+      }\n+\n+      benchmark.run()\n+    }\n+  }\n+\n   override def runBenchmarkSuite(mainArgs: Array[String]): Unit = {\n+    val numIters = 2"
+  }],
+  "prId": 22920
+}]

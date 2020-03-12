@@ -1,0 +1,66 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "mateiz"
+    },
+    "body": "Small code style thing, add a space before the {\n",
+    "commit": "85c89380b499702a6fee119e5f45a7a0685f149e",
+    "createdAt": "2014-07-25T21:41:39Z",
+    "diffHunk": "@@ -200,14 +200,21 @@ object BlockFetcherIterator {\n       // these all at once because they will just memory-map some files, so they won't consume\n       // any memory that might exceed our maxBytesInFlight\n       for (id <- localBlocksToFetch) {\n-        getLocalFromDisk(id, serializer) match {\n-          case Some(iter) => {\n-            // Pass 0 as size since it's not in flight\n-            results.put(new FetchResult(id, 0, () => iter))\n-            logDebug(\"Got local block \" + id)\n+        try{"
+  }],
+  "prId": 1578
+}, {
+  "comments": [{
+    "author": {
+      "login": "mateiz"
+    },
+    "body": "Why do we throw an exception above and then immediately catch it, instead of doing results.put above? Is there any other kind of error that can happen beyond getLocalFromDisk returning None?\n\nAlso, the current code seems to forget the exception: it just puts in a failed result. Is this intentional, i.e. will get a FetchFailedException later? It seems we should return from this method ASAP if there's a problem.\n",
+    "commit": "85c89380b499702a6fee119e5f45a7a0685f149e",
+    "createdAt": "2014-07-25T21:44:47Z",
+    "diffHunk": "@@ -200,14 +200,21 @@ object BlockFetcherIterator {\n       // these all at once because they will just memory-map some files, so they won't consume\n       // any memory that might exceed our maxBytesInFlight\n       for (id <- localBlocksToFetch) {\n-        getLocalFromDisk(id, serializer) match {\n-          case Some(iter) => {\n-            // Pass 0 as size since it's not in flight\n-            results.put(new FetchResult(id, 0, () => iter))\n-            logDebug(\"Got local block \" + id)\n+        try{\n+          getLocalFromDisk(id, serializer) match {\n+            case Some(iter) => {\n+              // Pass 0 as size since it's not in flight\n+              results.put(new FetchResult(id, 0, () => iter))\n+              logDebug(\"Got local block \" + id)\n+            }\n+            case None => {\n+              throw new BlockException(id, \"Could not get block \" + id + \" from local machine\")\n+            }\n           }\n-          case None => {\n-            throw new BlockException(id, \"Could not get block \" + id + \" from local machine\")\n+        } catch {\n+          case e: Exception => {\n+            logError(s\"Error occurred while fetch local block $id\", e)\n+            results.put(new FetchResult(id, -1, null))\n           }"
+  }, {
+    "author": {
+      "login": "sarutak"
+    },
+    "body": "Actually, getLocalFromDisk never return None but can throw BlockException. so I think \"case None\" block above is useless and we should remove the \"case None\" block rather than doing results.put.\n\n> Is there any other kind of error that can happen beyond getLocalFromDisk returning None?\n\nYes, BlockException is thrown from getLocalFromDisk, and FileNotFoundException from DiskStore#getBytes when it failed to fetch shuffle____ from local disk. \n\n> Also, the current code seems to forget the exception: it just puts in a failed result. Is this intentional, i.e. will get a FetchFailedException later?\n\nIt's for get FetchFailedException later. If we return from BasicBlockFetchIterator#getLocallocks, we can't know whether rest of blocks can be read successfully or not.\n",
+    "commit": "85c89380b499702a6fee119e5f45a7a0685f149e",
+    "createdAt": "2014-07-26T00:14:02Z",
+    "diffHunk": "@@ -200,14 +200,21 @@ object BlockFetcherIterator {\n       // these all at once because they will just memory-map some files, so they won't consume\n       // any memory that might exceed our maxBytesInFlight\n       for (id <- localBlocksToFetch) {\n-        getLocalFromDisk(id, serializer) match {\n-          case Some(iter) => {\n-            // Pass 0 as size since it's not in flight\n-            results.put(new FetchResult(id, 0, () => iter))\n-            logDebug(\"Got local block \" + id)\n+        try{\n+          getLocalFromDisk(id, serializer) match {\n+            case Some(iter) => {\n+              // Pass 0 as size since it's not in flight\n+              results.put(new FetchResult(id, 0, () => iter))\n+              logDebug(\"Got local block \" + id)\n+            }\n+            case None => {\n+              throw new BlockException(id, \"Could not get block \" + id + \" from local machine\")\n+            }\n           }\n-          case None => {\n-            throw new BlockException(id, \"Could not get block \" + id + \" from local machine\")\n+        } catch {\n+          case e: Exception => {\n+            logError(s\"Error occurred while fetch local block $id\", e)\n+            results.put(new FetchResult(id, -1, null))\n           }"
+  }],
+  "prId": 1578
+}, {
+  "comments": [{
+    "author": {
+      "login": "mateiz"
+    },
+    "body": "I wouldn't do drop and such on a ConcurrentQueue, since it might drop stuff other threads were adding. Just do a results.put on the failed block and don't worry about dropping other ones. You can actually move the try/catch into the for loop and add a \"return\" at the bottom of the catch after adding this failing FetchResult.\n",
+    "commit": "85c89380b499702a6fee119e5f45a7a0685f149e",
+    "createdAt": "2014-07-30T21:53:37Z",
+    "diffHunk": "@@ -199,15 +199,22 @@ object BlockFetcherIterator {\n       // Get the local blocks while remote blocks are being fetched. Note that it's okay to do\n       // these all at once because they will just memory-map some files, so they won't consume\n       // any memory that might exceed our maxBytesInFlight\n-      for (id <- localBlocksToFetch) {\n-        getLocalFromDisk(id, serializer) match {\n-          case Some(iter) => {\n-            // Pass 0 as size since it's not in flight\n-            results.put(new FetchResult(id, 0, () => iter))\n-            logDebug(\"Got local block \" + id)\n-          }\n-          case None => {\n-            throw new BlockException(id, \"Could not get block \" + id + \" from local machine\")\n+      var fetchIndex = 0\n+      try {\n+        for (id <- localBlocksToFetch) {\n+\n+          // getLocalFromDisk never return None but throws BlockException\n+          val iter = getLocalFromDisk(id, serializer).get\n+          // Pass 0 as size since it's not in flight\n+          results.put(new FetchResult(id, 0, () => iter))\n+          fetchIndex += 1\n+          logDebug(\"Got local block \" + id)\n+        }\n+      } catch {\n+        case e: Exception => {\n+          logError(s\"Error occurred while fetching local blocks\", e)\n+          for (id <- localBlocksToFetch.drop(fetchIndex)) {\n+            results.put(new FetchResult(id, -1, null))"
+  }, {
+    "author": {
+      "login": "sarutak"
+    },
+    "body": "Thank you for your comment, @mateiz .\n\n> I wouldn't do drop and such on a ConcurrentQueue, since it might drop stuff other threads  were adding. Just do a results.put on the failed block and don't worry about dropping other ones. You can actually move the try/catch into the for loop and add a \"return\" at the bottom of the catch after adding this failing FetchResult.\n\nBut, if it returns from getLocalBlocks immediately rest of FetchResults is not set to results, and we waits on results.take() in next method forever right? results is a instance of LinkedBlockingQueue and take method is blocking method.\n",
+    "commit": "85c89380b499702a6fee119e5f45a7a0685f149e",
+    "createdAt": "2014-07-31T05:53:16Z",
+    "diffHunk": "@@ -199,15 +199,22 @@ object BlockFetcherIterator {\n       // Get the local blocks while remote blocks are being fetched. Note that it's okay to do\n       // these all at once because they will just memory-map some files, so they won't consume\n       // any memory that might exceed our maxBytesInFlight\n-      for (id <- localBlocksToFetch) {\n-        getLocalFromDisk(id, serializer) match {\n-          case Some(iter) => {\n-            // Pass 0 as size since it's not in flight\n-            results.put(new FetchResult(id, 0, () => iter))\n-            logDebug(\"Got local block \" + id)\n-          }\n-          case None => {\n-            throw new BlockException(id, \"Could not get block \" + id + \" from local machine\")\n+      var fetchIndex = 0\n+      try {\n+        for (id <- localBlocksToFetch) {\n+\n+          // getLocalFromDisk never return None but throws BlockException\n+          val iter = getLocalFromDisk(id, serializer).get\n+          // Pass 0 as size since it's not in flight\n+          results.put(new FetchResult(id, 0, () => iter))\n+          fetchIndex += 1\n+          logDebug(\"Got local block \" + id)\n+        }\n+      } catch {\n+        case e: Exception => {\n+          logError(s\"Error occurred while fetching local blocks\", e)\n+          for (id <- localBlocksToFetch.drop(fetchIndex)) {\n+            results.put(new FetchResult(id, -1, null))"
+  }, {
+    "author": {
+      "login": "mateiz"
+    },
+    "body": "I thought next() would return a failure block, and then the caller of BlockFetcherIterator will just stop. Did you see it not doing that? I think all you have to do is put _one_ FetchResult with size = -1 in the queue and return, and everything will be fine.\n",
+    "commit": "85c89380b499702a6fee119e5f45a7a0685f149e",
+    "createdAt": "2014-07-31T07:21:05Z",
+    "diffHunk": "@@ -199,15 +199,22 @@ object BlockFetcherIterator {\n       // Get the local blocks while remote blocks are being fetched. Note that it's okay to do\n       // these all at once because they will just memory-map some files, so they won't consume\n       // any memory that might exceed our maxBytesInFlight\n-      for (id <- localBlocksToFetch) {\n-        getLocalFromDisk(id, serializer) match {\n-          case Some(iter) => {\n-            // Pass 0 as size since it's not in flight\n-            results.put(new FetchResult(id, 0, () => iter))\n-            logDebug(\"Got local block \" + id)\n-          }\n-          case None => {\n-            throw new BlockException(id, \"Could not get block \" + id + \" from local machine\")\n+      var fetchIndex = 0\n+      try {\n+        for (id <- localBlocksToFetch) {\n+\n+          // getLocalFromDisk never return None but throws BlockException\n+          val iter = getLocalFromDisk(id, serializer).get\n+          // Pass 0 as size since it's not in flight\n+          results.put(new FetchResult(id, 0, () => iter))\n+          fetchIndex += 1\n+          logDebug(\"Got local block \" + id)\n+        }\n+      } catch {\n+        case e: Exception => {\n+          logError(s\"Error occurred while fetching local blocks\", e)\n+          for (id <- localBlocksToFetch.drop(fetchIndex)) {\n+            results.put(new FetchResult(id, -1, null))"
+  }, {
+    "author": {
+      "login": "sarutak"
+    },
+    "body": "I thought wrong. Exactly, in current usage of BlockFetcherIterator, next() is not invoked after FetchFailedException has been thrown.\nI wonder it's a little bit problem that we can invoke next() after FetchFailedException even if there are no such usages in current implementation.\nI think it's better to prohibit invoking next() after FetchFailedException to clearly express the correct usage of the method.\n",
+    "commit": "85c89380b499702a6fee119e5f45a7a0685f149e",
+    "createdAt": "2014-07-31T14:47:57Z",
+    "diffHunk": "@@ -199,15 +199,22 @@ object BlockFetcherIterator {\n       // Get the local blocks while remote blocks are being fetched. Note that it's okay to do\n       // these all at once because they will just memory-map some files, so they won't consume\n       // any memory that might exceed our maxBytesInFlight\n-      for (id <- localBlocksToFetch) {\n-        getLocalFromDisk(id, serializer) match {\n-          case Some(iter) => {\n-            // Pass 0 as size since it's not in flight\n-            results.put(new FetchResult(id, 0, () => iter))\n-            logDebug(\"Got local block \" + id)\n-          }\n-          case None => {\n-            throw new BlockException(id, \"Could not get block \" + id + \" from local machine\")\n+      var fetchIndex = 0\n+      try {\n+        for (id <- localBlocksToFetch) {\n+\n+          // getLocalFromDisk never return None but throws BlockException\n+          val iter = getLocalFromDisk(id, serializer).get\n+          // Pass 0 as size since it's not in flight\n+          results.put(new FetchResult(id, 0, () => iter))\n+          fetchIndex += 1\n+          logDebug(\"Got local block \" + id)\n+        }\n+      } catch {\n+        case e: Exception => {\n+          logError(s\"Error occurred while fetching local blocks\", e)\n+          for (id <- localBlocksToFetch.drop(fetchIndex)) {\n+            results.put(new FetchResult(id, -1, null))"
+  }],
+  "prId": 1578
+}]

@@ -1,0 +1,84 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "viirya"
+    },
+    "body": "Why `ShowColumnsCommand` is sorted?\n",
+    "commit": "15c568f2cddf28b9542c7d96339b356ed5c578f7",
+    "createdAt": "2016-10-11T02:35:57Z",
+    "diffHunk": "@@ -207,6 +208,7 @@ class SQLQueryTestSuite extends QueryTest with SharedSQLContext {\n     // Returns true if the plan is supposed to be sorted.\n     def isSorted(plan: LogicalPlan): Boolean = plan match {\n       case _: Join | _: Aggregate | _: Generate | _: Sample | _: Distinct => false\n+      case _: ShowColumnsCommand => true"
+  }, {
+    "author": {
+      "login": "dilipbiswal"
+    },
+    "body": "@viirya I added the case here because of\nhttps://github.com/dilipbiswal/spark/blob/3acd08f9431d6cdfe4d043aa342d09fc0ebfa497/sql/core/src/test/scala/org/apache/spark/sql/SQLQueryTestSuite.scala#L222\n\nI didn't want the output of ShowColumnsCommand to be sorted before comparison.\n",
+    "commit": "15c568f2cddf28b9542c7d96339b356ed5c578f7",
+    "createdAt": "2016-10-11T02:49:47Z",
+    "diffHunk": "@@ -207,6 +208,7 @@ class SQLQueryTestSuite extends QueryTest with SharedSQLContext {\n     // Returns true if the plan is supposed to be sorted.\n     def isSorted(plan: LogicalPlan): Boolean = plan match {\n       case _: Join | _: Aggregate | _: Generate | _: Sample | _: Distinct => false\n+      case _: ShowColumnsCommand => true"
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "Will it affect comparison result? I think the result is generated, right?\n",
+    "commit": "15c568f2cddf28b9542c7d96339b356ed5c578f7",
+    "createdAt": "2016-10-11T03:08:27Z",
+    "diffHunk": "@@ -207,6 +208,7 @@ class SQLQueryTestSuite extends QueryTest with SharedSQLContext {\n     // Returns true if the plan is supposed to be sorted.\n     def isSorted(plan: LogicalPlan): Boolean = plan match {\n       case _: Join | _: Aggregate | _: Generate | _: Sample | _: Distinct => false\n+      case _: ShowColumnsCommand => true"
+  }, {
+    "author": {
+      "login": "dilipbiswal"
+    },
+    "body": "@viirya So it seemed odd to have the generated output files to have column names sorted which didn't reflect the column order of create table. In the test case i had the table create like following.\n\n``` SQL\nCREATE TABLE showcolumn2 (price int, qty int) partitioned by (year int, month int)\n```\n\nIt seemed odd to me to have the generated output file report the columns as month, price, qty and year as opposed to price, qty, year and month. Let me know if i am missing something here.\n",
+    "commit": "15c568f2cddf28b9542c7d96339b356ed5c578f7",
+    "createdAt": "2016-10-11T03:44:57Z",
+    "diffHunk": "@@ -207,6 +208,7 @@ class SQLQueryTestSuite extends QueryTest with SharedSQLContext {\n     // Returns true if the plan is supposed to be sorted.\n     def isSorted(plan: LogicalPlan): Boolean = plan match {\n       case _: Join | _: Aggregate | _: Generate | _: Sample | _: Distinct => false\n+      case _: ShowColumnsCommand => true"
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "Personally I don't think it is odd because we just want to compare the results. Adding `ShowColumnsCommand` to sorted op looks more odd to me. cc @cloud-fan \n",
+    "commit": "15c568f2cddf28b9542c7d96339b356ed5c578f7",
+    "createdAt": "2016-10-11T03:51:12Z",
+    "diffHunk": "@@ -207,6 +208,7 @@ class SQLQueryTestSuite extends QueryTest with SharedSQLContext {\n     // Returns true if the plan is supposed to be sorted.\n     def isSorted(plan: LogicalPlan): Boolean = plan match {\n       case _: Join | _: Aggregate | _: Generate | _: Sample | _: Distinct => false\n+      case _: ShowColumnsCommand => true"
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "Does it break test if we don't mark it as sorted?\n",
+    "commit": "15c568f2cddf28b9542c7d96339b356ed5c578f7",
+    "createdAt": "2016-10-11T13:57:34Z",
+    "diffHunk": "@@ -207,6 +208,7 @@ class SQLQueryTestSuite extends QueryTest with SharedSQLContext {\n     // Returns true if the plan is supposed to be sorted.\n     def isSorted(plan: LogicalPlan): Boolean = plan match {\n       case _: Join | _: Aggregate | _: Generate | _: Sample | _: Distinct => false\n+      case _: ShowColumnsCommand => true"
+  }, {
+    "author": {
+      "login": "dilipbiswal"
+    },
+    "body": "@cloud-fan @viirya Actually it does not break the test if we don't mark it as sorted. What happens is that, when we generate the expected output file, the results appear sorted like following:\n\n``` SQL\n-- !query 7\nSHOW COLUMNS IN showcolumn2 IN showdb\n-- !query 7 schema\nstruct<col_name:string>\n-- !query 7 output\nmonth\nprice\nqty\nyear\n```\n\nWhen i was going through the expected output file to make sure its correct, i noticed this as the above output would not be how it would be shown if i cut-paste the SQLs snippets from the test file and ran it in spark-sql shell. \n\nIf you guys think its okay to have the output in sorted form in the expected file, then i will change it back.\n",
+    "commit": "15c568f2cddf28b9542c7d96339b356ed5c578f7",
+    "createdAt": "2016-10-11T15:20:37Z",
+    "diffHunk": "@@ -207,6 +208,7 @@ class SQLQueryTestSuite extends QueryTest with SharedSQLContext {\n     // Returns true if the plan is supposed to be sorted.\n     def isSorted(plan: LogicalPlan): Boolean = plan match {\n       case _: Join | _: Aggregate | _: Generate | _: Sample | _: Distinct => false\n+      case _: ShowColumnsCommand => true"
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "marking `ShowColumnsCommand` as sorted is more weird, I'd like to leave the result sorted.\n",
+    "commit": "15c568f2cddf28b9542c7d96339b356ed5c578f7",
+    "createdAt": "2016-10-12T05:12:58Z",
+    "diffHunk": "@@ -207,6 +208,7 @@ class SQLQueryTestSuite extends QueryTest with SharedSQLContext {\n     // Returns true if the plan is supposed to be sorted.\n     def isSorted(plan: LogicalPlan): Boolean = plan match {\n       case _: Join | _: Aggregate | _: Generate | _: Sample | _: Distinct => false\n+      case _: ShowColumnsCommand => true"
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "+1 as mentioned in previous comment.\n",
+    "commit": "15c568f2cddf28b9542c7d96339b356ed5c578f7",
+    "createdAt": "2016-10-12T05:16:36Z",
+    "diffHunk": "@@ -207,6 +208,7 @@ class SQLQueryTestSuite extends QueryTest with SharedSQLContext {\n     // Returns true if the plan is supposed to be sorted.\n     def isSorted(plan: LogicalPlan): Boolean = plan match {\n       case _: Join | _: Aggregate | _: Generate | _: Sample | _: Distinct => false\n+      case _: ShowColumnsCommand => true"
+  }, {
+    "author": {
+      "login": "dilipbiswal"
+    },
+    "body": "@cloud-fan @viirya Thanks :-) I will change it.\n",
+    "commit": "15c568f2cddf28b9542c7d96339b356ed5c578f7",
+    "createdAt": "2016-10-12T05:27:11Z",
+    "diffHunk": "@@ -207,6 +208,7 @@ class SQLQueryTestSuite extends QueryTest with SharedSQLContext {\n     // Returns true if the plan is supposed to be sorted.\n     def isSorted(plan: LogicalPlan): Boolean = plan match {\n       case _: Join | _: Aggregate | _: Generate | _: Sample | _: Distinct => false\n+      case _: ShowColumnsCommand => true"
+  }],
+  "prId": 15423
+}]

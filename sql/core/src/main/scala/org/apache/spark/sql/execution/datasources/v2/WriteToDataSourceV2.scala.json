@@ -1,0 +1,130 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "I'm not sure why we have to do this at Spark side. In the implementation of `DataWriter.commit`, users can still call `SparkEnv.get.outputCommitCoordinator` and `TaskContext.get` to get all information they need. User can even use their own commit coordinator which is based on zookeeper or something.\r\n\r\nI think the current API is flexible enough to: 1) not use commit coordinator 2) use Spark built-in commit coordinator 3) use customer commit coordinator.",
+    "commit": "538bc864f8ebb8d1b7e63c26806f209f2c3b0fc4",
+    "createdAt": "2018-02-06T02:48:19Z",
+    "diffHunk": "@@ -117,20 +118,43 @@ object DataWritingSparkTask extends Logging {\n       writeTask: DataWriterFactory[InternalRow],\n       context: TaskContext,\n       iter: Iterator[InternalRow]): WriterCommitMessage = {\n-    val dataWriter = writeTask.createDataWriter(context.partitionId(), context.attemptNumber())\n+    val stageId = context.stageId()\n+    val partId = context.partitionId()\n+    val attemptId = context.attemptNumber()\n+    val dataWriter = writeTask.createDataWriter(partId, attemptId)\n \n     // write the data and commit this writer.\n     Utils.tryWithSafeFinallyAndFailureCallbacks(block = {\n       iter.foreach(dataWriter.write)\n-      logInfo(s\"Writer for partition ${context.partitionId()} is committing.\")\n-      val msg = dataWriter.commit()\n-      logInfo(s\"Writer for partition ${context.partitionId()} committed.\")\n+\n+      val msg = if (writeTask.useCommitCoordinator) {\n+        val coordinator = SparkEnv.get.outputCommitCoordinator"
+  }, {
+    "author": {
+      "login": "rdblue"
+    },
+    "body": "The API is flexible. The problem is that it defaults to no coordination, which will cause correctness bugs.\r\n\r\nThe safe option is to coordinate commits by default. If an implementation doesn't change the default, then it at least won't duplicate task outputs in job commit. Worst case is that it takes a little longer for committers that don't need coordination. On the other hand, not making this the default will cause some writers to work most of the time, but duplicate data in some cases.\r\n\r\nWhat do you think is the down side to adding this?",
+    "commit": "538bc864f8ebb8d1b7e63c26806f209f2c3b0fc4",
+    "createdAt": "2018-02-06T16:29:25Z",
+    "diffHunk": "@@ -117,20 +118,43 @@ object DataWritingSparkTask extends Logging {\n       writeTask: DataWriterFactory[InternalRow],\n       context: TaskContext,\n       iter: Iterator[InternalRow]): WriterCommitMessage = {\n-    val dataWriter = writeTask.createDataWriter(context.partitionId(), context.attemptNumber())\n+    val stageId = context.stageId()\n+    val partId = context.partitionId()\n+    val attemptId = context.attemptNumber()\n+    val dataWriter = writeTask.createDataWriter(partId, attemptId)\n \n     // write the data and commit this writer.\n     Utils.tryWithSafeFinallyAndFailureCallbacks(block = {\n       iter.foreach(dataWriter.write)\n-      logInfo(s\"Writer for partition ${context.partitionId()} is committing.\")\n-      val msg = dataWriter.commit()\n-      logInfo(s\"Writer for partition ${context.partitionId()} committed.\")\n+\n+      val msg = if (writeTask.useCommitCoordinator) {\n+        val coordinator = SparkEnv.get.outputCommitCoordinator"
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "Yea it makes sense to use a commit coordinator by default, but I think we need to carefully design the API to introduce the concept of commit coordinator, just a `boolean useCommitCoordinator()` seems not enough. We also need to update the documentation of the write APIs, to clearly specify in which phase the commit coordinator is involved and how it works.",
+    "commit": "538bc864f8ebb8d1b7e63c26806f209f2c3b0fc4",
+    "createdAt": "2018-02-06T17:08:09Z",
+    "diffHunk": "@@ -117,20 +118,43 @@ object DataWritingSparkTask extends Logging {\n       writeTask: DataWriterFactory[InternalRow],\n       context: TaskContext,\n       iter: Iterator[InternalRow]): WriterCommitMessage = {\n-    val dataWriter = writeTask.createDataWriter(context.partitionId(), context.attemptNumber())\n+    val stageId = context.stageId()\n+    val partId = context.partitionId()\n+    val attemptId = context.attemptNumber()\n+    val dataWriter = writeTask.createDataWriter(partId, attemptId)\n \n     // write the data and commit this writer.\n     Utils.tryWithSafeFinallyAndFailureCallbacks(block = {\n       iter.foreach(dataWriter.write)\n-      logInfo(s\"Writer for partition ${context.partitionId()} is committing.\")\n-      val msg = dataWriter.commit()\n-      logInfo(s\"Writer for partition ${context.partitionId()} committed.\")\n+\n+      val msg = if (writeTask.useCommitCoordinator) {\n+        val coordinator = SparkEnv.get.outputCommitCoordinator"
+  }, {
+    "author": {
+      "login": "rdblue"
+    },
+    "body": "What do you have in mind to \"introduce the concept\"?\r\n\r\nI'm happy to add more docs. Do you want me to add them to this PR or in a follow-up? Are you targeting this for 2.3.0?",
+    "commit": "538bc864f8ebb8d1b7e63c26806f209f2c3b0fc4",
+    "createdAt": "2018-02-06T17:32:11Z",
+    "diffHunk": "@@ -117,20 +118,43 @@ object DataWritingSparkTask extends Logging {\n       writeTask: DataWriterFactory[InternalRow],\n       context: TaskContext,\n       iter: Iterator[InternalRow]): WriterCommitMessage = {\n-    val dataWriter = writeTask.createDataWriter(context.partitionId(), context.attemptNumber())\n+    val stageId = context.stageId()\n+    val partId = context.partitionId()\n+    val attemptId = context.attemptNumber()\n+    val dataWriter = writeTask.createDataWriter(partId, attemptId)\n \n     // write the data and commit this writer.\n     Utils.tryWithSafeFinallyAndFailureCallbacks(block = {\n       iter.foreach(dataWriter.write)\n-      logInfo(s\"Writer for partition ${context.partitionId()} is committing.\")\n-      val msg = dataWriter.commit()\n-      logInfo(s\"Writer for partition ${context.partitionId()} committed.\")\n+\n+      val msg = if (writeTask.useCommitCoordinator) {\n+        val coordinator = SparkEnv.get.outputCommitCoordinator"
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "Since we have a workaround(call coordinator in `DataWriter.commit`), I don't think this should block the 2.3 release, but we can definitely get this in branch 2.3 if there is no breaking change on the public APIs.\r\n\r\nAnd I won't treat it as a correctness bug. The default no-coordinator behavior is well documented with the current APIs, see the classdoc of `DataWriter`. We never guarantee that for an RDD partition, only one task can commit successfully.\r\n\r\n> What do you have in mind to \"introduce the concept\"?\r\n\r\nI never thought about it before, I'll think about it these days.",
+    "commit": "538bc864f8ebb8d1b7e63c26806f209f2c3b0fc4",
+    "createdAt": "2018-02-06T18:20:26Z",
+    "diffHunk": "@@ -117,20 +118,43 @@ object DataWritingSparkTask extends Logging {\n       writeTask: DataWriterFactory[InternalRow],\n       context: TaskContext,\n       iter: Iterator[InternalRow]): WriterCommitMessage = {\n-    val dataWriter = writeTask.createDataWriter(context.partitionId(), context.attemptNumber())\n+    val stageId = context.stageId()\n+    val partId = context.partitionId()\n+    val attemptId = context.attemptNumber()\n+    val dataWriter = writeTask.createDataWriter(partId, attemptId)\n \n     // write the data and commit this writer.\n     Utils.tryWithSafeFinallyAndFailureCallbacks(block = {\n       iter.foreach(dataWriter.write)\n-      logInfo(s\"Writer for partition ${context.partitionId()} is committing.\")\n-      val msg = dataWriter.commit()\n-      logInfo(s\"Writer for partition ${context.partitionId()} committed.\")\n+\n+      val msg = if (writeTask.useCommitCoordinator) {\n+        val coordinator = SparkEnv.get.outputCommitCoordinator"
+  }, {
+    "author": {
+      "login": "rdblue"
+    },
+    "body": "Let me know if you want me to change this PR.\r\n\r\nI'd like to see this go into 2.3.0 if there's still time. Just because it is documented doesn't mean it isn't a choice that severely limits the utility of DataSourceV2. I'd rather not support work-arounds for the life of 2.3.0.",
+    "commit": "538bc864f8ebb8d1b7e63c26806f209f2c3b0fc4",
+    "createdAt": "2018-02-06T18:29:19Z",
+    "diffHunk": "@@ -117,20 +118,43 @@ object DataWritingSparkTask extends Logging {\n       writeTask: DataWriterFactory[InternalRow],\n       context: TaskContext,\n       iter: Iterator[InternalRow]): WriterCommitMessage = {\n-    val dataWriter = writeTask.createDataWriter(context.partitionId(), context.attemptNumber())\n+    val stageId = context.stageId()\n+    val partId = context.partitionId()\n+    val attemptId = context.attemptNumber()\n+    val dataWriter = writeTask.createDataWriter(partId, attemptId)\n \n     // write the data and commit this writer.\n     Utils.tryWithSafeFinallyAndFailureCallbacks(block = {\n       iter.foreach(dataWriter.write)\n-      logInfo(s\"Writer for partition ${context.partitionId()} is committing.\")\n-      val msg = dataWriter.commit()\n-      logInfo(s\"Writer for partition ${context.partitionId()} committed.\")\n+\n+      val msg = if (writeTask.useCommitCoordinator) {\n+        val coordinator = SparkEnv.get.outputCommitCoordinator"
+  }, {
+    "author": {
+      "login": "rdblue"
+    },
+    "body": "I updated the `DataSourceWriter` docs for this change.",
+    "commit": "538bc864f8ebb8d1b7e63c26806f209f2c3b0fc4",
+    "createdAt": "2018-02-06T19:34:47Z",
+    "diffHunk": "@@ -117,20 +118,43 @@ object DataWritingSparkTask extends Logging {\n       writeTask: DataWriterFactory[InternalRow],\n       context: TaskContext,\n       iter: Iterator[InternalRow]): WriterCommitMessage = {\n-    val dataWriter = writeTask.createDataWriter(context.partitionId(), context.attemptNumber())\n+    val stageId = context.stageId()\n+    val partId = context.partitionId()\n+    val attemptId = context.attemptNumber()\n+    val dataWriter = writeTask.createDataWriter(partId, attemptId)\n \n     // write the data and commit this writer.\n     Utils.tryWithSafeFinallyAndFailureCallbacks(block = {\n       iter.foreach(dataWriter.write)\n-      logInfo(s\"Writer for partition ${context.partitionId()} is committing.\")\n-      val msg = dataWriter.commit()\n-      logInfo(s\"Writer for partition ${context.partitionId()} committed.\")\n+\n+      val msg = if (writeTask.useCommitCoordinator) {\n+        val coordinator = SparkEnv.get.outputCommitCoordinator"
+  }, {
+    "author": {
+      "login": "steveloughran"
+    },
+    "body": "bq. We never guarantee that for an RDD partition, only one task can commit successfully\r\n\r\nThere's at-least once though, right? And then the Job Commit (which is implicitly at-most-once) is expected to handle the situation wherein 1+ task may have committed, and should resolve it so that the output of only one task is added.\r\n\r\nOne thing which I think would be good is for the spark docs to somewhere (scaladoc? markdown) to precisely write down its requirements of a committer. For the WiP paper on the new S3A committers, [I've tried to do this across MR & Spark](https://github.com/steveloughran/zero-rename-committer/blob/master/tex/a_zero_rename_committer.tex#L1993)\r\n\r\n1. Complete: you get the output of all committed tasks\r\n2. Exclusive: you only get the output of committed tasks\r\n3. (Consistent: produces right output even if store is inconsistent)\r\n4. Concurrent: >1 task may commit simultaneously\r\n5. Abortable: if you abort a task, no output is visible\r\n6. Continuity of correctness: after a job is committed,  no partitioned task may suddenly add its work to the output.\r\n\r\nNot required: if there's a partition and a 2nd task attempt is committed, the output of either one of those attempts must be committed, but the specifics of which one is left open.\r\n\r\n* Hadoop MR v1 meets 1-6 on HDFS, fails on 3 against raw S3\r\n* The Direct Parquet committer fails to meet requirements (2, 5 & probably 6)\r\n* The Hadoop MR v2 committer fails on 2, because if a task attempt commit fails partway through, some of its output may be in the dest dir. Both Spark and MR assume that this situation never occurs. Really, committers should be able to say \"Doesn't support retry on task commit failure\", or better. \r\n\r\nRegarding this patch,\r\n\r\n1. how often do you actually expect people to be doing their own commit co-ordinator? \r\n1. What's the likelihood that they will get it right?\r\n\r\nAs we can see, the number of people who can correctly implement a committer is << than those who have shipped one; I don't see a commit coordinator being any different. It's good to offer the flexibility, but important to have the default being the one which everyone else uses and which is generally trusted.\r\n",
+    "commit": "538bc864f8ebb8d1b7e63c26806f209f2c3b0fc4",
+    "createdAt": "2018-02-06T21:28:05Z",
+    "diffHunk": "@@ -117,20 +118,43 @@ object DataWritingSparkTask extends Logging {\n       writeTask: DataWriterFactory[InternalRow],\n       context: TaskContext,\n       iter: Iterator[InternalRow]): WriterCommitMessage = {\n-    val dataWriter = writeTask.createDataWriter(context.partitionId(), context.attemptNumber())\n+    val stageId = context.stageId()\n+    val partId = context.partitionId()\n+    val attemptId = context.attemptNumber()\n+    val dataWriter = writeTask.createDataWriter(partId, attemptId)\n \n     // write the data and commit this writer.\n     Utils.tryWithSafeFinallyAndFailureCallbacks(block = {\n       iter.foreach(dataWriter.write)\n-      logInfo(s\"Writer for partition ${context.partitionId()} is committing.\")\n-      val msg = dataWriter.commit()\n-      logInfo(s\"Writer for partition ${context.partitionId()} committed.\")\n+\n+      val msg = if (writeTask.useCommitCoordinator) {\n+        val coordinator = SparkEnv.get.outputCommitCoordinator"
+  }, {
+    "author": {
+      "login": "rdblue"
+    },
+    "body": "> As we can see, the number of people who can correctly implement a committer is << than those who have shipped one\r\n\r\nTotally agree. Great quote.\r\n\r\nFrom Wenchen's comments, I think we're in agreement that the default should be to use the commit coordinator. We just need to figure out how to get it in and how to document what it guarantees.",
+    "commit": "538bc864f8ebb8d1b7e63c26806f209f2c3b0fc4",
+    "createdAt": "2018-02-06T22:31:48Z",
+    "diffHunk": "@@ -117,20 +118,43 @@ object DataWritingSparkTask extends Logging {\n       writeTask: DataWriterFactory[InternalRow],\n       context: TaskContext,\n       iter: Iterator[InternalRow]): WriterCommitMessage = {\n-    val dataWriter = writeTask.createDataWriter(context.partitionId(), context.attemptNumber())\n+    val stageId = context.stageId()\n+    val partId = context.partitionId()\n+    val attemptId = context.attemptNumber()\n+    val dataWriter = writeTask.createDataWriter(partId, attemptId)\n \n     // write the data and commit this writer.\n     Utils.tryWithSafeFinallyAndFailureCallbacks(block = {\n       iter.foreach(dataWriter.write)\n-      logInfo(s\"Writer for partition ${context.partitionId()} is committing.\")\n-      val msg = dataWriter.commit()\n-      logInfo(s\"Writer for partition ${context.partitionId()} committed.\")\n+\n+      val msg = if (writeTask.useCommitCoordinator) {\n+        val coordinator = SparkEnv.get.outputCommitCoordinator"
+  }],
+  "prId": 20490
+}, {
+  "comments": [{
+    "author": {
+      "login": "steveloughran"
+    },
+    "body": "It's implicitly done in the logs anyway, but I've found tracking the duration of these operations useful",
+    "commit": "538bc864f8ebb8d1b7e63c26806f209f2c3b0fc4",
+    "createdAt": "2018-02-06T21:31:17Z",
+    "diffHunk": "@@ -117,20 +118,43 @@ object DataWritingSparkTask extends Logging {\n       writeTask: DataWriterFactory[InternalRow],\n       context: TaskContext,\n       iter: Iterator[InternalRow]): WriterCommitMessage = {\n-    val dataWriter = writeTask.createDataWriter(context.partitionId(), context.attemptNumber())\n+    val stageId = context.stageId()\n+    val partId = context.partitionId()\n+    val attemptId = context.attemptNumber()\n+    val dataWriter = writeTask.createDataWriter(partId, attemptId)\n \n     // write the data and commit this writer.\n     Utils.tryWithSafeFinallyAndFailureCallbacks(block = {\n       iter.foreach(dataWriter.write)\n-      logInfo(s\"Writer for partition ${context.partitionId()} is committing.\")\n-      val msg = dataWriter.commit()\n-      logInfo(s\"Writer for partition ${context.partitionId()} committed.\")\n+\n+      val msg = if (writeTask.useCommitCoordinator) {\n+        val coordinator = SparkEnv.get.outputCommitCoordinator\n+        val commitAuthorized = coordinator.canCommit(context.stageId(), partId, attemptId)\n+        if (commitAuthorized) {\n+          logInfo(s\"Writer for stage $stageId, task $partId.$attemptId is authorized to commit.\")\n+          dataWriter.commit()\n+\n+        } else {\n+          val message = s\"Stage $stageId, task $partId.$attemptId: driver did not authorize commit\"\n+          logInfo(message)\n+          // throwing CommitDeniedException will trigger the catch block for abort\n+          throw new CommitDeniedException(message, stageId, partId, attemptId)\n+        }\n+\n+      } else {\n+        logInfo(s\"Writer for partition ${context.partitionId()} is committing.\")\n+        dataWriter.commit()\n+      }\n+\n+      logInfo(s\"Writer for stage $stageId, task $partId.$attemptId committed.\")",
+    "line": 63
+  }],
+  "prId": 20490
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "I think we also need to handle it at the streaming side. Please check all the callers of `DataWriter.commit`.",
+    "commit": "538bc864f8ebb8d1b7e63c26806f209f2c3b0fc4",
+    "createdAt": "2018-02-08T10:58:54Z",
+    "diffHunk": "@@ -117,20 +118,43 @@ object DataWritingSparkTask extends Logging {\n       writeTask: DataWriterFactory[InternalRow],\n       context: TaskContext,\n       iter: Iterator[InternalRow]): WriterCommitMessage = {\n-    val dataWriter = writeTask.createDataWriter(context.partitionId(), context.attemptNumber())\n+    val stageId = context.stageId()\n+    val partId = context.partitionId()\n+    val attemptId = context.attemptNumber()\n+    val dataWriter = writeTask.createDataWriter(partId, attemptId)\n \n     // write the data and commit this writer.\n     Utils.tryWithSafeFinallyAndFailureCallbacks(block = {\n       iter.foreach(dataWriter.write)\n-      logInfo(s\"Writer for partition ${context.partitionId()} is committing.\")\n-      val msg = dataWriter.commit()\n-      logInfo(s\"Writer for partition ${context.partitionId()} committed.\")\n+\n+      val msg = if (writeTask.useCommitCoordinator) {"
+  }, {
+    "author": {
+      "login": "rdblue"
+    },
+    "body": "Is it a good idea to add streaming to this commit?\r\n\r\nThe changes differ significantly. It isn't clear how commit coordination happens for streaming writes. The OutputCommitCoordinator's `canCommit` method takes stage, partition, and attempt ids, not epochs. Either the other components aren't ready to have commit coordination, or I'm not familiar enough with how it is done for streaming.\r\n\r\nI think we can keep the two separate, and I'm happy to open a follow-up issue for the streaming side.",
+    "commit": "538bc864f8ebb8d1b7e63c26806f209f2c3b0fc4",
+    "createdAt": "2018-02-08T17:26:42Z",
+    "diffHunk": "@@ -117,20 +118,43 @@ object DataWritingSparkTask extends Logging {\n       writeTask: DataWriterFactory[InternalRow],\n       context: TaskContext,\n       iter: Iterator[InternalRow]): WriterCommitMessage = {\n-    val dataWriter = writeTask.createDataWriter(context.partitionId(), context.attemptNumber())\n+    val stageId = context.stageId()\n+    val partId = context.partitionId()\n+    val attemptId = context.attemptNumber()\n+    val dataWriter = writeTask.createDataWriter(partId, attemptId)\n \n     // write the data and commit this writer.\n     Utils.tryWithSafeFinallyAndFailureCallbacks(block = {\n       iter.foreach(dataWriter.write)\n-      logInfo(s\"Writer for partition ${context.partitionId()} is committing.\")\n-      val msg = dataWriter.commit()\n-      logInfo(s\"Writer for partition ${context.partitionId()} committed.\")\n+\n+      val msg = if (writeTask.useCommitCoordinator) {"
+  }],
+  "prId": 20490
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "nit: remove unnecessary blank line",
+    "commit": "538bc864f8ebb8d1b7e63c26806f209f2c3b0fc4",
+    "createdAt": "2018-02-10T02:35:29Z",
+    "diffHunk": "@@ -116,21 +118,45 @@ object DataWritingSparkTask extends Logging {\n   def run(\n       writeTask: DataWriterFactory[InternalRow],\n       context: TaskContext,\n-      iter: Iterator[InternalRow]): WriterCommitMessage = {\n-    val dataWriter = writeTask.createDataWriter(context.partitionId(), context.attemptNumber())\n+      iter: Iterator[InternalRow],\n+      useCommitCoordinator: Boolean): WriterCommitMessage = {\n+    val stageId = context.stageId()\n+    val partId = context.partitionId()\n+    val attemptId = context.attemptNumber()\n+    val dataWriter = writeTask.createDataWriter(partId, attemptId)\n \n     // write the data and commit this writer.\n     Utils.tryWithSafeFinallyAndFailureCallbacks(block = {\n       iter.foreach(dataWriter.write)\n-      logInfo(s\"Writer for partition ${context.partitionId()} is committing.\")\n-      val msg = dataWriter.commit()\n-      logInfo(s\"Writer for partition ${context.partitionId()} committed.\")\n+\n+      val msg = if (useCommitCoordinator) {\n+        val coordinator = SparkEnv.get.outputCommitCoordinator\n+        val commitAuthorized = coordinator.canCommit(context.stageId(), partId, attemptId)\n+        if (commitAuthorized) {\n+          logInfo(s\"Writer for stage $stageId, task $partId.$attemptId is authorized to commit.\")\n+          dataWriter.commit()\n+"
+  }],
+  "prId": 20490
+}, {
+  "comments": [{
+    "author": {
+      "login": "tedyu"
+    },
+    "body": "This should be WARN or ERROR since exception is thrown below.",
+    "commit": "538bc864f8ebb8d1b7e63c26806f209f2c3b0fc4",
+    "createdAt": "2018-04-27T16:19:21Z",
+    "diffHunk": "@@ -116,21 +118,44 @@ object DataWritingSparkTask extends Logging {\n   def run(\n       writeTask: DataWriterFactory[InternalRow],\n       context: TaskContext,\n-      iter: Iterator[InternalRow]): WriterCommitMessage = {\n-    val dataWriter = writeTask.createDataWriter(context.partitionId(), context.attemptNumber())\n+      iter: Iterator[InternalRow],\n+      useCommitCoordinator: Boolean): WriterCommitMessage = {\n+    val stageId = context.stageId()\n+    val partId = context.partitionId()\n+    val attemptId = context.attemptNumber()\n+    val dataWriter = writeTask.createDataWriter(partId, attemptId)\n \n     // write the data and commit this writer.\n     Utils.tryWithSafeFinallyAndFailureCallbacks(block = {\n       iter.foreach(dataWriter.write)\n-      logInfo(s\"Writer for partition ${context.partitionId()} is committing.\")\n-      val msg = dataWriter.commit()\n-      logInfo(s\"Writer for partition ${context.partitionId()} committed.\")\n+\n+      val msg = if (useCommitCoordinator) {\n+        val coordinator = SparkEnv.get.outputCommitCoordinator\n+        val commitAuthorized = coordinator.canCommit(context.stageId(), partId, attemptId)\n+        if (commitAuthorized) {\n+          logInfo(s\"Writer for stage $stageId, task $partId.$attemptId is authorized to commit.\")\n+          dataWriter.commit()\n+        } else {\n+          val message = s\"Stage $stageId, task $partId.$attemptId: driver did not authorize commit\"\n+          logInfo(message)",
+    "line": 53
+  }],
+  "prId": 20490
+}]

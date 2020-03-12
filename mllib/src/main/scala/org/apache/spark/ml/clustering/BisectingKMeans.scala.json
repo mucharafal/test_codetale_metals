@@ -1,0 +1,31 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "MLnick"
+    },
+    "body": "By the way, I've been meaning to log a ticket for this issue, but have been tied up.\r\n\r\nThis will actually never work. `dataset.rdd` will always have storage level `NONE`. To see this:\r\n\r\n```\r\nscala> import org.apache.spark.storage.StorageLevel\r\nimport org.apache.spark.storage.StorageLevel\r\n\r\nscala> val df = spark.range(10).toDF(\"num\")\r\ndf: org.apache.spark.sql.DataFrame = [num: bigint]\r\n\r\nscala> df.storageLevel == StorageLevel.NONE\r\nres0: Boolean = true\r\n\r\nscala> df.persist\r\nres1: df.type = [num: bigint]\r\n\r\nscala> df.storageLevel == StorageLevel.MEMORY_AND_DISK\r\nres2: Boolean = true\r\n\r\nscala> df.rdd.getStorageLevel == StorageLevel.MEMORY_AND_DISK\r\nres3: Boolean = false\r\n\r\nscala> df.rdd.getStorageLevel == StorageLevel.NONE\r\nres4: Boolean = true\r\n```\r\n\r\nSo in fact all the algorithms that are checking for storage level using `dataset.rdd` are actually double-caching the data if the input DataFrame is actually cached, because the RDD will not appear to be cached.\r\n\r\nSo we should migrate all the checks to use `dataset.storageLevel` which was added in https://github.com/apache/spark/pull/13780",
+    "commit": "678cd43321e98a20968e7d4ede561792d578dde4",
+    "createdAt": "2016-11-28T09:10:18Z",
+    "diffHunk": "@@ -255,10 +256,19 @@ class BisectingKMeans @Since(\"2.0.0\") (\n \n   @Since(\"2.0.0\")\n   override def fit(dataset: Dataset[_]): BisectingKMeansModel = {\n+    val handlePersistence = dataset.rdd.getStorageLevel == StorageLevel.NONE"
+  }, {
+    "author": {
+      "login": "hhbyyh"
+    },
+    "body": "Thanks for checking on this. I feel like we should have a unit test for this, but probably not here.",
+    "commit": "678cd43321e98a20968e7d4ede561792d578dde4",
+    "createdAt": "2016-11-28T13:28:55Z",
+    "diffHunk": "@@ -255,10 +256,19 @@ class BisectingKMeans @Since(\"2.0.0\") (\n \n   @Since(\"2.0.0\")\n   override def fit(dataset: Dataset[_]): BisectingKMeansModel = {\n+    val handlePersistence = dataset.rdd.getStorageLevel == StorageLevel.NONE"
+  }],
+  "prId": 16020
+}, {
+  "comments": [{
+    "author": {
+      "login": "MLnick"
+    },
+    "body": "Prefer \r\n\r\n```\r\nif (handlePersistence) {\r\n  rdd.unpersist()\r\n}\r\n```",
+    "commit": "678cd43321e98a20968e7d4ede561792d578dde4",
+    "createdAt": "2016-11-28T09:11:10Z",
+    "diffHunk": "@@ -273,6 +283,7 @@ class BisectingKMeans @Since(\"2.0.0\") (\n     val summary = new BisectingKMeansSummary(\n       model.transform(dataset), $(predictionCol), $(featuresCol), $(k))\n     model.setSummary(Some(summary))\n+    if (handlePersistence) rdd.unpersist()"
+  }],
+  "prId": 16020
+}]

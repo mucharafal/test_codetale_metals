@@ -1,0 +1,55 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "pwendell"
+    },
+    "body": "It might be good if this test first checks whether `printenv` is a valid command and just passes if it's not... since some distros or operating systems won't have it.\n",
+    "commit": "cc97a6a64f7a6c7c7cb46c8b8290bcb33e15e2e1",
+    "createdAt": "2014-03-06T22:28:20Z",
+    "diffHunk": "@@ -89,4 +97,37 @@ class PipedRDDSuite extends FunSuite with SharedSparkContext {\n     }\n   }\n \n+  test(\"test pipe exports map_input_file\") {\n+    testExportInputFile(\"map_input_file\")\n+  }\n+\n+  test(\"test pipe exports mapreduce_map_input_file\") {\n+    testExportInputFile(\"mapreduce_map_input_file\")\n+  }\n+\n+  def testExportInputFile(varName:String) {\n+    val nums = new HadoopRDD(sc, new JobConf(), classOf[TextInputFormat], classOf[LongWritable],\n+        classOf[Text], 2) {\n+      override def getPartitions: Array[Partition] = Array(generateFakeHadoopPartition())\n+      override val getDependencies = List[Dependency[_]]()\n+      override def compute(theSplit: Partition, context: TaskContext) = {\n+        new InterruptibleIterator[(LongWritable, Text)](context, Iterator((new LongWritable(1),\n+          new Text(\"b\"))))\n+      }\n+    }\n+    val hadoopPart1 = generateFakeHadoopPartition()\n+    val pipedRdd = new PipedRDD(nums, \"printenv \" + varName)"
+  }, {
+    "author": {
+      "login": "tgravescs"
+    },
+    "body": "Is there a convention or perhaps utilities for doing this already?  I didn't see one doing quick look but I might have missed it.  \n\nNote I copied the printenv command from a test above so I'll change both. \n",
+    "commit": "cc97a6a64f7a6c7c7cb46c8b8290bcb33e15e2e1",
+    "createdAt": "2014-03-07T00:18:26Z",
+    "diffHunk": "@@ -89,4 +97,37 @@ class PipedRDDSuite extends FunSuite with SharedSparkContext {\n     }\n   }\n \n+  test(\"test pipe exports map_input_file\") {\n+    testExportInputFile(\"map_input_file\")\n+  }\n+\n+  test(\"test pipe exports mapreduce_map_input_file\") {\n+    testExportInputFile(\"mapreduce_map_input_file\")\n+  }\n+\n+  def testExportInputFile(varName:String) {\n+    val nums = new HadoopRDD(sc, new JobConf(), classOf[TextInputFormat], classOf[LongWritable],\n+        classOf[Text], 2) {\n+      override def getPartitions: Array[Partition] = Array(generateFakeHadoopPartition())\n+      override val getDependencies = List[Dependency[_]]()\n+      override def compute(theSplit: Partition, context: TaskContext) = {\n+        new InterruptibleIterator[(LongWritable, Text)](context, Iterator((new LongWritable(1),\n+          new Text(\"b\"))))\n+      }\n+    }\n+    val hadoopPart1 = generateFakeHadoopPartition()\n+    val pipedRdd = new PipedRDD(nums, \"printenv \" + varName)"
+  }, {
+    "author": {
+      "login": "pwendell"
+    },
+    "body": "Ah I see - well then since your'e just doing what's there already I guess it's fine. But if you want to be a true hero, I think something like this would work:\n\n```\nimport scala.util.Try\nimport scala.sys.process._\nval hasPrintEnv = Try(Process(\"printenv\")!!).isSuccess\n```\n",
+    "commit": "cc97a6a64f7a6c7c7cb46c8b8290bcb33e15e2e1",
+    "createdAt": "2014-03-07T06:45:04Z",
+    "diffHunk": "@@ -89,4 +97,37 @@ class PipedRDDSuite extends FunSuite with SharedSparkContext {\n     }\n   }\n \n+  test(\"test pipe exports map_input_file\") {\n+    testExportInputFile(\"map_input_file\")\n+  }\n+\n+  test(\"test pipe exports mapreduce_map_input_file\") {\n+    testExportInputFile(\"mapreduce_map_input_file\")\n+  }\n+\n+  def testExportInputFile(varName:String) {\n+    val nums = new HadoopRDD(sc, new JobConf(), classOf[TextInputFormat], classOf[LongWritable],\n+        classOf[Text], 2) {\n+      override def getPartitions: Array[Partition] = Array(generateFakeHadoopPartition())\n+      override val getDependencies = List[Dependency[_]]()\n+      override def compute(theSplit: Partition, context: TaskContext) = {\n+        new InterruptibleIterator[(LongWritable, Text)](context, Iterator((new LongWritable(1),\n+          new Text(\"b\"))))\n+      }\n+    }\n+    val hadoopPart1 = generateFakeHadoopPartition()\n+    val pipedRdd = new PipedRDD(nums, \"printenv \" + varName)"
+  }, {
+    "author": {
+      "login": "tgravescs"
+    },
+    "body": "I'm definitely fine with fixing it, I was just wondering if we had some generic utilities that perhaps handled it for various platforms. Or perhaps a class that handled calling correct function depending on OS. \n",
+    "commit": "cc97a6a64f7a6c7c7cb46c8b8290bcb33e15e2e1",
+    "createdAt": "2014-03-07T14:25:29Z",
+    "diffHunk": "@@ -89,4 +97,37 @@ class PipedRDDSuite extends FunSuite with SharedSparkContext {\n     }\n   }\n \n+  test(\"test pipe exports map_input_file\") {\n+    testExportInputFile(\"map_input_file\")\n+  }\n+\n+  test(\"test pipe exports mapreduce_map_input_file\") {\n+    testExportInputFile(\"mapreduce_map_input_file\")\n+  }\n+\n+  def testExportInputFile(varName:String) {\n+    val nums = new HadoopRDD(sc, new JobConf(), classOf[TextInputFormat], classOf[LongWritable],\n+        classOf[Text], 2) {\n+      override def getPartitions: Array[Partition] = Array(generateFakeHadoopPartition())\n+      override val getDependencies = List[Dependency[_]]()\n+      override def compute(theSplit: Partition, context: TaskContext) = {\n+        new InterruptibleIterator[(LongWritable, Text)](context, Iterator((new LongWritable(1),\n+          new Text(\"b\"))))\n+      }\n+    }\n+    val hadoopPart1 = generateFakeHadoopPartition()\n+    val pipedRdd = new PipedRDD(nums, \"printenv \" + varName)"
+  }],
+  "prId": 94
+}, {
+  "comments": [{
+    "author": {
+      "login": "pwendell"
+    },
+    "body": "Just wondering - any reason to create this whole fake `HadoopRDD` rather than just make a temporary file and call `sc.textFile()`? Seems okay either way, I just couldn't tell if there was something else gained by doing that.\n",
+    "commit": "cc97a6a64f7a6c7c7cb46c8b8290bcb33e15e2e1",
+    "createdAt": "2014-03-06T22:28:57Z",
+    "diffHunk": "@@ -89,4 +97,37 @@ class PipedRDDSuite extends FunSuite with SharedSparkContext {\n     }\n   }\n \n+  test(\"test pipe exports map_input_file\") {\n+    testExportInputFile(\"map_input_file\")\n+  }\n+\n+  test(\"test pipe exports mapreduce_map_input_file\") {\n+    testExportInputFile(\"mapreduce_map_input_file\")\n+  }\n+\n+  def testExportInputFile(varName:String) {\n+    val nums = new HadoopRDD(sc, new JobConf(), classOf[TextInputFormat], classOf[LongWritable],"
+  }, {
+    "author": {
+      "login": "tgravescs"
+    },
+    "body": "no reason I just was trying to avoid temporary file.\n",
+    "commit": "cc97a6a64f7a6c7c7cb46c8b8290bcb33e15e2e1",
+    "createdAt": "2014-03-06T22:50:12Z",
+    "diffHunk": "@@ -89,4 +97,37 @@ class PipedRDDSuite extends FunSuite with SharedSparkContext {\n     }\n   }\n \n+  test(\"test pipe exports map_input_file\") {\n+    testExportInputFile(\"map_input_file\")\n+  }\n+\n+  test(\"test pipe exports mapreduce_map_input_file\") {\n+    testExportInputFile(\"mapreduce_map_input_file\")\n+  }\n+\n+  def testExportInputFile(varName:String) {\n+    val nums = new HadoopRDD(sc, new JobConf(), classOf[TextInputFormat], classOf[LongWritable],"
+  }],
+  "prId": 94
+}]

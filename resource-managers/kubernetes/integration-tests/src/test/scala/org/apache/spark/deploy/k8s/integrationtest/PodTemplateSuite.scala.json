@@ -1,0 +1,35 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "ifilonenko"
+    },
+    "body": "`test(\"Start pod creation from template\") {`\r\nshould be \r\n`test(\"Start pod creation from template\", k8sTestTag) {`\r\nfor the test to be run",
+    "commit": "3707e6a411cdb8410365cde8e79b8d3ec01a7fee",
+    "createdAt": "2018-08-27T17:57:43Z",
+    "diffHunk": "@@ -0,0 +1,108 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+package org.apache.spark.deploy.k8s.integrationtest\n+\n+import java.nio.file.Files\n+\n+import com.fasterxml.jackson.databind.ObjectMapper\n+import com.fasterxml.jackson.dataformat.yaml.YAMLFactory\n+import io.fabric8.kubernetes.api.model.{Pod, PodBuilder}\n+\n+private[spark] trait PodTemplateSuite { k8sSuite: KubernetesSuite =>\n+\n+  import PodTemplateSuite._\n+\n+  test(\"Start pod creation from template\") {"
+  }],
+  "prId": 22146
+}, {
+  "comments": [{
+    "author": {
+      "login": "ifilonenko"
+    },
+    "body": "just a couple NITS. Could you reformat throughout, as such, for easier readability, to keep consistent with the rest of the code-base\r\n```\r\n    val driverTemplatePod = new PodBuilder()\r\n      .withApiVersion(\"1\")\r\n      .withKind(\"Pod\")\r\n      .withNewMetadata()\r\n          .addToLabels(LABEL_KEY, DRIVER_LABEL_VALUE)\r\n          .endMetadata()\r\n      .withNewSpec()\r\n          .addNewContainer()\r\n              .withName(DRIVER_CONTAINER_NAME)\r\n              .withImage(\"will-be-overwritten\")\r\n              .endContainer()\r\n          .endSpec()\r\n      .build()\r\n```",
+    "commit": "3707e6a411cdb8410365cde8e79b8d3ec01a7fee",
+    "createdAt": "2018-08-27T18:01:47Z",
+    "diffHunk": "@@ -0,0 +1,108 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+package org.apache.spark.deploy.k8s.integrationtest\n+\n+import java.nio.file.Files\n+\n+import com.fasterxml.jackson.databind.ObjectMapper\n+import com.fasterxml.jackson.dataformat.yaml.YAMLFactory\n+import io.fabric8.kubernetes.api.model.{Pod, PodBuilder}\n+\n+private[spark] trait PodTemplateSuite { k8sSuite: KubernetesSuite =>\n+\n+  import PodTemplateSuite._\n+\n+  test(\"Start pod creation from template\") {\n+    createPodTemplateFiles()\n+    sparkAppConf\n+      .set(\"spark.kubernetes.driver.podTemplateFile\", DRIVER_TEMPLATE_FILE.getAbsolutePath)\n+      .set(\"spark.kubernetes.executor.podTemplateFile\", EXECUTOR_TEMPLATE_FILE.getAbsolutePath)\n+    runSparkPiAndVerifyCompletion(\n+      driverPodChecker = (driverPod: Pod) => {\n+        checkDriverPod(driverPod)\n+      },\n+      executorPodChecker = (executorPod: Pod) => {\n+        checkExecutorPod(executorPod)\n+      }\n+    )\n+  }\n+\n+  private def checkDriverPod(pod: Pod): Unit = {\n+    assert(pod.getMetadata.getName === driverPodName)\n+    assert(pod.getSpec.getContainers.get(0).getImage === image)\n+    assert(pod.getSpec.getContainers.get(0).getName === DRIVER_CONTAINER_NAME)\n+    assert(pod.getMetadata.getLabels.containsKey(LABEL_KEY))\n+    assert(pod.getMetadata.getLabels.get(LABEL_KEY) === DRIVER_LABEL_VALUE)\n+  }\n+\n+  private def checkExecutorPod(pod: Pod): Unit = {\n+    assert(pod.getMetadata.getName === \"template-pod\")\n+    assert(pod.getSpec.getContainers.get(0).getImage === image)\n+    assert(pod.getSpec.getContainers.get(0).getName === EXECUTOR_CONTAINER_NAME)\n+    assert(pod.getMetadata.getLabels.containsKey(LABEL_KEY))\n+    assert(pod.getMetadata.getLabels.get(LABEL_KEY) === EXECUTOR_LABEL_VALUE)\n+  }\n+\n+  private def createPodTemplateFiles(): Unit = {\n+    val objectMapper = new ObjectMapper(new YAMLFactory())\n+    val driverTemplatePod = new PodBuilder()\n+      .withApiVersion(\"1\")"
+  }],
+  "prId": 22146
+}, {
+  "comments": [{
+    "author": {
+      "login": "skonto"
+    },
+    "body": "We need to add more tests here with yaml files having more properties.",
+    "commit": "3707e6a411cdb8410365cde8e79b8d3ec01a7fee",
+    "createdAt": "2018-08-29T09:45:23Z",
+    "diffHunk": "@@ -0,0 +1,64 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+package org.apache.spark.deploy.k8s.integrationtest\n+\n+import java.io.File\n+\n+import io.fabric8.kubernetes.api.model.Pod\n+\n+import org.apache.spark.deploy.k8s.integrationtest.KubernetesSuite.k8sTestTag\n+\n+private[spark] trait PodTemplateSuite { k8sSuite: KubernetesSuite =>\n+\n+  import PodTemplateSuite._\n+\n+  test(\"Start pod creation from template\", k8sTestTag) {",
+    "line": 29
+  }],
+  "prId": 22146
+}]

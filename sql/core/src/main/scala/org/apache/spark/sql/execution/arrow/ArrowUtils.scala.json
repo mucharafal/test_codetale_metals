@@ -1,0 +1,117 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "icexelloss"
+    },
+    "body": "I do think we should use SQLConf.SESSION_LOCAL_TIMEZONE in this PR. I am concerned about potential inconsistent behavior due to system timezone like @wesm mentioned.",
+    "commit": "addd35f49d58227dd59b7d9d3595403cb992c1a8",
+    "createdAt": "2017-07-28T23:02:10Z",
+    "diffHunk": "@@ -42,6 +43,9 @@ object ArrowUtils {\n     case StringType => ArrowType.Utf8.INSTANCE\n     case BinaryType => ArrowType.Binary.INSTANCE\n     case DecimalType.Fixed(precision, scale) => new ArrowType.Decimal(precision, scale)\n+    case DateType => new ArrowType.Date(DateUnit.DAY)\n+    case TimestampType =>\n+      new ArrowType.Timestamp(TimeUnit.MICROSECOND, DateTimeUtils.defaultTimeZone().getID)"
+  }],
+  "prId": 18664
+}, {
+  "comments": [{
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "This is wrong, right?",
+    "commit": "addd35f49d58227dd59b7d9d3595403cb992c1a8",
+    "createdAt": "2017-08-02T06:14:07Z",
+    "diffHunk": "@@ -42,6 +43,9 @@ object ArrowUtils {\n     case StringType => ArrowType.Utf8.INSTANCE\n     case BinaryType => ArrowType.Binary.INSTANCE\n     case DecimalType.Fixed(precision, scale) => new ArrowType.Decimal(precision, scale)\n+    case DateType => new ArrowType.Date(DateUnit.DAY)\n+    case TimestampType =>\n+      new ArrowType.Timestamp(TimeUnit.MICROSECOND, DateTimeUtils.defaultTimeZone().getID)"
+  }],
+  "prId": 18664
+}, {
+  "comments": [{
+    "author": {
+      "login": "icexelloss"
+    },
+    "body": "Why do we use `Option` if this is not allowed to be `None`?",
+    "commit": "addd35f49d58227dd59b7d9d3595403cb992c1a8",
+    "createdAt": "2017-10-11T21:56:46Z",
+    "diffHunk": "@@ -31,7 +31,8 @@ object ArrowUtils {\n \n   // todo: support more types.\n \n-  def toArrowType(dt: DataType): ArrowType = dt match {\n+  /** Maps data type from Spark to Arrow. NOTE: timeZoneId required for TimestampTypes */\n+  def toArrowType(dt: DataType, timeZoneId: Option[String]): ArrowType = dt match {"
+  }, {
+    "author": {
+      "login": "icexelloss"
+    },
+    "body": "Hmm, I see, it's required only if dt is `TimestampType`. ",
+    "commit": "addd35f49d58227dd59b7d9d3595403cb992c1a8",
+    "createdAt": "2017-10-11T22:00:29Z",
+    "diffHunk": "@@ -31,7 +31,8 @@ object ArrowUtils {\n \n   // todo: support more types.\n \n-  def toArrowType(dt: DataType): ArrowType = dt match {\n+  /** Maps data type from Spark to Arrow. NOTE: timeZoneId required for TimestampTypes */\n+  def toArrowType(dt: DataType, timeZoneId: Option[String]): ArrowType = dt match {"
+  }, {
+    "author": {
+      "login": "icexelloss"
+    },
+    "body": "Btw, why don't we set default values for `timeZoneId`? Seems a bit weird having to specify `None` for other types.",
+    "commit": "addd35f49d58227dd59b7d9d3595403cb992c1a8",
+    "createdAt": "2017-10-11T22:03:43Z",
+    "diffHunk": "@@ -31,7 +31,8 @@ object ArrowUtils {\n \n   // todo: support more types.\n \n-  def toArrowType(dt: DataType): ArrowType = dt match {\n+  /** Maps data type from Spark to Arrow. NOTE: timeZoneId required for TimestampTypes */\n+  def toArrowType(dt: DataType, timeZoneId: Option[String]): ArrowType = dt match {"
+  }, {
+    "author": {
+      "login": "BryanCutler"
+    },
+    "body": "I don't think it's a good idea to have a default value for `timeZoneId`, then it makes it very easy to forget it and miss places in the code that really should have a timezone.  It will compile and probably pass tests, but might fail somewhere down the line.  Any place in Spark should specify a timezone, so it's better to force an argument to be used.  Only in the tests, where we are sure no TimestampTypes are used would we set it to None.",
+    "commit": "addd35f49d58227dd59b7d9d3595403cb992c1a8",
+    "createdAt": "2017-10-12T00:18:03Z",
+    "diffHunk": "@@ -31,7 +31,8 @@ object ArrowUtils {\n \n   // todo: support more types.\n \n-  def toArrowType(dt: DataType): ArrowType = dt match {\n+  /** Maps data type from Spark to Arrow. NOTE: timeZoneId required for TimestampTypes */\n+  def toArrowType(dt: DataType, timeZoneId: Option[String]): ArrowType = dt match {"
+  }, {
+    "author": {
+      "login": "icexelloss"
+    },
+    "body": "Ok. Makes sense. If this arg is required. We should maybe make it just `String` instead of `Option[String]`, I find having a required arg to be `Option` is not intuitive..",
+    "commit": "addd35f49d58227dd59b7d9d3595403cb992c1a8",
+    "createdAt": "2017-10-12T14:10:43Z",
+    "diffHunk": "@@ -31,7 +31,8 @@ object ArrowUtils {\n \n   // todo: support more types.\n \n-  def toArrowType(dt: DataType): ArrowType = dt match {\n+  /** Maps data type from Spark to Arrow. NOTE: timeZoneId required for TimestampTypes */\n+  def toArrowType(dt: DataType, timeZoneId: Option[String]): ArrowType = dt match {"
+  }, {
+    "author": {
+      "login": "icexelloss"
+    },
+    "body": "Btw, this is a bit nit pick. So feel free to stick to this if you think `Option[String]` is the right thing.",
+    "commit": "addd35f49d58227dd59b7d9d3595403cb992c1a8",
+    "createdAt": "2017-10-12T14:11:48Z",
+    "diffHunk": "@@ -31,7 +31,8 @@ object ArrowUtils {\n \n   // todo: support more types.\n \n-  def toArrowType(dt: DataType): ArrowType = dt match {\n+  /** Maps data type from Spark to Arrow. NOTE: timeZoneId required for TimestampTypes */\n+  def toArrowType(dt: DataType, timeZoneId: Option[String]): ArrowType = dt match {"
+  }],
+  "prId": 18664
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "Here we are mapping Spark SQL timestamp type to Arrow timestamp with timezone type. Does Arrow have tz-naive timestamp type?",
+    "commit": "addd35f49d58227dd59b7d9d3595403cb992c1a8",
+    "createdAt": "2017-10-19T04:19:02Z",
+    "diffHunk": "@@ -42,6 +43,13 @@ object ArrowUtils {\n     case StringType => ArrowType.Utf8.INSTANCE\n     case BinaryType => ArrowType.Binary.INSTANCE\n     case DecimalType.Fixed(precision, scale) => new ArrowType.Decimal(precision, scale)\n+    case DateType => new ArrowType.Date(DateUnit.DAY)\n+    case TimestampType =>\n+      timeZoneId match {\n+        case Some(id) => new ArrowType.Timestamp(TimeUnit.MICROSECOND, id)"
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "Looking at the read size, the timezone id here is not used? We always convert to python local timezone.",
+    "commit": "addd35f49d58227dd59b7d9d3595403cb992c1a8",
+    "createdAt": "2017-10-19T04:23:09Z",
+    "diffHunk": "@@ -42,6 +43,13 @@ object ArrowUtils {\n     case StringType => ArrowType.Utf8.INSTANCE\n     case BinaryType => ArrowType.Binary.INSTANCE\n     case DecimalType.Fixed(precision, scale) => new ArrowType.Decimal(precision, scale)\n+    case DateType => new ArrowType.Date(DateUnit.DAY)\n+    case TimestampType =>\n+      timeZoneId match {\n+        case Some(id) => new ArrowType.Timestamp(TimeUnit.MICROSECOND, id)"
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "I think we should use UTC here, then at read path, after we convert arrow to pandas, we should update pandas dataframe's timezone, to python local timezone.",
+    "commit": "addd35f49d58227dd59b7d9d3595403cb992c1a8",
+    "createdAt": "2017-10-19T14:53:52Z",
+    "diffHunk": "@@ -42,6 +43,13 @@ object ArrowUtils {\n     case StringType => ArrowType.Utf8.INSTANCE\n     case BinaryType => ArrowType.Binary.INSTANCE\n     case DecimalType.Fixed(precision, scale) => new ArrowType.Decimal(precision, scale)\n+    case DateType => new ArrowType.Date(DateUnit.DAY)\n+    case TimestampType =>\n+      timeZoneId match {\n+        case Some(id) => new ArrowType.Timestamp(TimeUnit.MICROSECOND, id)"
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "After we agree `toPandas` has a wrong behavior, we can update pandas dataframe's timezone to session local timezone in the last step.",
+    "commit": "addd35f49d58227dd59b7d9d3595403cb992c1a8",
+    "createdAt": "2017-10-19T14:55:25Z",
+    "diffHunk": "@@ -42,6 +43,13 @@ object ArrowUtils {\n     case StringType => ArrowType.Utf8.INSTANCE\n     case BinaryType => ArrowType.Binary.INSTANCE\n     case DecimalType.Fixed(precision, scale) => new ArrowType.Decimal(precision, scale)\n+    case DateType => new ArrowType.Date(DateUnit.DAY)\n+    case TimestampType =>\n+      timeZoneId match {\n+        case Some(id) => new ArrowType.Timestamp(TimeUnit.MICROSECOND, id)"
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "ok I understand the reason now. Setting the timezone here is better than setting it at python side. My only question is, why the timezone id is optional?",
+    "commit": "addd35f49d58227dd59b7d9d3595403cb992c1a8",
+    "createdAt": "2017-10-19T15:08:33Z",
+    "diffHunk": "@@ -42,6 +43,13 @@ object ArrowUtils {\n     case StringType => ArrowType.Utf8.INSTANCE\n     case BinaryType => ArrowType.Binary.INSTANCE\n     case DecimalType.Fixed(precision, scale) => new ArrowType.Decimal(precision, scale)\n+    case DateType => new ArrowType.Date(DateUnit.DAY)\n+    case TimestampType =>\n+      timeZoneId match {\n+        case Some(id) => new ArrowType.Timestamp(TimeUnit.MICROSECOND, id)"
+  }],
+  "prId": 18664
+}]

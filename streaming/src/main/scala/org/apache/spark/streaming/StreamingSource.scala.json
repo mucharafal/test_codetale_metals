@@ -1,0 +1,165 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "maasg"
+    },
+    "body": "Will this counter work? I think that gauges are collected only on request of a source, so if nobody is consuming the metric or consuming it too often, we will have a wrong count. \n",
+    "commit": "00f5f7f17b7aee95b519e17fb79e522277af8474",
+    "createdAt": "2014-11-26T09:38:26Z",
+    "diffHunk": "@@ -70,4 +78,14 @@ private[streaming] class StreamingSource(ssc: StreamingContext) extends Source {\n     _.lastCompletedBatch.flatMap(_.processingStartTime).getOrElse(-1L), -1L)\n   registerGauge(\"lastReceivedBatch_processEndTime\",\n     _.lastCompletedBatch.flatMap(_.processingEndTime).getOrElse(-1L), -1L)\n+\n+  // Gauge for last received batch records and total received batch records.\n+  private var totalReceivedBatchRecords: Long = 0L\n+  def getTotalReceivedBatchRecords(listener: StreamingJobProgressListener): Long = {\n+    totalReceivedBatchRecords += listener.lastReceivedBatchRecords.values.sum"
+  }, {
+    "author": {
+      "login": "jerryshao"
+    },
+    "body": "Aha, you're right, so it is hard to collect the total batch records without modifying the `StreamingJobProgressListener` code.\n",
+    "commit": "00f5f7f17b7aee95b519e17fb79e522277af8474",
+    "createdAt": "2014-11-26T12:23:12Z",
+    "diffHunk": "@@ -70,4 +78,14 @@ private[streaming] class StreamingSource(ssc: StreamingContext) extends Source {\n     _.lastCompletedBatch.flatMap(_.processingStartTime).getOrElse(-1L), -1L)\n   registerGauge(\"lastReceivedBatch_processEndTime\",\n     _.lastCompletedBatch.flatMap(_.processingEndTime).getOrElse(-1L), -1L)\n+\n+  // Gauge for last received batch records and total received batch records.\n+  private var totalReceivedBatchRecords: Long = 0L\n+  def getTotalReceivedBatchRecords(listener: StreamingJobProgressListener): Long = {\n+    totalReceivedBatchRecords += listener.lastReceivedBatchRecords.values.sum"
+  }, {
+    "author": {
+      "login": "jerryshao"
+    },
+    "body": "I will fix this, thanks a lot.\n",
+    "commit": "00f5f7f17b7aee95b519e17fb79e522277af8474",
+    "createdAt": "2014-11-26T12:35:28Z",
+    "diffHunk": "@@ -70,4 +78,14 @@ private[streaming] class StreamingSource(ssc: StreamingContext) extends Source {\n     _.lastCompletedBatch.flatMap(_.processingStartTime).getOrElse(-1L), -1L)\n   registerGauge(\"lastReceivedBatch_processEndTime\",\n     _.lastCompletedBatch.flatMap(_.processingEndTime).getOrElse(-1L), -1L)\n+\n+  // Gauge for last received batch records and total received batch records.\n+  private var totalReceivedBatchRecords: Long = 0L\n+  def getTotalReceivedBatchRecords(listener: StreamingJobProgressListener): Long = {\n+    totalReceivedBatchRecords += listener.lastReceivedBatchRecords.values.sum"
+  }],
+  "prId": 3466
+}, {
+  "comments": [{
+    "author": {
+      "login": "tdas"
+    },
+    "body": "Its better to name this \"processingTime\"\n",
+    "commit": "00f5f7f17b7aee95b519e17fb79e522277af8474",
+    "createdAt": "2014-12-23T23:50:30Z",
+    "diffHunk": "@@ -62,6 +62,14 @@ private[streaming] class StreamingSource(ssc: StreamingContext) extends Source {\n   registerGauge(\"lastCompletedBatch_processEndTime\",\n     _.lastCompletedBatch.flatMap(_.processingEndTime).getOrElse(-1L), -1L)\n \n+  // Gauge for last completed batch's delay information.\n+  registerGauge(\"lastCompletedBatch_processTime\","
+  }],
+  "prId": 3466
+}, {
+  "comments": [{
+    "author": {
+      "login": "tdas"
+    },
+    "body": "Why is the default value different within getOrElse, and the explicit default value? In fact the default value should not have to be specified twice. Since the registerGauge function already takes care of the nulls using Option and default value, we should not require Options here. \n",
+    "commit": "00f5f7f17b7aee95b519e17fb79e522277af8474",
+    "createdAt": "2014-12-23T23:54:28Z",
+    "diffHunk": "@@ -62,6 +62,14 @@ private[streaming] class StreamingSource(ssc: StreamingContext) extends Source {\n   registerGauge(\"lastCompletedBatch_processEndTime\",\n     _.lastCompletedBatch.flatMap(_.processingEndTime).getOrElse(-1L), -1L)\n \n+  // Gauge for last completed batch's delay information.\n+  registerGauge(\"lastCompletedBatch_processTime\",\n+    _.lastCompletedBatch.flatMap(_.processingDelay).getOrElse(0L), -1L)"
+  }],
+  "prId": 3466
+}, {
+  "comments": [{
+    "author": {
+      "login": "tdas"
+    },
+    "body": "Same comment as above.\n",
+    "commit": "00f5f7f17b7aee95b519e17fb79e522277af8474",
+    "createdAt": "2014-12-23T23:54:37Z",
+    "diffHunk": "@@ -62,6 +62,14 @@ private[streaming] class StreamingSource(ssc: StreamingContext) extends Source {\n   registerGauge(\"lastCompletedBatch_processEndTime\",\n     _.lastCompletedBatch.flatMap(_.processingEndTime).getOrElse(-1L), -1L)\n \n+  // Gauge for last completed batch's delay information.\n+  registerGauge(\"lastCompletedBatch_processTime\",\n+    _.lastCompletedBatch.flatMap(_.processingDelay).getOrElse(0L), -1L)\n+  registerGauge(\"lastCompletedBatch_schedulingDelay\",\n+    _.lastCompletedBatch.flatMap(_.schedulingDelay).getOrElse(0L), -1L)"
+  }],
+  "prId": 3466
+}, {
+  "comments": [{
+    "author": {
+      "login": "tdas"
+    },
+    "body": "I know that this is old code, but could you fix this as well? Default value should not have to specified twice. \n",
+    "commit": "00f5f7f17b7aee95b519e17fb79e522277af8474",
+    "createdAt": "2014-12-23T23:55:05Z",
+    "diffHunk": "@@ -70,4 +78,8 @@ private[streaming] class StreamingSource(ssc: StreamingContext) extends Source {\n     _.lastCompletedBatch.flatMap(_.processingStartTime).getOrElse(-1L), -1L)"
+  }],
+  "prId": 3466
+}, {
+  "comments": [{
+    "author": {
+      "login": "tdas"
+    },
+    "body": "I think its better to keep the Option here (and document that `defaultValue` is used when `f` returns `null`. And other places should not have to use Option. This is safer for any one to use and also minimizes the changes.\n",
+    "commit": "00f5f7f17b7aee95b519e17fb79e522277af8474",
+    "createdAt": "2014-12-24T01:59:32Z",
+    "diffHunk": "@@ -28,46 +28,58 @@ private[streaming] class StreamingSource(ssc: StreamingContext) extends Source {\n \n   private val streamingListener = ssc.progressListener\n \n-  private def registerGauge[T](name: String, f: StreamingJobProgressListener => T,\n+  private def registerGauge[T](name: String, f: StreamingJobProgressListener => Option[T],\n       defaultValue: T) {\n     metricRegistry.register(MetricRegistry.name(\"streaming\", name), new Gauge[T] {\n-      override def getValue: T = Option(f(streamingListener)).getOrElse(defaultValue)"
+  }, {
+    "author": {
+      "login": "jerryshao"
+    },
+    "body": "OK, I will revert it back and try a better way.\n",
+    "commit": "00f5f7f17b7aee95b519e17fb79e522277af8474",
+    "createdAt": "2014-12-24T02:05:21Z",
+    "diffHunk": "@@ -28,46 +28,58 @@ private[streaming] class StreamingSource(ssc: StreamingContext) extends Source {\n \n   private val streamingListener = ssc.progressListener\n \n-  private def registerGauge[T](name: String, f: StreamingJobProgressListener => T,\n+  private def registerGauge[T](name: String, f: StreamingJobProgressListener => Option[T],\n       defaultValue: T) {\n     metricRegistry.register(MetricRegistry.name(\"streaming\", name), new Gauge[T] {\n-      override def getValue: T = Option(f(streamingListener)).getOrElse(defaultValue)"
+  }, {
+    "author": {
+      "login": "jerryshao"
+    },
+    "body": "Hi TD, what's your meaning of \"And other places should not have to use Option\", If here as an example, change to \n\n``` scala\nregisterGauge(\"lastCompletedBatch_submissionTime\",\n    _.lastCompletedBatch.map(_.submissionTime).get, -1L)\n```\n\n`get` will throw exception when there's no completed batch. I'm not sure what's actual meaning, sorry if I misunderstand anything.\n",
+    "commit": "00f5f7f17b7aee95b519e17fb79e522277af8474",
+    "createdAt": "2014-12-24T03:18:22Z",
+    "diffHunk": "@@ -28,46 +28,58 @@ private[streaming] class StreamingSource(ssc: StreamingContext) extends Source {\n \n   private val streamingListener = ssc.progressListener\n \n-  private def registerGauge[T](name: String, f: StreamingJobProgressListener => T,\n+  private def registerGauge[T](name: String, f: StreamingJobProgressListener => Option[T],\n       defaultValue: T) {\n     metricRegistry.register(MetricRegistry.name(\"streaming\", name), new Gauge[T] {\n-      override def getValue: T = Option(f(streamingListener)).getOrElse(defaultValue)"
+  }, {
+    "author": {
+      "login": "jerryshao"
+    },
+    "body": "Hi TD, sorry to bother you again, I'm not if there's a better way to address this problem, would you mind giving me some hints, thanks a lot.\n",
+    "commit": "00f5f7f17b7aee95b519e17fb79e522277af8474",
+    "createdAt": "2014-12-24T05:01:49Z",
+    "diffHunk": "@@ -28,46 +28,58 @@ private[streaming] class StreamingSource(ssc: StreamingContext) extends Source {\n \n   private val streamingListener = ssc.progressListener\n \n-  private def registerGauge[T](name: String, f: StreamingJobProgressListener => T,\n+  private def registerGauge[T](name: String, f: StreamingJobProgressListener => Option[T],\n       defaultValue: T) {\n     metricRegistry.register(MetricRegistry.name(\"streaming\", name), new Gauge[T] {\n-      override def getValue: T = Option(f(streamingListener)).getOrElse(defaultValue)"
+  }, {
+    "author": {
+      "login": "tdas"
+    },
+    "body": "I understand the problem. Good catch, I did not realize that. How about this. Lets make two versions of registerGauge, one that takes `f: StreamingProgressListener => T` without any default value, another that takes `f: StreamingProgressListener => Option[T]` and the default value. Each version will be used accordingly. \n",
+    "commit": "00f5f7f17b7aee95b519e17fb79e522277af8474",
+    "createdAt": "2014-12-25T02:22:49Z",
+    "diffHunk": "@@ -28,46 +28,58 @@ private[streaming] class StreamingSource(ssc: StreamingContext) extends Source {\n \n   private val streamingListener = ssc.progressListener\n \n-  private def registerGauge[T](name: String, f: StreamingJobProgressListener => T,\n+  private def registerGauge[T](name: String, f: StreamingJobProgressListener => Option[T],\n       defaultValue: T) {\n     metricRegistry.register(MetricRegistry.name(\"streaming\", name), new Gauge[T] {\n-      override def getValue: T = Option(f(streamingListener)).getOrElse(defaultValue)"
+  }, {
+    "author": {
+      "login": "jerryshao"
+    },
+    "body": "OK, got it, I will change the code as you suggested.\n",
+    "commit": "00f5f7f17b7aee95b519e17fb79e522277af8474",
+    "createdAt": "2014-12-25T05:02:01Z",
+    "diffHunk": "@@ -28,46 +28,58 @@ private[streaming] class StreamingSource(ssc: StreamingContext) extends Source {\n \n   private val streamingListener = ssc.progressListener\n \n-  private def registerGauge[T](name: String, f: StreamingJobProgressListener => T,\n+  private def registerGauge[T](name: String, f: StreamingJobProgressListener => Option[T],\n       defaultValue: T) {\n     metricRegistry.register(MetricRegistry.name(\"streaming\", name), new Gauge[T] {\n-      override def getValue: T = Option(f(streamingListener)).getOrElse(defaultValue)"
+  }],
+  "prId": 3466
+}, {
+  "comments": [{
+    "author": {
+      "login": "tdas"
+    },
+    "body": "nit: The existing version of registerGauge could have used the new version. Not a big deal, very small amount of duplicate code.\n",
+    "commit": "00f5f7f17b7aee95b519e17fb79e522277af8474",
+    "createdAt": "2014-12-25T23:43:36Z",
+    "diffHunk": "@@ -35,6 +35,15 @@ private[streaming] class StreamingSource(ssc: StreamingContext) extends Source {\n     })",
+    "line": 17
+  }],
+  "prId": 3466
+}, {
+  "comments": [{
+    "author": {
+      "login": "tdas"
+    },
+    "body": "Isnt it more consistent to name this `lastReceivedBatch_records`?\n",
+    "commit": "00f5f7f17b7aee95b519e17fb79e522277af8474",
+    "createdAt": "2014-12-25T23:47:41Z",
+    "diffHunk": "@@ -55,19 +64,31 @@ private[streaming] class StreamingSource(ssc: StreamingContext) extends Source {\n \n   // Gauge for last completed batch, useful for monitoring the streaming job's running status,\n   // displayed data -1 for any abnormal condition.\n-  registerGauge(\"lastCompletedBatch_submissionTime\",\n-    _.lastCompletedBatch.map(_.submissionTime).getOrElse(-1L), -1L)\n-  registerGauge(\"lastCompletedBatch_processStartTime\",\n-    _.lastCompletedBatch.flatMap(_.processingStartTime).getOrElse(-1L), -1L)\n-  registerGauge(\"lastCompletedBatch_processEndTime\",\n-    _.lastCompletedBatch.flatMap(_.processingEndTime).getOrElse(-1L), -1L)\n+  registerGaugeWithOption(\"lastCompletedBatch_submissionTime\",\n+    _.lastCompletedBatch.map(_.submissionTime), -1L)\n+  registerGaugeWithOption(\"lastCompletedBatch_processingStartTime\",\n+    _.lastCompletedBatch.flatMap(_.processingStartTime), -1L)\n+  registerGaugeWithOption(\"lastCompletedBatch_processingEndTime\",\n+    _.lastCompletedBatch.flatMap(_.processingEndTime), -1L)\n+\n+  // Gauge for last completed batch's delay information.\n+  registerGaugeWithOption(\"lastCompletedBatch_processingDelay\",\n+    _.lastCompletedBatch.flatMap(_.processingDelay), -1L)\n+  registerGaugeWithOption(\"lastCompletedBatch_schedulingDelay\",\n+    _.lastCompletedBatch.flatMap(_.schedulingDelay), -1L)\n+  registerGaugeWithOption(\"lastCompletedBatch_totalDelay\",\n+    _.lastCompletedBatch.flatMap(_.totalDelay), -1L)\n \n   // Gauge for last received batch, useful for monitoring the streaming job's running status,\n   // displayed data -1 for any abnormal condition.\n-  registerGauge(\"lastReceivedBatch_submissionTime\",\n-    _.lastCompletedBatch.map(_.submissionTime).getOrElse(-1L), -1L)\n-  registerGauge(\"lastReceivedBatch_processStartTime\",\n-    _.lastCompletedBatch.flatMap(_.processingStartTime).getOrElse(-1L), -1L)\n-  registerGauge(\"lastReceivedBatch_processEndTime\",\n-    _.lastCompletedBatch.flatMap(_.processingEndTime).getOrElse(-1L), -1L)\n+  registerGaugeWithOption(\"lastReceivedBatch_submissionTime\",\n+    _.lastCompletedBatch.map(_.submissionTime), -1L)\n+  registerGaugeWithOption(\"lastReceivedBatch_processingStartTime\",\n+    _.lastCompletedBatch.flatMap(_.processingStartTime), -1L)\n+  registerGaugeWithOption(\"lastReceivedBatch_processingEndTime\",\n+    _.lastCompletedBatch.flatMap(_.processingEndTime), -1L)\n+\n+  // Gauge for last received batch records and total received batch records.\n+  registerGauge(\"lastReceivedBatchRecords\", _.lastReceivedBatchRecords.values.sum, 0L)"
+  }],
+  "prId": 3466
+}, {
+  "comments": [{
+    "author": {
+      "login": "tdas"
+    },
+    "body": "Since this is more related to the global streaming metrics like `totalCompletedBatches`, it might be more consistent to put these near them and naming it `totalReceivedRecords` (please update the corresponding field in the listener as well if you change this). \n",
+    "commit": "00f5f7f17b7aee95b519e17fb79e522277af8474",
+    "createdAt": "2014-12-25T23:52:16Z",
+    "diffHunk": "@@ -55,19 +64,31 @@ private[streaming] class StreamingSource(ssc: StreamingContext) extends Source {\n \n   // Gauge for last completed batch, useful for monitoring the streaming job's running status,\n   // displayed data -1 for any abnormal condition.\n-  registerGauge(\"lastCompletedBatch_submissionTime\",\n-    _.lastCompletedBatch.map(_.submissionTime).getOrElse(-1L), -1L)\n-  registerGauge(\"lastCompletedBatch_processStartTime\",\n-    _.lastCompletedBatch.flatMap(_.processingStartTime).getOrElse(-1L), -1L)\n-  registerGauge(\"lastCompletedBatch_processEndTime\",\n-    _.lastCompletedBatch.flatMap(_.processingEndTime).getOrElse(-1L), -1L)\n+  registerGaugeWithOption(\"lastCompletedBatch_submissionTime\",\n+    _.lastCompletedBatch.map(_.submissionTime), -1L)\n+  registerGaugeWithOption(\"lastCompletedBatch_processingStartTime\",\n+    _.lastCompletedBatch.flatMap(_.processingStartTime), -1L)\n+  registerGaugeWithOption(\"lastCompletedBatch_processingEndTime\",\n+    _.lastCompletedBatch.flatMap(_.processingEndTime), -1L)\n+\n+  // Gauge for last completed batch's delay information.\n+  registerGaugeWithOption(\"lastCompletedBatch_processingDelay\",\n+    _.lastCompletedBatch.flatMap(_.processingDelay), -1L)\n+  registerGaugeWithOption(\"lastCompletedBatch_schedulingDelay\",\n+    _.lastCompletedBatch.flatMap(_.schedulingDelay), -1L)\n+  registerGaugeWithOption(\"lastCompletedBatch_totalDelay\",\n+    _.lastCompletedBatch.flatMap(_.totalDelay), -1L)\n \n   // Gauge for last received batch, useful for monitoring the streaming job's running status,\n   // displayed data -1 for any abnormal condition.\n-  registerGauge(\"lastReceivedBatch_submissionTime\",\n-    _.lastCompletedBatch.map(_.submissionTime).getOrElse(-1L), -1L)\n-  registerGauge(\"lastReceivedBatch_processStartTime\",\n-    _.lastCompletedBatch.flatMap(_.processingStartTime).getOrElse(-1L), -1L)\n-  registerGauge(\"lastReceivedBatch_processEndTime\",\n-    _.lastCompletedBatch.flatMap(_.processingEndTime).getOrElse(-1L), -1L)\n+  registerGaugeWithOption(\"lastReceivedBatch_submissionTime\",\n+    _.lastCompletedBatch.map(_.submissionTime), -1L)\n+  registerGaugeWithOption(\"lastReceivedBatch_processingStartTime\",\n+    _.lastCompletedBatch.flatMap(_.processingStartTime), -1L)\n+  registerGaugeWithOption(\"lastReceivedBatch_processingEndTime\",\n+    _.lastCompletedBatch.flatMap(_.processingEndTime), -1L)\n+\n+  // Gauge for last received batch records and total received batch records.\n+  registerGauge(\"lastReceivedBatchRecords\", _.lastReceivedBatchRecords.values.sum, 0L)\n+  registerGauge(\"totalReceivedBatchRecords\", _.numTotalReceivedBatchRecords, 0L)"
+  }, {
+    "author": {
+      "login": "tdas"
+    },
+    "body": "And if its not too much work, could you add `totalProcessedRecords`? That seems useful. If it is too complicated then dont worry about it for this PR. \n",
+    "commit": "00f5f7f17b7aee95b519e17fb79e522277af8474",
+    "createdAt": "2014-12-25T23:54:02Z",
+    "diffHunk": "@@ -55,19 +64,31 @@ private[streaming] class StreamingSource(ssc: StreamingContext) extends Source {\n \n   // Gauge for last completed batch, useful for monitoring the streaming job's running status,\n   // displayed data -1 for any abnormal condition.\n-  registerGauge(\"lastCompletedBatch_submissionTime\",\n-    _.lastCompletedBatch.map(_.submissionTime).getOrElse(-1L), -1L)\n-  registerGauge(\"lastCompletedBatch_processStartTime\",\n-    _.lastCompletedBatch.flatMap(_.processingStartTime).getOrElse(-1L), -1L)\n-  registerGauge(\"lastCompletedBatch_processEndTime\",\n-    _.lastCompletedBatch.flatMap(_.processingEndTime).getOrElse(-1L), -1L)\n+  registerGaugeWithOption(\"lastCompletedBatch_submissionTime\",\n+    _.lastCompletedBatch.map(_.submissionTime), -1L)\n+  registerGaugeWithOption(\"lastCompletedBatch_processingStartTime\",\n+    _.lastCompletedBatch.flatMap(_.processingStartTime), -1L)\n+  registerGaugeWithOption(\"lastCompletedBatch_processingEndTime\",\n+    _.lastCompletedBatch.flatMap(_.processingEndTime), -1L)\n+\n+  // Gauge for last completed batch's delay information.\n+  registerGaugeWithOption(\"lastCompletedBatch_processingDelay\",\n+    _.lastCompletedBatch.flatMap(_.processingDelay), -1L)\n+  registerGaugeWithOption(\"lastCompletedBatch_schedulingDelay\",\n+    _.lastCompletedBatch.flatMap(_.schedulingDelay), -1L)\n+  registerGaugeWithOption(\"lastCompletedBatch_totalDelay\",\n+    _.lastCompletedBatch.flatMap(_.totalDelay), -1L)\n \n   // Gauge for last received batch, useful for monitoring the streaming job's running status,\n   // displayed data -1 for any abnormal condition.\n-  registerGauge(\"lastReceivedBatch_submissionTime\",\n-    _.lastCompletedBatch.map(_.submissionTime).getOrElse(-1L), -1L)\n-  registerGauge(\"lastReceivedBatch_processStartTime\",\n-    _.lastCompletedBatch.flatMap(_.processingStartTime).getOrElse(-1L), -1L)\n-  registerGauge(\"lastReceivedBatch_processEndTime\",\n-    _.lastCompletedBatch.flatMap(_.processingEndTime).getOrElse(-1L), -1L)\n+  registerGaugeWithOption(\"lastReceivedBatch_submissionTime\",\n+    _.lastCompletedBatch.map(_.submissionTime), -1L)\n+  registerGaugeWithOption(\"lastReceivedBatch_processingStartTime\",\n+    _.lastCompletedBatch.flatMap(_.processingStartTime), -1L)\n+  registerGaugeWithOption(\"lastReceivedBatch_processingEndTime\",\n+    _.lastCompletedBatch.flatMap(_.processingEndTime), -1L)\n+\n+  // Gauge for last received batch records and total received batch records.\n+  registerGauge(\"lastReceivedBatchRecords\", _.lastReceivedBatchRecords.values.sum, 0L)\n+  registerGauge(\"totalReceivedBatchRecords\", _.numTotalReceivedBatchRecords, 0L)"
+  }],
+  "prId": 3466
+}]

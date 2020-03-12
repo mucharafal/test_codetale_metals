@@ -1,0 +1,71 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "robert3005"
+    },
+    "body": "There's PartitionPruningRDD.create which will make this slightly cleaner and if you skip logging it's just\n`PartitionPruningRDD.create(relation.cachedColumnBuffers, validPartitions.contains)`.\n",
+    "commit": "7bf5bb9bacde297abf972a6ae3ad80ba2b6d65fa",
+    "createdAt": "2016-08-21T15:44:43Z",
+    "diffHunk": "@@ -125,12 +129,37 @@ case class InMemoryTableScanExec(\n     val schema = relation.partitionStatistics.schema\n     val schemaIndex = schema.zipWithIndex\n     val relOutput: AttributeSeq = relation.output\n-    val buffers = relation.cachedColumnBuffers\n+    val partitionFilter = newPredicate(\n+      partitionFilters.reduceOption(And).getOrElse(Literal(true)),\n+      schema)\n+\n+    val buffers = if (inMemoryPartitionPruningEnabled && !relation.batchStats.value.isEmpty) {\n+      val validPartitions = relation.batchStats.value.asScala\n+        .filter(batchStat => partitionFilter(batchStat._2))\n+        .map(_._1)\n+        .distinct\n+      if (validPartitions.isEmpty) {\n+        new EmptyRDD[CachedBatch](sparkContext)\n+      } else {\n+        new PartitionPruningRDD[CachedBatch](relation.cachedColumnBuffers,"
+  }, {
+    "author": {
+      "login": "pwoody"
+    },
+    "body": "Cool yeah used this (and removed the EmptyRDD constructor as well). I'd prefer to keep the logging in the function though.\n",
+    "commit": "7bf5bb9bacde297abf972a6ae3ad80ba2b6d65fa",
+    "createdAt": "2016-08-22T13:03:29Z",
+    "diffHunk": "@@ -125,12 +129,37 @@ case class InMemoryTableScanExec(\n     val schema = relation.partitionStatistics.schema\n     val schemaIndex = schema.zipWithIndex\n     val relOutput: AttributeSeq = relation.output\n-    val buffers = relation.cachedColumnBuffers\n+    val partitionFilter = newPredicate(\n+      partitionFilters.reduceOption(And).getOrElse(Literal(true)),\n+      schema)\n+\n+    val buffers = if (inMemoryPartitionPruningEnabled && !relation.batchStats.value.isEmpty) {\n+      val validPartitions = relation.batchStats.value.asScala\n+        .filter(batchStat => partitionFilter(batchStat._2))\n+        .map(_._1)\n+        .distinct\n+      if (validPartitions.isEmpty) {\n+        new EmptyRDD[CachedBatch](sparkContext)\n+      } else {\n+        new PartitionPruningRDD[CachedBatch](relation.cachedColumnBuffers,"
+  }],
+  "prId": 14733
+}, {
+  "comments": [{
+    "author": {
+      "login": "ash211"
+    },
+    "body": "Log at debug?\n",
+    "commit": "7bf5bb9bacde297abf972a6ae3ad80ba2b6d65fa",
+    "createdAt": "2016-08-30T00:42:14Z",
+    "diffHunk": "@@ -125,12 +129,37 @@ case class InMemoryTableScanExec(\n     val schema = relation.partitionStatistics.schema\n     val schemaIndex = schema.zipWithIndex\n     val relOutput: AttributeSeq = relation.output\n-    val buffers = relation.cachedColumnBuffers\n+    val partitionFilter = newPredicate(\n+      partitionFilters.reduceOption(And).getOrElse(Literal(true)),\n+      schema)\n+\n+    val buffers = if (inMemoryPartitionPruningEnabled && !relation.batchStats.value.isEmpty) {\n+      val validPartitions = relation.batchStats.value.asScala\n+        .filter(batchStat => partitionFilter(batchStat._2))\n+        .map(_._1)\n+        .distinct\n+      if (validPartitions.isEmpty) {\n+        sparkContext.emptyRDD[CachedBatch]\n+      } else {\n+        PartitionPruningRDD.create[CachedBatch](relation.cachedColumnBuffers,\n+          index => {\n+            if (validPartitions.contains(index)) {\n+              true\n+            } else {\n+              logInfo(s\"Skipping partition $index because all cached batches will be pruned\")",
+    "line": 33
+  }, {
+    "author": {
+      "login": "pwoody"
+    },
+    "body": "Current executor-side pruning logging is done at INFO. I have no strong opinion either way, but this can get noisy with many partitions getting pruned.\n",
+    "commit": "7bf5bb9bacde297abf972a6ae3ad80ba2b6d65fa",
+    "createdAt": "2016-08-30T11:20:48Z",
+    "diffHunk": "@@ -125,12 +129,37 @@ case class InMemoryTableScanExec(\n     val schema = relation.partitionStatistics.schema\n     val schemaIndex = schema.zipWithIndex\n     val relOutput: AttributeSeq = relation.output\n-    val buffers = relation.cachedColumnBuffers\n+    val partitionFilter = newPredicate(\n+      partitionFilters.reduceOption(And).getOrElse(Literal(true)),\n+      schema)\n+\n+    val buffers = if (inMemoryPartitionPruningEnabled && !relation.batchStats.value.isEmpty) {\n+      val validPartitions = relation.batchStats.value.asScala\n+        .filter(batchStat => partitionFilter(batchStat._2))\n+        .map(_._1)\n+        .distinct\n+      if (validPartitions.isEmpty) {\n+        sparkContext.emptyRDD[CachedBatch]\n+      } else {\n+        PartitionPruningRDD.create[CachedBatch](relation.cachedColumnBuffers,\n+          index => {\n+            if (validPartitions.contains(index)) {\n+              true\n+            } else {\n+              logInfo(s\"Skipping partition $index because all cached batches will be pruned\")",
+    "line": 33
+  }, {
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "+1 on logging at debug.\n",
+    "commit": "7bf5bb9bacde297abf972a6ae3ad80ba2b6d65fa",
+    "createdAt": "2016-09-01T21:31:11Z",
+    "diffHunk": "@@ -125,12 +129,37 @@ case class InMemoryTableScanExec(\n     val schema = relation.partitionStatistics.schema\n     val schemaIndex = schema.zipWithIndex\n     val relOutput: AttributeSeq = relation.output\n-    val buffers = relation.cachedColumnBuffers\n+    val partitionFilter = newPredicate(\n+      partitionFilters.reduceOption(And).getOrElse(Literal(true)),\n+      schema)\n+\n+    val buffers = if (inMemoryPartitionPruningEnabled && !relation.batchStats.value.isEmpty) {\n+      val validPartitions = relation.batchStats.value.asScala\n+        .filter(batchStat => partitionFilter(batchStat._2))\n+        .map(_._1)\n+        .distinct\n+      if (validPartitions.isEmpty) {\n+        sparkContext.emptyRDD[CachedBatch]\n+      } else {\n+        PartitionPruningRDD.create[CachedBatch](relation.cachedColumnBuffers,\n+          index => {\n+            if (validPartitions.contains(index)) {\n+              true\n+            } else {\n+              logInfo(s\"Skipping partition $index because all cached batches will be pruned\")",
+    "line": 33
+  }],
+  "prId": 14733
+}, {
+  "comments": [{
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "Why did you choose to nest this more deeply inside of the `filter` rather than leaving it where it was in `mapPartitionsInternal`? By moving it here, we'll wind up calling `newPredicate` once per batch rather than once per partition, thereby harming performance.\n",
+    "commit": "7bf5bb9bacde297abf972a6ae3ad80ba2b6d65fa",
+    "createdAt": "2016-09-01T21:30:16Z",
+    "diffHunk": "@@ -142,13 +171,16 @@ case class InMemoryTableScanExec(\n       val cachedBatchesToScan =\n         if (inMemoryPartitionPruningEnabled) {\n           cachedBatchIterator.filter { cachedBatch =>\n+            val partitionFilter = newPredicate(",
+    "line": 57
+  }, {
+    "author": {
+      "login": "pwoody"
+    },
+    "body": "It was to avoid the call if inMemoryPartitionPruning wasn't enabled. This reasoning is kind of dumb though given that it is the default and if disabled you will pay extra cost elsewhere. I'll move it back.\n",
+    "commit": "7bf5bb9bacde297abf972a6ae3ad80ba2b6d65fa",
+    "createdAt": "2016-09-02T08:04:52Z",
+    "diffHunk": "@@ -142,13 +171,16 @@ case class InMemoryTableScanExec(\n       val cachedBatchesToScan =\n         if (inMemoryPartitionPruningEnabled) {\n           cachedBatchIterator.filter { cachedBatch =>\n+            val partitionFilter = newPredicate(",
+    "line": 57
+  }],
+  "prId": 14733
+}]

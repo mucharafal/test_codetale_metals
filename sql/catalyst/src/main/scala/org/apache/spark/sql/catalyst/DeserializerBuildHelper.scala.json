@@ -1,0 +1,44 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "nit: everything in catalyst is considered as private, we don't need the `private[spark]`",
+    "commit": "24a1b195bad49e05353b80c85d30e32e8c898a52",
+    "createdAt": "2019-02-26T03:48:19Z",
+    "diffHunk": "@@ -0,0 +1,158 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst\n+\n+import org.apache.spark.sql.catalyst.analysis.UnresolvedExtractValue\n+import org.apache.spark.sql.catalyst.expressions.{Expression, GetStructField, UpCast}\n+import org.apache.spark.sql.catalyst.expressions.objects.{AssertNotNull, Invoke, StaticInvoke}\n+import org.apache.spark.sql.catalyst.util.DateTimeUtils\n+import org.apache.spark.sql.types._\n+\n+private[spark] object DeserializerBuildHelper {"
+  }],
+  "prId": 23854
+}, {
+  "comments": [{
+    "author": {
+      "login": "maropu"
+    },
+    "body": "This function is only used in `ScalaReflection`? If so, how about moving this into there and make it private?",
+    "commit": "24a1b195bad49e05353b80c85d30e32e8c898a52",
+    "createdAt": "2019-02-26T04:45:22Z",
+    "diffHunk": "@@ -0,0 +1,158 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst\n+\n+import org.apache.spark.sql.catalyst.analysis.UnresolvedExtractValue\n+import org.apache.spark.sql.catalyst.expressions.{Expression, GetStructField, UpCast}\n+import org.apache.spark.sql.catalyst.expressions.objects.{AssertNotNull, Invoke, StaticInvoke}\n+import org.apache.spark.sql.catalyst.util.DateTimeUtils\n+import org.apache.spark.sql.types._\n+\n+private[spark] object DeserializerBuildHelper {\n+  /** Returns the current path with a sub-field extracted. */\n+  def addToPath(\n+      path: Expression,\n+      part: String,\n+      dataType: DataType,\n+      walkedTypePath: Seq[String]): Expression = {\n+    val newPath = UnresolvedExtractValue(path, expressions.Literal(part))\n+    upCastToExpectedType(newPath, dataType, walkedTypePath)\n+  }\n+\n+  /** Returns the current path with a field at ordinal extracted. */\n+  def addToPathOrdinal(",
+    "line": 38
+  }, {
+    "author": {
+      "login": "HeartSaVioR"
+    },
+    "body": "It might be weird if we split out similar code (basically this only adds index handling on `addToPath`) to multiple places, but no strong opinion. WDYT? If you still feel better to move this to ScalaReflection, please let me know so that I can move it.",
+    "commit": "24a1b195bad49e05353b80c85d30e32e8c898a52",
+    "createdAt": "2019-02-26T05:09:26Z",
+    "diffHunk": "@@ -0,0 +1,158 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst\n+\n+import org.apache.spark.sql.catalyst.analysis.UnresolvedExtractValue\n+import org.apache.spark.sql.catalyst.expressions.{Expression, GetStructField, UpCast}\n+import org.apache.spark.sql.catalyst.expressions.objects.{AssertNotNull, Invoke, StaticInvoke}\n+import org.apache.spark.sql.catalyst.util.DateTimeUtils\n+import org.apache.spark.sql.types._\n+\n+private[spark] object DeserializerBuildHelper {\n+  /** Returns the current path with a sub-field extracted. */\n+  def addToPath(\n+      path: Expression,\n+      part: String,\n+      dataType: DataType,\n+      walkedTypePath: Seq[String]): Expression = {\n+    val newPath = UnresolvedExtractValue(path, expressions.Literal(part))\n+    upCastToExpectedType(newPath, dataType, walkedTypePath)\n+  }\n+\n+  /** Returns the current path with a field at ordinal extracted. */\n+  def addToPathOrdinal(",
+    "line": 38
+  }],
+  "prId": 23854
+}, {
+  "comments": [{
+    "author": {
+      "login": "maropu"
+    },
+    "body": "private?",
+    "commit": "24a1b195bad49e05353b80c85d30e32e8c898a52",
+    "createdAt": "2019-02-26T04:45:59Z",
+    "diffHunk": "@@ -0,0 +1,158 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst\n+\n+import org.apache.spark.sql.catalyst.analysis.UnresolvedExtractValue\n+import org.apache.spark.sql.catalyst.expressions.{Expression, GetStructField, UpCast}\n+import org.apache.spark.sql.catalyst.expressions.objects.{AssertNotNull, Invoke, StaticInvoke}\n+import org.apache.spark.sql.catalyst.util.DateTimeUtils\n+import org.apache.spark.sql.types._\n+\n+private[spark] object DeserializerBuildHelper {\n+  /** Returns the current path with a sub-field extracted. */\n+  def addToPath(\n+      path: Expression,\n+      part: String,\n+      dataType: DataType,\n+      walkedTypePath: Seq[String]): Expression = {\n+    val newPath = UnresolvedExtractValue(path, expressions.Literal(part))\n+    upCastToExpectedType(newPath, dataType, walkedTypePath)\n+  }\n+\n+  /** Returns the current path with a field at ordinal extracted. */\n+  def addToPathOrdinal(\n+      path: Expression,\n+      ordinal: Int,\n+      dataType: DataType,\n+      walkedTypePath: Seq[String]): Expression = {\n+    val newPath = GetStructField(path, ordinal)\n+    upCastToExpectedType(newPath, dataType, walkedTypePath)\n+  }\n+\n+  def expressionWithNullSafety("
+  }],
+  "prId": 23854
+}]

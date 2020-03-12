@@ -1,0 +1,12 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "sethah"
+    },
+    "body": "The problem with this test was that it checked that part of the gradient was zero, but didn't check that the rest of the gradient was correct. Here, you're checking that the rest of the gradient isn't nan or infinite, but not that it's actually correct. A more appropriate test, IMO, is to also run an aggregator over the same instances with the constant feature filtered out, then check that the portion of the gradients they share are the same. e.g.\r\n\r\n````scala\r\n    val aggConstantFeature = getNewAggregator(instancesConstantFeature,\r\n      Vectors.dense(coefArray ++ interceptArray), fitIntercept = true, isMultinomial = true)\r\n    val filteredInstances = instancesConstantFeature.map { case Instance(l, w, f) =>\r\n      Instance(l, w, Vectors.dense(f.toArray.tail))\r\n    }\r\n    val aggMultinomial = getNewAggregator(filteredInstances,\r\n      Vectors.dense(coefArray.slice(3, 6) ++ interceptArray), fitIntercept = true,\r\n      isMultinomial = true)\r\n    filteredInstances.foreach(aggMultinomial.add)\r\n    instancesConstantFeature.foreach(aggConstantFeature.add)\r\n\r\n    // constant features should not affect gradient\r\n    assert(aggConstantFeature.gradient.toArray.take(numClasses) === Array.fill(numClasses)(0.0))\r\n    assert(aggMultinomial.gradient.toArray === aggConstantFeature.gradient.toArray.slice(3, 9))\r\n````\r\n\r\nJust to note, this code is just for an example, not meant to be copy and pasted.",
+    "commit": "1f4ba14bf41f1cf05749bfc0951cd4844b00b861",
+    "createdAt": "2017-08-19T00:21:13Z",
+    "diffHunk": "@@ -238,8 +238,17 @@ class LogisticAggregatorSuite extends SparkFunSuite with MLlibTestSparkContext {\n     val aggConstantFeature = getNewAggregator(instancesConstantFeature,\n       Vectors.dense(coefArray ++ interceptArray), fitIntercept = true, isMultinomial = true)\n     instances.foreach(aggConstantFeature.add)\n+\n     // constant features should not affect gradient\n-    assert(aggConstantFeature.gradient(0) === 0.0)\n+    def validateGradient(grad: Vector): Unit = {\n+      assert(grad(0) === 0.0)\n+      grad.toArray.foreach { gradientValue =>"
+  }],
+  "prId": 18896
+}]

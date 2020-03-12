@@ -1,0 +1,77 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "This is really hacky. I'm wondering if we can track if a producer is using or not.",
+    "commit": "8a0906e11eab36cb92c159915915b77334d34312",
+    "createdAt": "2017-09-06T22:45:12Z",
+    "diffHunk": "@@ -43,8 +43,10 @@ private[kafka010] class KafkaWriteTask(\n    * Writes key value data out to topics.\n    */\n   def execute(iterator: Iterator[InternalRow]): Unit = {\n-    producer = CachedKafkaProducer.getOrCreate(producerConfiguration)\n+    val paramsSeq = CachedKafkaProducer.paramsToSeq(producerConfiguration)\n     while (iterator.hasNext && failedWrite == null) {\n+      // Prevent producer to get expired/evicted from guava cache.(SPARK-21869)\n+      producer = CachedKafkaProducer.getOrCreate(paramsSeq)"
+  }, {
+    "author": {
+      "login": "ScrapCodes"
+    },
+    "body": "Hi @zsxwing , thanks for looking, I too feel that - it seemed to be the easiest solution though. Anyway, now in the new approach, I am tracking how many threads are currently using the producer. Since guava cache, does not provide a API to prevent an item from being removed. We insert an in use producer in a close queue, for a deferred close.\r\n\r\n",
+    "commit": "8a0906e11eab36cb92c159915915b77334d34312",
+    "createdAt": "2017-09-08T12:31:53Z",
+    "diffHunk": "@@ -43,8 +43,10 @@ private[kafka010] class KafkaWriteTask(\n    * Writes key value data out to topics.\n    */\n   def execute(iterator: Iterator[InternalRow]): Unit = {\n-    producer = CachedKafkaProducer.getOrCreate(producerConfiguration)\n+    val paramsSeq = CachedKafkaProducer.paramsToSeq(producerConfiguration)\n     while (iterator.hasNext && failedWrite == null) {\n+      // Prevent producer to get expired/evicted from guava cache.(SPARK-21869)\n+      producer = CachedKafkaProducer.getOrCreate(paramsSeq)"
+  }],
+  "prId": 19096
+}, {
+  "comments": [{
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "This should be after `producer.kafkaProducer.flush()`. Otherwise this producer may be closed before `flush`. You can put this line in `finally`  to handle failed write.",
+    "commit": "8a0906e11eab36cb92c159915915b77334d34312",
+    "createdAt": "2017-09-22T20:28:59Z",
+    "diffHunk": "@@ -62,16 +61,18 @@ private[kafka010] class KafkaWriteTask(\n           }\n         }\n       }\n-      producer.send(record, callback)\n+      producer.kafkaProducer.send(record, callback)\n     }\n   }\n \n   def close(): Unit = {\n+    // Reduce the producer thread count first, so that in case of a failed write,\n+    // we do not get an incorrect count.\n+    val inUseCount = producer.inUseCount.decrementAndGet()"
+  }],
+  "prId": 19096
+}, {
+  "comments": [{
+    "author": {
+      "login": "skonto"
+    },
+    "body": "should we add a wrapper since we have one for `flush`?",
+    "commit": "8a0906e11eab36cb92c159915915b77334d34312",
+    "createdAt": "2019-03-07T10:26:16Z",
+    "diffHunk": "@@ -89,7 +85,7 @@ private[kafka010] abstract class KafkaRowWriter(\n         s\"${KafkaSourceProvider.TOPIC_OPTION_KEY} option for setting a default topic.\")\n     }\n     val record = new ProducerRecord[Array[Byte], Array[Byte]](topic.toString, key, value)\n-    producer.send(record, callback)\n+    producer.kafkaProducer.send(record, callback)",
+    "line": 64
+  }],
+  "prId": 19096
+}, {
+  "comments": [{
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "nit: unnecessary change",
+    "commit": "8a0906e11eab36cb92c159915915b77334d34312",
+    "createdAt": "2019-03-19T22:35:58Z",
+    "diffHunk": "@@ -50,17 +51,16 @@ private[kafka010] class KafkaWriteTask(\n \n   def close(): Unit = {\n     checkForErrors()\n-    if (producer != null) {\n-      producer.flush()\n-      checkForErrors()\n-      producer = null\n-    }\n+    producer.flush()\n+    checkForErrors()\n+    CachedKafkaProducer.release(producer, failedWrite != null)\n   }\n }\n \n private[kafka010] abstract class KafkaRowWriter(\n-    inputSchema: Seq[Attribute], topic: Option[String]) {\n+    inputSchema: Seq[Attribute], topic: Option[String]) extends Logging {"
+  }],
+  "prId": 19096
+}, {
+  "comments": [{
+    "author": {
+      "login": "gaborgsomogyi"
+    },
+    "body": "Nit: unused.",
+    "commit": "8a0906e11eab36cb92c159915915b77334d34312",
+    "createdAt": "2019-03-20T14:09:32Z",
+    "diffHunk": "@@ -19,8 +19,9 @@ package org.apache.spark.sql.kafka010\n \n import java.{util => ju}\n \n-import org.apache.kafka.clients.producer.{Callback, KafkaProducer, ProducerRecord, RecordMetadata}\n+import org.apache.kafka.clients.producer.{Callback, ProducerRecord, RecordMetadata}\n \n+import org.apache.spark.internal.Logging"
+  }],
+  "prId": 19096
+}, {
+  "comments": [{
+    "author": {
+      "login": "jose-torres"
+    },
+    "body": "This is a change in lifecycle for the producer. Are we sure that's safe?",
+    "commit": "8a0906e11eab36cb92c159915915b77334d34312",
+    "createdAt": "2019-08-19T16:34:06Z",
+    "diffHunk": "@@ -35,32 +35,35 @@ private[kafka010] class KafkaWriteTask(\n     inputSchema: Seq[Attribute],\n     topic: Option[String]) extends KafkaRowWriter(inputSchema, topic) {\n   // used to synchronize with Kafka callbacks\n-  private var producer: KafkaProducer[Array[Byte], Array[Byte]] = _\n+  protected val producer: CachedKafkaProducer =",
+    "line": 14
+  }],
+  "prId": 19096
+}]

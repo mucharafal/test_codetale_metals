@@ -1,0 +1,25 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "avulanov"
+    },
+    "body": "newValues -->> Vectors.dense(newValues)\n",
+    "commit": "70b63e42d81f9ca9f9c48bf8435f9620c6800b75",
+    "createdAt": "2014-08-11T13:57:13Z",
+    "diffHunk": "@@ -0,0 +1,82 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.mllib.discretization\n+\n+import org.apache.spark.mllib.regression.LabeledPoint\n+import org.apache.spark.rdd.RDD\n+\n+/**\n+ * This class provides the methods to discretize data with the given thresholds.\n+ * @param thresholds Thresholds used to discretize.\n+ */\n+class EntropyMinimizationDiscretizerModel (val thresholds: Map[Int, Seq[Double]])\n+  extends DiscretizerModel[LabeledPoint] with Serializable {\n+\n+  /**\n+   * Discretizes values for the given data set using the model trained.\n+   *\n+   * @param data Data point to discretize.\n+   * @return Data point with values discretized\n+   */\n+  override def discretize(data: LabeledPoint): LabeledPoint = {\n+    val newValues = data.features.zipWithIndex.map({ case (value, i) =>\n+      if (this.thresholds.keySet contains i) {\n+        assignDiscreteValue(value, thresholds(i))\n+      } else {\n+        value\n+      }\n+    })\n+    LabeledPoint(data.label, newValues)",
+    "line": 44
+  }],
+  "prId": 216
+}, {
+  "comments": [{
+    "author": {
+      "login": "avulanov"
+    },
+    "body": "Same as above. Also need to import org.apache.spark.mllib.linalg.Vectors\n",
+    "commit": "70b63e42d81f9ca9f9c48bf8435f9620c6800b75",
+    "createdAt": "2014-08-11T13:57:59Z",
+    "diffHunk": "@@ -0,0 +1,82 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.mllib.discretization\n+\n+import org.apache.spark.mllib.regression.LabeledPoint\n+import org.apache.spark.rdd.RDD\n+\n+/**\n+ * This class provides the methods to discretize data with the given thresholds.\n+ * @param thresholds Thresholds used to discretize.\n+ */\n+class EntropyMinimizationDiscretizerModel (val thresholds: Map[Int, Seq[Double]])\n+  extends DiscretizerModel[LabeledPoint] with Serializable {\n+\n+  /**\n+   * Discretizes values for the given data set using the model trained.\n+   *\n+   * @param data Data point to discretize.\n+   * @return Data point with values discretized\n+   */\n+  override def discretize(data: LabeledPoint): LabeledPoint = {\n+    val newValues = data.features.zipWithIndex.map({ case (value, i) =>\n+      if (this.thresholds.keySet contains i) {\n+        assignDiscreteValue(value, thresholds(i))\n+      } else {\n+        value\n+      }\n+    })\n+    LabeledPoint(data.label, newValues)\n+  }\n+\n+  /**\n+   * Discretizes values for the given data set using the model trained.\n+   *\n+   * @param data RDD representing data points to discretize.\n+   * @return RDD with values discretized\n+   */\n+  override def discretize(data: RDD[LabeledPoint]): RDD[LabeledPoint] = {\n+    val bc_thresholds = data.context.broadcast(this.thresholds)\n+\n+    // applies thresholds to discretize every continuous feature\n+    data.map({ case LabeledPoint(label, values) =>\n+      val newValues = values.zipWithIndex.map({ case (value, i) =>\n+        if (bc_thresholds.value.keySet contains i) {\n+          assignDiscreteValue(value, bc_thresholds.value(i))\n+        } else {\n+          value\n+        }\n+      })\n+      LabeledPoint(label, newValues)",
+    "line": 65
+  }],
+  "prId": 216
+}]

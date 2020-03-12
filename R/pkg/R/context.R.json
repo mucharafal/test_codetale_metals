@@ -1,0 +1,85 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "felixcheung"
+    },
+    "body": "would likely better to prefix this with SPARKR or similar - to be consistent with other env variables and also hope to avoid conflict",
+    "commit": "5311ebf8623cce3156339f81a9e0938f0efdd610",
+    "createdAt": "2017-03-14T06:48:36Z",
+    "diffHunk": "@@ -330,7 +330,13 @@ spark.addFile <- function(path, recursive = FALSE) {\n #'}\n #' @note spark.getSparkFilesRootDirectory since 2.1.0\n spark.getSparkFilesRootDirectory <- function() {\n-  callJStatic(\"org.apache.spark.SparkFiles\", \"getRootDirectory\")\n+  if (Sys.getenv(\"IS_RUNNING_ON_WORKER\") == \"\") {"
+  }],
+  "prId": 17274
+}, {
+  "comments": [{
+    "author": {
+      "login": "felixcheung"
+    },
+    "body": "SPARKFILES_ROOT_DIR - ditto",
+    "commit": "5311ebf8623cce3156339f81a9e0938f0efdd610",
+    "createdAt": "2017-03-14T06:48:54Z",
+    "diffHunk": "@@ -330,7 +330,13 @@ spark.addFile <- function(path, recursive = FALSE) {\n #'}\n #' @note spark.getSparkFilesRootDirectory since 2.1.0\n spark.getSparkFilesRootDirectory <- function() {\n-  callJStatic(\"org.apache.spark.SparkFiles\", \"getRootDirectory\")\n+  if (Sys.getenv(\"IS_RUNNING_ON_WORKER\") == \"\") {\n+    # Running on driver.\n+    callJStatic(\"org.apache.spark.SparkFiles\", \"getRootDirectory\")\n+  } else {\n+    # Running on worker.\n+    Sys.getenv(\"SPARKFILES_ROOT_DIR\")"
+  }],
+  "prId": 17274
+}, {
+  "comments": [{
+    "author": {
+      "login": "felixcheung"
+    },
+    "body": "use `file.path` instead-  this might not be correct on Windows.",
+    "commit": "5311ebf8623cce3156339f81a9e0938f0efdd610",
+    "createdAt": "2017-03-14T06:49:27Z",
+    "diffHunk": "@@ -345,7 +351,8 @@ spark.getSparkFilesRootDirectory <- function() {\n #'}\n #' @note spark.getSparkFiles since 2.1.0\n spark.getSparkFiles <- function(fileName) {\n-  callJStatic(\"org.apache.spark.SparkFiles\", \"get\", as.character(fileName))\n+  rootDir <- spark.getSparkFilesRootDirectory()\n+  paste0(rootDir, \"/\", as.character(fileName))"
+  }, {
+    "author": {
+      "login": "felixcheung"
+    },
+    "body": "actually, we might prefer to call SparkFiles if running on driver like before this change",
+    "commit": "5311ebf8623cce3156339f81a9e0938f0efdd610",
+    "createdAt": "2017-03-14T06:50:49Z",
+    "diffHunk": "@@ -345,7 +351,8 @@ spark.getSparkFilesRootDirectory <- function() {\n #'}\n #' @note spark.getSparkFiles since 2.1.0\n spark.getSparkFiles <- function(fileName) {\n-  callJStatic(\"org.apache.spark.SparkFiles\", \"get\", as.character(fileName))\n+  rootDir <- spark.getSparkFilesRootDirectory()\n+  paste0(rootDir, \"/\", as.character(fileName))"
+  }, {
+    "author": {
+      "login": "yanboliang"
+    },
+    "body": "Do you suggest to write as follow?\r\n```\r\nif (Sys.getenv(\"SPARKR_IS_RUNNING_ON_WORKER\") == \"\") {\r\n    callJStatic(\"org.apache.spark.SparkFiles\", \"get\", as.character(fileName))\r\n  } else {\r\n    file.path(spark.getSparkFilesRootDirectory(), as.character(fileName))\r\n  }\r\n```\r\nIt will check ```Sys.getenv(\"SPARKR_IS_RUNNING_ON_WORKER\")``` twice for the case of running on worker, since we always make this check in ```spark.getSparkFilesRootDirectory```. So I'm more prefer the current style. Thanks!",
+    "commit": "5311ebf8623cce3156339f81a9e0938f0efdd610",
+    "createdAt": "2017-03-15T14:41:32Z",
+    "diffHunk": "@@ -345,7 +351,8 @@ spark.getSparkFilesRootDirectory <- function() {\n #'}\n #' @note spark.getSparkFiles since 2.1.0\n spark.getSparkFiles <- function(fileName) {\n-  callJStatic(\"org.apache.spark.SparkFiles\", \"get\", as.character(fileName))\n+  rootDir <- spark.getSparkFilesRootDirectory()\n+  paste0(rootDir, \"/\", as.character(fileName))"
+  }, {
+    "author": {
+      "login": "felixcheung"
+    },
+    "body": "ok that's good - checking twice is not a problem, I was worry about the differences of what `SparkFiles.get(filename)` returns as compared to `file.path(SparkFiles.getRootDirectory, filename)`",
+    "commit": "5311ebf8623cce3156339f81a9e0938f0efdd610",
+    "createdAt": "2017-03-15T18:41:40Z",
+    "diffHunk": "@@ -345,7 +351,8 @@ spark.getSparkFilesRootDirectory <- function() {\n #'}\n #' @note spark.getSparkFiles since 2.1.0\n spark.getSparkFiles <- function(fileName) {\n-  callJStatic(\"org.apache.spark.SparkFiles\", \"get\", as.character(fileName))\n+  rootDir <- spark.getSparkFilesRootDirectory()\n+  paste0(rootDir, \"/\", as.character(fileName))"
+  }],
+  "prId": 17274
+}, {
+  "comments": [{
+    "author": {
+      "login": "felixcheung"
+    },
+    "body": "perhaps to check, does getSparkFilesRootDirectory returns something that file.path can handle, for instance, `file://` wouldn't work properly ",
+    "commit": "5311ebf8623cce3156339f81a9e0938f0efdd610",
+    "createdAt": "2017-03-20T17:24:24Z",
+    "diffHunk": "@@ -345,7 +351,7 @@ spark.getSparkFilesRootDirectory <- function() {\n #'}\n #' @note spark.getSparkFiles since 2.1.0\n spark.getSparkFiles <- function(fileName) {\n-  callJStatic(\"org.apache.spark.SparkFiles\", \"get\", as.character(fileName))\n+  file.path(spark.getSparkFilesRootDirectory(), as.character(fileName))"
+  }, {
+    "author": {
+      "login": "felixcheung"
+    },
+    "body": "or that fileName can be something file.path doesn't handle but SparkFiles.get() can? like an absolute path?",
+    "commit": "5311ebf8623cce3156339f81a9e0938f0efdd610",
+    "createdAt": "2017-03-20T17:25:19Z",
+    "diffHunk": "@@ -345,7 +351,7 @@ spark.getSparkFilesRootDirectory <- function() {\n #'}\n #' @note spark.getSparkFiles since 2.1.0\n spark.getSparkFiles <- function(fileName) {\n-  callJStatic(\"org.apache.spark.SparkFiles\", \"get\", as.character(fileName))\n+  file.path(spark.getSparkFilesRootDirectory(), as.character(fileName))"
+  }, {
+    "author": {
+      "login": "yanboliang"
+    },
+    "body": "I changed to call Scala ```SparkFiles``` if running on driver like before, here we do the best possible to use the Scala implementation. With respect to running on executors, we have no better choice.\r\nWe already have test coverage for ```spark.getSparkFiles``` on driver and executors. To some illegal arguments, such as fileName is absolute path, it can't handle in Scala API as well.",
+    "commit": "5311ebf8623cce3156339f81a9e0938f0efdd610",
+    "createdAt": "2017-03-21T14:04:45Z",
+    "diffHunk": "@@ -345,7 +351,7 @@ spark.getSparkFilesRootDirectory <- function() {\n #'}\n #' @note spark.getSparkFiles since 2.1.0\n spark.getSparkFiles <- function(fileName) {\n-  callJStatic(\"org.apache.spark.SparkFiles\", \"get\", as.character(fileName))\n+  file.path(spark.getSparkFilesRootDirectory(), as.character(fileName))"
+  }],
+  "prId": 17274
+}]

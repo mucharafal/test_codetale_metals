@@ -1,0 +1,39 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "hvanhovell"
+    },
+    "body": "Please don't put multiple statements on the same line.",
+    "commit": "d561ab0238ed323087e1bbb9eb8097daf1b562b4",
+    "createdAt": "2019-01-06T12:47:43Z",
+    "diffHunk": "@@ -0,0 +1,36 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.execution.datasources.noop\n+\n+import org.apache.spark.sql.test.SharedSQLContext\n+\n+class NoopSuite extends SharedSQLContext {\n+  import testImplicits._\n+\n+  test(\"materialisation of all rows\") {\n+    val numElems = 10\n+    val accum = spark.sparkContext.longAccumulator\n+    spark.range(numElems)\n+      .map(x => {accum.add(1); x})"
+  }],
+  "prId": 23471
+}, {
+  "comments": [{
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "@cloud-fan, can you confirm if we support partitioned table in Data Source V2? If not supported, let's remove theses tests. Technically, this shouldn't be allowed for the current status.\r\n\r\nYes, if we can explicitly allow or disallow later, we can fix the tests but I think it's better to add the test later as a followup after we fix the codes about allowing and disallowing first. Currently, It gives an impression that we support partitioned tables.",
+    "commit": "d561ab0238ed323087e1bbb9eb8097daf1b562b4",
+    "createdAt": "2019-01-14T02:09:44Z",
+    "diffHunk": "@@ -0,0 +1,78 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.execution.datasources.noop\n+\n+import org.apache.spark.sql.test.SharedSQLContext\n+\n+class NoopSuite extends SharedSQLContext {\n+  import testImplicits._\n+\n+  test(\"materialisation of all rows\") {\n+    val numElems = 10\n+    val accum = spark.sparkContext.longAccumulator\n+    spark.range(numElems)\n+      .map { x =>\n+        accum.add(1)\n+        x\n+      }\n+      .write\n+      .format(\"noop\")\n+      .save()\n+    assert(accum.value == numElems)\n+  }\n+\n+  test(\"write partitioned data\") {\n+    val numElems = 100\n+    val accum = spark.sparkContext.longAccumulator\n+    spark.range(numElems)\n+      .map { x =>\n+        accum.add(1)\n+        x\n+      }\n+      .select(('value mod 10) as \"key\", 'value)\n+      .write\n+      .format(\"noop\")\n+      .partitionBy(\"key\")"
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "data source v2 doesn't support partition yet, let's remove the related tests.",
+    "commit": "d561ab0238ed323087e1bbb9eb8097daf1b562b4",
+    "createdAt": "2019-01-16T10:35:27Z",
+    "diffHunk": "@@ -0,0 +1,78 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.execution.datasources.noop\n+\n+import org.apache.spark.sql.test.SharedSQLContext\n+\n+class NoopSuite extends SharedSQLContext {\n+  import testImplicits._\n+\n+  test(\"materialisation of all rows\") {\n+    val numElems = 10\n+    val accum = spark.sparkContext.longAccumulator\n+    spark.range(numElems)\n+      .map { x =>\n+        accum.add(1)\n+        x\n+      }\n+      .write\n+      .format(\"noop\")\n+      .save()\n+    assert(accum.value == numElems)\n+  }\n+\n+  test(\"write partitioned data\") {\n+    val numElems = 100\n+    val accum = spark.sparkContext.longAccumulator\n+    spark.range(numElems)\n+      .map { x =>\n+        accum.add(1)\n+        x\n+      }\n+      .select(('value mod 10) as \"key\", 'value)\n+      .write\n+      .format(\"noop\")\n+      .partitionBy(\"key\")"
+  }, {
+    "author": {
+      "login": "MaxGekk"
+    },
+    "body": "ok. I will remove the `write partitioned data` test but keep the `read partitioned data`.",
+    "commit": "d561ab0238ed323087e1bbb9eb8097daf1b562b4",
+    "createdAt": "2019-01-16T11:52:10Z",
+    "diffHunk": "@@ -0,0 +1,78 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.execution.datasources.noop\n+\n+import org.apache.spark.sql.test.SharedSQLContext\n+\n+class NoopSuite extends SharedSQLContext {\n+  import testImplicits._\n+\n+  test(\"materialisation of all rows\") {\n+    val numElems = 10\n+    val accum = spark.sparkContext.longAccumulator\n+    spark.range(numElems)\n+      .map { x =>\n+        accum.add(1)\n+        x\n+      }\n+      .write\n+      .format(\"noop\")\n+      .save()\n+    assert(accum.value == numElems)\n+  }\n+\n+  test(\"write partitioned data\") {\n+    val numElems = 100\n+    val accum = spark.sparkContext.longAccumulator\n+    spark.range(numElems)\n+      .map { x =>\n+        accum.add(1)\n+        x\n+      }\n+      .select(('value mod 10) as \"key\", 'value)\n+      .write\n+      .format(\"noop\")\n+      .partitionBy(\"key\")"
+  }],
+  "prId": 23471
+}]

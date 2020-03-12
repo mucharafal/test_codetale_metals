@@ -1,0 +1,43 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "bersprockets"
+    },
+    "body": "An alternative to this change: we could simply expect a caller to InterpretedPredicate.create, like SparkPlan.genInterpretedPredicate, to pre-initialized the expression before passing it to create.\r\n\r\nThis alternative is a little harder to unit test: we would also need to add a flag to shut off predicate codegen so that we can force SparkPlan.newPredicate to use InterpretedPredicate.",
+    "commit": "46972f7ce2123d7ebda23daad9362650532ca59e",
+    "createdAt": "2018-04-24T19:33:16Z",
+    "diffHunk": "@@ -36,6 +36,14 @@ object InterpretedPredicate {\n \n case class InterpretedPredicate(expression: Expression) extends BasePredicate {\n   override def eval(r: InternalRow): Boolean = expression.eval(r).asInstanceOf[Boolean]\n+\n+  override def initialize(partitionIndex: Int): Unit = {\n+    super.initialize(partitionIndex)\n+    expression.foreach {\n+      case n: Nondeterministic => n.initialize(partitionIndex)\n+      case _ =>\n+    }\n+  }\n }",
+    "line": 12
+  }, {
+    "author": {
+      "login": "hvanhovell"
+    },
+    "body": "Nah this is good like it is.",
+    "commit": "46972f7ce2123d7ebda23daad9362650532ca59e",
+    "createdAt": "2018-04-24T21:46:04Z",
+    "diffHunk": "@@ -36,6 +36,14 @@ object InterpretedPredicate {\n \n case class InterpretedPredicate(expression: Expression) extends BasePredicate {\n   override def eval(r: InternalRow): Boolean = expression.eval(r).asInstanceOf[Boolean]\n+\n+  override def initialize(partitionIndex: Int): Unit = {\n+    super.initialize(partitionIndex)\n+    expression.foreach {\n+      case n: Nondeterministic => n.initialize(partitionIndex)\n+      case _ =>\n+    }\n+  }\n }",
+    "line": 12
+  }],
+  "prId": 21144
+}, {
+  "comments": [{
+    "author": {
+      "login": "maropu"
+    },
+    "body": "Is it ok to use `foreachUp` instead? The initialization always does not depend on their children?",
+    "commit": "46972f7ce2123d7ebda23daad9362650532ca59e",
+    "createdAt": "2018-04-24T23:27:24Z",
+    "diffHunk": "@@ -36,6 +36,14 @@ object InterpretedPredicate {\n \n case class InterpretedPredicate(expression: Expression) extends BasePredicate {\n   override def eval(r: InternalRow): Boolean = expression.eval(r).asInstanceOf[Boolean]\n+\n+  override def initialize(partitionIndex: Int): Unit = {\n+    super.initialize(partitionIndex)\n+    expression.foreach {",
+    "line": 7
+  }, {
+    "author": {
+      "login": "bersprockets"
+    },
+    "body": "@maropu At the moment, all of the initialization methods are very simple and don't rely on children. That could change, but that's the current state.\r\n\r\nInterpretedProjection, InterpretedUnsafeProjection, InterpretedMutableProjection and ExpressionEvalHelper currently initialize the Nondeterministic expressions with a foreach. If we want to change it, we should change it in those other places too.",
+    "commit": "46972f7ce2123d7ebda23daad9362650532ca59e",
+    "createdAt": "2018-04-25T03:47:46Z",
+    "diffHunk": "@@ -36,6 +36,14 @@ object InterpretedPredicate {\n \n case class InterpretedPredicate(expression: Expression) extends BasePredicate {\n   override def eval(r: InternalRow): Boolean = expression.eval(r).asInstanceOf[Boolean]\n+\n+  override def initialize(partitionIndex: Int): Unit = {\n+    super.initialize(partitionIndex)\n+    expression.foreach {",
+    "line": 7
+  }],
+  "prId": 21144
+}]

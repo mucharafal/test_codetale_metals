@@ -1,0 +1,24 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "This `TransformFunction` (and its Java counterpart) is one of the most complex parts of the PySpark Streaming code, so it would help to have some additional documentation explaining how it works.\n\nTo confirm my understanding:\n\n> This class wraps a function `RDD[X] -> RDD[Y]` that was passed to `DStream.transform()`, allowing it to be called from Java via Py4J's callback server.  Java calls this function with a sequence of JavaRDDs and this function returns a single JavaRDD pointer back to Java.\n\nIs that an accurate summary?\n",
+    "commit": "64561e4e503eafb958f6769383ba3b37edbe5fa2",
+    "createdAt": "2014-10-07T22:38:47Z",
+    "diffHunk": "@@ -0,0 +1,113 @@\n+#\n+# Licensed to the Apache Software Foundation (ASF) under one or more\n+# contributor license agreements.  See the NOTICE file distributed with\n+# this work for additional information regarding copyright ownership.\n+# The ASF licenses this file to You under the Apache License, Version 2.0\n+# (the \"License\"); you may not use this file except in compliance with\n+# the License.  You may obtain a copy of the License at\n+#\n+#    http://www.apache.org/licenses/LICENSE-2.0\n+#\n+# Unless required by applicable law or agreed to in writing, software\n+# distributed under the License is distributed on an \"AS IS\" BASIS,\n+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+# See the License for the specific language governing permissions and\n+# limitations under the License.\n+#\n+\n+import time\n+from datetime import datetime\n+import traceback\n+\n+from pyspark import SparkContext, RDD\n+\n+\n+class TransformFunction(object):\n+    \"\"\"\n+    This class is for py4j callback."
+  }],
+  "prId": 2538
+}, {
+  "comments": [{
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "This class could also use a docstring:\n\n> This class implements a serializer for `PythonTransformFunction` Java objects.  This is necessary because the Java PythonTransformFunction objects are actually Py4J references to Python objects and thus are not directly serializable.  When Java needs to serialize a PythonTransformFunction, it uses this class to invoke Python, which returns the serialized function as a byte array.\n\nDoes this sound okay (feel free to correct / amend if it's not)?\n",
+    "commit": "64561e4e503eafb958f6769383ba3b37edbe5fa2",
+    "createdAt": "2014-10-07T22:44:39Z",
+    "diffHunk": "@@ -0,0 +1,113 @@\n+#\n+# Licensed to the Apache Software Foundation (ASF) under one or more\n+# contributor license agreements.  See the NOTICE file distributed with\n+# this work for additional information regarding copyright ownership.\n+# The ASF licenses this file to You under the Apache License, Version 2.0\n+# (the \"License\"); you may not use this file except in compliance with\n+# the License.  You may obtain a copy of the License at\n+#\n+#    http://www.apache.org/licenses/LICENSE-2.0\n+#\n+# Unless required by applicable law or agreed to in writing, software\n+# distributed under the License is distributed on an \"AS IS\" BASIS,\n+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+# See the License for the specific language governing permissions and\n+# limitations under the License.\n+#\n+\n+import time\n+from datetime import datetime\n+import traceback\n+\n+from pyspark import SparkContext, RDD\n+\n+\n+class TransformFunction(object):\n+    \"\"\"\n+    This class is for py4j callback.\n+    \"\"\"\n+    _emptyRDD = None\n+\n+    def __init__(self, ctx, func, *deserializers):\n+        self.ctx = ctx\n+        self.func = func\n+        self.deserializers = deserializers\n+\n+    def call(self, milliseconds, jrdds):\n+        try:\n+            if self.ctx is None:\n+                self.ctx = SparkContext._active_spark_context\n+            if not self.ctx or not self.ctx._jsc:\n+                # stopped\n+                return\n+\n+            # extend deserializers with the first one\n+            sers = self.deserializers\n+            if len(sers) < len(jrdds):\n+                sers += (sers[0],) * (len(jrdds) - len(sers))\n+\n+            rdds = [RDD(jrdd, self.ctx, ser) if jrdd else None\n+                    for jrdd, ser in zip(jrdds, sers)]\n+            t = datetime.fromtimestamp(milliseconds / 1000.0)\n+            r = self.func(t, *rdds)\n+            if r:\n+                return r._jrdd\n+        except Exception:\n+            traceback.print_exc()\n+\n+    def __repr__(self):\n+        return \"TransformFunction(%s)\" % self.func\n+\n+    class Java:\n+        implements = ['org.apache.spark.streaming.api.python.PythonTransformFunction']\n+\n+\n+class TransformFunctionSerializer(object):",
+    "line": 70
+  }],
+  "prId": 2538
+}]

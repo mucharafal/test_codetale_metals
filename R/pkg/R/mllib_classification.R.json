@@ -1,0 +1,61 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "yanboliang"
+    },
+    "body": "ML ```LinearSVC``` only supports binary classification, and will not support multiple classification in the near future, so we can simplify here.",
+    "commit": "5d9afe06b665464b06705d618a18a8032255fe1d",
+    "createdAt": "2017-05-19T12:04:53Z",
+    "diffHunk": "@@ -124,39 +125,30 @@ setMethod(\"predict\", signature(object = \"LinearSVCModel\"),\n             predict_internal(object, newData)\n           })\n \n-#  Get the summary of an LinearSVCModel\n+#  Get the summary of a linear SVM model.\n \n-#' @param object an LinearSVCModel fitted by \\code{spark.svmLinear}.\n+#' @param object a linear SVM model fitted by \\code{spark.svmLinear}.\n #' @return \\code{summary} returns summary information of the fitted model, which is a list.\n #'         The list includes \\code{coefficients} (coefficients of the fitted model),\n-#'         \\code{intercept} (intercept of the fitted model), \\code{numClasses} (number of classes),\n-#'         \\code{numFeatures} (number of features).\n+#'         \\code{numClasses} (number of classes), \\code{numFeatures} (number of features).\n #' @rdname spark.svmLinear\n #' @aliases summary,LinearSVCModel-method\n #' @export\n #' @note summary(LinearSVCModel) since 2.2.0\n setMethod(\"summary\", signature(object = \"LinearSVCModel\"),\n           function(object) {\n             jobj <- object@jobj\n-            features <- callJMethod(jobj, \"features\")\n-            labels <- callJMethod(jobj, \"labels\")\n-            coefficients <- callJMethod(jobj, \"coefficients\")\n-            nCol <- length(coefficients) / length(features)\n-            coefficients <- matrix(unlist(coefficients), ncol = nCol)\n-            intercept <- callJMethod(jobj, \"intercept\")\n+            features <- callJMethod(jobj, \"rFeatures\")\n+            coefficients <- callJMethod(jobj, \"rCoefficients\")\n+            coefficients <- as.matrix(unlist(coefficients))\n+            colnames(coefficients) <- c(\"Estimate\")\n+            rownames(coefficients) <- unlist(features)\n             numClasses <- callJMethod(jobj, \"numClasses\")\n             numFeatures <- callJMethod(jobj, \"numFeatures\")\n-            if (nCol == 1) {",
+    "line": 67
+  }, {
+    "author": {
+      "login": "felixcheung"
+    },
+    "body": "why not label, intercept? i think they are common in R to include what goes into the model (although in many cases it just include the formula in the model summary)",
+    "commit": "5d9afe06b665464b06705d618a18a8032255fe1d",
+    "createdAt": "2017-05-19T18:29:49Z",
+    "diffHunk": "@@ -124,39 +125,30 @@ setMethod(\"predict\", signature(object = \"LinearSVCModel\"),\n             predict_internal(object, newData)\n           })\n \n-#  Get the summary of an LinearSVCModel\n+#  Get the summary of a linear SVM model.\n \n-#' @param object an LinearSVCModel fitted by \\code{spark.svmLinear}.\n+#' @param object a linear SVM model fitted by \\code{spark.svmLinear}.\n #' @return \\code{summary} returns summary information of the fitted model, which is a list.\n #'         The list includes \\code{coefficients} (coefficients of the fitted model),\n-#'         \\code{intercept} (intercept of the fitted model), \\code{numClasses} (number of classes),\n-#'         \\code{numFeatures} (number of features).\n+#'         \\code{numClasses} (number of classes), \\code{numFeatures} (number of features).\n #' @rdname spark.svmLinear\n #' @aliases summary,LinearSVCModel-method\n #' @export\n #' @note summary(LinearSVCModel) since 2.2.0\n setMethod(\"summary\", signature(object = \"LinearSVCModel\"),\n           function(object) {\n             jobj <- object@jobj\n-            features <- callJMethod(jobj, \"features\")\n-            labels <- callJMethod(jobj, \"labels\")\n-            coefficients <- callJMethod(jobj, \"coefficients\")\n-            nCol <- length(coefficients) / length(features)\n-            coefficients <- matrix(unlist(coefficients), ncol = nCol)\n-            intercept <- callJMethod(jobj, \"intercept\")\n+            features <- callJMethod(jobj, \"rFeatures\")\n+            coefficients <- callJMethod(jobj, \"rCoefficients\")\n+            coefficients <- as.matrix(unlist(coefficients))\n+            colnames(coefficients) <- c(\"Estimate\")\n+            rownames(coefficients) <- unlist(features)\n             numClasses <- callJMethod(jobj, \"numClasses\")\n             numFeatures <- callJMethod(jobj, \"numFeatures\")\n-            if (nCol == 1) {",
+    "line": 67
+  }, {
+    "author": {
+      "login": "yanboliang"
+    },
+    "body": "@felixcheung The change here is to make ```coefficients``` matrix has only one column named ```Estimate```. I speculate the original code referred to ```spark.logit``` which supports multiple classification, so it should have multiple columns and each columns' name should be corresponding label. For binary classification, the coefficients are not bind to any labels, so we use ```Estimate``` as the column name like what R does. ```LinearSVC``` will not support multiple classification in the future, so I simplified it at here.\r\nThe followings are ```summary``` outputs for binomial and multinomial logistic regression in SparkR:\r\nBinomial logistic regression model:\r\n![image](https://cloud.githubusercontent.com/assets/1962026/26303664/f5683d0e-3f1a-11e7-8be9-80f2c9b9a03e.png)\r\nMultinomial logistic regression model:\r\n![image](https://cloud.githubusercontent.com/assets/1962026/26303599/c226ebca-3f1a-11e7-8327-ac7119bf2254.png)\r\n",
+    "commit": "5d9afe06b665464b06705d618a18a8032255fe1d",
+    "createdAt": "2017-05-22T10:07:44Z",
+    "diffHunk": "@@ -124,39 +125,30 @@ setMethod(\"predict\", signature(object = \"LinearSVCModel\"),\n             predict_internal(object, newData)\n           })\n \n-#  Get the summary of an LinearSVCModel\n+#  Get the summary of a linear SVM model.\n \n-#' @param object an LinearSVCModel fitted by \\code{spark.svmLinear}.\n+#' @param object a linear SVM model fitted by \\code{spark.svmLinear}.\n #' @return \\code{summary} returns summary information of the fitted model, which is a list.\n #'         The list includes \\code{coefficients} (coefficients of the fitted model),\n-#'         \\code{intercept} (intercept of the fitted model), \\code{numClasses} (number of classes),\n-#'         \\code{numFeatures} (number of features).\n+#'         \\code{numClasses} (number of classes), \\code{numFeatures} (number of features).\n #' @rdname spark.svmLinear\n #' @aliases summary,LinearSVCModel-method\n #' @export\n #' @note summary(LinearSVCModel) since 2.2.0\n setMethod(\"summary\", signature(object = \"LinearSVCModel\"),\n           function(object) {\n             jobj <- object@jobj\n-            features <- callJMethod(jobj, \"features\")\n-            labels <- callJMethod(jobj, \"labels\")\n-            coefficients <- callJMethod(jobj, \"coefficients\")\n-            nCol <- length(coefficients) / length(features)\n-            coefficients <- matrix(unlist(coefficients), ncol = nCol)\n-            intercept <- callJMethod(jobj, \"intercept\")\n+            features <- callJMethod(jobj, \"rFeatures\")\n+            coefficients <- callJMethod(jobj, \"rCoefficients\")\n+            coefficients <- as.matrix(unlist(coefficients))\n+            colnames(coefficients) <- c(\"Estimate\")\n+            rownames(coefficients) <- unlist(features)\n             numClasses <- callJMethod(jobj, \"numClasses\")\n             numFeatures <- callJMethod(jobj, \"numFeatures\")\n-            if (nCol == 1) {",
+    "line": 67
+  }],
+  "prId": 18035
+}, {
+  "comments": [{
+    "author": {
+      "login": "felixcheung"
+    },
+    "body": "I think these are intentional - we have `#  Predicted values based on an LogisticRegressionModel model`\r\nthey are prefix by `#` and not in generated doc - only for developers",
+    "commit": "5d9afe06b665464b06705d618a18a8032255fe1d",
+    "createdAt": "2017-05-19T18:27:22Z",
+    "diffHunk": "@@ -111,10 +112,10 @@ setMethod(\"spark.svmLinear\", signature(data = \"SparkDataFrame\", formula = \"formu\n             new(\"LinearSVCModel\", jobj = jobj)\n           })\n \n-#  Predicted values based on an LinearSVCModel model\n+#  Predicted values based on a linear SVM model."
+  }, {
+    "author": {
+      "login": "felixcheung"
+    },
+    "body": "there are a couple of these starting with `#`",
+    "commit": "5d9afe06b665464b06705d618a18a8032255fe1d",
+    "createdAt": "2017-05-19T18:35:26Z",
+    "diffHunk": "@@ -111,10 +112,10 @@ setMethod(\"spark.svmLinear\", signature(data = \"SparkDataFrame\", formula = \"formu\n             new(\"LinearSVCModel\", jobj = jobj)\n           })\n \n-#  Predicted values based on an LinearSVCModel model\n+#  Predicted values based on a linear SVM model."
+  }],
+  "prId": 18035
+}, {
+  "comments": [{
+    "author": {
+      "login": "bdwyer2"
+    },
+    "body": "Do you mean `kernel` instead of `kernal`?",
+    "commit": "5d9afe06b665464b06705d618a18a8032255fe1d",
+    "createdAt": "2017-05-22T23:03:42Z",
+    "diffHunk": "@@ -46,15 +46,16 @@ setClass(\"MultilayerPerceptronClassificationModel\", representation(jobj = \"jobj\"\n #' @note NaiveBayesModel since 2.0.0\n setClass(\"NaiveBayesModel\", representation(jobj = \"jobj\"))\n \n-#' linear SVM Model\n+#' Linear SVM Model\n #'\n-#' Fits an linear SVM model against a SparkDataFrame. It is a binary classifier, similar to svm in glmnet package\n+#' Fits a linear SVM model against a SparkDataFrame, similar to svm in e1071 package.\n+#' Currently only supports binary classification model with linear kernal."
+  }],
+  "prId": 18035
+}]

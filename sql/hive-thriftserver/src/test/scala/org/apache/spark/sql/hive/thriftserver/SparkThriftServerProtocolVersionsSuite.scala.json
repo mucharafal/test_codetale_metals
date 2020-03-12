@@ -1,0 +1,141 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "@wangyum Btw how does this fix the flakiness?",
+    "commit": "da84f92f7eb011184641eefb81f669bcdf74d080",
+    "createdAt": "2019-08-17T02:02:11Z",
+    "diffHunk": "@@ -222,7 +222,8 @@ class SparkThriftServerProtocolVersionsSuite extends HiveThriftJdbcTest {\n         assert(rs.next())\n         assert(rs.getString(1) === \"ABC\")\n       }\n-      testExecuteStatementWithProtocolVersion(version, \"SELECT cast(49960 as binary)\") { rs =>\n+      testExecuteStatementWithProtocolVersion(version,\n+        \"SELECT cast(cast(49960 as int) as binary)\") { rs =>"
+  }],
+  "prId": 25480
+}, {
+  "comments": [{
+    "author": {
+      "login": "wangyum"
+    },
+    "body": "@dongjoon-hyun @HyukjinKwon Maybe we should uses CharArray.",
+    "commit": "da84f92f7eb011184641eefb81f669bcdf74d080",
+    "createdAt": "2019-08-17T04:12:04Z",
+    "diffHunk": "@@ -224,7 +224,9 @@ class SparkThriftServerProtocolVersionsSuite extends HiveThriftJdbcTest {\n       }\n       testExecuteStatementWithProtocolVersion(version, \"SELECT cast(49960 as binary)\") { rs =>\n         assert(rs.next())\n-        assert(rs.getString(1) === UTF8String.fromBytes(NumberConverter.toBinary(49960)).toString)\n+        assertResult(Array(0, 0, 65533, 40).map(_.toChar)) {\n+          rs.getString(1).toCharArray\n+        }",
+    "line": 7
+  }, {
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "What is the difference? Could you tell us the root cause you think?",
+    "commit": "da84f92f7eb011184641eefb81f669bcdf74d080",
+    "createdAt": "2019-08-17T06:47:45Z",
+    "diffHunk": "@@ -224,7 +224,9 @@ class SparkThriftServerProtocolVersionsSuite extends HiveThriftJdbcTest {\n       }\n       testExecuteStatementWithProtocolVersion(version, \"SELECT cast(49960 as binary)\") { rs =>\n         assert(rs.next())\n-        assert(rs.getString(1) === UTF8String.fromBytes(NumberConverter.toBinary(49960)).toString)\n+        assertResult(Array(0, 0, 65533, 40).map(_.toChar)) {\n+          rs.getString(1).toCharArray\n+        }",
+    "line": 7
+  }, {
+    "author": {
+      "login": "wangyum"
+    },
+    "body": "I'm not sure. May be related to environment:\r\nhttps://amplab.cs.berkeley.edu/jenkins/job/NewSparkPullRequestBuilder/4832/\r\nhttps://amplab.cs.berkeley.edu/jenkins/job/SparkPullRequestBuilder/109194/testReport/\r\n\r\nThese two PullRequestBuilders are built on the same machine(amp-jenkins-worker-03). The first one failed, but the last one successful. The environment differences:\r\n![image](https://user-images.githubusercontent.com/5399861/63208095-c7effd00-c102-11e9-8542-53cfad79716c.png)\r\n",
+    "commit": "da84f92f7eb011184641eefb81f669bcdf74d080",
+    "createdAt": "2019-08-17T07:25:09Z",
+    "diffHunk": "@@ -224,7 +224,9 @@ class SparkThriftServerProtocolVersionsSuite extends HiveThriftJdbcTest {\n       }\n       testExecuteStatementWithProtocolVersion(version, \"SELECT cast(49960 as binary)\") { rs =>\n         assert(rs.next())\n-        assert(rs.getString(1) === UTF8String.fromBytes(NumberConverter.toBinary(49960)).toString)\n+        assertResult(Array(0, 0, 65533, 40).map(_.toChar)) {\n+          rs.getString(1).toCharArray\n+        }",
+    "line": 7
+  }, {
+    "author": {
+      "login": "wangyum"
+    },
+    "body": "I will verify it later.",
+    "commit": "da84f92f7eb011184641eefb81f669bcdf74d080",
+    "createdAt": "2019-08-17T07:25:27Z",
+    "diffHunk": "@@ -224,7 +224,9 @@ class SparkThriftServerProtocolVersionsSuite extends HiveThriftJdbcTest {\n       }\n       testExecuteStatementWithProtocolVersion(version, \"SELECT cast(49960 as binary)\") { rs =>\n         assert(rs.next())\n-        assert(rs.getString(1) === UTF8String.fromBytes(NumberConverter.toBinary(49960)).toString)\n+        assertResult(Array(0, 0, 65533, 40).map(_.toChar)) {\n+          rs.getString(1).toCharArray\n+        }",
+    "line": 7
+  }, {
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "Maybe, something like `LANG=en_US.UTF_8`?",
+    "commit": "da84f92f7eb011184641eefb81f669bcdf74d080",
+    "createdAt": "2019-08-17T07:38:06Z",
+    "diffHunk": "@@ -224,7 +224,9 @@ class SparkThriftServerProtocolVersionsSuite extends HiveThriftJdbcTest {\n       }\n       testExecuteStatementWithProtocolVersion(version, \"SELECT cast(49960 as binary)\") { rs =>\n         assert(rs.next())\n-        assert(rs.getString(1) === UTF8String.fromBytes(NumberConverter.toBinary(49960)).toString)\n+        assertResult(Array(0, 0, 65533, 40).map(_.toChar)) {\n+          rs.getString(1).toCharArray\n+        }",
+    "line": 7
+  }, {
+    "author": {
+      "login": "wangyum"
+    },
+    "body": "Yes. I can reproduce it by `unset LANG`:\r\n```\r\n[info] - HIVE_CLI_SERVICE_PROTOCOL_V1 get binary type *** FAILED *** (458 milliseconds)\r\n[info]   \"[?](\" did not equal \"[?](\" (SparkThriftServerProtocolVersionsSuite.scala:227)\r\n```",
+    "commit": "da84f92f7eb011184641eefb81f669bcdf74d080",
+    "createdAt": "2019-08-17T14:43:13Z",
+    "diffHunk": "@@ -224,7 +224,9 @@ class SparkThriftServerProtocolVersionsSuite extends HiveThriftJdbcTest {\n       }\n       testExecuteStatementWithProtocolVersion(version, \"SELECT cast(49960 as binary)\") { rs =>\n         assert(rs.next())\n-        assert(rs.getString(1) === UTF8String.fromBytes(NumberConverter.toBinary(49960)).toString)\n+        assertResult(Array(0, 0, 65533, 40).map(_.toChar)) {\n+          rs.getString(1).toCharArray\n+        }",
+    "line": 7
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "@shaneknapp I think we need to standardize `LANG` across the workers? or should I try giving it shot?\r\nThat seems reasonable though I am distantly concerned that something in the code relies on this setting. That said, I think it's probably correct to set `LANG` in a prod environment and correct to set it to this value anyway.",
+    "commit": "da84f92f7eb011184641eefb81f669bcdf74d080",
+    "createdAt": "2019-08-17T20:45:12Z",
+    "diffHunk": "@@ -224,7 +224,9 @@ class SparkThriftServerProtocolVersionsSuite extends HiveThriftJdbcTest {\n       }\n       testExecuteStatementWithProtocolVersion(version, \"SELECT cast(49960 as binary)\") { rs =>\n         assert(rs.next())\n-        assert(rs.getString(1) === UTF8String.fromBytes(NumberConverter.toBinary(49960)).toString)\n+        assertResult(Array(0, 0, 65533, 40).map(_.toChar)) {\n+          rs.getString(1).toCharArray\n+        }",
+    "line": 7
+  }, {
+    "author": {
+      "login": "shaneknapp"
+    },
+    "body": "> I'm not sure. May be related to environment:\r\n> https://amplab.cs.berkeley.edu/jenkins/job/NewSparkPullRequestBuilder/4832/\r\n> https://amplab.cs.berkeley.edu/jenkins/job/SparkPullRequestBuilder/109194/testReport/\r\n> \r\n> These two PullRequestBuilders are built on the same machine(amp-jenkins-worker-03). The first one failed, but the last one successful. The environment differences:\r\n> ![image](https://user-images.githubusercontent.com/5399861/63208095-c7effd00-c102-11e9-8542-53cfad79716c.png)\r\n\r\nok, the SparkPullRequestBuilder is triggered by the amplab jenkins bot, and the NewSparkPullRequestBuilder is triggered by databricks' test site (http://spark-prs.appspot.com).\r\n\r\ni can easily add the LANG variable in the latter build.  another option is to add it to the default environment vars for all workers.",
+    "commit": "da84f92f7eb011184641eefb81f669bcdf74d080",
+    "createdAt": "2019-08-21T17:51:54Z",
+    "diffHunk": "@@ -224,7 +224,9 @@ class SparkThriftServerProtocolVersionsSuite extends HiveThriftJdbcTest {\n       }\n       testExecuteStatementWithProtocolVersion(version, \"SELECT cast(49960 as binary)\") { rs =>\n         assert(rs.next())\n-        assert(rs.getString(1) === UTF8String.fromBytes(NumberConverter.toBinary(49960)).toString)\n+        assertResult(Array(0, 0, 65533, 40).map(_.toChar)) {\n+          rs.getString(1).toCharArray\n+        }",
+    "line": 7
+  }, {
+    "author": {
+      "login": "shaneknapp"
+    },
+    "body": "(fyi, i just added LANG=en_US.UTF-8 to the NewSparkPullRequestBuilder job)",
+    "commit": "da84f92f7eb011184641eefb81f669bcdf74d080",
+    "createdAt": "2019-08-21T17:55:13Z",
+    "diffHunk": "@@ -224,7 +224,9 @@ class SparkThriftServerProtocolVersionsSuite extends HiveThriftJdbcTest {\n       }\n       testExecuteStatementWithProtocolVersion(version, \"SELECT cast(49960 as binary)\") { rs =>\n         assert(rs.next())\n-        assert(rs.getString(1) === UTF8String.fromBytes(NumberConverter.toBinary(49960)).toString)\n+        assertResult(Array(0, 0, 65533, 40).map(_.toChar)) {\n+          rs.getString(1).toCharArray\n+        }",
+    "line": 7
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "@shaneknapp I'd set it everywhere, personally, if it's easy.",
+    "commit": "da84f92f7eb011184641eefb81f669bcdf74d080",
+    "createdAt": "2019-08-21T17:55:14Z",
+    "diffHunk": "@@ -224,7 +224,9 @@ class SparkThriftServerProtocolVersionsSuite extends HiveThriftJdbcTest {\n       }\n       testExecuteStatementWithProtocolVersion(version, \"SELECT cast(49960 as binary)\") { rs =>\n         assert(rs.next())\n-        assert(rs.getString(1) === UTF8String.fromBytes(NumberConverter.toBinary(49960)).toString)\n+        assertResult(Array(0, 0, 65533, 40).map(_.toChar)) {\n+          rs.getString(1).toCharArray\n+        }",
+    "line": 7
+  }, {
+    "author": {
+      "login": "shaneknapp"
+    },
+    "body": "it's easy, but requires each worker to be disconnected/reconnected...  i'll get that set up now but it won't go in to effect until i have the opportunity to restart things.",
+    "commit": "da84f92f7eb011184641eefb81f669bcdf74d080",
+    "createdAt": "2019-08-21T18:05:57Z",
+    "diffHunk": "@@ -224,7 +224,9 @@ class SparkThriftServerProtocolVersionsSuite extends HiveThriftJdbcTest {\n       }\n       testExecuteStatementWithProtocolVersion(version, \"SELECT cast(49960 as binary)\") { rs =>\n         assert(rs.next())\n-        assert(rs.getString(1) === UTF8String.fromBytes(NumberConverter.toBinary(49960)).toString)\n+        assertResult(Array(0, 0, 65533, 40).map(_.toChar)) {\n+          rs.getString(1).toCharArray\n+        }",
+    "line": 7
+  }, {
+    "author": {
+      "login": "wangyum"
+    },
+    "body": "Thank you @shaneknapp",
+    "commit": "da84f92f7eb011184641eefb81f669bcdf74d080",
+    "createdAt": "2019-08-22T03:04:20Z",
+    "diffHunk": "@@ -224,7 +224,9 @@ class SparkThriftServerProtocolVersionsSuite extends HiveThriftJdbcTest {\n       }\n       testExecuteStatementWithProtocolVersion(version, \"SELECT cast(49960 as binary)\") { rs =>\n         assert(rs.next())\n-        assert(rs.getString(1) === UTF8String.fromBytes(NumberConverter.toBinary(49960)).toString)\n+        assertResult(Array(0, 0, 65533, 40).map(_.toChar)) {\n+          rs.getString(1).toCharArray\n+        }",
+    "line": 7
+  }, {
+    "author": {
+      "login": "wangyum"
+    },
+    "body": "Could we close this PR?",
+    "commit": "da84f92f7eb011184641eefb81f669bcdf74d080",
+    "createdAt": "2019-08-22T03:04:54Z",
+    "diffHunk": "@@ -224,7 +224,9 @@ class SparkThriftServerProtocolVersionsSuite extends HiveThriftJdbcTest {\n       }\n       testExecuteStatementWithProtocolVersion(version, \"SELECT cast(49960 as binary)\") { rs =>\n         assert(rs.next())\n-        assert(rs.getString(1) === UTF8String.fromBytes(NumberConverter.toBinary(49960)).toString)\n+        assertResult(Array(0, 0, 65533, 40).map(_.toChar)) {\n+          rs.getString(1).toCharArray\n+        }",
+    "line": 7
+  }, {
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "Thank you for investigating this so far, @wangyum . Yes. It looks like that. \r\nYou can close this and the JIRA together. If the failure is reported again, we can reopen this.",
+    "commit": "da84f92f7eb011184641eefb81f669bcdf74d080",
+    "createdAt": "2019-08-22T03:30:17Z",
+    "diffHunk": "@@ -224,7 +224,9 @@ class SparkThriftServerProtocolVersionsSuite extends HiveThriftJdbcTest {\n       }\n       testExecuteStatementWithProtocolVersion(version, \"SELECT cast(49960 as binary)\") { rs =>\n         assert(rs.next())\n-        assert(rs.getString(1) === UTF8String.fromBytes(NumberConverter.toBinary(49960)).toString)\n+        assertResult(Array(0, 0, 65533, 40).map(_.toChar)) {\n+          rs.getString(1).toCharArray\n+        }",
+    "line": 7
+  }],
+  "prId": 25480
+}]

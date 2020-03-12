@@ -1,0 +1,53 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "nongli"
+    },
+    "body": "I don't think you need the check for -1 twice.\n",
+    "commit": "f11c12f946fc13afcafc99c850d4a3063f032429",
+    "createdAt": "2016-03-30T07:04:12Z",
+    "diffHunk": "@@ -0,0 +1,79 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.execution.vectorized;\n+\n+import java.util.Arrays;\n+\n+import org.apache.spark.memory.MemoryMode;\n+import org.apache.spark.sql.types.StructType;\n+\n+import static org.apache.spark.sql.types.DataTypes.LongType;\n+\n+/**\n+ * This is an illustrative implementation of a single-key/single value vectorized hash map that can\n+ * be potentially 'codegened' in TungstenAggregate to speed up aggregate w/ key\n+ */\n+public class VectorizedHashMap {\n+  public ColumnarBatch batch;\n+  public int[] buckets;\n+  private int numBuckets;\n+  private int numRows = 0;\n+  private int maxSteps = 3;\n+\n+  public VectorizedHashMap(int capacity, double loadFactor, int maxSteps) {\n+    StructType schema = new StructType()\n+        .add(\"key\", LongType)\n+        .add(\"value\", LongType);\n+    this.maxSteps = maxSteps;\n+    numBuckets = capacity;\n+    batch = ColumnarBatch.allocate(schema, MemoryMode.ON_HEAP, (int) (numBuckets * loadFactor));\n+    buckets = new int[numBuckets];\n+    Arrays.fill(buckets, -1);\n+  }\n+\n+  public int findOrInsert(long key) {\n+    int idx = find(key);\n+    if (idx != -1 && buckets[idx] == -1) {\n+      batch.column(0).putLong(numRows, key);\n+      batch.column(1).putLong(numRows, 0);\n+      buckets[idx] = numRows++;\n+    }\n+    return idx;\n+  }\n+\n+  public int find(long key) {\n+    long h = hash(key);\n+    int step = 0;\n+    int idx = (int) h & (numBuckets - 1);\n+    while (step < maxSteps) {\n+      if ((buckets[idx] == -1) || (buckets[idx] != -1 && equals(idx, key))) return idx;"
+  }],
+  "prId": 12055
+}, {
+  "comments": [{
+    "author": {
+      "login": "nongli"
+    },
+    "body": "I think you should comment the overall design of this data structure, where it is good and where it is bad.\n",
+    "commit": "f11c12f946fc13afcafc99c850d4a3063f032429",
+    "createdAt": "2016-03-30T07:05:01Z",
+    "diffHunk": "@@ -0,0 +1,79 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.execution.vectorized;\n+\n+import java.util.Arrays;\n+\n+import org.apache.spark.memory.MemoryMode;\n+import org.apache.spark.sql.types.StructType;\n+\n+import static org.apache.spark.sql.types.DataTypes.LongType;\n+\n+/**\n+ * This is an illustrative implementation of a single-key/single value vectorized hash map that can\n+ * be potentially 'codegened' in TungstenAggregate to speed up aggregate w/ key\n+ */\n+public class VectorizedHashMap {"
+  }],
+  "prId": 12055
+}, {
+  "comments": [{
+    "author": {
+      "login": "nongli"
+    },
+    "body": "do these needs to be public?\n",
+    "commit": "f11c12f946fc13afcafc99c850d4a3063f032429",
+    "createdAt": "2016-03-30T07:05:56Z",
+    "diffHunk": "@@ -0,0 +1,79 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.execution.vectorized;\n+\n+import java.util.Arrays;\n+\n+import org.apache.spark.memory.MemoryMode;\n+import org.apache.spark.sql.types.StructType;\n+\n+import static org.apache.spark.sql.types.DataTypes.LongType;\n+\n+/**\n+ * This is an illustrative implementation of a single-key/single value vectorized hash map that can\n+ * be potentially 'codegened' in TungstenAggregate to speed up aggregate w/ key\n+ */\n+public class VectorizedHashMap {\n+  public ColumnarBatch batch;"
+  }, {
+    "author": {
+      "login": "sameeragarwal"
+    },
+    "body": "currently I need to access this in the benchmark to update the aggregated value\n",
+    "commit": "f11c12f946fc13afcafc99c850d4a3063f032429",
+    "createdAt": "2016-03-30T22:49:13Z",
+    "diffHunk": "@@ -0,0 +1,79 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.execution.vectorized;\n+\n+import java.util.Arrays;\n+\n+import org.apache.spark.memory.MemoryMode;\n+import org.apache.spark.sql.types.StructType;\n+\n+import static org.apache.spark.sql.types.DataTypes.LongType;\n+\n+/**\n+ * This is an illustrative implementation of a single-key/single value vectorized hash map that can\n+ * be potentially 'codegened' in TungstenAggregate to speed up aggregate w/ key\n+ */\n+public class VectorizedHashMap {\n+  public ColumnarBatch batch;"
+  }],
+  "prId": 12055
+}, {
+  "comments": [{
+    "author": {
+      "login": "nongli"
+    },
+    "body": "I think this should take the schema as the parameter.\n\ncapacity needs to be a power of 2 for the mod to work. I'm not sure these should be exposed for the typical caller. At the very least, expose a ctor with reasonable defaults.\n",
+    "commit": "f11c12f946fc13afcafc99c850d4a3063f032429",
+    "createdAt": "2016-03-30T07:07:58Z",
+    "diffHunk": "@@ -0,0 +1,79 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.execution.vectorized;\n+\n+import java.util.Arrays;\n+\n+import org.apache.spark.memory.MemoryMode;\n+import org.apache.spark.sql.types.StructType;\n+\n+import static org.apache.spark.sql.types.DataTypes.LongType;\n+\n+/**\n+ * This is an illustrative implementation of a single-key/single value vectorized hash map that can\n+ * be potentially 'codegened' in TungstenAggregate to speed up aggregate w/ key\n+ */\n+public class VectorizedHashMap {\n+  public ColumnarBatch batch;\n+  public int[] buckets;\n+  private int numBuckets;\n+  private int numRows = 0;\n+  private int maxSteps = 3;\n+\n+  public VectorizedHashMap(int capacity, double loadFactor, int maxSteps) {"
+  }],
+  "prId": 12055
+}]

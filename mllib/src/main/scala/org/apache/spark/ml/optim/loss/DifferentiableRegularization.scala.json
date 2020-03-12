@@ -1,0 +1,23 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "sethah"
+    },
+    "body": "make these private",
+    "commit": "29052d3dbc97ad548128c13533de47d5488b4196",
+    "createdAt": "2017-03-03T20:17:04Z",
+    "diffHunk": "@@ -0,0 +1,68 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+package org.apache.spark.ml.optim.loss\n+\n+import breeze.optimize.DiffFunction\n+\n+/**\n+ * A Breeze diff function which represents a cost function for differentiable regularization\n+ * of parameters. e.g. L2 regularization: 1 / 2 regParam * <\\beta, \\beta>\n+ *\n+ * @tparam T The type of the coefficients being regularized.\n+ */\n+trait DifferentiableRegularization[T] extends DiffFunction[T] {"
+  }],
+  "prId": 17094
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Not sure if this is performance critical but in a few blocks like this an array index is dereferenced many times and could be saved off, if it mattered, to optimize a bit",
+    "commit": "29052d3dbc97ad548128c13533de47d5488b4196",
+    "createdAt": "2017-05-25T12:36:34Z",
+    "diffHunk": "@@ -0,0 +1,68 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+package org.apache.spark.ml.optim.loss\n+\n+import breeze.optimize.DiffFunction\n+\n+/**\n+ * A Breeze diff function which represents a cost function for differentiable regularization\n+ * of parameters. e.g. L2 regularization: 1 / 2 regParam * beta dot beta\n+ *\n+ * @tparam T The type of the coefficients being regularized.\n+ */\n+private[ml] trait DifferentiableRegularization[T] extends DiffFunction[T] {\n+\n+  def regParam: Double\n+\n+}\n+\n+/**\n+ * A Breeze diff function for computing the L2 regularized loss and gradient of an array of\n+ * coefficients.\n+ *\n+ * @param regParam The magnitude of the regularization.\n+ * @param shouldApply A function (Int => Boolean) indicating whether a given index should have\n+ *                    regularization applied to it.\n+ * @param featuresStd Option indicating whether the regularization should be scaled by the standard\n+ *                    deviation of the features.\n+ */\n+private[ml] class L2Regularization(\n+    val regParam: Double,\n+    shouldApply: Int => Boolean,\n+    featuresStd: Option[Array[Double]]) extends DifferentiableRegularization[Array[Double]] {\n+\n+  override def calculate(coefficients: Array[Double]): (Double, Array[Double]) = {\n+    var sum = 0.0\n+    val gradient = new Array[Double](coefficients.length)\n+    coefficients.indices.filter(shouldApply).foreach { j =>\n+      featuresStd match {\n+        case Some(std) =>\n+          if (std(j) != 0.0) {\n+            val temp = coefficients(j) / (std(j) * std(j))\n+            sum += coefficients(j) * temp\n+            gradient(j) = regParam * temp\n+          } else {\n+            0.0\n+          }\n+        case None =>\n+          sum += coefficients(j) * coefficients(j)"
+  }],
+  "prId": 17094
+}]

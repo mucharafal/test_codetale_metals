@@ -1,0 +1,45 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "squito"
+    },
+    "body": "in scala, `if( isInstanceOf) { asInstanceOf}` can be replaced by pattern matching:\r\n\r\n```scala\r\nmapStatus match {\r\n  case hc: HighlyCompressedMapStatus => writeMetrics.setAverageBlockSize(hc.getAvgSize());\r\n  case _ =>  //no-op\r\n}\r\n```",
+    "commit": "873129f783d154c96803e13b94f8f16c2922cb68",
+    "createdAt": "2017-03-21T13:46:45Z",
+    "diffHunk": "@@ -72,6 +72,18 @@ private[spark] class SortShuffleWriter[K, V, C](\n       val partitionLengths = sorter.writePartitionedFile(blockId, tmp)\n       shuffleBlockResolver.writeIndexFileAndCommit(dep.shuffleId, mapId, partitionLengths, tmp)\n       mapStatus = MapStatus(blockManager.shuffleServerId, partitionLengths)\n+      partitionLengths.foreach(writeMetrics.incBlockSizeDistribution(_))\n+      if (mapStatus.isInstanceOf[HighlyCompressedMapStatus]) {\n+        writeMetrics.setAverageBlockSize(\n+          mapStatus.asInstanceOf[HighlyCompressedMapStatus].getAvgSize());"
+  }],
+  "prId": 17276
+}, {
+  "comments": [{
+    "author": {
+      "login": "squito"
+    },
+    "body": "don't you want the condition reversed? `partitionLengths(i)` is the true size, so an underestimate is if the mapStatus says the size is smaller.",
+    "commit": "873129f783d154c96803e13b94f8f16c2922cb68",
+    "createdAt": "2017-03-21T13:58:39Z",
+    "diffHunk": "@@ -72,6 +72,18 @@ private[spark] class SortShuffleWriter[K, V, C](\n       val partitionLengths = sorter.writePartitionedFile(blockId, tmp)\n       shuffleBlockResolver.writeIndexFileAndCommit(dep.shuffleId, mapId, partitionLengths, tmp)\n       mapStatus = MapStatus(blockManager.shuffleServerId, partitionLengths)\n+      partitionLengths.foreach(writeMetrics.incBlockSizeDistribution(_))\n+      if (mapStatus.isInstanceOf[HighlyCompressedMapStatus]) {\n+        writeMetrics.setAverageBlockSize(\n+          mapStatus.asInstanceOf[HighlyCompressedMapStatus].getAvgSize());\n+        (0 until partitionLengths.length).foreach {\n+          case i =>\n+            if (partitionLengths(i) < mapStatus.getSizeForBlock(i)) {"
+  }],
+  "prId": 17276
+}, {
+  "comments": [{
+    "author": {
+      "login": "squito"
+    },
+    "body": "another metric that may be nice to capture here is *maximum* underestimate -- `(0 until partitionLengths).map { i => partitionLengths(i) - mapStatus.getSizeForBlock(i) }.max`.  In fact, that alone might be enough to discover cases where the reduce side will OOM because of this underestimate.",
+    "commit": "873129f783d154c96803e13b94f8f16c2922cb68",
+    "createdAt": "2017-03-21T14:02:38Z",
+    "diffHunk": "@@ -72,6 +72,18 @@ private[spark] class SortShuffleWriter[K, V, C](\n       val partitionLengths = sorter.writePartitionedFile(blockId, tmp)\n       shuffleBlockResolver.writeIndexFileAndCommit(dep.shuffleId, mapId, partitionLengths, tmp)\n       mapStatus = MapStatus(blockManager.shuffleServerId, partitionLengths)\n+      partitionLengths.foreach(writeMetrics.incBlockSizeDistribution(_))\n+      if (mapStatus.isInstanceOf[HighlyCompressedMapStatus]) {\n+        writeMetrics.setAverageBlockSize(\n+          mapStatus.asInstanceOf[HighlyCompressedMapStatus].getAvgSize());\n+        (0 until partitionLengths.length).foreach {\n+          case i =>\n+            if (partitionLengths(i) < mapStatus.getSizeForBlock(i)) {\n+              writeMetrics.incUnderestimatedBlocksNum()\n+              writeMetrics.incUnderestimatedBlocksSize(partitionLengths(i))"
+  }],
+  "prId": 17276
+}, {
+  "comments": [{
+    "author": {
+      "login": "mridulm"
+    },
+    "body": "Isn;t this not similar to what is in core/src/main/java/org/apache/spark/shuffle/sort/UnsafeShuffleWriter.java, etc above ? Or is it different ?\r\nThe code looked same, but written differently (and more expensive here).",
+    "commit": "873129f783d154c96803e13b94f8f16c2922cb68",
+    "createdAt": "2017-03-26T06:20:18Z",
+    "diffHunk": "@@ -72,6 +72,27 @@ private[spark] class SortShuffleWriter[K, V, C](\n       val partitionLengths = sorter.writePartitionedFile(blockId, tmp)\n       shuffleBlockResolver.writeIndexFileAndCommit(dep.shuffleId, mapId, partitionLengths, tmp)\n       mapStatus = MapStatus(blockManager.shuffleServerId, partitionLengths)\n+\n+      mapStatus match {\n+        case hc: HighlyCompressedMapStatus =>\n+          val underestimatedLengths = partitionLengths.filter(_ > hc.getAvgSize)\n+          writeMetrics.incUnderestimatedBlocksSize(underestimatedLengths.sum)\n+          if (log.isDebugEnabled() && partitionLengths.length > 0) {\n+            // Distribution of sizes in MapStatus.\n+            Distribution(partitionLengths.map(_.toDouble)) match {\n+              case Some(distribution) =>\n+                val distributionStr = distribution.getQuantiles().mkString(\", \")\n+                logDebug(s\"For task ${context.partitionId()}.${context.attemptNumber()} in stage\" +\n+                  s\" ${context.stageId()} (TID ${context.taskAttemptId()}), the block sizes in\" +\n+                  s\" MapStatus are inaccurate (average is ${hc.getAvgSize},\" +\n+                  s\" ${underestimatedLengths.length} blocks underestimated, sum of sizes is\" +\n+                  s\" ${underestimatedLengths.sum}), distribution at the given probabilities\" +\n+                  s\" (0, 0.25, 0.5, 0.75, 1.0) is $distributionStr.\")\n+              case None => // no-op\n+            }\n+          }"
+  }],
+  "prId": 17276
+}]

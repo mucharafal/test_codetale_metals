@@ -1,0 +1,40 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "maropu"
+    },
+    "body": "NonFatal?",
+    "commit": "4aa2dd2b7441b35fe80c1656dc8487bf4afef1c7",
+    "createdAt": "2019-10-02T02:39:58Z",
+    "diffHunk": "@@ -68,11 +69,18 @@ private[hive] class SparkGetCatalogsOperation(\n       }\n       setState(OperationState.FINISHED)\n     } catch {\n-      case e: HiveSQLException =>\n+      case e: Throwable =>",
+    "line": 13
+  }, {
+    "author": {
+      "login": "juliuszsompolski"
+    },
+    "body": "Hm. I think we may want to catch a Throwable.\r\nE.g. InterruptedExpression is not catched by NonFatal, and we want to inform the HiveThriftServer2.listener about the error after an interrupt - this definitely can happen in SparkExecuteStatementOperation that is async and can be cancelled. After a ThreadDeath of OutOfMemoryError I think we also want to inform the HiveThriftServer2.listener to not get the query hanging in the UI, as I think the server would continue to go on (I think it won't bring the whole JVM down?).",
+    "commit": "4aa2dd2b7441b35fe80c1656dc8487bf4afef1c7",
+    "createdAt": "2019-10-02T13:30:28Z",
+    "diffHunk": "@@ -68,11 +69,18 @@ private[hive] class SparkGetCatalogsOperation(\n       }\n       setState(OperationState.FINISHED)\n     } catch {\n-      case e: HiveSQLException =>\n+      case e: Throwable =>",
+    "line": 13
+  }, {
+    "author": {
+      "login": "maropu"
+    },
+    "body": "If so, we should list up `InterruptedExpression` here, too? IIUC the reason why we mainly use `NonFatal` in this case is not to catch `NonLocalReturnControl`.  But, yea, this is not my area, so I think @wangyum could suggest more about this.",
+    "commit": "4aa2dd2b7441b35fe80c1656dc8487bf4afef1c7",
+    "createdAt": "2019-10-03T01:10:59Z",
+    "diffHunk": "@@ -68,11 +69,18 @@ private[hive] class SparkGetCatalogsOperation(\n       }\n       setState(OperationState.FINISHED)\n     } catch {\n-      case e: HiveSQLException =>\n+      case e: Throwable =>",
+    "line": 13
+  }, {
+    "author": {
+      "login": "wangyum"
+    },
+    "body": "+1 for `Throwable`.\r\n\r\nExtractor of non-fatal Throwables. Will not match fatal errors like `VirtualMachineError`.\r\n(for example, `OutOfMemoryError` and `StackOverflowError`, subclasses of `VirtualMachineError`), `ThreadDeath`, `LinkageError`, `InterruptedException`, `ControlThrowable`.\r\n\r\nhttps://github.com/scala/scala/blob/v2.12.10/src/library/scala/util/control/NonFatal.scala#L17-L19",
+    "commit": "4aa2dd2b7441b35fe80c1656dc8487bf4afef1c7",
+    "createdAt": "2019-10-08T08:15:50Z",
+    "diffHunk": "@@ -68,11 +69,18 @@ private[hive] class SparkGetCatalogsOperation(\n       }\n       setState(OperationState.FINISHED)\n     } catch {\n-      case e: HiveSQLException =>\n+      case e: Throwable =>",
+    "line": 13
+  }],
+  "prId": 25960
+}]

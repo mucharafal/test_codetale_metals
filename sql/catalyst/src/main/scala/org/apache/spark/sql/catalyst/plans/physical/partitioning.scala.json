@@ -1,0 +1,43 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "yhuai"
+    },
+    "body": "Since we are using `guarantees` to check if sibling operators are compatible or not. How about we just get back compatible with?\n",
+    "commit": "38006e75650f7f0a827dd4b00fc2984786a2244f",
+    "createdAt": "2015-08-06T23:46:45Z",
+    "diffHunk": "@@ -95,6 +95,22 @@ sealed trait Partitioning {\n   def guarantees(other: Partitioning): Boolean\n }\n \n+object Partitioning {\n+  def allCompatible(partitionings: Seq[Partitioning]): Boolean = {\n+    // Note: this assumes transitivity\n+    partitionings.sliding(2).map {\n+      case Seq(a) => true\n+      case Seq(a, b) =>\n+        if (a.numPartitions != b.numPartitions) {\n+          assert(!a.guarantees(b) && !b.guarantees(a))"
+  }, {
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "This sounds good to me.  Let's revisit this naming later once we actually break this symmetry.\n",
+    "commit": "38006e75650f7f0a827dd4b00fc2984786a2244f",
+    "createdAt": "2015-08-06T23:47:51Z",
+    "diffHunk": "@@ -95,6 +95,22 @@ sealed trait Partitioning {\n   def guarantees(other: Partitioning): Boolean\n }\n \n+object Partitioning {\n+  def allCompatible(partitionings: Seq[Partitioning]): Boolean = {\n+    // Note: this assumes transitivity\n+    partitionings.sliding(2).map {\n+      case Seq(a) => true\n+      case Seq(a, b) =>\n+        if (a.numPartitions != b.numPartitions) {\n+          assert(!a.guarantees(b) && !b.guarantees(a))"
+  }],
+  "prId": 7988
+}, {
+  "comments": [{
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "Editing note: should exploit parallelism between these two lists, since that's better writing.  Will copyedit tomorrow.\n",
+    "commit": "38006e75650f7f0a827dd4b00fc2984786a2244f",
+    "createdAt": "2015-08-08T06:40:22Z",
+    "diffHunk": "@@ -75,6 +75,37 @@ case class OrderedDistribution(ordering: Seq[SortOrder]) extends Distribution {\n   def clustering: Set[Expression] = ordering.map(_.child).toSet\n }\n \n+/**\n+ * Describes how an operator's output is split across partitions. The `satisfies`,"
+  }],
+  "prId": 7988
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "Nit: we can use `forall` instead of `map` here and remove the `forall` at the end.\n",
+    "commit": "38006e75650f7f0a827dd4b00fc2984786a2244f",
+    "createdAt": "2015-08-10T06:36:58Z",
+    "diffHunk": "@@ -90,9 +121,66 @@ sealed trait Partitioning {\n   /**\n    * Returns true iff we can say that the partitioning scheme of this [[Partitioning]]\n    * guarantees the same partitioning scheme described by `other`.\n+   *\n+   * Compatibility of partitionings is only checked for operators that have multiple children\n+   * and that require a specific child output [[Distribution]], such as joins.\n+   *\n+   * Intuitively, partitionings are compatible if they route the same partitioning key to the same\n+   * partition. For instance, two hash partitionings are only compatible if they produce the same\n+   * number of output partitionings and hash records according to the same hash function and\n+   * same partitioning key schema.\n+   *\n+   * Put another way, two partitionings are compatible with each other if they satisfy all of the\n+   * same distribution guarantees.\n    */\n-  // TODO: Add an example once we have the `nullSafe` concept.\n-  def guarantees(other: Partitioning): Boolean\n+  def compatibleWith(other: Partitioning): Boolean\n+\n+  /**\n+   * Returns true iff we can say that the partitioning scheme of this [[Partitioning]] guarantees\n+   * the same partitioning scheme described by `other`. If a `A.guarantees(B)`, then repartitioning\n+   * the child's output according to `B` will be unnecessary. `guarantees` is used as a performance\n+   * optimization to allow the exchange planner to avoid redundant repartitionings. By default,\n+   * a partitioning only guarantees partitionings that are equal to itself (i.e. the same number\n+   * of partitions, same strategy (range or hash), etc).\n+   *\n+   * In order to enable more aggressive optimization, this strict equality check can be relaxed.\n+   * For example, say that the planner needs to repartition all of an operator's children so that\n+   * they satisfy the [[AllTuples]] distribution. One way to do this is to repartition all children\n+   * to have the [[SinglePartition]] partitioning. If one of the operator's children already happens\n+   * to be hash-partitioned with a single partition then we do not need to re-shuffle this child;\n+   * this repartitioning can be avoided if a single-partition [[HashPartitioning]] `guarantees`\n+   * [[SinglePartition]].\n+   *\n+   * The SinglePartition example given above is not particularly interesting; guarantees' real\n+   * value occurs for more advanced partitioning strategies. SPARK-7871 will introduce a notion\n+   * of null-safe partitionings, under which partitionings can specify whether rows whose\n+   * partitioning keys contain null values will be grouped into the same partition or whether they\n+   * will have an unknown / random distribution. If a partitioning does not require nulls to be\n+   * clustered then a partitioning which _does_ cluster nulls will guarantee the null clustered\n+   * partitioning. The converse is not true, however: a partitioning which clusters nulls cannot\n+   * be guaranteed by one which does not cluster them. Thus, in general `guarantees` is not a\n+   * symmetric relation.\n+   *\n+   * Another way to think about `guarantees`: if `A.guarantees(B)`, then any partitioning of rows\n+   * produced by `A` could have also been produced by `B`.\n+   */\n+  def guarantees(other: Partitioning): Boolean = this == other\n+}\n+\n+object Partitioning {\n+  def allCompatible(partitionings: Seq[Partitioning]): Boolean = {\n+    // Note: this assumes transitivity\n+    partitionings.sliding(2).map {",
+    "line": 93
+  }],
+  "prId": 7988
+}]

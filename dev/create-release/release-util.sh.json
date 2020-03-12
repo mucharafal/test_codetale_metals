@@ -1,0 +1,151 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "What does the `!` do -- make this fail if grep successfully found a 404? does `grep -v` get the same effect? No need to change it, it's fine, just curious",
+    "commit": "3178a69e130fa1bf7f5cba0cb825d63cb4163d9e",
+    "createdAt": "2019-01-06T23:32:52Z",
+    "diffHunk": "@@ -73,7 +73,7 @@ function fcreate_secure {\n }\n \n function check_for_tag {\n-  curl -s --head --fail \"$ASF_REPO_WEBUI;a=commit;h=$1\" >/dev/null\n+  ! curl -s --fail \"$ASF_REPO_WEBUI;a=commit;h=$1\" | grep '404 Not Found' > /dev/null",
+    "line": 7
+  }, {
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "Thank you for review and approval, @srowen . Yes, right. `!` does.\r\nWe cannot use `grep -v` which matches all the other lines doesn't have `404 Not Found`. `grep` only returns `1` when no lines are selected.",
+    "commit": "3178a69e130fa1bf7f5cba0cb825d63cb4163d9e",
+    "createdAt": "2019-01-07T00:04:56Z",
+    "diffHunk": "@@ -73,7 +73,7 @@ function fcreate_secure {\n }\n \n function check_for_tag {\n-  curl -s --head --fail \"$ASF_REPO_WEBUI;a=commit;h=$1\" >/dev/null\n+  ! curl -s --fail \"$ASF_REPO_WEBUI;a=commit;h=$1\" | grep '404 Not Found' > /dev/null",
+    "line": 7
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Oh right, duh, wasn't thinking it through",
+    "commit": "3178a69e130fa1bf7f5cba0cb825d63cb4163d9e",
+    "createdAt": "2019-01-07T00:12:42Z",
+    "diffHunk": "@@ -73,7 +73,7 @@ function fcreate_secure {\n }\n \n function check_for_tag {\n-  curl -s --head --fail \"$ASF_REPO_WEBUI;a=commit;h=$1\" >/dev/null\n+  ! curl -s --fail \"$ASF_REPO_WEBUI;a=commit;h=$1\" | grep '404 Not Found' > /dev/null",
+    "line": 7
+  }],
+  "prId": 23476
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "as we can push commit to github repo directly, do we still have sync issues between github repo and apache repo?",
+    "commit": "3178a69e130fa1bf7f5cba0cb825d63cb4163d9e",
+    "createdAt": "2019-01-07T04:23:22Z",
+    "diffHunk": "@@ -73,7 +73,9 @@ function fcreate_secure {\n }\n \n function check_for_tag {\n-  curl -s --head --fail \"$ASF_REPO_WEBUI;a=commit;h=$1\" >/dev/null\n+  # Check HTML body messages instead of header status codes. Apache GitBox returns\n+  # a header with `200 OK` status code for both existing and non-existing tag URLs",
+    "line": 6
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "if we don't, maybe we can use the github repo to do the release?",
+    "commit": "3178a69e130fa1bf7f5cba0cb825d63cb4163d9e",
+    "createdAt": "2019-01-07T04:23:45Z",
+    "diffHunk": "@@ -73,7 +73,9 @@ function fcreate_secure {\n }\n \n function check_for_tag {\n-  curl -s --head --fail \"$ASF_REPO_WEBUI;a=commit;h=$1\" >/dev/null\n+  # Check HTML body messages instead of header status codes. Apache GitBox returns\n+  # a header with `200 OK` status code for both existing and non-existing tag URLs",
+    "line": 6
+  }, {
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "Right. GitHub repo can be used.\r\n```bash\r\n$ curl -s --head --fail \"https://github.com/apache/spark/releases/tag/v2.4.0\" > /dev/null\r\n$ echo $?\r\n0\r\n$ curl -s --head --fail \"https://github.com/apache/spark/releases/tag/v3.0.0\" > /dev/null\r\n$ echo $?\r\n22\r\n```\r\n\r\nFor me, since last bad experience, I'm pushing to only GitBox. So, I'm not sure whether `GitHub to GitBox` sync is safe or not in these days.",
+    "commit": "3178a69e130fa1bf7f5cba0cb825d63cb4163d9e",
+    "createdAt": "2019-01-07T04:55:21Z",
+    "diffHunk": "@@ -73,7 +73,9 @@ function fcreate_secure {\n }\n \n function check_for_tag {\n-  curl -s --head --fail \"$ASF_REPO_WEBUI;a=commit;h=$1\" >/dev/null\n+  # Check HTML body messages instead of header status codes. Apache GitBox returns\n+  # a header with `200 OK` status code for both existing and non-existing tag URLs",
+    "line": 6
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "GitHub to GitBox sync must be safe otherwise we have problems. At least I've updated my local `ASF_REPO` to github repo and merge PR to github repo directly.",
+    "commit": "3178a69e130fa1bf7f5cba0cb825d63cb4163d9e",
+    "createdAt": "2019-01-07T05:34:29Z",
+    "diffHunk": "@@ -73,7 +73,9 @@ function fcreate_secure {\n }\n \n function check_for_tag {\n-  curl -s --head --fail \"$ASF_REPO_WEBUI;a=commit;h=$1\" >/dev/null\n+  # Check HTML body messages instead of header status codes. Apache GitBox returns\n+  # a header with `200 OK` status code for both existing and non-existing tag URLs",
+    "line": 6
+  }, {
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "Then, shall I change it back to check header messages against GitHub tag urls? I can do that as a followup PR if you want.",
+    "commit": "3178a69e130fa1bf7f5cba0cb825d63cb4163d9e",
+    "createdAt": "2019-01-07T06:56:55Z",
+    "diffHunk": "@@ -73,7 +73,9 @@ function fcreate_secure {\n }\n \n function check_for_tag {\n-  curl -s --head --fail \"$ASF_REPO_WEBUI;a=commit;h=$1\" >/dev/null\n+  # Check HTML body messages instead of header status codes. Apache GitBox returns\n+  # a header with `200 OK` status code for both existing and non-existing tag URLs",
+    "line": 6
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "SGTM. I think it's a better idea to forget about GitBox. Once a committer has done the setup, he can pull/push to the github repo, which is the single south of truth.",
+    "commit": "3178a69e130fa1bf7f5cba0cb825d63cb4163d9e",
+    "createdAt": "2019-01-07T07:34:51Z",
+    "diffHunk": "@@ -73,7 +73,9 @@ function fcreate_secure {\n }\n \n function check_for_tag {\n-  curl -s --head --fail \"$ASF_REPO_WEBUI;a=commit;h=$1\" >/dev/null\n+  # Check HTML body messages instead of header status codes. Apache GitBox returns\n+  # a header with `200 OK` status code for both existing and non-existing tag URLs",
+    "line": 6
+  }, {
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "Yep. I'll make a PR soon. Thanks!",
+    "commit": "3178a69e130fa1bf7f5cba0cb825d63cb4163d9e",
+    "createdAt": "2019-01-07T07:37:39Z",
+    "diffHunk": "@@ -73,7 +73,9 @@ function fcreate_secure {\n }\n \n function check_for_tag {\n-  curl -s --head --fail \"$ASF_REPO_WEBUI;a=commit;h=$1\" >/dev/null\n+  # Check HTML body messages instead of header status codes. Apache GitBox returns\n+  # a header with `200 OK` status code for both existing and non-existing tag URLs",
+    "line": 6
+  }, {
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "Ur, are you thinking of changing all `gitbox` to `github` together?\r\nActually, we changed them from `git-wip-us` to `github` yesterday.\r\n- https://github.com/apache/spark/pull/23454\r\n\r\nFor tag checking, it's okay to use GitHub only. But, I'm afraid that GitHub-only-usage is a potential violation of some Apache project policies.",
+    "commit": "3178a69e130fa1bf7f5cba0cb825d63cb4163d9e",
+    "createdAt": "2019-01-07T07:42:15Z",
+    "diffHunk": "@@ -73,7 +73,9 @@ function fcreate_secure {\n }\n \n function check_for_tag {\n-  curl -s --head --fail \"$ASF_REPO_WEBUI;a=commit;h=$1\" >/dev/null\n+  # Check HTML body messages instead of header status codes. Apache GitBox returns\n+  # a header with `200 OK` status code for both existing and non-existing tag URLs",
+    "line": 6
+  }, {
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "Before proceeding that, let me search some from Apache websites.",
+    "commit": "3178a69e130fa1bf7f5cba0cb825d63cb4163d9e",
+    "createdAt": "2019-01-07T07:48:35Z",
+    "diffHunk": "@@ -73,7 +73,9 @@ function fcreate_secure {\n }\n \n function check_for_tag {\n-  curl -s --head --fail \"$ASF_REPO_WEBUI;a=commit;h=$1\" >/dev/null\n+  # Check HTML body messages instead of header status codes. Apache GitBox returns\n+  # a header with `200 OK` status code for both existing and non-existing tag URLs",
+    "line": 6
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "Good point on the apache policy concerns. For now I think we only need to use github at this particular place, because gitbox has a mistake about the reader status.",
+    "commit": "3178a69e130fa1bf7f5cba0cb825d63cb4163d9e",
+    "createdAt": "2019-01-07T08:03:15Z",
+    "diffHunk": "@@ -73,7 +73,9 @@ function fcreate_secure {\n }\n \n function check_for_tag {\n-  curl -s --head --fail \"$ASF_REPO_WEBUI;a=commit;h=$1\" >/dev/null\n+  # Check HTML body messages instead of header status codes. Apache GitBox returns\n+  # a header with `200 OK` status code for both existing and non-existing tag URLs",
+    "line": 6
+  }, {
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "Ya. It was just my confusion. My bad. It looks completely okay. \r\n\r\n- https://reference.apache.org/committer/github\r\n> The ASF has a presence on GitHub at https://github.com/apache\r\n\r\n- https://gitbox.apache.org/\r\n> People that do not wish to utilize GitHub may continue using their ASF credentials to push code to gitbox.apache.org - we do not mandate use of one of the other.\r\n\r\nPreviously, `github` was able to be used at read-only pointers like `pom.xml`'s `connection`. After GitBox setup, it's okay for read/write pointers for all GitHub users.\r\n\r\nFor non-GitHub users (maybe BitBucket or GitLab users), we still use the `gitbox` URL at write-access-required pointer like `pom.xml`'s `developerConnection`.",
+    "commit": "3178a69e130fa1bf7f5cba0cb825d63cb4163d9e",
+    "createdAt": "2019-01-07T08:13:10Z",
+    "diffHunk": "@@ -73,7 +73,9 @@ function fcreate_secure {\n }\n \n function check_for_tag {\n-  curl -s --head --fail \"$ASF_REPO_WEBUI;a=commit;h=$1\" >/dev/null\n+  # Check HTML body messages instead of header status codes. Apache GitBox returns\n+  # a header with `200 OK` status code for both existing and non-existing tag URLs",
+    "line": 6
+  }, {
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "Yes. So for a `SPARK-26554` follow-up PR, I'll focus only this `check_for_tag` function at this time. Thank you for clarification.",
+    "commit": "3178a69e130fa1bf7f5cba0cb825d63cb4163d9e",
+    "createdAt": "2019-01-07T08:14:48Z",
+    "diffHunk": "@@ -73,7 +73,9 @@ function fcreate_secure {\n }\n \n function check_for_tag {\n-  curl -s --head --fail \"$ASF_REPO_WEBUI;a=commit;h=$1\" >/dev/null\n+  # Check HTML body messages instead of header status codes. Apache GitBox returns\n+  # a header with `200 OK` status code for both existing and non-existing tag URLs",
+    "line": 6
+  }, {
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "@cloud-fan . I made a followup PR, https://github.com/apache/spark/pull/23482. ",
+    "commit": "3178a69e130fa1bf7f5cba0cb825d63cb4163d9e",
+    "createdAt": "2019-01-07T08:35:14Z",
+    "diffHunk": "@@ -73,7 +73,9 @@ function fcreate_secure {\n }\n \n function check_for_tag {\n-  curl -s --head --fail \"$ASF_REPO_WEBUI;a=commit;h=$1\" >/dev/null\n+  # Check HTML body messages instead of header status codes. Apache GitBox returns\n+  # a header with `200 OK` status code for both existing and non-existing tag URLs",
+    "line": 6
+  }],
+  "prId": 23476
+}]

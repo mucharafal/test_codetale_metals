@@ -1,0 +1,113 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "why we need default values here?",
+    "commit": "60ab5b18f031c97640195a7ff0a94070e928f7f5",
+    "createdAt": "2018-12-13T02:24:36Z",
+    "diffHunk": "@@ -33,26 +33,37 @@ sealed trait DateTimeFormatter {\n   def format(us: Long): String\n }\n \n+trait FormatterUtils {\n+  def zoneId: ZoneId\n+  def buildFormatter(pattern: String, locale: Locale): java.time.format.DateTimeFormatter = {\n+    new DateTimeFormatterBuilder()\n+      .appendPattern(pattern)\n+      .parseDefaulting(ChronoField.YEAR_OF_ERA, 1970)\n+      .parseDefaulting(ChronoField.MONTH_OF_YEAR, 1)\n+      .parseDefaulting(ChronoField.DAY_OF_MONTH, 1)\n+      .parseDefaulting(ChronoField.HOUR_OF_DAY, 0)\n+      .parseDefaulting(ChronoField.MINUTE_OF_HOUR, 0)\n+      .parseDefaulting(ChronoField.SECOND_OF_MINUTE, 0)",
+    "line": 32
+  }, {
+    "author": {
+      "login": "MaxGekk"
+    },
+    "body": "Let's say ff you need to parse `Dec 2018`, the parser doesn't know what day it should use by default.",
+    "commit": "60ab5b18f031c97640195a7ff0a94070e928f7f5",
+    "createdAt": "2018-12-13T08:54:25Z",
+    "diffHunk": "@@ -33,26 +33,37 @@ sealed trait DateTimeFormatter {\n   def format(us: Long): String\n }\n \n+trait FormatterUtils {\n+  def zoneId: ZoneId\n+  def buildFormatter(pattern: String, locale: Locale): java.time.format.DateTimeFormatter = {\n+    new DateTimeFormatterBuilder()\n+      .appendPattern(pattern)\n+      .parseDefaulting(ChronoField.YEAR_OF_ERA, 1970)\n+      .parseDefaulting(ChronoField.MONTH_OF_YEAR, 1)\n+      .parseDefaulting(ChronoField.DAY_OF_MONTH, 1)\n+      .parseDefaulting(ChronoField.HOUR_OF_DAY, 0)\n+      .parseDefaulting(ChronoField.MINUTE_OF_HOUR, 0)\n+      .parseDefaulting(ChronoField.SECOND_OF_MINUTE, 0)",
+    "line": 32
+  }],
+  "prId": 23196
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "sorry I'm not very familiar with this API. what does this condition mean?",
+    "commit": "60ab5b18f031c97640195a7ff0a94070e928f7f5",
+    "createdAt": "2018-12-13T02:27:47Z",
+    "diffHunk": "@@ -33,26 +33,37 @@ sealed trait DateTimeFormatter {\n   def format(us: Long): String\n }\n \n+trait FormatterUtils {\n+  def zoneId: ZoneId\n+  def buildFormatter(pattern: String, locale: Locale): java.time.format.DateTimeFormatter = {\n+    new DateTimeFormatterBuilder()\n+      .appendPattern(pattern)\n+      .parseDefaulting(ChronoField.YEAR_OF_ERA, 1970)\n+      .parseDefaulting(ChronoField.MONTH_OF_YEAR, 1)\n+      .parseDefaulting(ChronoField.DAY_OF_MONTH, 1)\n+      .parseDefaulting(ChronoField.HOUR_OF_DAY, 0)\n+      .parseDefaulting(ChronoField.MINUTE_OF_HOUR, 0)\n+      .parseDefaulting(ChronoField.SECOND_OF_MINUTE, 0)\n+      .toFormatter(locale)\n+  }\n+  def toInstant(temporalAccessor: TemporalAccessor): java.time.Instant = {\n+    val localDateTime = LocalDateTime.from(temporalAccessor)\n+    val zonedDateTime = ZonedDateTime.of(localDateTime, zoneId)\n+    Instant.from(zonedDateTime)\n+  }\n+}\n+\n class Iso8601DateTimeFormatter(\n     pattern: String,\n     timeZone: TimeZone,\n-    locale: Locale) extends DateTimeFormatter {\n-  val formatter = new DateTimeFormatterBuilder()\n-    .appendPattern(pattern)\n-    .parseDefaulting(ChronoField.YEAR_OF_ERA, 1970)\n-    .parseDefaulting(ChronoField.MONTH_OF_YEAR, 1)\n-    .parseDefaulting(ChronoField.DAY_OF_MONTH, 1)\n-    .parseDefaulting(ChronoField.HOUR_OF_DAY, 0)\n-    .parseDefaulting(ChronoField.MINUTE_OF_HOUR, 0)\n-    .parseDefaulting(ChronoField.SECOND_OF_MINUTE, 0)\n-    .toFormatter(locale)\n+    locale: Locale) extends DateTimeFormatter with FormatterUtils {\n+  val zoneId = timeZone.toZoneId\n+  val formatter = buildFormatter(pattern, locale)\n \n   def toInstant(s: String): Instant = {\n     val temporalAccessor = formatter.parse(s)\n     if (temporalAccessor.query(TemporalQueries.offset()) == null) {",
+    "line": 61
+  }, {
+    "author": {
+      "login": "MaxGekk"
+    },
+    "body": "zone offset is unknown after parsing. For example, if you parse `13-12-2018 09:55:00`, it is unclear in which timezone it is.",
+    "commit": "60ab5b18f031c97640195a7ff0a94070e928f7f5",
+    "createdAt": "2018-12-13T08:56:35Z",
+    "diffHunk": "@@ -33,26 +33,37 @@ sealed trait DateTimeFormatter {\n   def format(us: Long): String\n }\n \n+trait FormatterUtils {\n+  def zoneId: ZoneId\n+  def buildFormatter(pattern: String, locale: Locale): java.time.format.DateTimeFormatter = {\n+    new DateTimeFormatterBuilder()\n+      .appendPattern(pattern)\n+      .parseDefaulting(ChronoField.YEAR_OF_ERA, 1970)\n+      .parseDefaulting(ChronoField.MONTH_OF_YEAR, 1)\n+      .parseDefaulting(ChronoField.DAY_OF_MONTH, 1)\n+      .parseDefaulting(ChronoField.HOUR_OF_DAY, 0)\n+      .parseDefaulting(ChronoField.MINUTE_OF_HOUR, 0)\n+      .parseDefaulting(ChronoField.SECOND_OF_MINUTE, 0)\n+      .toFormatter(locale)\n+  }\n+  def toInstant(temporalAccessor: TemporalAccessor): java.time.Instant = {\n+    val localDateTime = LocalDateTime.from(temporalAccessor)\n+    val zonedDateTime = ZonedDateTime.of(localDateTime, zoneId)\n+    Instant.from(zonedDateTime)\n+  }\n+}\n+\n class Iso8601DateTimeFormatter(\n     pattern: String,\n     timeZone: TimeZone,\n-    locale: Locale) extends DateTimeFormatter {\n-  val formatter = new DateTimeFormatterBuilder()\n-    .appendPattern(pattern)\n-    .parseDefaulting(ChronoField.YEAR_OF_ERA, 1970)\n-    .parseDefaulting(ChronoField.MONTH_OF_YEAR, 1)\n-    .parseDefaulting(ChronoField.DAY_OF_MONTH, 1)\n-    .parseDefaulting(ChronoField.HOUR_OF_DAY, 0)\n-    .parseDefaulting(ChronoField.MINUTE_OF_HOUR, 0)\n-    .parseDefaulting(ChronoField.SECOND_OF_MINUTE, 0)\n-    .toFormatter(locale)\n+    locale: Locale) extends DateTimeFormatter with FormatterUtils {\n+  val zoneId = timeZone.toZoneId\n+  val formatter = buildFormatter(pattern, locale)\n \n   def toInstant(s: String): Instant = {\n     val temporalAccessor = formatter.parse(s)\n     if (temporalAccessor.query(TemporalQueries.offset()) == null) {",
+    "line": 61
+  }],
+  "prId": 23196
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "maybe doesn't matter, but `UTC` is more widely used when timezone doesn't matter. ",
+    "commit": "60ab5b18f031c97640195a7ff0a94070e928f7f5",
+    "createdAt": "2018-12-13T02:31:59Z",
+    "diffHunk": "@@ -116,29 +127,32 @@ sealed trait DateFormatter {\n \n class Iso8601DateFormatter(\n     pattern: String,\n-    timeZone: TimeZone,\n-    locale: Locale) extends DateFormatter {\n+    locale: Locale) extends DateFormatter with FormatterUtils {\n \n-  val dateTimeFormatter = new Iso8601DateTimeFormatter(pattern, timeZone, locale)\n+  val zoneId = ZoneId.of(\"GMT\")"
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "see https://www.timeanddate.com/time/gmt-utc-time.html",
+    "commit": "60ab5b18f031c97640195a7ff0a94070e928f7f5",
+    "createdAt": "2018-12-13T02:33:06Z",
+    "diffHunk": "@@ -116,29 +127,32 @@ sealed trait DateFormatter {\n \n class Iso8601DateFormatter(\n     pattern: String,\n-    timeZone: TimeZone,\n-    locale: Locale) extends DateFormatter {\n+    locale: Locale) extends DateFormatter with FormatterUtils {\n \n-  val dateTimeFormatter = new Iso8601DateTimeFormatter(pattern, timeZone, locale)\n+  val zoneId = ZoneId.of(\"GMT\")"
+  }, {
+    "author": {
+      "login": "MaxGekk"
+    },
+    "body": "Thanks for the link. I probably read the same when I thought what is better to use. What confused me is **GMT is a time zone** vs **UTC is not a time zone**\r\n",
+    "commit": "60ab5b18f031c97640195a7ff0a94070e928f7f5",
+    "createdAt": "2018-12-13T08:59:39Z",
+    "diffHunk": "@@ -116,29 +127,32 @@ sealed trait DateFormatter {\n \n class Iso8601DateFormatter(\n     pattern: String,\n-    timeZone: TimeZone,\n-    locale: Locale) extends DateFormatter {\n+    locale: Locale) extends DateFormatter with FormatterUtils {\n \n-  val dateTimeFormatter = new Iso8601DateTimeFormatter(pattern, timeZone, locale)\n+  val zoneId = ZoneId.of(\"GMT\")"
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "`UTC` is a time standard, and `GMT` is `UTC+0`. So here looks like `UTC` is more proper.",
+    "commit": "60ab5b18f031c97640195a7ff0a94070e928f7f5",
+    "createdAt": "2018-12-13T10:58:58Z",
+    "diffHunk": "@@ -116,29 +127,32 @@ sealed trait DateFormatter {\n \n class Iso8601DateFormatter(\n     pattern: String,\n-    timeZone: TimeZone,\n-    locale: Locale) extends DateFormatter {\n+    locale: Locale) extends DateFormatter with FormatterUtils {\n \n-  val dateTimeFormatter = new Iso8601DateTimeFormatter(pattern, timeZone, locale)\n+  val zoneId = ZoneId.of(\"GMT\")"
+  }],
+  "prId": 23196
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "mark it as `protected` if it's only used in child",
+    "commit": "60ab5b18f031c97640195a7ff0a94070e928f7f5",
+    "createdAt": "2018-12-13T02:35:39Z",
+    "diffHunk": "@@ -33,26 +33,37 @@ sealed trait DateTimeFormatter {\n   def format(us: Long): String\n }\n \n+trait FormatterUtils {\n+  def zoneId: ZoneId\n+  def buildFormatter(pattern: String, locale: Locale): java.time.format.DateTimeFormatter = {\n+    new DateTimeFormatterBuilder()\n+      .appendPattern(pattern)\n+      .parseDefaulting(ChronoField.YEAR_OF_ERA, 1970)\n+      .parseDefaulting(ChronoField.MONTH_OF_YEAR, 1)\n+      .parseDefaulting(ChronoField.DAY_OF_MONTH, 1)\n+      .parseDefaulting(ChronoField.HOUR_OF_DAY, 0)\n+      .parseDefaulting(ChronoField.MINUTE_OF_HOUR, 0)\n+      .parseDefaulting(ChronoField.SECOND_OF_MINUTE, 0)\n+      .toFormatter(locale)\n+  }\n+  def toInstant(temporalAccessor: TemporalAccessor): java.time.Instant = {"
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "maybe call it `toInstantWithDefaultTimeZone`?",
+    "commit": "60ab5b18f031c97640195a7ff0a94070e928f7f5",
+    "createdAt": "2018-12-13T02:36:17Z",
+    "diffHunk": "@@ -33,26 +33,37 @@ sealed trait DateTimeFormatter {\n   def format(us: Long): String\n }\n \n+trait FormatterUtils {\n+  def zoneId: ZoneId\n+  def buildFormatter(pattern: String, locale: Locale): java.time.format.DateTimeFormatter = {\n+    new DateTimeFormatterBuilder()\n+      .appendPattern(pattern)\n+      .parseDefaulting(ChronoField.YEAR_OF_ERA, 1970)\n+      .parseDefaulting(ChronoField.MONTH_OF_YEAR, 1)\n+      .parseDefaulting(ChronoField.DAY_OF_MONTH, 1)\n+      .parseDefaulting(ChronoField.HOUR_OF_DAY, 0)\n+      .parseDefaulting(ChronoField.MINUTE_OF_HOUR, 0)\n+      .parseDefaulting(ChronoField.SECOND_OF_MINUTE, 0)\n+      .toFormatter(locale)\n+  }\n+  def toInstant(temporalAccessor: TemporalAccessor): java.time.Instant = {"
+  }, {
+    "author": {
+      "login": "MaxGekk"
+    },
+    "body": "Strictly speaking it uses non-default time zone, what about `toInstantWithZoneId`?",
+    "commit": "60ab5b18f031c97640195a7ff0a94070e928f7f5",
+    "createdAt": "2018-12-13T09:02:24Z",
+    "diffHunk": "@@ -33,26 +33,37 @@ sealed trait DateTimeFormatter {\n   def format(us: Long): String\n }\n \n+trait FormatterUtils {\n+  def zoneId: ZoneId\n+  def buildFormatter(pattern: String, locale: Locale): java.time.format.DateTimeFormatter = {\n+    new DateTimeFormatterBuilder()\n+      .appendPattern(pattern)\n+      .parseDefaulting(ChronoField.YEAR_OF_ERA, 1970)\n+      .parseDefaulting(ChronoField.MONTH_OF_YEAR, 1)\n+      .parseDefaulting(ChronoField.DAY_OF_MONTH, 1)\n+      .parseDefaulting(ChronoField.HOUR_OF_DAY, 0)\n+      .parseDefaulting(ChronoField.MINUTE_OF_HOUR, 0)\n+      .parseDefaulting(ChronoField.SECOND_OF_MINUTE, 0)\n+      .toFormatter(locale)\n+  }\n+  def toInstant(temporalAccessor: TemporalAccessor): java.time.Instant = {"
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "sure",
+    "commit": "60ab5b18f031c97640195a7ff0a94070e928f7f5",
+    "createdAt": "2018-12-13T10:59:13Z",
+    "diffHunk": "@@ -33,26 +33,37 @@ sealed trait DateTimeFormatter {\n   def format(us: Long): String\n }\n \n+trait FormatterUtils {\n+  def zoneId: ZoneId\n+  def buildFormatter(pattern: String, locale: Locale): java.time.format.DateTimeFormatter = {\n+    new DateTimeFormatterBuilder()\n+      .appendPattern(pattern)\n+      .parseDefaulting(ChronoField.YEAR_OF_ERA, 1970)\n+      .parseDefaulting(ChronoField.MONTH_OF_YEAR, 1)\n+      .parseDefaulting(ChronoField.DAY_OF_MONTH, 1)\n+      .parseDefaulting(ChronoField.HOUR_OF_DAY, 0)\n+      .parseDefaulting(ChronoField.MINUTE_OF_HOUR, 0)\n+      .parseDefaulting(ChronoField.SECOND_OF_MINUTE, 0)\n+      .toFormatter(locale)\n+  }\n+  def toInstant(temporalAccessor: TemporalAccessor): java.time.Instant = {"
+  }],
+  "prId": 23196
+}]

@@ -1,0 +1,67 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "`t1`?",
+    "commit": "0d947a55a80ecc63eb15092c29b2c44aeeb197e5",
+    "createdAt": "2017-01-22T18:50:22Z",
+    "diffHunk": "@@ -1431,4 +1431,27 @@ class HiveDDLSuite\n       }\n     }\n   }\n+\n+  test(\"insert data to a table which has altered the table location \" +\n+    \"to an not exist location should success\") {\n+    withTable(\"t\", \"t1\") {"
+  }],
+  "prId": 16672
+}, {
+  "comments": [{
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "Test case names are not accurate after you add new test cases.  Actually, could you split the test cases? \r\n\r\n\r\n",
+    "commit": "0d947a55a80ecc63eb15092c29b2c44aeeb197e5",
+    "createdAt": "2017-02-12T05:59:54Z",
+    "diffHunk": "@@ -1431,4 +1431,30 @@ class HiveDDLSuite\n       }\n     }\n   }\n+\n+  test(\"insert data to a table which has altered the table location \" +\n+    \"to an not exist location should success\") {"
+  }],
+  "prId": 16672
+}, {
+  "comments": [{
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "General style suggestions. Please use upper case for SQL keywords. For example, in this SQL statement can be improved to\r\n```\r\nCREATE TABLE t(a STRING, b INT)\r\nUSING parquet\r\nOPTIONS(path \"xyz\")\r\n```",
+    "commit": "0d947a55a80ecc63eb15092c29b2c44aeeb197e5",
+    "createdAt": "2017-02-12T06:10:13Z",
+    "diffHunk": "@@ -1431,4 +1431,30 @@ class HiveDDLSuite\n       }\n     }\n   }\n+\n+  test(\"insert data to a table which has altered the table location \" +\n+    \"to an not exist location should success\") {\n+    withTable(\"t\") {\n+      withTempDir { dir =>\n+        spark.sql(\n+          s\"\"\"create table t(a string, b int)"
+  }],
+  "prId": 16672
+}, {
+  "comments": [{
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "A general comment about the test cases. Can you please check whether the directory exists after the insert? It can help others confirm the path is correct",
+    "commit": "0d947a55a80ecc63eb15092c29b2c44aeeb197e5",
+    "createdAt": "2017-02-13T07:12:16Z",
+    "diffHunk": "@@ -1431,4 +1432,133 @@ class HiveDDLSuite\n       }\n     }\n   }\n+\n+  test(\"insert data to a data source table which has a not existed location should succeed\") {\n+    withTable(\"t\") {\n+      withTempDir { dir =>\n+        spark.sql(\n+          s\"\"\"CREATE TABLE t(a string, b int)\n+              |USING parquet\n+              |OPTIONS(path \"file:${dir.getCanonicalPath}\")\n+           \"\"\".stripMargin)\n+        var table = spark.sessionState.catalog.getTableMetadata(TableIdentifier(\"t\"))\n+        val expectedPath = s\"file:${dir.getAbsolutePath.stripSuffix(\"/\")}\"\n+        assert(table.location.stripSuffix(\"/\") == expectedPath)\n+\n+        dir.delete\n+        assert(!new File(table.location).exists())\n+        spark.sql(\"INSERT INTO TABLE t SELECT 'c', 1\")\n+        checkAnswer(spark.table(\"t\"), Row(\"c\", 1) :: Nil)\n+\n+        Utils.deleteRecursively(dir)\n+        assert(!new File(table.location).exists())\n+        spark.sql(\"INSERT OVERWRITE TABLE t SELECT 'c', 1\")\n+        checkAnswer(spark.table(\"t\"), Row(\"c\", 1) :: Nil)\n+\n+        var newDir = dir.getAbsolutePath.stripSuffix(\"/\") + \"/x\"\n+        spark.sql(s\"ALTER TABLE t SET LOCATION '$newDir'\")\n+        spark.sessionState.catalog.refreshTable(TableIdentifier(\"t\"))\n+\n+        table = spark.sessionState.catalog.getTableMetadata(TableIdentifier(\"t\"))\n+        assert(table.location == newDir)\n+        assert(!new File(newDir).exists())\n+\n+        spark.sql(\"INSERT INTO TABLE t SELECT 'c', 1\")\n+        checkAnswer(spark.table(\"t\"), Row(\"c\", 1) :: Nil)\n+      }\n+    }\n+  }\n+\n+  test(\"insert into a data source table with no existed partition location should succeed\") {\n+    withTable(\"t\") {\n+      withTempDir { dir =>\n+        spark.sql(\n+          s\"\"\"CREATE TABLE t(a int, b int, c int, d int)\n+              |USING parquet\n+              |PARTITIONED BY(a, b)\n+              |LOCATION \"file:${dir.getCanonicalPath}\"\n+           \"\"\".stripMargin)\n+        var table = spark.sessionState.catalog.getTableMetadata(TableIdentifier(\"t\"))\n+        val expectedPath = s\"file:${dir.getAbsolutePath.stripSuffix(\"/\")}\"\n+        assert(table.location.stripSuffix(\"/\") == expectedPath)\n+\n+        spark.sql(\"INSERT INTO TABLE t PARTITION(a=1, b=2) SELECT 3, 4\")\n+        checkAnswer(spark.table(\"t\"), Row(3, 4, 1, 2) :: Nil)\n+\n+        val partLoc = new File(s\"${dir.getAbsolutePath}/a=1\")"
+  }],
+  "prId": 16672
+}, {
+  "comments": [{
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "A general comment about the style. We prefer to the following indentation styles.\r\n```Scala\r\n        sql(\r\n          \"\"\"\r\n            |SELECT '1' AS part, key, value FROM VALUES\r\n            |(1, \"one\"), (2, \"two\"), (3, null) AS data(key, value)\r\n          \"\"\".stripMargin)\r\n```",
+    "commit": "0d947a55a80ecc63eb15092c29b2c44aeeb197e5",
+    "createdAt": "2017-02-13T07:15:28Z",
+    "diffHunk": "@@ -1431,4 +1432,133 @@ class HiveDDLSuite\n       }\n     }\n   }\n+\n+  test(\"insert data to a data source table which has a not existed location should succeed\") {\n+    withTable(\"t\") {\n+      withTempDir { dir =>\n+        spark.sql(\n+          s\"\"\"CREATE TABLE t(a string, b int)\n+              |USING parquet\n+              |OPTIONS(path \"file:${dir.getCanonicalPath}\")\n+           \"\"\".stripMargin)"
+  }],
+  "prId": 16672
+}, {
+  "comments": [{
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "Another general comment. Please avoid using `var`, if possible.",
+    "commit": "0d947a55a80ecc63eb15092c29b2c44aeeb197e5",
+    "createdAt": "2017-02-13T07:16:33Z",
+    "diffHunk": "@@ -1431,4 +1432,133 @@ class HiveDDLSuite\n       }\n     }\n   }\n+\n+  test(\"insert data to a data source table which has a not existed location should succeed\") {\n+    withTable(\"t\") {\n+      withTempDir { dir =>\n+        spark.sql(\n+          s\"\"\"CREATE TABLE t(a string, b int)\n+              |USING parquet\n+              |OPTIONS(path \"file:${dir.getCanonicalPath}\")\n+           \"\"\".stripMargin)\n+        var table = spark.sessionState.catalog.getTableMetadata(TableIdentifier(\"t\"))"
+  }],
+  "prId": 16672
+}]

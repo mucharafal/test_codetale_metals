@@ -1,0 +1,36 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "I'm OK with the approach here, but just want to share a few thoughts about how to make the API better. The use case is: there are some additional information (input schema, numPartition, etc.) that Spark should always provide, and the implementation only need to write extra code if they need to access the additional information.\r\n\r\nWith the current API, we can:\r\n1. add more additional information in future versions without breaking backward compatibility.\r\n2. users only need to overwrite `withNumPartitions` and other methods if they need to access the additional information.\r\n\r\nBut there is one drawback: we need to take extra effort to make sure the additional information is provided by Spark. It's better to guarantee this at compile time.\r\n\r\nI think we can improve this API a little bit. For `Table#newWriteBuilder`, we can define it as\r\n```\r\nWriteBuilder newWriteBuilder(CaseInsensitiveStringMap options, WriteInfo info);\r\n```\r\nWhile `WriteInfo` is an interface providing additional information:\r\n```\r\ninterface WriteInfo {\r\n  String queryId();\r\n  StructType inputDataSchema();\r\n  ...\r\n}\r\n```\r\nThe `WriteInfo` is implemented by Spark and called by data source implementations, so we can add more methods in future versions without breaking backward compatibility.  The `WriteInfo` can also make sure Spark always provide additional information at compile time.\r\n\r\nIf you guys think it makes sense, we can do it in a followup.",
+    "commit": "f3dba5ea7823f593d4d75d933ffd2603ec75475f",
+    "createdAt": "2019-09-27T08:00:19Z",
+    "diffHunk": "@@ -55,6 +55,16 @@ default WriteBuilder withInputDataSchema(StructType schema) {\n     return this;\n   }\n \n+  /**\n+   * Passes the number of partitions of the input data from Spark to data source.\n+   *\n+   * @return a new builder with the `schema`. By default it returns `this`, which means the given\n+   *         `numPartitions` is ignored. Please override this method to take the `numPartitions`.\n+   */\n+  default WriteBuilder withNumPartitions(int numPartitions) {"
+  }, {
+    "author": {
+      "login": "edrevo"
+    },
+    "body": "I agree with you that the WriteInfo approach has better compile time guarantees. I actually started implementing the change like that, but then felt it was maybe too much of a change and that I should focus on the numPartitions.\r\n\r\nI'm happy to change it in a followup PR, if that works for everyone.",
+    "commit": "f3dba5ea7823f593d4d75d933ffd2603ec75475f",
+    "createdAt": "2019-09-27T09:07:40Z",
+    "diffHunk": "@@ -55,6 +55,16 @@ default WriteBuilder withInputDataSchema(StructType schema) {\n     return this;\n   }\n \n+  /**\n+   * Passes the number of partitions of the input data from Spark to data source.\n+   *\n+   * @return a new builder with the `schema`. By default it returns `this`, which means the given\n+   *         `numPartitions` is ignored. Please override this method to take the `numPartitions`.\n+   */\n+  default WriteBuilder withNumPartitions(int numPartitions) {"
+  }, {
+    "author": {
+      "login": "rdblue"
+    },
+    "body": "If we want to take this approach, then let's do it now before a release. Otherwise we should use the original implementation to add an additional method because that is a compatible change.",
+    "commit": "f3dba5ea7823f593d4d75d933ffd2603ec75475f",
+    "createdAt": "2019-09-27T16:28:47Z",
+    "diffHunk": "@@ -55,6 +55,16 @@ default WriteBuilder withInputDataSchema(StructType schema) {\n     return this;\n   }\n \n+  /**\n+   * Passes the number of partitions of the input data from Spark to data source.\n+   *\n+   * @return a new builder with the `schema`. By default it returns `this`, which means the given\n+   *         `numPartitions` is ignored. Please override this method to take the `numPartitions`.\n+   */\n+  default WriteBuilder withNumPartitions(int numPartitions) {"
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "@edrevo can you implement this approach here? I think adding a `numPartitions` is really a small change, we can set the main focus of this PR to improve this API.",
+    "commit": "f3dba5ea7823f593d4d75d933ffd2603ec75475f",
+    "createdAt": "2019-09-28T03:20:00Z",
+    "diffHunk": "@@ -55,6 +55,16 @@ default WriteBuilder withInputDataSchema(StructType schema) {\n     return this;\n   }\n \n+  /**\n+   * Passes the number of partitions of the input data from Spark to data source.\n+   *\n+   * @return a new builder with the `schema`. By default it returns `this`, which means the given\n+   *         `numPartitions` is ignored. Please override this method to take the `numPartitions`.\n+   */\n+  default WriteBuilder withNumPartitions(int numPartitions) {"
+  }],
+  "prId": 25945
+}]

@@ -1,0 +1,39 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "liancheng"
+    },
+    "body": "`private[thriftserver]`?\n",
+    "commit": "fd352621c215cf39efb6a3d289d8659366b02c53",
+    "createdAt": "2015-01-08T10:02:32Z",
+    "diffHunk": "@@ -0,0 +1,45 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.hive.thriftserver.ui\n+\n+import org.apache.spark.sql.hive.thriftserver.SparkSQLEnv\n+import org.apache.spark.sql.hive.thriftserver.ui.ThriftServerTab._\n+import org.apache.spark.ui.{SparkUI, SparkUITab}\n+import org.apache.spark.{Logging, SparkException}\n+\n+/**\n+ * Spark Web UI tab that shows statistics of a streaming job.\n+ * This assumes the given SparkContext has enabled its SparkUI.\n+ */\n+private[hive] class ThriftServerTab()"
+  }],
+  "prId": 3946
+}, {
+  "comments": [{
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "The initialization / call order here is a bit confusing to me; why not just accept a SparkContext in the `ThriftServerTab` constructor then pass it onto `SparkUITab`?  Why do we need this `getSparkUI()` method?\n",
+    "commit": "fd352621c215cf39efb6a3d289d8659366b02c53",
+    "createdAt": "2015-01-15T20:19:05Z",
+    "diffHunk": "@@ -0,0 +1,45 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.hive.thriftserver.ui\n+\n+import org.apache.spark.sql.hive.thriftserver.SparkSQLEnv\n+import org.apache.spark.sql.hive.thriftserver.ui.ThriftServerTab._\n+import org.apache.spark.ui.{SparkUI, SparkUITab}\n+import org.apache.spark.{Logging, SparkException}\n+\n+/**\n+ * Spark Web UI tab that shows statistics of a streaming job.\n+ * This assumes the given SparkContext has enabled its SparkUI.\n+ */\n+private[thriftserver] class ThriftServerTab()\n+  extends SparkUITab(getSparkUI(), \"ThriftServer\") with Logging {"
+  }, {
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "This is fine, I suppose; I guess the only change that we could make would be to take the SparkContext through the constructor rather than using SparkSqlEnv; not sure if that's a big win.\n",
+    "commit": "fd352621c215cf39efb6a3d289d8659366b02c53",
+    "createdAt": "2015-01-15T20:30:24Z",
+    "diffHunk": "@@ -0,0 +1,45 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.hive.thriftserver.ui\n+\n+import org.apache.spark.sql.hive.thriftserver.SparkSQLEnv\n+import org.apache.spark.sql.hive.thriftserver.ui.ThriftServerTab._\n+import org.apache.spark.ui.{SparkUI, SparkUITab}\n+import org.apache.spark.{Logging, SparkException}\n+\n+/**\n+ * Spark Web UI tab that shows statistics of a streaming job.\n+ * This assumes the given SparkContext has enabled its SparkUI.\n+ */\n+private[thriftserver] class ThriftServerTab()\n+  extends SparkUITab(getSparkUI(), \"ThriftServer\") with Logging {"
+  }, {
+    "author": {
+      "login": "tianyi"
+    },
+    "body": "You mean like this?\n\n```\nprivate[thriftserver] class ThriftServerTab(sparkContext: SparkContext)\n  extends SparkUITab(getSparkUI(sparkContext), \"ThriftServer\") with Logging {\n\n  val parent = getSparkUI(sparkContext)\n  val listener = SparkSQLEnv.sqlEventListener\n\n  attachPage(new ThriftServerPage(this))\n  parent.attachTab(this)\n}\n\nprivate[thriftserver] object ThriftServerTab {\n  def getSparkUI(sparkContext: SparkContext): SparkUI = {\n    sparkContext.ui.getOrElse {\n      throw new SparkException(\"Parent SparkUI to attach this tab to not found!\")\n    }\n  }\n}\n```\n",
+    "commit": "fd352621c215cf39efb6a3d289d8659366b02c53",
+    "createdAt": "2015-01-16T01:33:22Z",
+    "diffHunk": "@@ -0,0 +1,45 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.hive.thriftserver.ui\n+\n+import org.apache.spark.sql.hive.thriftserver.SparkSQLEnv\n+import org.apache.spark.sql.hive.thriftserver.ui.ThriftServerTab._\n+import org.apache.spark.ui.{SparkUI, SparkUITab}\n+import org.apache.spark.{Logging, SparkException}\n+\n+/**\n+ * Spark Web UI tab that shows statistics of a streaming job.\n+ * This assumes the given SparkContext has enabled its SparkUI.\n+ */\n+private[thriftserver] class ThriftServerTab()\n+  extends SparkUITab(getSparkUI(), \"ThriftServer\") with Logging {"
+  }],
+  "prId": 3946
+}]

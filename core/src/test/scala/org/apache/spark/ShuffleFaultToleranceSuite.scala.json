@@ -1,0 +1,53 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "aarondav"
+    },
+    "body": "just for clarification to me, this issue is not specific to hash-shuffles -- you just chose this because it's the clearest to delete files from?\n",
+    "commit": "255b4fd8faf241244591a21273ea1e2e3d97b5c9",
+    "createdAt": "2014-12-03T18:15:41Z",
+    "diffHunk": "@@ -0,0 +1,40 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark\n+\n+import org.scalatest.FunSuite\n+\n+import org.apache.spark.storage.ShuffleBlockId\n+\n+\n+class ShuffleFaultToleranceSuite extends FunSuite {\n+\n+  test(\"[SPARK-4085] hash shuffle manager recovers when local shuffle files get deleted\") {"
+  }, {
+    "author": {
+      "login": "rxin"
+    },
+    "body": "Yea - this was a test case written by @kayousterhout. \n",
+    "commit": "255b4fd8faf241244591a21273ea1e2e3d97b5c9",
+    "createdAt": "2014-12-03T21:50:05Z",
+    "diffHunk": "@@ -0,0 +1,40 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark\n+\n+import org.scalatest.FunSuite\n+\n+import org.apache.spark.storage.ShuffleBlockId\n+\n+\n+class ShuffleFaultToleranceSuite extends FunSuite {\n+\n+  test(\"[SPARK-4085] hash shuffle manager recovers when local shuffle files get deleted\") {"
+  }],
+  "prId": 3579
+}, {
+  "comments": [{
+    "author": {
+      "login": "aarondav"
+    },
+    "body": "assert that the file exists before deleting, otherwise you could be doing nothing\n",
+    "commit": "255b4fd8faf241244591a21273ea1e2e3d97b5c9",
+    "createdAt": "2014-12-03T18:16:05Z",
+    "diffHunk": "@@ -0,0 +1,40 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark\n+\n+import org.scalatest.FunSuite\n+\n+import org.apache.spark.storage.ShuffleBlockId\n+\n+\n+class ShuffleFaultToleranceSuite extends FunSuite {\n+\n+  test(\"[SPARK-4085] hash shuffle manager recovers when local shuffle files get deleted\") {\n+    val conf = new SparkConf(false)\n+    conf.set(\"spark.shuffle.manager\", \"hash\")\n+    val sc = new SparkContext(\"local\", \"test\", conf)\n+    val rdd = sc.parallelize(1 to 10, 2).map((_, 1)).reduceByKey(_ + _)\n+    rdd.count()\n+\n+    // Delete one of the local shuffle blocks.\n+    sc.env.blockManager.diskBlockManager.getFile(new ShuffleBlockId(0, 0, 0)).delete()"
+  }],
+  "prId": 3579
+}, {
+  "comments": [{
+    "author": {
+      "login": "aarondav"
+    },
+    "body": "use LocalSparkContext instead, it's the preferred way of ensuring the SC is cleaned up\n",
+    "commit": "255b4fd8faf241244591a21273ea1e2e3d97b5c9",
+    "createdAt": "2014-12-03T18:16:35Z",
+    "diffHunk": "@@ -0,0 +1,40 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark\n+\n+import org.scalatest.FunSuite\n+\n+import org.apache.spark.storage.ShuffleBlockId\n+\n+\n+class ShuffleFaultToleranceSuite extends FunSuite {\n+\n+  test(\"[SPARK-4085] hash shuffle manager recovers when local shuffle files get deleted\") {\n+    val conf = new SparkConf(false)\n+    conf.set(\"spark.shuffle.manager\", \"hash\")\n+    val sc = new SparkContext(\"local\", \"test\", conf)\n+    val rdd = sc.parallelize(1 to 10, 2).map((_, 1)).reduceByKey(_ + _)\n+    rdd.count()\n+\n+    // Delete one of the local shuffle blocks.\n+    sc.env.blockManager.diskBlockManager.getFile(new ShuffleBlockId(0, 0, 0)).delete()\n+    rdd.count()\n+\n+    sc.stop()"
+  }],
+  "prId": 3579
+}, {
+  "comments": [{
+    "author": {
+      "login": "kayousterhout"
+    },
+    "body": "Just one more follow up here re: Aaron's question: if this is an issue for sort too, make another test that tests the sort shuffle manager?\n",
+    "commit": "255b4fd8faf241244591a21273ea1e2e3d97b5c9",
+    "createdAt": "2014-12-03T22:00:23Z",
+    "diffHunk": "@@ -0,0 +1,42 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark\n+\n+import org.scalatest.FunSuite\n+\n+import org.apache.spark.storage.ShuffleBlockId\n+\n+\n+class ShuffleFaultToleranceSuite extends FunSuite with LocalSparkContext {\n+\n+  test(\"[SPARK-4085] hash shuffle manager recovers when local shuffle files get deleted\") {\n+    val conf = new SparkConf(false)\n+    conf.set(\"spark.shuffle.manager\", \"hash\")"
+  }],
+  "prId": 3579
+}]

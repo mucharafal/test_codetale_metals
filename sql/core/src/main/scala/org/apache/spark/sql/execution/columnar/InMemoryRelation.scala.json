@@ -1,0 +1,35 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "Here, I'd prefer to use `TaskContext.get.getPartitionId` to get the partition id. The problem with this change is that it's re-introducing closure cleaning overhead, which `mapPartitionsInternal` avoids.\n",
+    "commit": "7bf5bb9bacde297abf972a6ae3ad80ba2b6d65fa",
+    "createdAt": "2016-08-30T01:17:39Z",
+    "diffHunk": "@@ -106,7 +106,7 @@ case class InMemoryRelation(\n \n   private def buildBuffers(): Unit = {\n     val output = child.output\n-    val cached = child.execute().mapPartitionsInternal { rowIterator =>\n+    val cached = child.execute().mapPartitionsWithIndex { (i, rowIterator) =>"
+  }],
+  "prId": 14733
+}, {
+  "comments": [{
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "Maybe add a line comment to explain that `Int` is a partition id?\n",
+    "commit": "7bf5bb9bacde297abf972a6ae3ad80ba2b6d65fa",
+    "createdAt": "2016-08-30T01:20:44Z",
+    "diffHunk": "@@ -63,8 +63,8 @@ case class InMemoryRelation(\n     @transient child: SparkPlan,\n     tableName: Option[String])(\n     @transient var _cachedColumnBuffers: RDD[CachedBatch] = null,\n-    val batchStats: CollectionAccumulator[InternalRow] =\n-      child.sqlContext.sparkContext.collectionAccumulator[InternalRow])\n+    val batchStats: CollectionAccumulator[(Int, InternalRow)] ="
+  }],
+  "prId": 14733
+}, {
+  "comments": [{
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "To clarify, is this because the content of the batches might change after recomputation in such a way that the use of these batch stats for whole partition pruning would be invalid? It's my understanding that the _set_ of values in each RDD partition will be the same although their order within that partition may change unless a sort is performed (this is the case for reduce tasks due to interleaving of fetched map output, for example).\n\nGiven this, it seems like the correctness case that we'd have to worry about is a situation where the old batch stats would have pruned a partition but that pruning decision is invalid with the new stats. But I'm not sure how that can be the case given that pruning decisions seem to be based on conditions defined over the maximum or minimum values of columns and we're effectively constructing partition-wide stats by `AND`-ing conditions over the per-batch stats.\n\nBasically, I think that I see the motivation for this but I don't have an immediate counterexample to show how things would break if we omitted this.\n",
+    "commit": "7bf5bb9bacde297abf972a6ae3ad80ba2b6d65fa",
+    "createdAt": "2016-09-01T21:44:50Z",
+    "diffHunk": "@@ -98,9 +100,14 @@ case class InMemoryRelation(\n     buildBuffers()\n   }\n \n-  def recache(): Unit = {\n-    _cachedColumnBuffers.unpersist()\n+  def unpersist(blocking: Boolean = true): Unit = {\n+    batchStats.reset()",
+    "line": 36
+  }],
+  "prId": 14733
+}]

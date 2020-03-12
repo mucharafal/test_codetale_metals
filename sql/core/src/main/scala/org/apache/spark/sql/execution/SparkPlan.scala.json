@@ -1,0 +1,104 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "kiszk"
+    },
+    "body": "nit: Is it better to define a variable as `val`?",
+    "commit": "c4c2177774e55cf0c46d8f2257be995478a4d81e",
+    "createdAt": "2018-08-24T15:22:11Z",
+    "diffHunk": "@@ -348,30 +350,30 @@ abstract class SparkPlan extends QueryPlan[SparkPlan] with Logging with Serializ\n         // Otherwise, interpolate the number of partitions we need to try, but overestimate\n         // it by 50%. We also cap the estimation in the end.\n         val limitScaleUpFactor = Math.max(sqlContext.conf.limitScaleUpFactor, 2)\n-        if (buf.isEmpty) {\n+        if (scannedRowCount == 0) {\n           numPartsToTry = partsScanned * limitScaleUpFactor\n         } else {\n-          val left = n - buf.size\n+          val left = n - scannedRowCount\n           // As left > 0, numPartsToTry is always >= 1\n-          numPartsToTry = Math.ceil(1.5 * left * partsScanned / buf.size).toInt\n+          numPartsToTry = Math.ceil(1.5 * left * partsScanned / scannedRowCount).toInt",
+    "line": 54
+  }, {
+    "author": {
+      "login": "Dooyoung-Hwang"
+    },
+    "body": "Do you mean scannedRowCount? scannedRowCount is update at line 369, and it's difficult to define as val.",
+    "commit": "c4c2177774e55cf0c46d8f2257be995478a4d81e",
+    "createdAt": "2018-08-24T17:46:14Z",
+    "diffHunk": "@@ -348,30 +350,30 @@ abstract class SparkPlan extends QueryPlan[SparkPlan] with Logging with Serializ\n         // Otherwise, interpolate the number of partitions we need to try, but overestimate\n         // it by 50%. We also cap the estimation in the end.\n         val limitScaleUpFactor = Math.max(sqlContext.conf.limitScaleUpFactor, 2)\n-        if (buf.isEmpty) {\n+        if (scannedRowCount == 0) {\n           numPartsToTry = partsScanned * limitScaleUpFactor\n         } else {\n-          val left = n - buf.size\n+          val left = n - scannedRowCount\n           // As left > 0, numPartsToTry is always >= 1\n-          numPartsToTry = Math.ceil(1.5 * left * partsScanned / buf.size).toInt\n+          numPartsToTry = Math.ceil(1.5 * left * partsScanned / scannedRowCount).toInt",
+    "line": 54
+  }, {
+    "author": {
+      "login": "kiszk"
+    },
+    "body": "Sorry, I mean `numPartsToTry`. I also realize we can write as follows without `var`.\r\n\r\n```\r\nval numPartsToTry = if (partsScanned > 0) {\r\n  ...\r\n  if (...) {\r\n    partsScanned ...\r\n  } else {\r\n    ...\r\n    Math.min(...)\r\n  }\r\n} else {\r\n  1L\r\n}\r\n```",
+    "commit": "c4c2177774e55cf0c46d8f2257be995478a4d81e",
+    "createdAt": "2018-08-24T17:53:50Z",
+    "diffHunk": "@@ -348,30 +350,30 @@ abstract class SparkPlan extends QueryPlan[SparkPlan] with Logging with Serializ\n         // Otherwise, interpolate the number of partitions we need to try, but overestimate\n         // it by 50%. We also cap the estimation in the end.\n         val limitScaleUpFactor = Math.max(sqlContext.conf.limitScaleUpFactor, 2)\n-        if (buf.isEmpty) {\n+        if (scannedRowCount == 0) {\n           numPartsToTry = partsScanned * limitScaleUpFactor\n         } else {\n-          val left = n - buf.size\n+          val left = n - scannedRowCount\n           // As left > 0, numPartsToTry is always >= 1\n-          numPartsToTry = Math.ceil(1.5 * left * partsScanned / buf.size).toInt\n+          numPartsToTry = Math.ceil(1.5 * left * partsScanned / scannedRowCount).toInt",
+    "line": 54
+  }],
+  "prId": 22219
+}, {
+  "comments": [{
+    "author": {
+      "login": "viirya"
+    },
+    "body": "Please add some description for this method.",
+    "commit": "c4c2177774e55cf0c46d8f2257be995478a4d81e",
+    "createdAt": "2018-08-27T02:36:49Z",
+    "diffHunk": "@@ -329,49 +329,52 @@ abstract class SparkPlan extends QueryPlan[SparkPlan] with Logging with Serializ\n    *\n    * This is modeled after `RDD.take` but never runs any job locally on the driver.\n    */\n-  def executeTake(n: Int): Array[InternalRow] = {\n+  def executeTake(n: Int): Array[InternalRow] = executeTakeIterator(n)._2.toArray\n+\n+  private[spark] def executeTakeIterator(n: Int): (Long, Iterator[InternalRow]) = {"
+  }],
+  "prId": 22219
+}, {
+  "comments": [{
+    "author": {
+      "login": "viirya"
+    },
+    "body": "Most of above change looks just refactoring. Looks fine but may be avoided to reduce diff.",
+    "commit": "c4c2177774e55cf0c46d8f2257be995478a4d81e",
+    "createdAt": "2018-08-27T02:39:42Z",
+    "diffHunk": "@@ -329,49 +329,52 @@ abstract class SparkPlan extends QueryPlan[SparkPlan] with Logging with Serializ\n    *\n    * This is modeled after `RDD.take` but never runs any job locally on the driver.\n    */\n-  def executeTake(n: Int): Array[InternalRow] = {\n+  def executeTake(n: Int): Array[InternalRow] = executeTakeIterator(n)._2.toArray\n+\n+  private[spark] def executeTakeIterator(n: Int): (Long, Iterator[InternalRow]) = {\n     if (n == 0) {\n-      return new Array[InternalRow](0)\n+      return (0, Iterator.empty)\n     }\n \n-    val childRDD = getByteArrayRdd(n).map(_._2)\n-\n-    val buf = new ArrayBuffer[InternalRow]\n+    val childRDD = getByteArrayRdd(n)\n+    val encodedBuf = new ArrayBuffer[Array[Byte]]\n     val totalParts = childRDD.partitions.length\n+    var scannedRowCount = 0L\n     var partsScanned = 0\n-    while (buf.size < n && partsScanned < totalParts) {\n+    while (scannedRowCount < n && partsScanned < totalParts) {\n       // The number of partitions to try in this iteration. It is ok for this number to be\n       // greater than totalParts because we actually cap it at totalParts in runJob.\n-      var numPartsToTry = 1L\n-      if (partsScanned > 0) {\n+      val numPartsToTry = if (partsScanned > 0) {\n         // If we didn't find any rows after the previous iteration, quadruple and retry.\n         // Otherwise, interpolate the number of partitions we need to try, but overestimate\n         // it by 50%. We also cap the estimation in the end.\n         val limitScaleUpFactor = Math.max(sqlContext.conf.limitScaleUpFactor, 2)\n-        if (buf.isEmpty) {\n-          numPartsToTry = partsScanned * limitScaleUpFactor\n+        if (scannedRowCount == 0) {\n+          partsScanned * limitScaleUpFactor\n         } else {\n-          val left = n - buf.size\n+          val left = n - scannedRowCount\n           // As left > 0, numPartsToTry is always >= 1\n-          numPartsToTry = Math.ceil(1.5 * left * partsScanned / buf.size).toInt\n-          numPartsToTry = Math.min(numPartsToTry, partsScanned * limitScaleUpFactor)\n+          Math.min(Math.ceil(1.5 * left * partsScanned / scannedRowCount).toInt,\n+            partsScanned * limitScaleUpFactor)\n         }\n+      } else {\n+        1L"
+  }, {
+    "author": {
+      "login": "Dooyoung-Hwang"
+    },
+    "body": "@kiszk \r\nYeah, I'll prepare test cases.\r\n\r\n@viirya \r\nAbove are changed to execute decodeUnsafeRows lazily for reduce peak memory. Changing type of numPartsToTry to val may be refactoring part that can be separated from this patch. If reviewers want to revert [this refactoring]( https://github.com/apache/spark/pull/22219/commits/91617caaab56760ea2f64f3da7486fbf445d7aa9), I can separate it and make another trivial pull request for it.",
+    "commit": "c4c2177774e55cf0c46d8f2257be995478a4d81e",
+    "createdAt": "2018-08-27T05:00:46Z",
+    "diffHunk": "@@ -329,49 +329,52 @@ abstract class SparkPlan extends QueryPlan[SparkPlan] with Logging with Serializ\n    *\n    * This is modeled after `RDD.take` but never runs any job locally on the driver.\n    */\n-  def executeTake(n: Int): Array[InternalRow] = {\n+  def executeTake(n: Int): Array[InternalRow] = executeTakeIterator(n)._2.toArray\n+\n+  private[spark] def executeTakeIterator(n: Int): (Long, Iterator[InternalRow]) = {\n     if (n == 0) {\n-      return new Array[InternalRow](0)\n+      return (0, Iterator.empty)\n     }\n \n-    val childRDD = getByteArrayRdd(n).map(_._2)\n-\n-    val buf = new ArrayBuffer[InternalRow]\n+    val childRDD = getByteArrayRdd(n)\n+    val encodedBuf = new ArrayBuffer[Array[Byte]]\n     val totalParts = childRDD.partitions.length\n+    var scannedRowCount = 0L\n     var partsScanned = 0\n-    while (buf.size < n && partsScanned < totalParts) {\n+    while (scannedRowCount < n && partsScanned < totalParts) {\n       // The number of partitions to try in this iteration. It is ok for this number to be\n       // greater than totalParts because we actually cap it at totalParts in runJob.\n-      var numPartsToTry = 1L\n-      if (partsScanned > 0) {\n+      val numPartsToTry = if (partsScanned > 0) {\n         // If we didn't find any rows after the previous iteration, quadruple and retry.\n         // Otherwise, interpolate the number of partitions we need to try, but overestimate\n         // it by 50%. We also cap the estimation in the end.\n         val limitScaleUpFactor = Math.max(sqlContext.conf.limitScaleUpFactor, 2)\n-        if (buf.isEmpty) {\n-          numPartsToTry = partsScanned * limitScaleUpFactor\n+        if (scannedRowCount == 0) {\n+          partsScanned * limitScaleUpFactor\n         } else {\n-          val left = n - buf.size\n+          val left = n - scannedRowCount\n           // As left > 0, numPartsToTry is always >= 1\n-          numPartsToTry = Math.ceil(1.5 * left * partsScanned / buf.size).toInt\n-          numPartsToTry = Math.min(numPartsToTry, partsScanned * limitScaleUpFactor)\n+          Math.min(Math.ceil(1.5 * left * partsScanned / scannedRowCount).toInt,\n+            partsScanned * limitScaleUpFactor)\n         }\n+      } else {\n+        1L"
+  }, {
+    "author": {
+      "login": "Dooyoung-Hwang"
+    },
+    "body": "@kiszk\r\nDo we revert [this commit](https://github.com/apache/spark/pull/22219/commits/91617caaab56760ea2f64f3da7486fbf445d7aa9) to reduce diff?\r\n",
+    "commit": "c4c2177774e55cf0c46d8f2257be995478a4d81e",
+    "createdAt": "2018-08-29T08:58:43Z",
+    "diffHunk": "@@ -329,49 +329,52 @@ abstract class SparkPlan extends QueryPlan[SparkPlan] with Logging with Serializ\n    *\n    * This is modeled after `RDD.take` but never runs any job locally on the driver.\n    */\n-  def executeTake(n: Int): Array[InternalRow] = {\n+  def executeTake(n: Int): Array[InternalRow] = executeTakeIterator(n)._2.toArray\n+\n+  private[spark] def executeTakeIterator(n: Int): (Long, Iterator[InternalRow]) = {\n     if (n == 0) {\n-      return new Array[InternalRow](0)\n+      return (0, Iterator.empty)\n     }\n \n-    val childRDD = getByteArrayRdd(n).map(_._2)\n-\n-    val buf = new ArrayBuffer[InternalRow]\n+    val childRDD = getByteArrayRdd(n)\n+    val encodedBuf = new ArrayBuffer[Array[Byte]]\n     val totalParts = childRDD.partitions.length\n+    var scannedRowCount = 0L\n     var partsScanned = 0\n-    while (buf.size < n && partsScanned < totalParts) {\n+    while (scannedRowCount < n && partsScanned < totalParts) {\n       // The number of partitions to try in this iteration. It is ok for this number to be\n       // greater than totalParts because we actually cap it at totalParts in runJob.\n-      var numPartsToTry = 1L\n-      if (partsScanned > 0) {\n+      val numPartsToTry = if (partsScanned > 0) {\n         // If we didn't find any rows after the previous iteration, quadruple and retry.\n         // Otherwise, interpolate the number of partitions we need to try, but overestimate\n         // it by 50%. We also cap the estimation in the end.\n         val limitScaleUpFactor = Math.max(sqlContext.conf.limitScaleUpFactor, 2)\n-        if (buf.isEmpty) {\n-          numPartsToTry = partsScanned * limitScaleUpFactor\n+        if (scannedRowCount == 0) {\n+          partsScanned * limitScaleUpFactor\n         } else {\n-          val left = n - buf.size\n+          val left = n - scannedRowCount\n           // As left > 0, numPartsToTry is always >= 1\n-          numPartsToTry = Math.ceil(1.5 * left * partsScanned / buf.size).toInt\n-          numPartsToTry = Math.min(numPartsToTry, partsScanned * limitScaleUpFactor)\n+          Math.min(Math.ceil(1.5 * left * partsScanned / scannedRowCount).toInt,\n+            partsScanned * limitScaleUpFactor)\n         }\n+      } else {\n+        1L"
+  }, {
+    "author": {
+      "login": "kiszk"
+    },
+    "body": "It is also fine to revert this.",
+    "commit": "c4c2177774e55cf0c46d8f2257be995478a4d81e",
+    "createdAt": "2018-08-29T11:52:06Z",
+    "diffHunk": "@@ -329,49 +329,52 @@ abstract class SparkPlan extends QueryPlan[SparkPlan] with Logging with Serializ\n    *\n    * This is modeled after `RDD.take` but never runs any job locally on the driver.\n    */\n-  def executeTake(n: Int): Array[InternalRow] = {\n+  def executeTake(n: Int): Array[InternalRow] = executeTakeIterator(n)._2.toArray\n+\n+  private[spark] def executeTakeIterator(n: Int): (Long, Iterator[InternalRow]) = {\n     if (n == 0) {\n-      return new Array[InternalRow](0)\n+      return (0, Iterator.empty)\n     }\n \n-    val childRDD = getByteArrayRdd(n).map(_._2)\n-\n-    val buf = new ArrayBuffer[InternalRow]\n+    val childRDD = getByteArrayRdd(n)\n+    val encodedBuf = new ArrayBuffer[Array[Byte]]\n     val totalParts = childRDD.partitions.length\n+    var scannedRowCount = 0L\n     var partsScanned = 0\n-    while (buf.size < n && partsScanned < totalParts) {\n+    while (scannedRowCount < n && partsScanned < totalParts) {\n       // The number of partitions to try in this iteration. It is ok for this number to be\n       // greater than totalParts because we actually cap it at totalParts in runJob.\n-      var numPartsToTry = 1L\n-      if (partsScanned > 0) {\n+      val numPartsToTry = if (partsScanned > 0) {\n         // If we didn't find any rows after the previous iteration, quadruple and retry.\n         // Otherwise, interpolate the number of partitions we need to try, but overestimate\n         // it by 50%. We also cap the estimation in the end.\n         val limitScaleUpFactor = Math.max(sqlContext.conf.limitScaleUpFactor, 2)\n-        if (buf.isEmpty) {\n-          numPartsToTry = partsScanned * limitScaleUpFactor\n+        if (scannedRowCount == 0) {\n+          partsScanned * limitScaleUpFactor\n         } else {\n-          val left = n - buf.size\n+          val left = n - scannedRowCount\n           // As left > 0, numPartsToTry is always >= 1\n-          numPartsToTry = Math.ceil(1.5 * left * partsScanned / buf.size).toInt\n-          numPartsToTry = Math.min(numPartsToTry, partsScanned * limitScaleUpFactor)\n+          Math.min(Math.ceil(1.5 * left * partsScanned / scannedRowCount).toInt,\n+            partsScanned * limitScaleUpFactor)\n         }\n+      } else {\n+        1L"
+  }],
+  "prId": 22219
+}, {
+  "comments": [{
+    "author": {
+      "login": "maropu"
+    },
+    "body": "You'd be better to separate this PR into two parts you proposed in the PR description.",
+    "commit": "c4c2177774e55cf0c46d8f2257be995478a4d81e",
+    "createdAt": "2018-09-04T07:16:43Z",
+    "diffHunk": "@@ -329,17 +337,26 @@ abstract class SparkPlan extends QueryPlan[SparkPlan] with Logging with Serializ\n    *\n    * This is modeled after `RDD.take` but never runs any job locally on the driver.\n    */\n-  def executeTake(n: Int): Array[InternalRow] = {\n+  def executeTake(n: Int): Array[InternalRow] = executeTakeSeqView(n)._2.force\n+\n+  /**\n+   * Runs this query returning the tuple of the row count and the SeqView of first `n` rows.\n+   *\n+   * This is modeled to execute decodeUnsafeRows lazily to reduce peak memory usage of\n+   * decoding rows. Only compressed byte arrays consume memory after return.\n+   */\n+  private[spark] def executeTakeSeqView("
+  }, {
+    "author": {
+      "login": "Dooyoung-Hwang"
+    },
+    "body": "Do you mean to separate this PR by sql part and thriftserver part?",
+    "commit": "c4c2177774e55cf0c46d8f2257be995478a4d81e",
+    "createdAt": "2018-09-04T07:56:23Z",
+    "diffHunk": "@@ -329,17 +337,26 @@ abstract class SparkPlan extends QueryPlan[SparkPlan] with Logging with Serializ\n    *\n    * This is modeled after `RDD.take` but never runs any job locally on the driver.\n    */\n-  def executeTake(n: Int): Array[InternalRow] = {\n+  def executeTake(n: Int): Array[InternalRow] = executeTakeSeqView(n)._2.force\n+\n+  /**\n+   * Runs this query returning the tuple of the row count and the SeqView of first `n` rows.\n+   *\n+   * This is modeled to execute decodeUnsafeRows lazily to reduce peak memory usage of\n+   * decoding rows. Only compressed byte arrays consume memory after return.\n+   */\n+  private[spark] def executeTakeSeqView("
+  }, {
+    "author": {
+      "login": "maropu"
+    },
+    "body": "For example, `collectCountAndSeqView` and `executeTakeSeqView` depend on each other? If no, please split them into separate PRs.",
+    "commit": "c4c2177774e55cf0c46d8f2257be995478a4d81e",
+    "createdAt": "2018-09-04T08:22:11Z",
+    "diffHunk": "@@ -329,17 +337,26 @@ abstract class SparkPlan extends QueryPlan[SparkPlan] with Logging with Serializ\n    *\n    * This is modeled after `RDD.take` but never runs any job locally on the driver.\n    */\n-  def executeTake(n: Int): Array[InternalRow] = {\n+  def executeTake(n: Int): Array[InternalRow] = executeTakeSeqView(n)._2.force\n+\n+  /**\n+   * Runs this query returning the tuple of the row count and the SeqView of first `n` rows.\n+   *\n+   * This is modeled to execute decodeUnsafeRows lazily to reduce peak memory usage of\n+   * decoding rows. Only compressed byte arrays consume memory after return.\n+   */\n+  private[spark] def executeTakeSeqView("
+  }],
+  "prId": 22219
+}]

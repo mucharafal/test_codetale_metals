@@ -1,0 +1,13 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "jaceklaskowski"
+    },
+    "body": "No white spaces around `::` intended?",
+    "commit": "e333c514bc2f7917cfee69ab6da6c96a673eb53f",
+    "createdAt": "2017-11-17T17:20:11Z",
+    "diffHunk": "@@ -0,0 +1,69 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.execution.exchange\n+\n+import org.apache.spark.sql.catalyst.expressions.SortOrder\n+import org.apache.spark.sql.catalyst.plans.physical._\n+import org.apache.spark.sql.catalyst.rules.Rule\n+import org.apache.spark.sql.execution.SparkPlan\n+import org.apache.spark.sql.internal.SQLConf\n+\n+case class InjectPlaceholderExchange(conf: SQLConf) extends Rule[SparkPlan] {\n+  private def defaultNumPreShufflePartitions: Int = conf.numShufflePartitions\n+\n+  /**\n+   * Given a required distribution, returns a partitioning that satisfies that distribution.\n+   * @param requiredDistribution The distribution that is required by the operator\n+   * @param numPartitions Used when the distribution doesn't require a specific number of partitions\n+   */\n+  private def createPartitioning(requiredDistribution: Distribution,\n+                                 numPartitions: Int): Partitioning = {\n+    requiredDistribution match {\n+      case AllTuples => SinglePartition\n+      case ClusteredDistribution(clustering, desiredPartitions) =>\n+        HashPartitioning(clustering, desiredPartitions.getOrElse(numPartitions))\n+      case OrderedDistribution(ordering) => RangePartitioning(ordering, numPartitions)\n+      case dist => sys.error(s\"Do not know how to satisfy distribution $dist\")\n+    }\n+  }\n+\n+  def apply(plan: SparkPlan): SparkPlan = plan.transformUp {\n+    case operator @ ShuffleExchangeExec(partitioning, child, _) =>\n+      child.children match {\n+        case ShuffleExchangeExec(childPartitioning, baseChild, _)::Nil =>",
+    "line": 48
+  }],
+  "prId": 19725
+}]

@@ -1,0 +1,104 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Mentioning \"cached connector\" here is a little weird since this class isn't really related to caching...",
+    "commit": "b1b22878d00b250e5706aeb6dc9c92f34f9b02a7",
+    "createdAt": "2019-09-25T23:38:30Z",
+    "diffHunk": "@@ -288,4 +288,18 @@ private[spark] object KafkaTokenUtil extends Logging {\n \n     params\n   }\n+\n+  def isConnectorUsingCurrentToken(params: ju.Map[String, Object]): Boolean = {\n+    if (params.containsKey(SaslConfigs.SASL_JAAS_CONFIG)) {\n+      logDebug(\"Delegation token used by cached connector, checking if uses the latest token.\")"
+  }, {
+    "author": {
+      "login": "gaborgsomogyi"
+    },
+    "body": "Yep, removed.",
+    "commit": "b1b22878d00b250e5706aeb6dc9c92f34f9b02a7",
+    "createdAt": "2019-09-26T14:48:34Z",
+    "diffHunk": "@@ -288,4 +288,18 @@ private[spark] object KafkaTokenUtil extends Logging {\n \n     params\n   }\n+\n+  def isConnectorUsingCurrentToken(params: ju.Map[String, Object]): Boolean = {\n+    if (params.containsKey(SaslConfigs.SASL_JAAS_CONFIG)) {\n+      logDebug(\"Delegation token used by cached connector, checking if uses the latest token.\")"
+  }],
+  "prId": 25760
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "There's something that still bothers me about this call. The caller should already know the `KafkaTokenClusterConf` it's using, so this shouldn't need to be computed again. It also would make this method independent of `SparkEnv.get.conf`.\r\n\r\nIt would be even better if the consumer could compare the token directly instead of doing it through `KafkaTokenUtil.getTokenJaasParam`, but I can live with that one.",
+    "commit": "b1b22878d00b250e5706aeb6dc9c92f34f9b02a7",
+    "createdAt": "2019-09-25T23:48:26Z",
+    "diffHunk": "@@ -288,4 +288,18 @@ private[spark] object KafkaTokenUtil extends Logging {\n \n     params\n   }\n+\n+  def isConnectorUsingCurrentToken(params: ju.Map[String, Object]): Boolean = {\n+    if (params.containsKey(SaslConfigs.SASL_JAAS_CONFIG)) {\n+      logDebug(\"Delegation token used by cached connector, checking if uses the latest token.\")\n+      val consumerJaasParams = params.get(SaslConfigs.SASL_JAAS_CONFIG).asInstanceOf[String]\n+      val clusterConfig = KafkaTokenUtil.findMatchingTokenClusterConfig(SparkEnv.get.conf,"
+  }, {
+    "author": {
+      "login": "HeartSaVioR"
+    },
+    "body": "If my understanding is correct, given Spark doesn't allow a set of bootstrap server be matched against multiple cluster identifiers, \"cluster identifier\" could be used as a key to match a set of bootstrap server and vice versa. This seems to open a chance to reduce bunch of redundant calculations, as `findMatchingTokenClusterConfig` and `getClusterConfig` seems to do pretty much work and they seem to be called frequently.\r\n\r\nFor example, we can find matching token from all tokens directly without comparing with heavy regex calculation with bootstrap server once we have cluster identifier. We can even cache latest updated JAAS config per cluster identifier (only if it doesn't make security issue at all) and then we can compare consumer's JAAS and latest JAAS directly.",
+    "commit": "b1b22878d00b250e5706aeb6dc9c92f34f9b02a7",
+    "createdAt": "2019-09-26T06:13:39Z",
+    "diffHunk": "@@ -288,4 +288,18 @@ private[spark] object KafkaTokenUtil extends Logging {\n \n     params\n   }\n+\n+  def isConnectorUsingCurrentToken(params: ju.Map[String, Object]): Boolean = {\n+    if (params.containsKey(SaslConfigs.SASL_JAAS_CONFIG)) {\n+      logDebug(\"Delegation token used by cached connector, checking if uses the latest token.\")\n+      val consumerJaasParams = params.get(SaslConfigs.SASL_JAAS_CONFIG).asInstanceOf[String]\n+      val clusterConfig = KafkaTokenUtil.findMatchingTokenClusterConfig(SparkEnv.get.conf,"
+  }],
+  "prId": 25760
+}, {
+  "comments": [{
+    "author": {
+      "login": "HeartSaVioR"
+    },
+    "body": "nit: `KafkaTokenUtil.` not needed at multiple places in this method.",
+    "commit": "b1b22878d00b250e5706aeb6dc9c92f34f9b02a7",
+    "createdAt": "2019-09-26T05:10:22Z",
+    "diffHunk": "@@ -288,4 +288,18 @@ private[spark] object KafkaTokenUtil extends Logging {\n \n     params\n   }\n+\n+  def isConnectorUsingCurrentToken(params: ju.Map[String, Object]): Boolean = {\n+    if (params.containsKey(SaslConfigs.SASL_JAAS_CONFIG)) {\n+      logDebug(\"Delegation token used by cached connector, checking if uses the latest token.\")\n+      val consumerJaasParams = params.get(SaslConfigs.SASL_JAAS_CONFIG).asInstanceOf[String]\n+      val clusterConfig = KafkaTokenUtil.findMatchingTokenClusterConfig(SparkEnv.get.conf,"
+  }, {
+    "author": {
+      "login": "gaborgsomogyi"
+    },
+    "body": "Removed.",
+    "commit": "b1b22878d00b250e5706aeb6dc9c92f34f9b02a7",
+    "createdAt": "2019-09-26T14:49:34Z",
+    "diffHunk": "@@ -288,4 +288,18 @@ private[spark] object KafkaTokenUtil extends Logging {\n \n     params\n   }\n+\n+  def isConnectorUsingCurrentToken(params: ju.Map[String, Object]): Boolean = {\n+    if (params.containsKey(SaslConfigs.SASL_JAAS_CONFIG)) {\n+      logDebug(\"Delegation token used by cached connector, checking if uses the latest token.\")\n+      val consumerJaasParams = params.get(SaslConfigs.SASL_JAAS_CONFIG).asInstanceOf[String]\n+      val clusterConfig = KafkaTokenUtil.findMatchingTokenClusterConfig(SparkEnv.get.conf,"
+  }],
+  "prId": 25760
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "My previous comment is marked \"outdated\" because you changed this line, but it still applies, so I wanted to make sure it doesn't go unaddressed.\r\n\r\nMy best suggestion at the moment is to have the cached consumer to do something like:\r\n\r\n```\r\nprivate val tokenConfig = findMatchingTokenClusterConfig(...)\r\n```\r\n\r\nWhen creating a consumer:\r\n\r\n```\r\nval updatedConfigs = KafkaConfigUpdater(...).setAuthInfo(tokenConfig)...\r\n```\r\n\r\nAnd also use that `tokenConfig` when calling this method.\r\n\r\n",
+    "commit": "b1b22878d00b250e5706aeb6dc9c92f34f9b02a7",
+    "createdAt": "2019-09-26T16:24:56Z",
+    "diffHunk": "@@ -288,4 +288,18 @@ private[spark] object KafkaTokenUtil extends Logging {\n \n     params\n   }\n+\n+  def isConnectorUsingCurrentToken(params: ju.Map[String, Object]): Boolean = {\n+    if (params.containsKey(SaslConfigs.SASL_JAAS_CONFIG)) {\n+      logDebug(\"Delegation token used by connector, checking if uses the latest token.\")\n+      val consumerJaasParams = params.get(SaslConfigs.SASL_JAAS_CONFIG).asInstanceOf[String]\n+      val clusterConfig = findMatchingTokenClusterConfig(SparkEnv.get.conf,"
+  }, {
+    "author": {
+      "login": "gaborgsomogyi"
+    },
+    "body": "At the moment just playing with it to see what are the options which would make it better (that's the reason why not resolved the conversation)...",
+    "commit": "b1b22878d00b250e5706aeb6dc9c92f34f9b02a7",
+    "createdAt": "2019-09-26T16:30:08Z",
+    "diffHunk": "@@ -288,4 +288,18 @@ private[spark] object KafkaTokenUtil extends Logging {\n \n     params\n   }\n+\n+  def isConnectorUsingCurrentToken(params: ju.Map[String, Object]): Boolean = {\n+    if (params.containsKey(SaslConfigs.SASL_JAAS_CONFIG)) {\n+      logDebug(\"Delegation token used by connector, checking if uses the latest token.\")\n+      val consumerJaasParams = params.get(SaslConfigs.SASL_JAAS_CONFIG).asInstanceOf[String]\n+      val clusterConfig = findMatchingTokenClusterConfig(SparkEnv.get.conf,"
+  }, {
+    "author": {
+      "login": "gaborgsomogyi"
+    },
+    "body": "Tried out couple of things and ended up in similar solution what you've suggested. I've considered the actual code and couple of further improvements and `clusterConfig` is the key what all the places needs.",
+    "commit": "b1b22878d00b250e5706aeb6dc9c92f34f9b02a7",
+    "createdAt": "2019-09-27T11:35:17Z",
+    "diffHunk": "@@ -288,4 +288,18 @@ private[spark] object KafkaTokenUtil extends Logging {\n \n     params\n   }\n+\n+  def isConnectorUsingCurrentToken(params: ju.Map[String, Object]): Boolean = {\n+    if (params.containsKey(SaslConfigs.SASL_JAAS_CONFIG)) {\n+      logDebug(\"Delegation token used by connector, checking if uses the latest token.\")\n+      val consumerJaasParams = params.get(SaslConfigs.SASL_JAAS_CONFIG).asInstanceOf[String]\n+      val clusterConfig = findMatchingTokenClusterConfig(SparkEnv.get.conf,"
+  }],
+  "prId": 25760
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "`getTokenJaasParams(clusterConfig.get) == currentJaasParams`",
+    "commit": "b1b22878d00b250e5706aeb6dc9c92f34f9b02a7",
+    "createdAt": "2019-10-01T20:37:44Z",
+    "diffHunk": "@@ -288,4 +289,18 @@ private[spark] object KafkaTokenUtil extends Logging {\n \n     params\n   }\n+\n+  def isConnectorUsingCurrentToken(\n+      params: ju.Map[String, Object],\n+      clusterConfig: Option[KafkaTokenClusterConf]): Boolean = {\n+    if (params.containsKey(SaslConfigs.SASL_JAAS_CONFIG)) {\n+      logDebug(\"Delegation token used by connector, checking if uses the latest token.\")\n+      val consumerJaasParams = params.get(SaslConfigs.SASL_JAAS_CONFIG).asInstanceOf[String]\n+      require(clusterConfig.isDefined, \"Delegation token must exist for this connector.\")\n+      val currentJaasParams = getTokenJaasParams(clusterConfig.get)\n+      consumerJaasParams.equals(currentJaasParams)"
+  }, {
+    "author": {
+      "login": "gaborgsomogyi"
+    },
+    "body": "Fixed.",
+    "commit": "b1b22878d00b250e5706aeb6dc9c92f34f9b02a7",
+    "createdAt": "2019-10-02T03:36:44Z",
+    "diffHunk": "@@ -288,4 +289,18 @@ private[spark] object KafkaTokenUtil extends Logging {\n \n     params\n   }\n+\n+  def isConnectorUsingCurrentToken(\n+      params: ju.Map[String, Object],\n+      clusterConfig: Option[KafkaTokenClusterConf]): Boolean = {\n+    if (params.containsKey(SaslConfigs.SASL_JAAS_CONFIG)) {\n+      logDebug(\"Delegation token used by connector, checking if uses the latest token.\")\n+      val consumerJaasParams = params.get(SaslConfigs.SASL_JAAS_CONFIG).asInstanceOf[String]\n+      require(clusterConfig.isDefined, \"Delegation token must exist for this connector.\")\n+      val currentJaasParams = getTokenJaasParams(clusterConfig.get)\n+      consumerJaasParams.equals(currentJaasParams)"
+  }],
+  "prId": 25760
+}]

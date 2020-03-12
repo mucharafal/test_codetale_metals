@@ -1,0 +1,63 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "Now things get tricky here. There are 2 different kind of stream requests:\r\n1. to download jar and other files\r\n2. to fetch data blocks (introduced at #16989)\r\n\r\nWhich one do we need to register channel?",
+    "commit": "7eed77988d5330b054b4a0af60639e680bc116e5",
+    "createdAt": "2019-01-14T05:28:43Z",
+    "diffHunk": "@@ -70,6 +70,13 @@ public ManagedBuffer openStream(String streamId) {\n    */\n   public void registerChannel(Channel channel, long streamId) { }\n \n+  /**\n+   * Associates a stream with a single client connection, which is guaranteed to be the only reader\n+   * of the stream. This is similar to {@link #registerChannel(Channel, long)} method, but the\n+   * <code>streamId</code> argument is for the stream in response to a stream() request.\n+   */\n+  public void registerChannel(Channel channel, String streamId) { }"
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "1. For stream requests from fetching data blocks, the streams will be registered by RPC handler. So registering the channels helps to remove registered streams when the channels get inactive.\r\n2. For stream requests from downloading jar and files, there is no such stream registration.\r\n",
+    "commit": "7eed77988d5330b054b4a0af60639e680bc116e5",
+    "createdAt": "2019-01-14T08:53:17Z",
+    "diffHunk": "@@ -70,6 +70,13 @@ public ManagedBuffer openStream(String streamId) {\n    */\n   public void registerChannel(Channel channel, long streamId) { }\n \n+  /**\n+   * Associates a stream with a single client connection, which is guaranteed to be the only reader\n+   * of the stream. This is similar to {@link #registerChannel(Channel, long)} method, but the\n+   * <code>streamId</code> argument is for the stream in response to a stream() request.\n+   */\n+  public void registerChannel(Channel channel, String streamId) { }"
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "Are you saying `TransportRequestHandler.processStreamRequest` is only used to deal with stream request to fetch blocks?",
+    "commit": "7eed77988d5330b054b4a0af60639e680bc116e5",
+    "createdAt": "2019-01-14T10:07:35Z",
+    "diffHunk": "@@ -70,6 +70,13 @@ public ManagedBuffer openStream(String streamId) {\n    */\n   public void registerChannel(Channel channel, long streamId) { }\n \n+  /**\n+   * Associates a stream with a single client connection, which is guaranteed to be the only reader\n+   * of the stream. This is similar to {@link #registerChannel(Channel, long)} method, but the\n+   * <code>streamId</code> argument is for the stream in response to a stream() request.\n+   */\n+  public void registerChannel(Channel channel, String streamId) { }"
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "`TransportRequestHandler.processStreamRequest` is used for both. But the streams are not registered there. It is registered by `NettyBlockRpcServer` when processing `OpenBlocks` message.",
+    "commit": "7eed77988d5330b054b4a0af60639e680bc116e5",
+    "createdAt": "2019-01-14T10:14:27Z",
+    "diffHunk": "@@ -70,6 +70,13 @@ public ManagedBuffer openStream(String streamId) {\n    */\n   public void registerChannel(Channel channel, long streamId) { }\n \n+  /**\n+   * Associates a stream with a single client connection, which is guaranteed to be the only reader\n+   * of the stream. This is similar to {@link #registerChannel(Channel, long)} method, but the\n+   * <code>streamId</code> argument is for the stream in response to a stream() request.\n+   */\n+  public void registerChannel(Channel channel, String streamId) { }"
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "`registerStream` is only in `OneForOneStreamManager`, it's super weird that `registerChannel` needs to be called after `registerStream`, but `registerChannel` is in the parent `StreamManager`.",
+    "commit": "7eed77988d5330b054b4a0af60639e680bc116e5",
+    "createdAt": "2019-01-14T11:40:09Z",
+    "diffHunk": "@@ -70,6 +70,13 @@ public ManagedBuffer openStream(String streamId) {\n    */\n   public void registerChannel(Channel channel, long streamId) { }\n \n+  /**\n+   * Associates a stream with a single client connection, which is guaranteed to be the only reader\n+   * of the stream. This is similar to {@link #registerChannel(Channel, long)} method, but the\n+   * <code>streamId</code> argument is for the stream in response to a stream() request.\n+   */\n+  public void registerChannel(Channel channel, String streamId) { }"
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "Hmm, I agree. I think it is also good to clean this up a bit. I will do a change later.",
+    "commit": "7eed77988d5330b054b4a0af60639e680bc116e5",
+    "createdAt": "2019-01-14T12:18:39Z",
+    "diffHunk": "@@ -70,6 +70,13 @@ public ManagedBuffer openStream(String streamId) {\n    */\n   public void registerChannel(Channel channel, long streamId) { }\n \n+  /**\n+   * Associates a stream with a single client connection, which is guaranteed to be the only reader\n+   * of the stream. This is similar to {@link #registerChannel(Channel, long)} method, but the\n+   * <code>streamId</code> argument is for the stream in response to a stream() request.\n+   */\n+  public void registerChannel(Channel channel, String streamId) { }"
+  }],
+  "prId": 23521
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "let's say more about this parameter, especially how it should be used. IIUC we need to track the channel states, and do some cleanup if the channel is inactive.",
+    "commit": "7eed77988d5330b054b4a0af60639e680bc116e5",
+    "createdAt": "2019-01-15T05:16:03Z",
+    "diffHunk": "@@ -42,9 +42,10 @@\n    * The returned ManagedBuffer will be release()'d after being written to the network.\n    *\n    * @param streamId id of a stream that has been previously registered with the StreamManager.\n+   * @param channel The connection used to serve chunk request."
+  }],
+  "prId": 23521
+}]

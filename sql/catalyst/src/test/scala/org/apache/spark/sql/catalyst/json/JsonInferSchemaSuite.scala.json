@@ -1,0 +1,23 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "super nit: `type` -> `dt`, to avoid quoting it",
+    "commit": "11daee31f6474528292a0485596f66fa7b955a04",
+    "createdAt": "2018-12-17T00:40:20Z",
+    "diffHunk": "@@ -0,0 +1,83 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst.json\n+\n+import com.fasterxml.jackson.core.JsonFactory\n+\n+import org.apache.spark.SparkFunSuite\n+import org.apache.spark.sql.types._\n+\n+class JsonInferSchemaSuite extends SparkFunSuite {\n+\n+  def checkType(options: Map[String, String], json: String, `type`: DataType): Unit = {"
+  }],
+  "prId": 23201
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "can we add one more case that fallbacks to StringType?",
+    "commit": "11daee31f6474528292a0485596f66fa7b955a04",
+    "createdAt": "2018-12-17T00:40:38Z",
+    "diffHunk": "@@ -0,0 +1,83 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst.json\n+\n+import com.fasterxml.jackson.core.JsonFactory\n+\n+import org.apache.spark.SparkFunSuite\n+import org.apache.spark.sql.types._\n+\n+class JsonInferSchemaSuite extends SparkFunSuite {\n+\n+  def checkType(options: Map[String, String], json: String, `type`: DataType): Unit = {\n+    val jsonOptions = new JSONOptions(options, \"GMT\", \"\")\n+    val inferSchema = new JsonInferSchema(jsonOptions)\n+    val factory = new JsonFactory()\n+    jsonOptions.setJacksonOptions(factory)\n+    val parser = CreateJacksonParser.string(factory, json)\n+    parser.nextToken()\n+    val expectedType = StructType(Seq(StructField(\"a\", `type`, true)))\n+\n+    assert(inferSchema.inferField(parser) === expectedType)\n+  }\n+\n+  def checkTimestampType(pattern: String, json: String): Unit = {\n+    checkType(Map(\"timestampFormat\" -> pattern), json, TimestampType)\n+  }\n+\n+  test(\"inferring timestamp type\") {\n+    checkTimestampType(\"yyyy\", \"\"\"{\"a\": \"2018\"}\"\"\")\n+    checkTimestampType(\"yyyy=MM\", \"\"\"{\"a\": \"2018=12\"}\"\"\")\n+    checkTimestampType(\"yyyy MM dd\", \"\"\"{\"a\": \"2018 12 02\"}\"\"\")\n+    checkTimestampType(\n+      \"yyyy-MM-dd'T'HH:mm:ss.SSS\",\n+      \"\"\"{\"a\": \"2018-12-02T21:04:00.123\"}\"\"\")\n+    checkTimestampType(\n+      \"yyyy-MM-dd'T'HH:mm:ss.SSSSSSXXX\",\n+      \"\"\"{\"a\": \"2018-12-02T21:04:00.123567+01:00\"}\"\"\")\n+  }\n+\n+  def checkDateType(pattern: String, json: String): Unit = {\n+    checkType(Map(\"dateFormat\" -> pattern), json, DateType)\n+  }\n+\n+  test(\"inferring date type\") {\n+    checkDateType(\"yyyy\", \"\"\"{\"a\": \"2018\"}\"\"\")\n+    checkDateType(\"yyyy-MM\", \"\"\"{\"a\": \"2018-12\"}\"\"\")\n+    checkDateType(\"yyyy-MM-dd\", \"\"\"{\"a\": \"2018-12-02\"}\"\"\")\n+  }\n+\n+  test(\"strict inferring of date and timestamps\") {"
+  }],
+  "prId": 23201
+}]

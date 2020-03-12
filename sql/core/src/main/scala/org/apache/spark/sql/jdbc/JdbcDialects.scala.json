@@ -1,0 +1,37 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "yhuai"
+    },
+    "body": "@travishegner To provide more information, you can provide the links to their comments.\n",
+    "commit": "a1370a7a93e1bc4e2f908be980165223d0f67d58",
+    "createdAt": "2015-11-05T16:49:11Z",
+    "diffHunk": "@@ -315,3 +316,27 @@ case object DerbyDialect extends JdbcDialect {\n \n }\n \n+/**\n+ * :: DeveloperApi ::\n+ * Default Oracle dialect, mapping a nonspecific\n+ * numeric type to a general decimal type.\n+ * Solution by @cloud-fan and @bdolbeare (github.com)",
+    "line": 16
+  }],
+  "prId": 9495
+}, {
+  "comments": [{
+    "author": {
+      "login": "yhuai"
+    },
+    "body": "I think putting the line number at here is not a very robust way. Since we already described the problem, we can simply explain our workaround at here.\n",
+    "commit": "a1370a7a93e1bc4e2f908be980165223d0f67d58",
+    "createdAt": "2015-11-05T16:50:56Z",
+    "diffHunk": "@@ -315,3 +316,27 @@ case object DerbyDialect extends JdbcDialect {\n \n }\n \n+/**\n+ * :: DeveloperApi ::\n+ * Default Oracle dialect, mapping a nonspecific\n+ * numeric type to a general decimal type.\n+ * Solution by @cloud-fan and @bdolbeare (github.com)\n+ */\n+@DeveloperApi\n+case object OracleDialect extends JdbcDialect {\n+  override def canHandle(url: String): Boolean = url.startsWith(\"jdbc:oracle\")\n+  override def getCatalystType(\n+      sqlType: Int, typeName: String, size: Int, md: MetadataBuilder): Option[DataType] = {\n+    // Handle NUMBER fields that have no precision/scale in special way\n+    // because JDBC ResultSetMetaData converts this to 0 procision and -127 scale\n+    if (sqlType == Types.NUMERIC && size == 0) {\n+      // This is sub-optimal as we have to pick a precision/scale in advance whereas the data\n+      //  in Oracle is allowed to have different precision/scale for each value.\n+      //  This conversion works in our domain for now though we need a more durable solution.\n+      //  Look into changing JDBCRDD (line 406):",
+    "line": 29
+  }],
+  "prId": 9495
+}, {
+  "comments": [{
+    "author": {
+      "login": "yhuai"
+    },
+    "body": "```\n} else {\n  None\n}\n```\n",
+    "commit": "a1370a7a93e1bc4e2f908be980165223d0f67d58",
+    "createdAt": "2015-11-05T16:51:11Z",
+    "diffHunk": "@@ -315,3 +316,27 @@ case object DerbyDialect extends JdbcDialect {\n \n }\n \n+/**\n+ * :: DeveloperApi ::\n+ * Default Oracle dialect, mapping a nonspecific\n+ * numeric type to a general decimal type.\n+ * Solution by @cloud-fan and @bdolbeare (github.com)\n+ */\n+@DeveloperApi\n+case object OracleDialect extends JdbcDialect {\n+  override def canHandle(url: String): Boolean = url.startsWith(\"jdbc:oracle\")\n+  override def getCatalystType(\n+      sqlType: Int, typeName: String, size: Int, md: MetadataBuilder): Option[DataType] = {\n+    // Handle NUMBER fields that have no precision/scale in special way\n+    // because JDBC ResultSetMetaData converts this to 0 procision and -127 scale\n+    if (sqlType == Types.NUMERIC && size == 0) {\n+      // This is sub-optimal as we have to pick a precision/scale in advance whereas the data\n+      //  in Oracle is allowed to have different precision/scale for each value.\n+      //  This conversion works in our domain for now though we need a more durable solution.\n+      //  Look into changing JDBCRDD (line 406):\n+      //    FROM:  mutableRow.update(i, Decimal(decimalVal, p, s))\n+      //    TO:  mutableRow.update(i, Decimal(decimalVal))\n+      Some(DecimalType(DecimalType.MAX_PRECISION, 10))\n+    } else None",
+    "line": 33
+  }],
+  "prId": 9495
+}]

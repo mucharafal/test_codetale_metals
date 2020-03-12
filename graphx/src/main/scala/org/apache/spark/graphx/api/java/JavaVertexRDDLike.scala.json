@@ -1,0 +1,40 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "I'd remove this trait and fold all of this code directly into the `JavaVertexRDD` class.  The `*RDDLike` pattern in the Java API wasn't a great design and I'd like to avoid mimicking it in new code.\n",
+    "commit": "d0a747901af273c5eb8578ec191cc7673f6efce5",
+    "createdAt": "2015-01-26T18:50:00Z",
+    "diffHunk": "@@ -0,0 +1,127 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.graphx.api.java\n+\n+import java.util.{List => JList}\n+\n+import org.apache.spark.api.java.JavaRDDLike\n+import org.apache.spark.api.java.function.{Function => JFunction, Function2 => JFunction2, Function3 => JFunction3}\n+import org.apache.spark.graphx._\n+import org.apache.spark.graphx.impl.{EdgeRDDImpl, ShippableVertexPartition}\n+import org.apache.spark.rdd.RDD\n+import org.apache.spark.{Logging, Partition, TaskContext}\n+\n+import scala.language.implicitConversions\n+import scala.reflect.ClassTag\n+\n+trait JavaVertexRDDLike[VD, This <: JavaVertexRDDLike[VD, This, R],",
+    "line": 32
+  }, {
+    "author": {
+      "login": "kdatta"
+    },
+    "body": "Josh, then how will we handle type bounds? Is there a new design for Java API?\n",
+    "commit": "d0a747901af273c5eb8578ec191cc7673f6efce5",
+    "createdAt": "2015-01-26T19:04:06Z",
+    "diffHunk": "@@ -0,0 +1,127 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.graphx.api.java\n+\n+import java.util.{List => JList}\n+\n+import org.apache.spark.api.java.JavaRDDLike\n+import org.apache.spark.api.java.function.{Function => JFunction, Function2 => JFunction2, Function3 => JFunction3}\n+import org.apache.spark.graphx._\n+import org.apache.spark.graphx.impl.{EdgeRDDImpl, ShippableVertexPartition}\n+import org.apache.spark.rdd.RDD\n+import org.apache.spark.{Logging, Partition, TaskContext}\n+\n+import scala.language.implicitConversions\n+import scala.reflect.ClassTag\n+\n+trait JavaVertexRDDLike[VD, This <: JavaVertexRDDLike[VD, This, R],",
+    "line": 32
+  }, {
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "What do you mean by \"handle type bounds\"?  In this PR's current code, it looks like `JavaVertexRDDLike` is only extended by a single class and isn't used as part of any method signatures, return types, etc, so unless I'm overlooking something I don't see why it can't be removed.  Inheriting implementations from generic traits has bitten us in the past via https://issues.scala-lang.org/browse/SI-8905 (see https://issues.apache.org/jira/browse/SPARK-3266), so if this trait isn't necessary then we shouldn't have it.\n\nThe JavaRDDLike traits in the Spark Core Java API are an unfortunate holdover from an earlier design and exists primarily for code re-use purposes.  We can't remove it now due because that would break binary compatibility.\n",
+    "commit": "d0a747901af273c5eb8578ec191cc7673f6efce5",
+    "createdAt": "2015-01-26T19:11:48Z",
+    "diffHunk": "@@ -0,0 +1,127 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.graphx.api.java\n+\n+import java.util.{List => JList}\n+\n+import org.apache.spark.api.java.JavaRDDLike\n+import org.apache.spark.api.java.function.{Function => JFunction, Function2 => JFunction2, Function3 => JFunction3}\n+import org.apache.spark.graphx._\n+import org.apache.spark.graphx.impl.{EdgeRDDImpl, ShippableVertexPartition}\n+import org.apache.spark.rdd.RDD\n+import org.apache.spark.{Logging, Partition, TaskContext}\n+\n+import scala.language.implicitConversions\n+import scala.reflect.ClassTag\n+\n+trait JavaVertexRDDLike[VD, This <: JavaVertexRDDLike[VD, This, R],",
+    "line": 32
+  }, {
+    "author": {
+      "login": "kdatta"
+    },
+    "body": "Got it. I will change this.\n",
+    "commit": "d0a747901af273c5eb8578ec191cc7673f6efce5",
+    "createdAt": "2015-01-26T19:14:15Z",
+    "diffHunk": "@@ -0,0 +1,127 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.graphx.api.java\n+\n+import java.util.{List => JList}\n+\n+import org.apache.spark.api.java.JavaRDDLike\n+import org.apache.spark.api.java.function.{Function => JFunction, Function2 => JFunction2, Function3 => JFunction3}\n+import org.apache.spark.graphx._\n+import org.apache.spark.graphx.impl.{EdgeRDDImpl, ShippableVertexPartition}\n+import org.apache.spark.rdd.RDD\n+import org.apache.spark.{Logging, Partition, TaskContext}\n+\n+import scala.language.implicitConversions\n+import scala.reflect.ClassTag\n+\n+trait JavaVertexRDDLike[VD, This <: JavaVertexRDDLike[VD, This, R],",
+    "line": 32
+  }],
+  "prId": 4205
+}]

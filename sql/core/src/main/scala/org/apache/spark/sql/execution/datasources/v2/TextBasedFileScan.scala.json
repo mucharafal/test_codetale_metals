@@ -1,0 +1,79 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "when will we return null here?",
+    "commit": "801c6e30d785142dd5d03716b619dc48b87d125a",
+    "createdAt": "2019-07-23T08:22:58Z",
+    "diffHunk": "@@ -33,14 +34,16 @@ abstract class TextBasedFileScan(\n     readPartitionSchema: StructType,\n     options: CaseInsensitiveStringMap)\n   extends FileScan(sparkSession, fileIndex, readDataSchema, readPartitionSchema) {\n-  private var codecFactory: CompressionCodecFactory = _\n+  @transient private lazy val codecFactory: CompressionCodecFactory = new CompressionCodecFactory(\n+    sparkSession.sessionState.newHadoopConfWithOptions(options.asScala.toMap))\n \n-  override def isSplitable(path: Path): Boolean = {\n-    if (codecFactory == null) {\n-      codecFactory = new CompressionCodecFactory(\n-        sparkSession.sessionState.newHadoopConfWithOptions(options.asScala.toMap))\n+  override def isSplitable(path: Path): Boolean = Utils.isFileSplittable(path, codecFactory)\n+\n+  override def getFileUnSplittableReason(path: Path): String = {\n+    if (!isSplitable(path)) {\n+      \"the file is compressed by unsplittable compression codec\"\n+    } else {\n+      null"
+  }, {
+    "author": {
+      "login": "WeichenXu123"
+    },
+    "body": "If path is splittable, return null. (because this method is to get path \"unsplittable\" reason)",
+    "commit": "801c6e30d785142dd5d03716b619dc48b87d125a",
+    "createdAt": "2019-07-24T02:38:09Z",
+    "diffHunk": "@@ -33,14 +34,16 @@ abstract class TextBasedFileScan(\n     readPartitionSchema: StructType,\n     options: CaseInsensitiveStringMap)\n   extends FileScan(sparkSession, fileIndex, readDataSchema, readPartitionSchema) {\n-  private var codecFactory: CompressionCodecFactory = _\n+  @transient private lazy val codecFactory: CompressionCodecFactory = new CompressionCodecFactory(\n+    sparkSession.sessionState.newHadoopConfWithOptions(options.asScala.toMap))\n \n-  override def isSplitable(path: Path): Boolean = {\n-    if (codecFactory == null) {\n-      codecFactory = new CompressionCodecFactory(\n-        sparkSession.sessionState.newHadoopConfWithOptions(options.asScala.toMap))\n+  override def isSplitable(path: Path): Boolean = Utils.isFileSplittable(path, codecFactory)\n+\n+  override def getFileUnSplittableReason(path: Path): String = {\n+    if (!isSplitable(path)) {\n+      \"the file is compressed by unsplittable compression codec\"\n+    } else {\n+      null"
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "but we won't call `getFileUnSplittableReason` if the file is splittable, or do I miss something?",
+    "commit": "801c6e30d785142dd5d03716b619dc48b87d125a",
+    "createdAt": "2019-07-24T03:31:24Z",
+    "diffHunk": "@@ -33,14 +34,16 @@ abstract class TextBasedFileScan(\n     readPartitionSchema: StructType,\n     options: CaseInsensitiveStringMap)\n   extends FileScan(sparkSession, fileIndex, readDataSchema, readPartitionSchema) {\n-  private var codecFactory: CompressionCodecFactory = _\n+  @transient private lazy val codecFactory: CompressionCodecFactory = new CompressionCodecFactory(\n+    sparkSession.sessionState.newHadoopConfWithOptions(options.asScala.toMap))\n \n-  override def isSplitable(path: Path): Boolean = {\n-    if (codecFactory == null) {\n-      codecFactory = new CompressionCodecFactory(\n-        sparkSession.sessionState.newHadoopConfWithOptions(options.asScala.toMap))\n+  override def isSplitable(path: Path): Boolean = Utils.isFileSplittable(path, codecFactory)\n+\n+  override def getFileUnSplittableReason(path: Path): String = {\n+    if (!isSplitable(path)) {\n+      \"the file is compressed by unsplittable compression codec\"\n+    } else {\n+      null"
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "At least we should return `undefined` here.",
+    "commit": "801c6e30d785142dd5d03716b619dc48b87d125a",
+    "createdAt": "2019-07-25T12:24:27Z",
+    "diffHunk": "@@ -33,14 +34,16 @@ abstract class TextBasedFileScan(\n     readPartitionSchema: StructType,\n     options: CaseInsensitiveStringMap)\n   extends FileScan(sparkSession, fileIndex, readDataSchema, readPartitionSchema) {\n-  private var codecFactory: CompressionCodecFactory = _\n+  @transient private lazy val codecFactory: CompressionCodecFactory = new CompressionCodecFactory(\n+    sparkSession.sessionState.newHadoopConfWithOptions(options.asScala.toMap))\n \n-  override def isSplitable(path: Path): Boolean = {\n-    if (codecFactory == null) {\n-      codecFactory = new CompressionCodecFactory(\n-        sparkSession.sessionState.newHadoopConfWithOptions(options.asScala.toMap))\n+  override def isSplitable(path: Path): Boolean = Utils.isFileSplittable(path, codecFactory)\n+\n+  override def getFileUnSplittableReason(path: Path): String = {\n+    if (!isSplitable(path)) {\n+      \"the file is compressed by unsplittable compression codec\"\n+    } else {\n+      null"
+  }, {
+    "author": {
+      "login": "WeichenXu123"
+    },
+    "body": "What about add an `require` inside method `getFileUnSplittableReason`\r\n`require(!isSplitable(path), \"file is splittable.\")`",
+    "commit": "801c6e30d785142dd5d03716b619dc48b87d125a",
+    "createdAt": "2019-07-29T01:54:09Z",
+    "diffHunk": "@@ -33,14 +34,16 @@ abstract class TextBasedFileScan(\n     readPartitionSchema: StructType,\n     options: CaseInsensitiveStringMap)\n   extends FileScan(sparkSession, fileIndex, readDataSchema, readPartitionSchema) {\n-  private var codecFactory: CompressionCodecFactory = _\n+  @transient private lazy val codecFactory: CompressionCodecFactory = new CompressionCodecFactory(\n+    sparkSession.sessionState.newHadoopConfWithOptions(options.asScala.toMap))\n \n-  override def isSplitable(path: Path): Boolean = {\n-    if (codecFactory == null) {\n-      codecFactory = new CompressionCodecFactory(\n-        sparkSession.sessionState.newHadoopConfWithOptions(options.asScala.toMap))\n+  override def isSplitable(path: Path): Boolean = Utils.isFileSplittable(path, codecFactory)\n+\n+  override def getFileUnSplittableReason(path: Path): String = {\n+    if (!isSplitable(path)) {\n+      \"the file is compressed by unsplittable compression codec\"\n+    } else {\n+      null"
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "sure",
+    "commit": "801c6e30d785142dd5d03716b619dc48b87d125a",
+    "createdAt": "2019-07-29T05:52:42Z",
+    "diffHunk": "@@ -33,14 +34,16 @@ abstract class TextBasedFileScan(\n     readPartitionSchema: StructType,\n     options: CaseInsensitiveStringMap)\n   extends FileScan(sparkSession, fileIndex, readDataSchema, readPartitionSchema) {\n-  private var codecFactory: CompressionCodecFactory = _\n+  @transient private lazy val codecFactory: CompressionCodecFactory = new CompressionCodecFactory(\n+    sparkSession.sessionState.newHadoopConfWithOptions(options.asScala.toMap))\n \n-  override def isSplitable(path: Path): Boolean = {\n-    if (codecFactory == null) {\n-      codecFactory = new CompressionCodecFactory(\n-        sparkSession.sessionState.newHadoopConfWithOptions(options.asScala.toMap))\n+  override def isSplitable(path: Path): Boolean = Utils.isFileSplittable(path, codecFactory)\n+\n+  override def getFileUnSplittableReason(path: Path): String = {\n+    if (!isSplitable(path)) {\n+      \"the file is compressed by unsplittable compression codec\"\n+    } else {\n+      null"
+  }, {
+    "author": {
+      "login": "WeichenXu123"
+    },
+    "body": "I update return type to be`Option[String]` (when file is splittable return `None`).\r\nSo that it is more fit with scala style.",
+    "commit": "801c6e30d785142dd5d03716b619dc48b87d125a",
+    "createdAt": "2019-07-29T12:12:13Z",
+    "diffHunk": "@@ -33,14 +34,16 @@ abstract class TextBasedFileScan(\n     readPartitionSchema: StructType,\n     options: CaseInsensitiveStringMap)\n   extends FileScan(sparkSession, fileIndex, readDataSchema, readPartitionSchema) {\n-  private var codecFactory: CompressionCodecFactory = _\n+  @transient private lazy val codecFactory: CompressionCodecFactory = new CompressionCodecFactory(\n+    sparkSession.sessionState.newHadoopConfWithOptions(options.asScala.toMap))\n \n-  override def isSplitable(path: Path): Boolean = {\n-    if (codecFactory == null) {\n-      codecFactory = new CompressionCodecFactory(\n-        sparkSession.sessionState.newHadoopConfWithOptions(options.asScala.toMap))\n+  override def isSplitable(path: Path): Boolean = Utils.isFileSplittable(path, codecFactory)\n+\n+  override def getFileUnSplittableReason(path: Path): String = {\n+    if (!isSplitable(path)) {\n+      \"the file is compressed by unsplittable compression codec\"\n+    } else {\n+      null"
+  }],
+  "prId": 25134
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "when will we hit this branch?",
+    "commit": "801c6e30d785142dd5d03716b619dc48b87d125a",
+    "createdAt": "2019-07-31T14:34:09Z",
+    "diffHunk": "@@ -33,14 +34,16 @@ abstract class TextBasedFileScan(\n     readPartitionSchema: StructType,\n     options: CaseInsensitiveStringMap)\n   extends FileScan(sparkSession, fileIndex, readDataSchema, readPartitionSchema) {\n-  private var codecFactory: CompressionCodecFactory = _\n+  @transient private lazy val codecFactory: CompressionCodecFactory = new CompressionCodecFactory(\n+    sparkSession.sessionState.newHadoopConfWithOptions(options.asScala.toMap))\n \n-  override def isSplitable(path: Path): Boolean = {\n-    if (codecFactory == null) {\n-      codecFactory = new CompressionCodecFactory(\n-        sparkSession.sessionState.newHadoopConfWithOptions(options.asScala.toMap))\n+  override def isSplitable(path: Path): Boolean = Utils.isFileSplittable(path, codecFactory)\n+\n+  override def getFileUnSplittableReason(path: Path): Option[String] = {\n+    if (!isSplitable(path)) {\n+      Some(\"the file is compressed by unsplittable compression codec\")\n+    } else {\n+      None"
+  }, {
+    "author": {
+      "login": "WeichenXu123"
+    },
+    "body": "Remove all branch return `None` and add assert.",
+    "commit": "801c6e30d785142dd5d03716b619dc48b87d125a",
+    "createdAt": "2019-07-31T16:15:46Z",
+    "diffHunk": "@@ -33,14 +34,16 @@ abstract class TextBasedFileScan(\n     readPartitionSchema: StructType,\n     options: CaseInsensitiveStringMap)\n   extends FileScan(sparkSession, fileIndex, readDataSchema, readPartitionSchema) {\n-  private var codecFactory: CompressionCodecFactory = _\n+  @transient private lazy val codecFactory: CompressionCodecFactory = new CompressionCodecFactory(\n+    sparkSession.sessionState.newHadoopConfWithOptions(options.asScala.toMap))\n \n-  override def isSplitable(path: Path): Boolean = {\n-    if (codecFactory == null) {\n-      codecFactory = new CompressionCodecFactory(\n-        sparkSession.sessionState.newHadoopConfWithOptions(options.asScala.toMap))\n+  override def isSplitable(path: Path): Boolean = Utils.isFileSplittable(path, codecFactory)\n+\n+  override def getFileUnSplittableReason(path: Path): Option[String] = {\n+    if (!isSplitable(path)) {\n+      Some(\"the file is compressed by unsplittable compression codec\")\n+    } else {\n+      None"
+  }],
+  "prId": 25134
+}]

@@ -1,0 +1,71 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "icexelloss"
+    },
+    "body": "This is probably another bug I found in testing this - If the input node to EvalPythonExec doesn't produce UnsafeRow, and cast here will fail. \r\n\r\nI found this in testing when I pass in an test data source scan node, which produces GeneralInternalRow, will throw exception here.\r\n\r\nI am happy to submit this as a separate patch if people think it's necessary ",
+    "commit": "2325a4f18a2bc6cc95d96bc5ac6790749b3e927e",
+    "createdAt": "2018-08-15T20:01:56Z",
+    "diffHunk": "@@ -117,15 +117,16 @@ abstract class EvalPythonExec(udfs: Seq[PythonUDF], output: Seq[Attribute], chil\n           }\n         }.toArray\n       }.toArray\n-      val projection = newMutableProjection(allInputs, child.output)\n+      val projection = UnsafeProjection.create(allInputs, child.output)\n       val schema = StructType(dataTypes.zipWithIndex.map { case (dt, i) =>\n         StructField(s\"_$i\", dt)\n       })\n \n       // Add rows to queue to join later with the result.\n       val projectedRowIter = iter.map { inputRow =>\n-        queue.add(inputRow.asInstanceOf[UnsafeRow])\n-        projection(inputRow)\n+        val unsafeRow = projection(inputRow)\n+        queue.add(unsafeRow.asInstanceOf[UnsafeRow])"
+  }, {
+    "author": {
+      "login": "icexelloss"
+    },
+    "body": "Ok.. This seems to break existing tests. Need to look into it.",
+    "commit": "2325a4f18a2bc6cc95d96bc5ac6790749b3e927e",
+    "createdAt": "2018-08-15T21:10:57Z",
+    "diffHunk": "@@ -117,15 +117,16 @@ abstract class EvalPythonExec(udfs: Seq[PythonUDF], output: Seq[Attribute], chil\n           }\n         }.toArray\n       }.toArray\n-      val projection = newMutableProjection(allInputs, child.output)\n+      val projection = UnsafeProjection.create(allInputs, child.output)\n       val schema = StructType(dataTypes.zipWithIndex.map { case (dt, i) =>\n         StructField(s\"_$i\", dt)\n       })\n \n       // Add rows to queue to join later with the result.\n       val projectedRowIter = iter.map { inputRow =>\n-        queue.add(inputRow.asInstanceOf[UnsafeRow])\n-        projection(inputRow)\n+        val unsafeRow = projection(inputRow)\n+        queue.add(unsafeRow.asInstanceOf[UnsafeRow])"
+  }],
+  "prId": 22104
+}, {
+  "comments": [{
+    "author": {
+      "login": "icexelloss"
+    },
+    "body": "This requires some discussion.\r\n\r\nThis is probably another bug I found in testing this - If the input node to EvalPythonExec doesn't produce UnsafeRow, and cast here will fail. I don't know if we require data sources to produce unsafe rows, if not, then this is a problem.\r\n\r\nI also don't know if this will introduce additional copy if input is already UnsafeRow - it seems like UnsafeProject should be smart to skip the copy but I am not sure if it's actually the case\r\n\r\n",
+    "commit": "2325a4f18a2bc6cc95d96bc5ac6790749b3e927e",
+    "createdAt": "2018-08-15T21:25:43Z",
+    "diffHunk": "@@ -117,15 +117,18 @@ abstract class EvalPythonExec(udfs: Seq[PythonUDF], output: Seq[Attribute], chil\n           }\n         }.toArray\n       }.toArray\n-      val projection = newMutableProjection(allInputs, child.output)\n+\n+      // Project input rows to unsafe row so we can put it in the row queue\n+      val unsafeProjection = UnsafeProjection.create(child.output, child.output)"
+  }, {
+    "author": {
+      "login": "icexelloss"
+    },
+    "body": "Friendly ping @cloud-fan. Do you think forcing a unsafeProject here to deal with non-unsafe rows from data sources is correct? Is there a way to know whether the children nodes output unsafe rows so to avoid unnecessary unsafe projection here? ",
+    "commit": "2325a4f18a2bc6cc95d96bc5ac6790749b3e927e",
+    "createdAt": "2018-08-21T19:38:08Z",
+    "diffHunk": "@@ -117,15 +117,18 @@ abstract class EvalPythonExec(udfs: Seq[PythonUDF], output: Seq[Attribute], chil\n           }\n         }.toArray\n       }.toArray\n-      val projection = newMutableProjection(allInputs, child.output)\n+\n+      // Project input rows to unsafe row so we can put it in the row queue\n+      val unsafeProjection = UnsafeProjection.create(child.output, child.output)"
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "Ideally all the operators will produce UnsafeRow. If the data source does not produce UnsafeRow, Spark will make sure there will be a project above it to produce UnsafeRow, so we don't need to worry it here and safely assume the input is always UnsafeRow.",
+    "commit": "2325a4f18a2bc6cc95d96bc5ac6790749b3e927e",
+    "createdAt": "2018-08-23T06:43:14Z",
+    "diffHunk": "@@ -117,15 +117,18 @@ abstract class EvalPythonExec(udfs: Seq[PythonUDF], output: Seq[Attribute], chil\n           }\n         }.toArray\n       }.toArray\n-      val projection = newMutableProjection(allInputs, child.output)\n+\n+      // Project input rows to unsafe row so we can put it in the row queue\n+      val unsafeProjection = UnsafeProjection.create(child.output, child.output)"
+  }, {
+    "author": {
+      "login": "icexelloss"
+    },
+    "body": "Thanks! I will remove this then.",
+    "commit": "2325a4f18a2bc6cc95d96bc5ac6790749b3e927e",
+    "createdAt": "2018-08-23T13:31:49Z",
+    "diffHunk": "@@ -117,15 +117,18 @@ abstract class EvalPythonExec(udfs: Seq[PythonUDF], output: Seq[Attribute], chil\n           }\n         }.toArray\n       }.toArray\n-      val projection = newMutableProjection(allInputs, child.output)\n+\n+      // Project input rows to unsafe row so we can put it in the row queue\n+      val unsafeProjection = UnsafeProjection.create(child.output, child.output)"
+  }, {
+    "author": {
+      "login": "icexelloss"
+    },
+    "body": "@cloud-fan Sorry, I don't think I am being very clear...\r\n\r\n> If the data source does not produce UnsafeRow, Spark will make sure there will be a project\r\n> above it to produce UnsafeRow\r\n\r\nI don't think this is happening for datasource V2 right now:\r\n\r\n(Code running in pyspark test)\r\n```\r\ndatasource_v2_df = self.spark.read \\\r\n                .format(\"org.apache.spark.sql.sources.v2.SimpleDataSourceV2\") \\\r\n                .load()\r\nresult = datasource_v2_df.withColumn('x', udf(lambda x: x, 'int')(datasource_v2_df['i']))\r\nresult.show()\r\n```\r\nThe code above fails with:\r\n```\r\nCaused by: java.lang.ClassCastException: org.apache.spark.sql.catalyst.expressions.GenericInternalRow cannot be cast to org.apache.spark.sql.catalyst.expressions.UnsafeRow\r\n\tat org.apache.spark.sql.execution.python.EvalPythonExec$$anonfun$doExecute$1$$anonfun$5.apply(EvalPythonExec.scala:127)\r\n\tat org.apache.spark.sql.execution.python.EvalPythonExec$$anonfun$doExecute$1$$anonfun$5.apply(EvalPythonExec.scala:126)\r\n\tat scala.collection.Iterator$$anon$11.next(Iterator.scala:410)\r\n\tat scala.collection.Iterator$$anon$11.next(Iterator.scala:410)\r\n\tat scala.collection.Iterator$GroupedIterator.takeDestructively(Iterator.scala:1074)\r\n```\r\n\r\nI think this is an issue with DataSourceV2 that probably should be addressed in another PR (DataSourceV1 works fine). @cloud-fan WDYT?",
+    "commit": "2325a4f18a2bc6cc95d96bc5ac6790749b3e927e",
+    "createdAt": "2018-08-23T14:52:35Z",
+    "diffHunk": "@@ -117,15 +117,18 @@ abstract class EvalPythonExec(udfs: Seq[PythonUDF], output: Seq[Attribute], chil\n           }\n         }.toArray\n       }.toArray\n-      val projection = newMutableProjection(allInputs, child.output)\n+\n+      // Project input rows to unsafe row so we can put it in the row queue\n+      val unsafeProjection = UnsafeProjection.create(child.output, child.output)"
+  }, {
+    "author": {
+      "login": "icexelloss"
+    },
+    "body": "Created https://jira.apache.org/jira/browse/SPARK-25213",
+    "commit": "2325a4f18a2bc6cc95d96bc5ac6790749b3e927e",
+    "createdAt": "2018-08-23T15:11:38Z",
+    "diffHunk": "@@ -117,15 +117,18 @@ abstract class EvalPythonExec(udfs: Seq[PythonUDF], output: Seq[Attribute], chil\n           }\n         }.toArray\n       }.toArray\n-      val projection = newMutableProjection(allInputs, child.output)\n+\n+      // Project input rows to unsafe row so we can put it in the row queue\n+      val unsafeProjection = UnsafeProjection.create(child.output, child.output)"
+  }],
+  "prId": 22104
+}]

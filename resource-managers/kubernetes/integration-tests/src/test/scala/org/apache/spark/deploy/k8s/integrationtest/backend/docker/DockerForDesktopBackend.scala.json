@@ -1,0 +1,90 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "rvesse"
+    },
+    "body": "Would people be opposed to bumping the K8S client to 3.1.0 (or even a more recent 3.1.x release) as this would simplify the code significantly and avoid any need to shell out to `kubectl`?",
+    "commit": "cf7ef362352365c7aab4c927db3ea8240fcfaf21",
+    "createdAt": "2018-10-23T13:52:36Z",
+    "diffHunk": "@@ -0,0 +1,68 @@\n+package org.apache.spark.deploy.k8s.integrationtest.backend.docker\n+\n+import java.nio.file.Paths\n+\n+import io.fabric8.kubernetes.client.{Config, DefaultKubernetesClient}\n+import org.apache.spark.deploy.k8s.integrationtest.ProcessUtils\n+import org.apache.spark.deploy.k8s.integrationtest.backend.IntegrationTestBackend\n+\n+private[spark] object DockerForDesktopBackend extends IntegrationTestBackend {\n+\n+  private val KUBECTL_STARTUP_TIMEOUT_SECONDS = 15\n+\n+  private var defaultClient: DefaultKubernetesClient = _\n+  private var initialContext = \"\"\n+\n+  private def getCurrentContext: String = {\n+    val outputs = executeKubectl(\"config\", \"current-context\")\n+    assert(outputs.size == 1, \"Unexpected amount of output from kubectl config current-context\")\n+    outputs.head\n+  }\n+\n+  private def setContext(context: String): Unit = {\n+    val outputs = executeKubectl(\"config\", \"use-context\", context)\n+    assert(outputs.size == 1, \"Unexpected amount of output from kubectl config use-context\")\n+    val errors = outputs.filter(_.startsWith(\"error\"))\n+    assert(errors.size == 0, s\"Received errors from kubectl: ${errors.head}\")\n+  }\n+\n+  override def initialize(): Unit = {\n+    // Switch context if necessary\n+    // TODO: If we were using Fabric 8 client 3.1.0 then we could\n+    // instead just use the overload of autoConfigure() that takes the\n+    // desired context avoiding the need to interact with kubectl at all\n+    initialContext = getCurrentContext"
+  }, {
+    "author": {
+      "login": "ifilonenko"
+    },
+    "body": "I would definitely not be opposed. This work will cause a bit of overhead in little refactorings all over the code-base tho, but shouldn't be a problem. I had already gotten started with that, but if you or @skonto want to take over, that would be great. Especially given that this would remove the need to use `kubectl`.\r\n+1 on this",
+    "commit": "cf7ef362352365c7aab4c927db3ea8240fcfaf21",
+    "createdAt": "2018-10-23T17:53:22Z",
+    "diffHunk": "@@ -0,0 +1,68 @@\n+package org.apache.spark.deploy.k8s.integrationtest.backend.docker\n+\n+import java.nio.file.Paths\n+\n+import io.fabric8.kubernetes.client.{Config, DefaultKubernetesClient}\n+import org.apache.spark.deploy.k8s.integrationtest.ProcessUtils\n+import org.apache.spark.deploy.k8s.integrationtest.backend.IntegrationTestBackend\n+\n+private[spark] object DockerForDesktopBackend extends IntegrationTestBackend {\n+\n+  private val KUBECTL_STARTUP_TIMEOUT_SECONDS = 15\n+\n+  private var defaultClient: DefaultKubernetesClient = _\n+  private var initialContext = \"\"\n+\n+  private def getCurrentContext: String = {\n+    val outputs = executeKubectl(\"config\", \"current-context\")\n+    assert(outputs.size == 1, \"Unexpected amount of output from kubectl config current-context\")\n+    outputs.head\n+  }\n+\n+  private def setContext(context: String): Unit = {\n+    val outputs = executeKubectl(\"config\", \"use-context\", context)\n+    assert(outputs.size == 1, \"Unexpected amount of output from kubectl config use-context\")\n+    val errors = outputs.filter(_.startsWith(\"error\"))\n+    assert(errors.size == 0, s\"Received errors from kubectl: ${errors.head}\")\n+  }\n+\n+  override def initialize(): Unit = {\n+    // Switch context if necessary\n+    // TODO: If we were using Fabric 8 client 3.1.0 then we could\n+    // instead just use the overload of autoConfigure() that takes the\n+    // desired context avoiding the need to interact with kubectl at all\n+    initialContext = getCurrentContext"
+  }, {
+    "author": {
+      "login": "liyinan926"
+    },
+    "body": "No, this is a welcomed. If it's not a significant change to upgrade to 3.1.0, we probably should make it part of this PR. ",
+    "commit": "cf7ef362352365c7aab4c927db3ea8240fcfaf21",
+    "createdAt": "2018-10-23T20:36:53Z",
+    "diffHunk": "@@ -0,0 +1,68 @@\n+package org.apache.spark.deploy.k8s.integrationtest.backend.docker\n+\n+import java.nio.file.Paths\n+\n+import io.fabric8.kubernetes.client.{Config, DefaultKubernetesClient}\n+import org.apache.spark.deploy.k8s.integrationtest.ProcessUtils\n+import org.apache.spark.deploy.k8s.integrationtest.backend.IntegrationTestBackend\n+\n+private[spark] object DockerForDesktopBackend extends IntegrationTestBackend {\n+\n+  private val KUBECTL_STARTUP_TIMEOUT_SECONDS = 15\n+\n+  private var defaultClient: DefaultKubernetesClient = _\n+  private var initialContext = \"\"\n+\n+  private def getCurrentContext: String = {\n+    val outputs = executeKubectl(\"config\", \"current-context\")\n+    assert(outputs.size == 1, \"Unexpected amount of output from kubectl config current-context\")\n+    outputs.head\n+  }\n+\n+  private def setContext(context: String): Unit = {\n+    val outputs = executeKubectl(\"config\", \"use-context\", context)\n+    assert(outputs.size == 1, \"Unexpected amount of output from kubectl config use-context\")\n+    val errors = outputs.filter(_.startsWith(\"error\"))\n+    assert(errors.size == 0, s\"Received errors from kubectl: ${errors.head}\")\n+  }\n+\n+  override def initialize(): Unit = {\n+    // Switch context if necessary\n+    // TODO: If we were using Fabric 8 client 3.1.0 then we could\n+    // instead just use the overload of autoConfigure() that takes the\n+    // desired context avoiding the need to interact with kubectl at all\n+    initialContext = getCurrentContext"
+  }],
+  "prId": 22805
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "(needs an Apache copyright header)",
+    "commit": "cf7ef362352365c7aab4c927db3ea8240fcfaf21",
+    "createdAt": "2018-10-23T14:51:35Z",
+    "diffHunk": "@@ -0,0 +1,68 @@\n+package org.apache.spark.deploy.k8s.integrationtest.backend.docker",
+    "line": 17
+  }, {
+    "author": {
+      "login": "rvesse"
+    },
+    "body": "Fixed",
+    "commit": "cf7ef362352365c7aab4c927db3ea8240fcfaf21",
+    "createdAt": "2018-10-24T15:11:32Z",
+    "diffHunk": "@@ -0,0 +1,68 @@\n+package org.apache.spark.deploy.k8s.integrationtest.backend.docker",
+    "line": 17
+  }],
+  "prId": 22805
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Not sure, but do you want to do the superclass cleanup afterwards, after you finish cleanup in this class?",
+    "commit": "cf7ef362352365c7aab4c927db3ea8240fcfaf21",
+    "createdAt": "2018-10-23T14:52:48Z",
+    "diffHunk": "@@ -0,0 +1,68 @@\n+package org.apache.spark.deploy.k8s.integrationtest.backend.docker\n+\n+import java.nio.file.Paths\n+\n+import io.fabric8.kubernetes.client.{Config, DefaultKubernetesClient}\n+import org.apache.spark.deploy.k8s.integrationtest.ProcessUtils\n+import org.apache.spark.deploy.k8s.integrationtest.backend.IntegrationTestBackend\n+\n+private[spark] object DockerForDesktopBackend extends IntegrationTestBackend {\n+\n+  private val KUBECTL_STARTUP_TIMEOUT_SECONDS = 15\n+\n+  private var defaultClient: DefaultKubernetesClient = _\n+  private var initialContext = \"\"\n+\n+  private def getCurrentContext: String = {\n+    val outputs = executeKubectl(\"config\", \"current-context\")\n+    assert(outputs.size == 1, \"Unexpected amount of output from kubectl config current-context\")\n+    outputs.head\n+  }\n+\n+  private def setContext(context: String): Unit = {\n+    val outputs = executeKubectl(\"config\", \"use-context\", context)\n+    assert(outputs.size == 1, \"Unexpected amount of output from kubectl config use-context\")\n+    val errors = outputs.filter(_.startsWith(\"error\"))\n+    assert(errors.size == 0, s\"Received errors from kubectl: ${errors.head}\")\n+  }\n+\n+  override def initialize(): Unit = {\n+    // Switch context if necessary\n+    // TODO: If we were using Fabric 8 client 3.1.0 then we could\n+    // instead just use the overload of autoConfigure() that takes the\n+    // desired context avoiding the need to interact with kubectl at all\n+    initialContext = getCurrentContext\n+    if (!initialContext.equals(\"docker-for-desktop\")) {\n+      setContext(\"docker-for-desktop\")\n+    }\n+\n+    // Auto-configure K8S client from K8S config file\n+    System.setProperty(Config.KUBERNETES_AUTH_TRYKUBECONFIG_SYSTEM_PROPERTY, \"true\");\n+    val userHome = System.getProperty(\"user.home\")\n+    System.setProperty(Config.KUBERNETES_KUBECONFIG_FILE,\n+      Option(System.getenv(\"KUBECONFIG\"))\n+        .getOrElse(Paths.get(userHome, \".kube\", \"config\").toFile.getAbsolutePath))\n+    val config = Config.autoConfigure()\n+\n+    defaultClient = new DefaultKubernetesClient(config)\n+  }\n+\n+  override def cleanUp(): Unit = {\n+    super.cleanUp()"
+  }],
+  "prId": 22805
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Total nit, but you can write `\"kubectl\" +: args`",
+    "commit": "cf7ef362352365c7aab4c927db3ea8240fcfaf21",
+    "createdAt": "2018-10-23T14:54:28Z",
+    "diffHunk": "@@ -0,0 +1,68 @@\n+package org.apache.spark.deploy.k8s.integrationtest.backend.docker\n+\n+import java.nio.file.Paths\n+\n+import io.fabric8.kubernetes.client.{Config, DefaultKubernetesClient}\n+import org.apache.spark.deploy.k8s.integrationtest.ProcessUtils\n+import org.apache.spark.deploy.k8s.integrationtest.backend.IntegrationTestBackend\n+\n+private[spark] object DockerForDesktopBackend extends IntegrationTestBackend {\n+\n+  private val KUBECTL_STARTUP_TIMEOUT_SECONDS = 15\n+\n+  private var defaultClient: DefaultKubernetesClient = _\n+  private var initialContext = \"\"\n+\n+  private def getCurrentContext: String = {\n+    val outputs = executeKubectl(\"config\", \"current-context\")\n+    assert(outputs.size == 1, \"Unexpected amount of output from kubectl config current-context\")\n+    outputs.head\n+  }\n+\n+  private def setContext(context: String): Unit = {\n+    val outputs = executeKubectl(\"config\", \"use-context\", context)\n+    assert(outputs.size == 1, \"Unexpected amount of output from kubectl config use-context\")\n+    val errors = outputs.filter(_.startsWith(\"error\"))\n+    assert(errors.size == 0, s\"Received errors from kubectl: ${errors.head}\")\n+  }\n+\n+  override def initialize(): Unit = {\n+    // Switch context if necessary\n+    // TODO: If we were using Fabric 8 client 3.1.0 then we could\n+    // instead just use the overload of autoConfigure() that takes the\n+    // desired context avoiding the need to interact with kubectl at all\n+    initialContext = getCurrentContext\n+    if (!initialContext.equals(\"docker-for-desktop\")) {\n+      setContext(\"docker-for-desktop\")\n+    }\n+\n+    // Auto-configure K8S client from K8S config file\n+    System.setProperty(Config.KUBERNETES_AUTH_TRYKUBECONFIG_SYSTEM_PROPERTY, \"true\");\n+    val userHome = System.getProperty(\"user.home\")\n+    System.setProperty(Config.KUBERNETES_KUBECONFIG_FILE,\n+      Option(System.getenv(\"KUBECONFIG\"))\n+        .getOrElse(Paths.get(userHome, \".kube\", \"config\").toFile.getAbsolutePath))\n+    val config = Config.autoConfigure()\n+\n+    defaultClient = new DefaultKubernetesClient(config)\n+  }\n+\n+  override def cleanUp(): Unit = {\n+    super.cleanUp()\n+\n+    // Reset users kubectl context appropriately if necessary\n+    if (!initialContext.equals(\"docker-for-desktop\")) {\n+      setContext(initialContext)\n+    }\n+  }\n+\n+  override def getKubernetesClient: DefaultKubernetesClient = {\n+    defaultClient\n+  }\n+\n+  private def executeKubectl(args: String*): Seq[String] = {\n+    ProcessUtils.executeProcess(\n+      Array(\"kubectl\") ++ args, KUBECTL_STARTUP_TIMEOUT_SECONDS, true)"
+  }],
+  "prId": 22805
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Is it OK that this is basically a singleton? it has state. I'm just wondering if that could cause a problem if used across many tests.",
+    "commit": "cf7ef362352365c7aab4c927db3ea8240fcfaf21",
+    "createdAt": "2018-10-23T14:55:40Z",
+    "diffHunk": "@@ -0,0 +1,68 @@\n+package org.apache.spark.deploy.k8s.integrationtest.backend.docker\n+\n+import java.nio.file.Paths\n+\n+import io.fabric8.kubernetes.client.{Config, DefaultKubernetesClient}\n+import org.apache.spark.deploy.k8s.integrationtest.ProcessUtils\n+import org.apache.spark.deploy.k8s.integrationtest.backend.IntegrationTestBackend\n+\n+private[spark] object DockerForDesktopBackend extends IntegrationTestBackend {"
+  }, {
+    "author": {
+      "login": "rvesse"
+    },
+    "body": "With the latest commits the only state maintained is the K8S client which is reusable and there is no longer any need to modify the on-disk state via `kubectl` by adopting a newer Fabric 8 client library version",
+    "commit": "cf7ef362352365c7aab4c927db3ea8240fcfaf21",
+    "createdAt": "2018-10-24T15:14:16Z",
+    "diffHunk": "@@ -0,0 +1,68 @@\n+package org.apache.spark.deploy.k8s.integrationtest.backend.docker\n+\n+import java.nio.file.Paths\n+\n+import io.fabric8.kubernetes.client.{Config, DefaultKubernetesClient}\n+import org.apache.spark.deploy.k8s.integrationtest.ProcessUtils\n+import org.apache.spark.deploy.k8s.integrationtest.backend.IntegrationTestBackend\n+\n+private[spark] object DockerForDesktopBackend extends IntegrationTestBackend {"
+  }],
+  "prId": 22805
+}]

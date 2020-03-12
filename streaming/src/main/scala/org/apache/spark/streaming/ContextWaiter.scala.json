@@ -1,0 +1,221 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Minor point - these are not in the JDK but in a Findbugs library for JSR-305. It's not used in Spark, and happens to be a dependency now. Maybe not worth using it just 1 place?\n",
+    "commit": "52247f5ff48f1fdf285daac20846c7587a30f340",
+    "createdAt": "2014-12-10T09:25:37Z",
+    "diffHunk": "@@ -17,30 +17,74 @@\n \n package org.apache.spark.streaming\n \n+import java.util.concurrent.{TimeoutException, TimeUnit}\n+import java.util.concurrent.locks.ReentrantLock\n+import javax.annotation.concurrent.GuardedBy\n+\n private[streaming] class ContextWaiter {\n+\n+  private val lock = new ReentrantLock()\n+  private val condition = lock.newCondition()\n+\n+  @GuardedBy(\"lock\")"
+  }, {
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "> Maybe not worth using it just 1 place?\n\nSo which one do you prefer?\n1. Use comments to describe such information.\n2. Use `GuardedBy` from now on.\n",
+    "commit": "52247f5ff48f1fdf285daac20846c7587a30f340",
+    "createdAt": "2014-12-10T09:40:53Z",
+    "diffHunk": "@@ -17,30 +17,74 @@\n \n package org.apache.spark.streaming\n \n+import java.util.concurrent.{TimeoutException, TimeUnit}\n+import java.util.concurrent.locks.ReentrantLock\n+import javax.annotation.concurrent.GuardedBy\n+\n private[streaming] class ContextWaiter {\n+\n+  private val lock = new ReentrantLock()\n+  private val condition = lock.newCondition()\n+\n+  @GuardedBy(\"lock\")"
+  }, {
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "In addition, now Findbugs does not recognize `GuardedBy` in Scala codes.\n",
+    "commit": "52247f5ff48f1fdf285daac20846c7587a30f340",
+    "createdAt": "2014-12-10T09:42:14Z",
+    "diffHunk": "@@ -17,30 +17,74 @@\n \n package org.apache.spark.streaming\n \n+import java.util.concurrent.{TimeoutException, TimeUnit}\n+import java.util.concurrent.locks.ReentrantLock\n+import javax.annotation.concurrent.GuardedBy\n+\n private[streaming] class ContextWaiter {\n+\n+  private val lock = new ReentrantLock()\n+  private val condition = lock.newCondition()\n+\n+  @GuardedBy(\"lock\")"
+  }, {
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "BTW, I turned to `GuardedBy` because @aarondav asked me to do it in #3634\n",
+    "commit": "52247f5ff48f1fdf285daac20846c7587a30f340",
+    "createdAt": "2014-12-10T09:49:26Z",
+    "diffHunk": "@@ -17,30 +17,74 @@\n \n package org.apache.spark.streaming\n \n+import java.util.concurrent.{TimeoutException, TimeUnit}\n+import java.util.concurrent.locks.ReentrantLock\n+import javax.annotation.concurrent.GuardedBy\n+\n private[streaming] class ContextWaiter {\n+\n+  private val lock = new ReentrantLock()\n+  private val condition = lock.newCondition()\n+\n+  @GuardedBy(\"lock\")"
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Yes, that's why I brought it up. It's not actually a standard Java annotation (unless someone tells me it just turned up in 8 or something) but part of JSR-305. This is a dependency of Spark core at the moment, but none of the annotations are used. I think we should just not use them instead of using this lib in 1 place.\n",
+    "commit": "52247f5ff48f1fdf285daac20846c7587a30f340",
+    "createdAt": "2014-12-10T09:53:35Z",
+    "diffHunk": "@@ -17,30 +17,74 @@\n \n package org.apache.spark.streaming\n \n+import java.util.concurrent.{TimeoutException, TimeUnit}\n+import java.util.concurrent.locks.ReentrantLock\n+import javax.annotation.concurrent.GuardedBy\n+\n private[streaming] class ContextWaiter {\n+\n+  private val lock = new ReentrantLock()\n+  private val condition = lock.newCondition()\n+\n+  @GuardedBy(\"lock\")"
+  }, {
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "OK. I changed them to comments.\n",
+    "commit": "52247f5ff48f1fdf285daac20846c7587a30f340",
+    "createdAt": "2014-12-10T10:00:43Z",
+    "diffHunk": "@@ -17,30 +17,74 @@\n \n package org.apache.spark.streaming\n \n+import java.util.concurrent.{TimeoutException, TimeUnit}\n+import java.util.concurrent.locks.ReentrantLock\n+import javax.annotation.concurrent.GuardedBy\n+\n private[streaming] class ContextWaiter {\n+\n+  private val lock = new ReentrantLock()\n+  private val condition = lock.newCondition()\n+\n+  @GuardedBy(\"lock\")"
+  }, {
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "In general, I'm a fan of the FindBugs annotations.  I've had trouble getting the various analysis tools to work well with them in Scala, though.  +1 to this commenting convention, though; this is very helpful.\n",
+    "commit": "52247f5ff48f1fdf285daac20846c7587a30f340",
+    "createdAt": "2014-12-16T21:00:35Z",
+    "diffHunk": "@@ -17,30 +17,74 @@\n \n package org.apache.spark.streaming\n \n+import java.util.concurrent.{TimeoutException, TimeUnit}\n+import java.util.concurrent.locks.ReentrantLock\n+import javax.annotation.concurrent.GuardedBy\n+\n private[streaming] class ContextWaiter {\n+\n+  private val lock = new ReentrantLock()\n+  private val condition = lock.newCondition()\n+\n+  @GuardedBy(\"lock\")"
+  }],
+  "prId": 3661
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Maybe it's just me but it feels like these loops would be simpler just testing `while (!stopped && error == null)`? `nanos` would be tested in the other one too. This avoids duplication, and also avoids the unreachable return value, because you check these conditions in one place at the end.\n",
+    "commit": "52247f5ff48f1fdf285daac20846c7587a30f340",
+    "createdAt": "2014-12-10T09:29:48Z",
+    "diffHunk": "@@ -17,30 +17,74 @@\n \n package org.apache.spark.streaming\n \n+import java.util.concurrent.{TimeoutException, TimeUnit}\n+import java.util.concurrent.locks.ReentrantLock\n+import javax.annotation.concurrent.GuardedBy\n+\n private[streaming] class ContextWaiter {\n+\n+  private val lock = new ReentrantLock()\n+  private val condition = lock.newCondition()\n+\n+  @GuardedBy(\"lock\")\n   private var error: Throwable = null\n+\n+  @GuardedBy(\"lock\")\n   private var stopped: Boolean = false\n \n-  def notifyError(e: Throwable) = synchronized {\n-    error = e\n-    notifyAll()\n+  def notifyError(e: Throwable) = {\n+    lock.lock()\n+    try {\n+      error = e\n+      condition.signalAll()\n+    } finally {\n+      lock.unlock()\n+    }\n   }\n \n-  def notifyStop() = synchronized {\n-    stopped = true\n-    notifyAll()\n+  def notifyStop() = {\n+    lock.lock()\n+    try {\n+      stopped = true\n+      condition.signalAll()\n+    } finally {\n+      lock.unlock()\n+    }\n   }\n \n-  def waitForStopOrError(timeout: Long = -1) = synchronized {\n-    // If already had error, then throw it\n-    if (error != null) {\n-      throw error\n-    }\n+  /**\n+   * Return `true` if it's stopped; or throw the reported error if `notifyError` has been called; or\n+   * `false` if the waiting time detectably elapsed before return from the method.\n+   */\n+  def waitForStopOrError(timeout: Long = -1): Boolean = {\n+    lock.lock()\n+    try {\n+      if (timeout < 0) {\n+        while (true) {"
+  }, {
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "It's cleaner now.\n",
+    "commit": "52247f5ff48f1fdf285daac20846c7587a30f340",
+    "createdAt": "2014-12-10T10:00:11Z",
+    "diffHunk": "@@ -17,30 +17,74 @@\n \n package org.apache.spark.streaming\n \n+import java.util.concurrent.{TimeoutException, TimeUnit}\n+import java.util.concurrent.locks.ReentrantLock\n+import javax.annotation.concurrent.GuardedBy\n+\n private[streaming] class ContextWaiter {\n+\n+  private val lock = new ReentrantLock()\n+  private val condition = lock.newCondition()\n+\n+  @GuardedBy(\"lock\")\n   private var error: Throwable = null\n+\n+  @GuardedBy(\"lock\")\n   private var stopped: Boolean = false\n \n-  def notifyError(e: Throwable) = synchronized {\n-    error = e\n-    notifyAll()\n+  def notifyError(e: Throwable) = {\n+    lock.lock()\n+    try {\n+      error = e\n+      condition.signalAll()\n+    } finally {\n+      lock.unlock()\n+    }\n   }\n \n-  def notifyStop() = synchronized {\n-    stopped = true\n-    notifyAll()\n+  def notifyStop() = {\n+    lock.lock()\n+    try {\n+      stopped = true\n+      condition.signalAll()\n+    } finally {\n+      lock.unlock()\n+    }\n   }\n \n-  def waitForStopOrError(timeout: Long = -1) = synchronized {\n-    // If already had error, then throw it\n-    if (error != null) {\n-      throw error\n-    }\n+  /**\n+   * Return `true` if it's stopped; or throw the reported error if `notifyError` has been called; or\n+   * `false` if the waiting time detectably elapsed before return from the method.\n+   */\n+  def waitForStopOrError(timeout: Long = -1): Boolean = {\n+    lock.lock()\n+    try {\n+      if (timeout < 0) {\n+        while (true) {"
+  }],
+  "prId": 3661
+}, {
+  "comments": [{
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "Minor nit, but mind adding `: Unit` here?\n",
+    "commit": "52247f5ff48f1fdf285daac20846c7587a30f340",
+    "createdAt": "2014-12-16T20:57:57Z",
+    "diffHunk": "@@ -17,30 +17,63 @@\n \n package org.apache.spark.streaming\n \n+import java.util.concurrent.TimeUnit\n+import java.util.concurrent.locks.ReentrantLock\n+\n private[streaming] class ContextWaiter {\n+\n+  private val lock = new ReentrantLock()\n+  private val condition = lock.newCondition()\n+\n+  // Guarded by \"lock\"\n   private var error: Throwable = null\n-  private var stopped: Boolean = false\n \n-  def notifyError(e: Throwable) = synchronized {\n-    error = e\n-    notifyAll()\n-  }\n+  // Guarded by \"lock\"\n+  private var stopped: Boolean = false\n \n-  def notifyStop() = synchronized {\n-    stopped = true\n-    notifyAll()\n+  def notifyError(e: Throwable) = {"
+  }],
+  "prId": 3661
+}, {
+  "comments": [{
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "Same here: could this have an explicit  `: Unit` type?\n",
+    "commit": "52247f5ff48f1fdf285daac20846c7587a30f340",
+    "createdAt": "2014-12-16T20:58:25Z",
+    "diffHunk": "@@ -17,30 +17,63 @@\n \n package org.apache.spark.streaming\n \n+import java.util.concurrent.TimeUnit\n+import java.util.concurrent.locks.ReentrantLock\n+\n private[streaming] class ContextWaiter {\n+\n+  private val lock = new ReentrantLock()\n+  private val condition = lock.newCondition()\n+\n+  // Guarded by \"lock\"\n   private var error: Throwable = null\n-  private var stopped: Boolean = false\n \n-  def notifyError(e: Throwable) = synchronized {\n-    error = e\n-    notifyAll()\n-  }\n+  // Guarded by \"lock\"\n+  private var stopped: Boolean = false\n \n-  def notifyStop() = synchronized {\n-    stopped = true\n-    notifyAll()\n+  def notifyError(e: Throwable) = {\n+    lock.lock()\n+    try {\n+      error = e\n+      condition.signalAll()\n+    } finally {\n+      lock.unlock()\n+    }\n   }\n \n-  def waitForStopOrError(timeout: Long = -1) = synchronized {\n-    // If already had error, then throw it\n-    if (error != null) {\n-      throw error\n+  def notifyStop() = {"
+  }],
+  "prId": 3661
+}, {
+  "comments": [{
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "I considered whether this should throw `TimeoutException` instead of signaling failure via a boolean, but I guess this is sort of like `Object.wait()` or `Condition.wait()`, both of which don't throw exceptions.\n\nAlso, it looks like the usages of this in `StreamingContext` support this theory:\n\n``` scala\n  /**\n   * Wait for the execution to stop. Any exceptions that occurs during the execution\n   * will be thrown in this thread.\n   */\n  def awaitTermination() {\n    waiter.waitForStopOrError()\n  }\n\n  /**\n   * Wait for the execution to stop. Any exceptions that occurs during the execution\n   * will be thrown in this thread.\n   * @param timeout time to wait in milliseconds\n   */\n  def awaitTermination(timeout: Long) {\n    waiter.waitForStopOrError(timeout)\n  }\n```\n",
+    "commit": "52247f5ff48f1fdf285daac20846c7587a30f340",
+    "createdAt": "2014-12-17T21:46:42Z",
+    "diffHunk": "@@ -17,30 +17,63 @@\n \n package org.apache.spark.streaming\n \n+import java.util.concurrent.TimeUnit\n+import java.util.concurrent.locks.ReentrantLock\n+\n private[streaming] class ContextWaiter {\n+\n+  private val lock = new ReentrantLock()\n+  private val condition = lock.newCondition()\n+\n+  // Guarded by \"lock\"\n   private var error: Throwable = null\n-  private var stopped: Boolean = false\n \n-  def notifyError(e: Throwable) = synchronized {\n-    error = e\n-    notifyAll()\n-  }\n+  // Guarded by \"lock\"\n+  private var stopped: Boolean = false\n \n-  def notifyStop() = synchronized {\n-    stopped = true\n-    notifyAll()\n+  def notifyError(e: Throwable): Unit = {\n+    lock.lock()\n+    try {\n+      error = e\n+      condition.signalAll()\n+    } finally {\n+      lock.unlock()\n+    }\n   }\n \n-  def waitForStopOrError(timeout: Long = -1) = synchronized {\n-    // If already had error, then throw it\n-    if (error != null) {\n-      throw error\n+  def notifyStop(): Unit = {\n+    lock.lock()\n+    try {\n+      stopped = true\n+      condition.signalAll()\n+    } finally {\n+      lock.unlock()\n     }\n+  }\n \n-    // If not already stopped, then wait\n-    if (!stopped) {\n-      if (timeout < 0) wait() else wait(timeout)\n+  /**\n+   * Return `true` if it's stopped; or throw the reported error if `notifyError` has been called; or\n+   * `false` if the waiting time detectably elapsed before return from the method.\n+   */\n+  def waitForStopOrError(timeout: Long = -1): Boolean = {",
+    "line": 57
+  }, {
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "I suppose the documentation for the `SparkContext.awaitTermination(timeout)` could be improved to convey what happens when the timeout occurs...\n",
+    "commit": "52247f5ff48f1fdf285daac20846c7587a30f340",
+    "createdAt": "2014-12-17T21:47:57Z",
+    "diffHunk": "@@ -17,30 +17,63 @@\n \n package org.apache.spark.streaming\n \n+import java.util.concurrent.TimeUnit\n+import java.util.concurrent.locks.ReentrantLock\n+\n private[streaming] class ContextWaiter {\n+\n+  private val lock = new ReentrantLock()\n+  private val condition = lock.newCondition()\n+\n+  // Guarded by \"lock\"\n   private var error: Throwable = null\n-  private var stopped: Boolean = false\n \n-  def notifyError(e: Throwable) = synchronized {\n-    error = e\n-    notifyAll()\n-  }\n+  // Guarded by \"lock\"\n+  private var stopped: Boolean = false\n \n-  def notifyStop() = synchronized {\n-    stopped = true\n-    notifyAll()\n+  def notifyError(e: Throwable): Unit = {\n+    lock.lock()\n+    try {\n+      error = e\n+      condition.signalAll()\n+    } finally {\n+      lock.unlock()\n+    }\n   }\n \n-  def waitForStopOrError(timeout: Long = -1) = synchronized {\n-    // If already had error, then throw it\n-    if (error != null) {\n-      throw error\n+  def notifyStop(): Unit = {\n+    lock.lock()\n+    try {\n+      stopped = true\n+      condition.signalAll()\n+    } finally {\n+      lock.unlock()\n     }\n+  }\n \n-    // If not already stopped, then wait\n-    if (!stopped) {\n-      if (timeout < 0) wait() else wait(timeout)\n+  /**\n+   * Return `true` if it's stopped; or throw the reported error if `notifyError` has been called; or\n+   * `false` if the waiting time detectably elapsed before return from the method.\n+   */\n+  def waitForStopOrError(timeout: Long = -1): Boolean = {",
+    "line": 57
+  }, {
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "Do you think if it's better to return `Boolean` to indicate if it's timeout? Although it will break the source compatibility.\n",
+    "commit": "52247f5ff48f1fdf285daac20846c7587a30f340",
+    "createdAt": "2014-12-18T02:10:46Z",
+    "diffHunk": "@@ -17,30 +17,63 @@\n \n package org.apache.spark.streaming\n \n+import java.util.concurrent.TimeUnit\n+import java.util.concurrent.locks.ReentrantLock\n+\n private[streaming] class ContextWaiter {\n+\n+  private val lock = new ReentrantLock()\n+  private val condition = lock.newCondition()\n+\n+  // Guarded by \"lock\"\n   private var error: Throwable = null\n-  private var stopped: Boolean = false\n \n-  def notifyError(e: Throwable) = synchronized {\n-    error = e\n-    notifyAll()\n-  }\n+  // Guarded by \"lock\"\n+  private var stopped: Boolean = false\n \n-  def notifyStop() = synchronized {\n-    stopped = true\n-    notifyAll()\n+  def notifyError(e: Throwable): Unit = {\n+    lock.lock()\n+    try {\n+      error = e\n+      condition.signalAll()\n+    } finally {\n+      lock.unlock()\n+    }\n   }\n \n-  def waitForStopOrError(timeout: Long = -1) = synchronized {\n-    // If already had error, then throw it\n-    if (error != null) {\n-      throw error\n+  def notifyStop(): Unit = {\n+    lock.lock()\n+    try {\n+      stopped = true\n+      condition.signalAll()\n+    } finally {\n+      lock.unlock()\n     }\n+  }\n \n-    // If not already stopped, then wait\n-    if (!stopped) {\n-      if (timeout < 0) wait() else wait(timeout)\n+  /**\n+   * Return `true` if it's stopped; or throw the reported error if `notifyError` has been called; or\n+   * `false` if the waiting time detectably elapsed before return from the method.\n+   */\n+  def waitForStopOrError(timeout: Long = -1): Boolean = {",
+    "line": 57
+  }, {
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "Another option would be to just add a new `def isTerminated: Boolean` method, which would let users write code like\n\n```\nwaiter.awaitTermination(1000)\nif (!waiter.isTerminated) {\n  throw Exception(...)\n}\n```\n",
+    "commit": "52247f5ff48f1fdf285daac20846c7587a30f340",
+    "createdAt": "2014-12-18T02:28:05Z",
+    "diffHunk": "@@ -17,30 +17,63 @@\n \n package org.apache.spark.streaming\n \n+import java.util.concurrent.TimeUnit\n+import java.util.concurrent.locks.ReentrantLock\n+\n private[streaming] class ContextWaiter {\n+\n+  private val lock = new ReentrantLock()\n+  private val condition = lock.newCondition()\n+\n+  // Guarded by \"lock\"\n   private var error: Throwable = null\n-  private var stopped: Boolean = false\n \n-  def notifyError(e: Throwable) = synchronized {\n-    error = e\n-    notifyAll()\n-  }\n+  // Guarded by \"lock\"\n+  private var stopped: Boolean = false\n \n-  def notifyStop() = synchronized {\n-    stopped = true\n-    notifyAll()\n+  def notifyError(e: Throwable): Unit = {\n+    lock.lock()\n+    try {\n+      error = e\n+      condition.signalAll()\n+    } finally {\n+      lock.unlock()\n+    }\n   }\n \n-  def waitForStopOrError(timeout: Long = -1) = synchronized {\n-    // If already had error, then throw it\n-    if (error != null) {\n-      throw error\n+  def notifyStop(): Unit = {\n+    lock.lock()\n+    try {\n+      stopped = true\n+      condition.signalAll()\n+    } finally {\n+      lock.unlock()\n     }\n+  }\n \n-    // If not already stopped, then wait\n-    if (!stopped) {\n-      if (timeout < 0) wait() else wait(timeout)\n+  /**\n+   * Return `true` if it's stopped; or throw the reported error if `notifyError` has been called; or\n+   * `false` if the waiting time detectably elapsed before return from the method.\n+   */\n+  def waitForStopOrError(timeout: Long = -1): Boolean = {",
+    "line": 57
+  }, {
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "Agreed. Done.\n",
+    "commit": "52247f5ff48f1fdf285daac20846c7587a30f340",
+    "createdAt": "2014-12-18T03:26:27Z",
+    "diffHunk": "@@ -17,30 +17,63 @@\n \n package org.apache.spark.streaming\n \n+import java.util.concurrent.TimeUnit\n+import java.util.concurrent.locks.ReentrantLock\n+\n private[streaming] class ContextWaiter {\n+\n+  private val lock = new ReentrantLock()\n+  private val condition = lock.newCondition()\n+\n+  // Guarded by \"lock\"\n   private var error: Throwable = null\n-  private var stopped: Boolean = false\n \n-  def notifyError(e: Throwable) = synchronized {\n-    error = e\n-    notifyAll()\n-  }\n+  // Guarded by \"lock\"\n+  private var stopped: Boolean = false\n \n-  def notifyStop() = synchronized {\n-    stopped = true\n-    notifyAll()\n+  def notifyError(e: Throwable): Unit = {\n+    lock.lock()\n+    try {\n+      error = e\n+      condition.signalAll()\n+    } finally {\n+      lock.unlock()\n+    }\n   }\n \n-  def waitForStopOrError(timeout: Long = -1) = synchronized {\n-    // If already had error, then throw it\n-    if (error != null) {\n-      throw error\n+  def notifyStop(): Unit = {\n+    lock.lock()\n+    try {\n+      stopped = true\n+      condition.signalAll()\n+    } finally {\n+      lock.unlock()\n     }\n+  }\n \n-    // If not already stopped, then wait\n-    if (!stopped) {\n-      if (timeout < 0) wait() else wait(timeout)\n+  /**\n+   * Return `true` if it's stopped; or throw the reported error if `notifyError` has been called; or\n+   * `false` if the waiting time detectably elapsed before return from the method.\n+   */\n+  def waitForStopOrError(timeout: Long = -1): Boolean = {",
+    "line": 57
+  }, {
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "One thought: what happens if `awaitTermination` times out, an error is thrown, and then we check `isTerminated`?  In that (rare) case, I guess we might miss the error-causing exception.  I suppose the caller could do some sort of double-checking, like\n\n``` scala\nwaiter.awaitTermination(1000)\nif (!waiter.isTerminated) {\n  throw Exception(...)\n} else {\n   waiter.awaitTermination(1)  // re-throws the error, if one occurred\n}\n```\n\nMaybe this is a super-rare edge-case which we don't care about.\n",
+    "commit": "52247f5ff48f1fdf285daac20846c7587a30f340",
+    "createdAt": "2014-12-21T21:43:15Z",
+    "diffHunk": "@@ -17,30 +17,63 @@\n \n package org.apache.spark.streaming\n \n+import java.util.concurrent.TimeUnit\n+import java.util.concurrent.locks.ReentrantLock\n+\n private[streaming] class ContextWaiter {\n+\n+  private val lock = new ReentrantLock()\n+  private val condition = lock.newCondition()\n+\n+  // Guarded by \"lock\"\n   private var error: Throwable = null\n-  private var stopped: Boolean = false\n \n-  def notifyError(e: Throwable) = synchronized {\n-    error = e\n-    notifyAll()\n-  }\n+  // Guarded by \"lock\"\n+  private var stopped: Boolean = false\n \n-  def notifyStop() = synchronized {\n-    stopped = true\n-    notifyAll()\n+  def notifyError(e: Throwable): Unit = {\n+    lock.lock()\n+    try {\n+      error = e\n+      condition.signalAll()\n+    } finally {\n+      lock.unlock()\n+    }\n   }\n \n-  def waitForStopOrError(timeout: Long = -1) = synchronized {\n-    // If already had error, then throw it\n-    if (error != null) {\n-      throw error\n+  def notifyStop(): Unit = {\n+    lock.lock()\n+    try {\n+      stopped = true\n+      condition.signalAll()\n+    } finally {\n+      lock.unlock()\n     }\n+  }\n \n-    // If not already stopped, then wait\n-    if (!stopped) {\n-      if (timeout < 0) wait() else wait(timeout)\n+  /**\n+   * Return `true` if it's stopped; or throw the reported error if `notifyError` has been called; or\n+   * `false` if the waiting time detectably elapsed before return from the method.\n+   */\n+  def waitForStopOrError(timeout: Long = -1): Boolean = {",
+    "line": 57
+  }, {
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "> what happens if awaitTermination times out, an error is thrown, and then we check isTerminated?\n\nHow about throwing the error in `isTerminated` for such case?\n",
+    "commit": "52247f5ff48f1fdf285daac20846c7587a30f340",
+    "createdAt": "2014-12-22T02:21:19Z",
+    "diffHunk": "@@ -17,30 +17,63 @@\n \n package org.apache.spark.streaming\n \n+import java.util.concurrent.TimeUnit\n+import java.util.concurrent.locks.ReentrantLock\n+\n private[streaming] class ContextWaiter {\n+\n+  private val lock = new ReentrantLock()\n+  private val condition = lock.newCondition()\n+\n+  // Guarded by \"lock\"\n   private var error: Throwable = null\n-  private var stopped: Boolean = false\n \n-  def notifyError(e: Throwable) = synchronized {\n-    error = e\n-    notifyAll()\n-  }\n+  // Guarded by \"lock\"\n+  private var stopped: Boolean = false\n \n-  def notifyStop() = synchronized {\n-    stopped = true\n-    notifyAll()\n+  def notifyError(e: Throwable): Unit = {\n+    lock.lock()\n+    try {\n+      error = e\n+      condition.signalAll()\n+    } finally {\n+      lock.unlock()\n+    }\n   }\n \n-  def waitForStopOrError(timeout: Long = -1) = synchronized {\n-    // If already had error, then throw it\n-    if (error != null) {\n-      throw error\n+  def notifyStop(): Unit = {\n+    lock.lock()\n+    try {\n+      stopped = true\n+      condition.signalAll()\n+    } finally {\n+      lock.unlock()\n     }\n+  }\n \n-    // If not already stopped, then wait\n-    if (!stopped) {\n-      if (timeout < 0) wait() else wait(timeout)\n+  /**\n+   * Return `true` if it's stopped; or throw the reported error if `notifyError` has been called; or\n+   * `false` if the waiting time detectably elapsed before return from the method.\n+   */\n+  def waitForStopOrError(timeout: Long = -1): Boolean = {",
+    "line": 57
+  }, {
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "It seems a little counterintuitive that `isTerminated` would have three outputs: `true`, `false`, or `Exception`.  The alternative is a bit weird, though: we'd have to have something like `isTerminatedWithError` or `hasError` to distinguish between the two cases.\n\nSorry for being so nitpicky here, but I'm just trying to reason out what's the most consistent public API for this use case.\n",
+    "commit": "52247f5ff48f1fdf285daac20846c7587a30f340",
+    "createdAt": "2014-12-23T19:33:59Z",
+    "diffHunk": "@@ -17,30 +17,63 @@\n \n package org.apache.spark.streaming\n \n+import java.util.concurrent.TimeUnit\n+import java.util.concurrent.locks.ReentrantLock\n+\n private[streaming] class ContextWaiter {\n+\n+  private val lock = new ReentrantLock()\n+  private val condition = lock.newCondition()\n+\n+  // Guarded by \"lock\"\n   private var error: Throwable = null\n-  private var stopped: Boolean = false\n \n-  def notifyError(e: Throwable) = synchronized {\n-    error = e\n-    notifyAll()\n-  }\n+  // Guarded by \"lock\"\n+  private var stopped: Boolean = false\n \n-  def notifyStop() = synchronized {\n-    stopped = true\n-    notifyAll()\n+  def notifyError(e: Throwable): Unit = {\n+    lock.lock()\n+    try {\n+      error = e\n+      condition.signalAll()\n+    } finally {\n+      lock.unlock()\n+    }\n   }\n \n-  def waitForStopOrError(timeout: Long = -1) = synchronized {\n-    // If already had error, then throw it\n-    if (error != null) {\n-      throw error\n+  def notifyStop(): Unit = {\n+    lock.lock()\n+    try {\n+      stopped = true\n+      condition.signalAll()\n+    } finally {\n+      lock.unlock()\n     }\n+  }\n \n-    // If not already stopped, then wait\n-    if (!stopped) {\n-      if (timeout < 0) wait() else wait(timeout)\n+  /**\n+   * Return `true` if it's stopped; or throw the reported error if `notifyError` has been called; or\n+   * `false` if the waiting time detectably elapsed before return from the method.\n+   */\n+  def waitForStopOrError(timeout: Long = -1): Boolean = {",
+    "line": 57
+  }, {
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "How about making `awaitTermination` throw a TimeoutException if timeout? It looks a better API.\n",
+    "commit": "52247f5ff48f1fdf285daac20846c7587a30f340",
+    "createdAt": "2014-12-25T12:03:50Z",
+    "diffHunk": "@@ -17,30 +17,63 @@\n \n package org.apache.spark.streaming\n \n+import java.util.concurrent.TimeUnit\n+import java.util.concurrent.locks.ReentrantLock\n+\n private[streaming] class ContextWaiter {\n+\n+  private val lock = new ReentrantLock()\n+  private val condition = lock.newCondition()\n+\n+  // Guarded by \"lock\"\n   private var error: Throwable = null\n-  private var stopped: Boolean = false\n \n-  def notifyError(e: Throwable) = synchronized {\n-    error = e\n-    notifyAll()\n-  }\n+  // Guarded by \"lock\"\n+  private var stopped: Boolean = false\n \n-  def notifyStop() = synchronized {\n-    stopped = true\n-    notifyAll()\n+  def notifyError(e: Throwable): Unit = {\n+    lock.lock()\n+    try {\n+      error = e\n+      condition.signalAll()\n+    } finally {\n+      lock.unlock()\n+    }\n   }\n \n-  def waitForStopOrError(timeout: Long = -1) = synchronized {\n-    // If already had error, then throw it\n-    if (error != null) {\n-      throw error\n+  def notifyStop(): Unit = {\n+    lock.lock()\n+    try {\n+      stopped = true\n+      condition.signalAll()\n+    } finally {\n+      lock.unlock()\n     }\n+  }\n \n-    // If not already stopped, then wait\n-    if (!stopped) {\n-      if (timeout < 0) wait() else wait(timeout)\n+  /**\n+   * Return `true` if it's stopped; or throw the reported error if `notifyError` has been called; or\n+   * `false` if the waiting time detectably elapsed before return from the method.\n+   */\n+  def waitForStopOrError(timeout: Long = -1): Boolean = {",
+    "line": 57
+  }, {
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "@tdas what do you think?\n",
+    "commit": "52247f5ff48f1fdf285daac20846c7587a30f340",
+    "createdAt": "2014-12-26T04:06:15Z",
+    "diffHunk": "@@ -17,30 +17,63 @@\n \n package org.apache.spark.streaming\n \n+import java.util.concurrent.TimeUnit\n+import java.util.concurrent.locks.ReentrantLock\n+\n private[streaming] class ContextWaiter {\n+\n+  private val lock = new ReentrantLock()\n+  private val condition = lock.newCondition()\n+\n+  // Guarded by \"lock\"\n   private var error: Throwable = null\n-  private var stopped: Boolean = false\n \n-  def notifyError(e: Throwable) = synchronized {\n-    error = e\n-    notifyAll()\n-  }\n+  // Guarded by \"lock\"\n+  private var stopped: Boolean = false\n \n-  def notifyStop() = synchronized {\n-    stopped = true\n-    notifyAll()\n+  def notifyError(e: Throwable): Unit = {\n+    lock.lock()\n+    try {\n+      error = e\n+      condition.signalAll()\n+    } finally {\n+      lock.unlock()\n+    }\n   }\n \n-  def waitForStopOrError(timeout: Long = -1) = synchronized {\n-    // If already had error, then throw it\n-    if (error != null) {\n-      throw error\n+  def notifyStop(): Unit = {\n+    lock.lock()\n+    try {\n+      stopped = true\n+      condition.signalAll()\n+    } finally {\n+      lock.unlock()\n     }\n+  }\n \n-    // If not already stopped, then wait\n-    if (!stopped) {\n-      if (timeout < 0) wait() else wait(timeout)\n+  /**\n+   * Return `true` if it's stopped; or throw the reported error if `notifyError` has been called; or\n+   * `false` if the waiting time detectably elapsed before return from the method.\n+   */\n+  def waitForStopOrError(timeout: Long = -1): Boolean = {",
+    "line": 57
+  }, {
+    "author": {
+      "login": "tdas"
+    },
+    "body": "I think that will break a lot of existing programs for people. A lot of time (even in our own test cases) `awaitTermination(timeout)` is used for wait for a short period of time before check checking status or something. Currently that times out return quietly. If instead it starts throwing exceptions, then it will completely break some applications. So I strongly advise against changing this behavior. \n",
+    "commit": "52247f5ff48f1fdf285daac20846c7587a30f340",
+    "createdAt": "2014-12-29T21:04:23Z",
+    "diffHunk": "@@ -17,30 +17,63 @@\n \n package org.apache.spark.streaming\n \n+import java.util.concurrent.TimeUnit\n+import java.util.concurrent.locks.ReentrantLock\n+\n private[streaming] class ContextWaiter {\n+\n+  private val lock = new ReentrantLock()\n+  private val condition = lock.newCondition()\n+\n+  // Guarded by \"lock\"\n   private var error: Throwable = null\n-  private var stopped: Boolean = false\n \n-  def notifyError(e: Throwable) = synchronized {\n-    error = e\n-    notifyAll()\n-  }\n+  // Guarded by \"lock\"\n+  private var stopped: Boolean = false\n \n-  def notifyStop() = synchronized {\n-    stopped = true\n-    notifyAll()\n+  def notifyError(e: Throwable): Unit = {\n+    lock.lock()\n+    try {\n+      error = e\n+      condition.signalAll()\n+    } finally {\n+      lock.unlock()\n+    }\n   }\n \n-  def waitForStopOrError(timeout: Long = -1) = synchronized {\n-    // If already had error, then throw it\n-    if (error != null) {\n-      throw error\n+  def notifyStop(): Unit = {\n+    lock.lock()\n+    try {\n+      stopped = true\n+      condition.signalAll()\n+    } finally {\n+      lock.unlock()\n     }\n+  }\n \n-    // If not already stopped, then wait\n-    if (!stopped) {\n-      if (timeout < 0) wait() else wait(timeout)\n+  /**\n+   * Return `true` if it's stopped; or throw the reported error if `notifyError` has been called; or\n+   * `false` if the waiting time detectably elapsed before return from the method.\n+   */\n+  def waitForStopOrError(timeout: Long = -1): Boolean = {",
+    "line": 57
+  }, {
+    "author": {
+      "login": "tdas"
+    },
+    "body": "In hindsight, instead of modeling `awaitTermination` against Akka [ActorSystem](http://doc.akka.io/api/akka/2.0/akka/actor/ActorSystem.html)'s awaitTermination (which return `Unit`) , I should have modeled it like Java [ExecutorService](http://docs.oracle.com/javase/7/docs/api/java/util/concurrent/ExecutorService.html#awaitTermination%28long,%20java.util.concurrent.TimeUnit%29)'s awaitTermination which returns a `Boolean`. Now its not possible to change the API without breaking compatiblity. :(\n",
+    "commit": "52247f5ff48f1fdf285daac20846c7587a30f340",
+    "createdAt": "2014-12-29T21:13:45Z",
+    "diffHunk": "@@ -17,30 +17,63 @@\n \n package org.apache.spark.streaming\n \n+import java.util.concurrent.TimeUnit\n+import java.util.concurrent.locks.ReentrantLock\n+\n private[streaming] class ContextWaiter {\n+\n+  private val lock = new ReentrantLock()\n+  private val condition = lock.newCondition()\n+\n+  // Guarded by \"lock\"\n   private var error: Throwable = null\n-  private var stopped: Boolean = false\n \n-  def notifyError(e: Throwable) = synchronized {\n-    error = e\n-    notifyAll()\n-  }\n+  // Guarded by \"lock\"\n+  private var stopped: Boolean = false\n \n-  def notifyStop() = synchronized {\n-    stopped = true\n-    notifyAll()\n+  def notifyError(e: Throwable): Unit = {\n+    lock.lock()\n+    try {\n+      error = e\n+      condition.signalAll()\n+    } finally {\n+      lock.unlock()\n+    }\n   }\n \n-  def waitForStopOrError(timeout: Long = -1) = synchronized {\n-    // If already had error, then throw it\n-    if (error != null) {\n-      throw error\n+  def notifyStop(): Unit = {\n+    lock.lock()\n+    try {\n+      stopped = true\n+      condition.signalAll()\n+    } finally {\n+      lock.unlock()\n     }\n+  }\n \n-    // If not already stopped, then wait\n-    if (!stopped) {\n-      if (timeout < 0) wait() else wait(timeout)\n+  /**\n+   * Return `true` if it's stopped; or throw the reported error if `notifyError` has been called; or\n+   * `false` if the waiting time detectably elapsed before return from the method.\n+   */\n+  def waitForStopOrError(timeout: Long = -1): Boolean = {",
+    "line": 57
+  }, {
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "> In hindsight, instead of modeling awaitTermination against Akka ActorSystem's awaitTermination (which return Unit) , I should have modeled it like Java ExecutorService's awaitTermination which returns a Boolean. Now its not possible to change the API without breaking compatiblity. :(\n\n@tdas, Sorry that I forgot to reply you. You said you designed it just like Akka `ActorSystem.awaitTermination`. But  [ActorSystem.awaitTermination](https://github.com/akka/akka/blob/master/akka-actor/src/main/scala/akka/actor/ActorSystem.scala#L394) will throw  a TimeoutException in case of timeout.\n\n``` Scala\n  /**\n   * Block current thread until the system has been shutdown, or the specified\n   * timeout has elapsed. This will block until after all on termination\n   * callbacks have been run.\n   *\n   * @throws TimeoutException in case of timeout\n   */\n  def awaitTermination(timeout: Duration): Unit\n```\n",
+    "commit": "52247f5ff48f1fdf285daac20846c7587a30f340",
+    "createdAt": "2015-01-22T12:39:45Z",
+    "diffHunk": "@@ -17,30 +17,63 @@\n \n package org.apache.spark.streaming\n \n+import java.util.concurrent.TimeUnit\n+import java.util.concurrent.locks.ReentrantLock\n+\n private[streaming] class ContextWaiter {\n+\n+  private val lock = new ReentrantLock()\n+  private val condition = lock.newCondition()\n+\n+  // Guarded by \"lock\"\n   private var error: Throwable = null\n-  private var stopped: Boolean = false\n \n-  def notifyError(e: Throwable) = synchronized {\n-    error = e\n-    notifyAll()\n-  }\n+  // Guarded by \"lock\"\n+  private var stopped: Boolean = false\n \n-  def notifyStop() = synchronized {\n-    stopped = true\n-    notifyAll()\n+  def notifyError(e: Throwable): Unit = {\n+    lock.lock()\n+    try {\n+      error = e\n+      condition.signalAll()\n+    } finally {\n+      lock.unlock()\n+    }\n   }\n \n-  def waitForStopOrError(timeout: Long = -1) = synchronized {\n-    // If already had error, then throw it\n-    if (error != null) {\n-      throw error\n+  def notifyStop(): Unit = {\n+    lock.lock()\n+    try {\n+      stopped = true\n+      condition.signalAll()\n+    } finally {\n+      lock.unlock()\n     }\n+  }\n \n-    // If not already stopped, then wait\n-    if (!stopped) {\n-      if (timeout < 0) wait() else wait(timeout)\n+  /**\n+   * Return `true` if it's stopped; or throw the reported error if `notifyError` has been called; or\n+   * `false` if the waiting time detectably elapsed before return from the method.\n+   */\n+  def waitForStopOrError(timeout: Long = -1): Boolean = {",
+    "line": 57
+  }],
+  "prId": 3661
+}]

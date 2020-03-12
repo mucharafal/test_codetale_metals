@@ -1,0 +1,55 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Should this not be connected to some common constant somewhere? Is 450MB a fixed value checked elsewhere? Failing more clearly is fine of course.\n",
+    "commit": "e5784b66fca886e0d336b89c48e5292a9595efc1",
+    "createdAt": "2016-04-14T15:54:02Z",
+    "diffHunk": "@@ -104,6 +104,8 @@ private[spark] class StaticMemoryManager(\n \n private[spark] object StaticMemoryManager {\n \n+  private val MIN_MEMORY_BYTES = 450 * 1024 * 1024"
+  }, {
+    "author": {
+      "login": "peterableda"
+    },
+    "body": "I used the same constant (1.5 \\* 300 \\* 1024 \\* 1024) as the one in the `UnifiedMemoryManager`. \nhttps://github.com/apache/spark/blob/master/core/src/main/scala/org/apache/spark/memory/UnifiedMemoryManager.scala#L190\n\nI'm open to any recommendation here though. :)\n",
+    "commit": "e5784b66fca886e0d336b89c48e5292a9595efc1",
+    "createdAt": "2016-04-14T16:03:05Z",
+    "diffHunk": "@@ -104,6 +104,8 @@ private[spark] class StaticMemoryManager(\n \n private[spark] object StaticMemoryManager {\n \n+  private val MIN_MEMORY_BYTES = 450 * 1024 * 1024"
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Yeah I just mean let's literally refer to the same constant rather than copying it. Maybe it needs to live somewhere else to make sense to access in both classes.\n",
+    "commit": "e5784b66fca886e0d336b89c48e5292a9595efc1",
+    "createdAt": "2016-04-14T16:04:06Z",
+    "diffHunk": "@@ -104,6 +104,8 @@ private[spark] class StaticMemoryManager(\n \n private[spark] object StaticMemoryManager {\n \n+  private val MIN_MEMORY_BYTES = 450 * 1024 * 1024"
+  }, {
+    "author": {
+      "login": "peterableda"
+    },
+    "body": "How about a trait containing the **RESERVED_SYSTEM_MEMORY_BYTES** in the https://github.com/apache/spark/blob/master/core/src/main/scala/org/apache/spark/memory/MemoryManager.scala file? \nBoth the **StaticMemoryManager** and the **UnifiedMemoryManager** objects could extend this trait and reference the constant.  \n",
+    "commit": "e5784b66fca886e0d336b89c48e5292a9595efc1",
+    "createdAt": "2016-04-15T09:32:31Z",
+    "diffHunk": "@@ -104,6 +104,8 @@ private[spark] class StaticMemoryManager(\n \n private[spark] object StaticMemoryManager {\n \n+  private val MIN_MEMORY_BYTES = 450 * 1024 * 1024"
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Rather than bother with a trait, just make it a constant in the `MemoryManger` companion object?\n",
+    "commit": "e5784b66fca886e0d336b89c48e5292a9595efc1",
+    "createdAt": "2016-04-15T09:45:41Z",
+    "diffHunk": "@@ -104,6 +104,8 @@ private[spark] class StaticMemoryManager(\n \n private[spark] object StaticMemoryManager {\n \n+  private val MIN_MEMORY_BYTES = 450 * 1024 * 1024"
+  }],
+  "prId": 12395
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Hm maybe we could factor out these duplicated checks into the new `object`? You can use `require` to check a condition and if it fails throw IAE if it fails.\n",
+    "commit": "e5784b66fca886e0d336b89c48e5292a9595efc1",
+    "createdAt": "2016-04-19T10:14:39Z",
+    "diffHunk": "@@ -119,6 +119,21 @@ private[spark] object StaticMemoryManager {\n    */\n   private def getMaxExecutionMemory(conf: SparkConf): Long = {\n     val systemMaxMemory = conf.getLong(\"spark.testing.memory\", Runtime.getRuntime.maxMemory)\n+    val minSystemMemory = (MemoryManager.RESERVED_SYSTEM_MEMORY_BYTES * 1.5).ceil.toLong\n+\n+    if (systemMaxMemory < minSystemMemory) {"
+  }],
+  "prId": 12395
+}]

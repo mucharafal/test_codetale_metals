@@ -1,0 +1,205 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "squito"
+    },
+    "body": "if I understand right, the idea of this is test is you set up some really slow transformations, so that it won't actually complete before you get to this assert?  at the very least lets add a comment saying that.  I worry that this will become a flaky test ... though I can't immediately think of an alternative.\nAlso -- what happens to the async actions at the end of this?  Does it get cleaned up nicely?\n",
+    "commit": "539ac43c3be54abb61b5a44450cc13cc196113b2",
+    "createdAt": "2015-11-09T18:56:13Z",
+    "diffHunk": "@@ -197,4 +197,30 @@ class AsyncRDDActionsSuite extends SparkFunSuite with BeforeAndAfterAll with Tim\n       Await.result(f, Duration(20, \"milliseconds\"))\n     }\n   }\n+\n+  test(\"SimpleFutureAction callback must not consume a thread while waiting\") {\n+    val executorInvoked = Promise[Unit]\n+    val fakeExecutionContext = new ExecutionContext {\n+      override def execute(runnable: Runnable): Unit = {\n+        executorInvoked.success(())\n+      }\n+      override def reportFailure(t: Throwable): Unit = ???\n+    }\n+    val f = sc.parallelize(1 to 100, 4).mapPartitions(itr => {Thread.sleep(1000L); itr}).countAsync()\n+    f.onComplete(_ => ())(fakeExecutionContext)\n+    assert(!executorInvoked.isCompleted)"
+  }, {
+    "author": {
+      "login": "reggert"
+    },
+    "body": "I tried two other approaches (one using semaphores, one using actors) to come up with a \"non-flaky\" solution, but neither worked because the tasks get serialized and deserialized, even when running in local mode. It seems that \"Thread.sleep\" is the only viable approach, as ugly as it is. The async action should just go away after the job completes. I'll add a comment.\n",
+    "commit": "539ac43c3be54abb61b5a44450cc13cc196113b2",
+    "createdAt": "2015-11-10T05:19:21Z",
+    "diffHunk": "@@ -197,4 +197,30 @@ class AsyncRDDActionsSuite extends SparkFunSuite with BeforeAndAfterAll with Tim\n       Await.result(f, Duration(20, \"milliseconds\"))\n     }\n   }\n+\n+  test(\"SimpleFutureAction callback must not consume a thread while waiting\") {\n+    val executorInvoked = Promise[Unit]\n+    val fakeExecutionContext = new ExecutionContext {\n+      override def execute(runnable: Runnable): Unit = {\n+        executorInvoked.success(())\n+      }\n+      override def reportFailure(t: Throwable): Unit = ???\n+    }\n+    val f = sc.parallelize(1 to 100, 4).mapPartitions(itr => {Thread.sleep(1000L); itr}).countAsync()\n+    f.onComplete(_ => ())(fakeExecutionContext)\n+    assert(!executorInvoked.isCompleted)"
+  }],
+  "prId": 9264
+}, {
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "style: `mapPartitions { iter => Thread.sleep(1000L); iter }`\n",
+    "commit": "539ac43c3be54abb61b5a44450cc13cc196113b2",
+    "createdAt": "2015-11-11T17:59:29Z",
+    "diffHunk": "@@ -197,4 +197,31 @@ class AsyncRDDActionsSuite extends SparkFunSuite with BeforeAndAfterAll with Tim\n       Await.result(f, Duration(20, \"milliseconds\"))\n     }\n   }\n+\n+  private def testAsyncAction[R](action : RDD[Int] => FutureAction[R]) : Unit = {\n+    val executorInvoked = Promise[Unit]\n+    val fakeExecutionContext = new ExecutionContext {\n+      override def execute(runnable: Runnable): Unit = {\n+        executorInvoked.success(())\n+      }\n+      override def reportFailure(t: Throwable): Unit = ()\n+    }\n+    /*\n+      We sleep here so that we get to the assertion before the job completes.\n+      I wish there were a cleaner way to do this, but trying to use any sort of synchronization\n+      with this fails due to task serialization.\n+    */\n+    val rdd = sc.parallelize(1 to 100, 4).mapPartitions(itr => {Thread.sleep(1000L); itr})"
+  }, {
+    "author": {
+      "login": "reggert"
+    },
+    "body": "I just copied the style of the test that appears immediately above this. \n",
+    "commit": "539ac43c3be54abb61b5a44450cc13cc196113b2",
+    "createdAt": "2015-11-11T18:10:21Z",
+    "diffHunk": "@@ -197,4 +197,31 @@ class AsyncRDDActionsSuite extends SparkFunSuite with BeforeAndAfterAll with Tim\n       Await.result(f, Duration(20, \"milliseconds\"))\n     }\n   }\n+\n+  private def testAsyncAction[R](action : RDD[Int] => FutureAction[R]) : Unit = {\n+    val executorInvoked = Promise[Unit]\n+    val fakeExecutionContext = new ExecutionContext {\n+      override def execute(runnable: Runnable): Unit = {\n+        executorInvoked.success(())\n+      }\n+      override def reportFailure(t: Throwable): Unit = ()\n+    }\n+    /*\n+      We sleep here so that we get to the assertion before the job completes.\n+      I wish there were a cleaner way to do this, but trying to use any sort of synchronization\n+      with this fails due to task serialization.\n+    */\n+    val rdd = sc.parallelize(1 to 100, 4).mapPartitions(itr => {Thread.sleep(1000L); itr})"
+  }],
+  "prId": 9264
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "We don't generally use `_` import but it's up to your judgment. Maybe in this case; maybe note the previous one\n",
+    "commit": "539ac43c3be54abb61b5a44450cc13cc196113b2",
+    "createdAt": "2015-11-14T08:41:36Z",
+    "diffHunk": "@@ -27,7 +27,7 @@ import org.scalatest.BeforeAndAfterAll\n import org.scalatest.concurrent.Timeouts\n import org.scalatest.time.SpanSugar._\n \n-import org.apache.spark.{LocalSparkContext, SparkContext, SparkException, SparkFunSuite}\n+import org.apache.spark._",
+    "line": 14
+  }, {
+    "author": {
+      "login": "reggert"
+    },
+    "body": "I think IntelliJ did that automatically because the number of things being imported exceeded some threshold.\n",
+    "commit": "539ac43c3be54abb61b5a44450cc13cc196113b2",
+    "createdAt": "2015-11-14T22:23:29Z",
+    "diffHunk": "@@ -27,7 +27,7 @@ import org.scalatest.BeforeAndAfterAll\n import org.scalatest.concurrent.Timeouts\n import org.scalatest.time.SpanSugar._\n \n-import org.apache.spark.{LocalSparkContext, SparkContext, SparkException, SparkFunSuite}\n+import org.apache.spark._",
+    "line": 14
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Sure, that's just your IDE defaults though, doesn't mean it's the right thing in every case. I don't think I'd change imports just to change them, not just because the IDE did it.\n",
+    "commit": "539ac43c3be54abb61b5a44450cc13cc196113b2",
+    "createdAt": "2015-11-15T19:17:32Z",
+    "diffHunk": "@@ -27,7 +27,7 @@ import org.scalatest.BeforeAndAfterAll\n import org.scalatest.concurrent.Timeouts\n import org.scalatest.time.SpanSugar._\n \n-import org.apache.spark.{LocalSparkContext, SparkContext, SparkException, SparkFunSuite}\n+import org.apache.spark._",
+    "line": 14
+  }, {
+    "author": {
+      "login": "reggert"
+    },
+    "body": "The line needs to change regardless, because an import was added. Explicitly specifying 5 imported classes causes the line to exceed 100 characters, however.\n",
+    "commit": "539ac43c3be54abb61b5a44450cc13cc196113b2",
+    "createdAt": "2015-11-15T23:02:42Z",
+    "diffHunk": "@@ -27,7 +27,7 @@ import org.scalatest.BeforeAndAfterAll\n import org.scalatest.concurrent.Timeouts\n import org.scalatest.time.SpanSugar._\n \n-import org.apache.spark.{LocalSparkContext, SparkContext, SparkException, SparkFunSuite}\n+import org.apache.spark._",
+    "line": 14
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Sure, the code still tends to prefer explicit imports up to a point, even if it means wrapping the line. I'd leave it though\n",
+    "commit": "539ac43c3be54abb61b5a44450cc13cc196113b2",
+    "createdAt": "2015-11-16T09:15:42Z",
+    "diffHunk": "@@ -27,7 +27,7 @@ import org.scalatest.BeforeAndAfterAll\n import org.scalatest.concurrent.Timeouts\n import org.scalatest.time.SpanSugar._\n \n-import org.apache.spark.{LocalSparkContext, SparkContext, SparkException, SparkFunSuite}\n+import org.apache.spark._",
+    "line": 14
+  }],
+  "prId": 9264
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Can this simply be two arguments to a function? it reads a little unclearly\n",
+    "commit": "539ac43c3be54abb61b5a44450cc13cc196113b2",
+    "createdAt": "2015-11-14T08:42:30Z",
+    "diffHunk": "@@ -197,4 +197,50 @@ class AsyncRDDActionsSuite extends SparkFunSuite with BeforeAndAfterAll with Tim\n       Await.result(f, Duration(20, \"milliseconds\"))\n     }\n   }\n+\n+  private def testAsyncAction[R](action: RDD[Int] => FutureAction[R])\n+    (starter: => Semaphore) : Unit = {"
+  }, {
+    "author": {
+      "login": "reggert"
+    },
+    "body": "Keeping it this way keeps the call sites a lot less cluttered.\n",
+    "commit": "539ac43c3be54abb61b5a44450cc13cc196113b2",
+    "createdAt": "2015-11-14T22:28:58Z",
+    "diffHunk": "@@ -197,4 +197,50 @@ class AsyncRDDActionsSuite extends SparkFunSuite with BeforeAndAfterAll with Tim\n       Await.result(f, Duration(20, \"milliseconds\"))\n     }\n   }\n+\n+  private def testAsyncAction[R](action: RDD[Int] => FutureAction[R])\n+    (starter: => Semaphore) : Unit = {"
+  }, {
+    "author": {
+      "login": "reggert"
+    },
+    "body": "To clarify: If I put the parameters in the same parameter list, the compiler forces me to be a lot more verbose at the call sites (with curly braces, `=>`, and so forth)\n",
+    "commit": "539ac43c3be54abb61b5a44450cc13cc196113b2",
+    "createdAt": "2015-11-14T22:45:57Z",
+    "diffHunk": "@@ -197,4 +197,50 @@ class AsyncRDDActionsSuite extends SparkFunSuite with BeforeAndAfterAll with Tim\n       Await.result(f, Duration(20, \"milliseconds\"))\n     }\n   }\n+\n+  private def testAsyncAction[R](action: RDD[Int] => FutureAction[R])\n+    (starter: => Semaphore) : Unit = {"
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "OK, no problem, I see what you mean.\n",
+    "commit": "539ac43c3be54abb61b5a44450cc13cc196113b2",
+    "createdAt": "2015-11-14T22:52:56Z",
+    "diffHunk": "@@ -197,4 +197,50 @@ class AsyncRDDActionsSuite extends SparkFunSuite with BeforeAndAfterAll with Tim\n       Await.result(f, Duration(20, \"milliseconds\"))\n     }\n   }\n+\n+  private def testAsyncAction[R](action: RDD[Int] => FutureAction[R])\n+    (starter: => Semaphore) : Unit = {"
+  }],
+  "prId": 9264
+}, {
+  "comments": [{
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "Since the callback doesn't run, how to verify that we didn't break task deserialization?\n",
+    "commit": "539ac43c3be54abb61b5a44450cc13cc196113b2",
+    "createdAt": "2015-12-07T19:09:29Z",
+    "diffHunk": "@@ -197,4 +197,34 @@ class AsyncRDDActionsSuite extends SparkFunSuite with BeforeAndAfterAll with Tim\n       Await.result(f, Duration(20, \"milliseconds\"))\n     }\n   }\n+\n+  private def testAsyncAction[R](action: RDD[Int] => FutureAction[R]): Unit = {\n+    val executionContextInvoked = Promise[Unit]\n+    val fakeExecutionContext = new ExecutionContext {\n+      override def execute(runnable: Runnable): Unit = {\n+        executionContextInvoked.success(())\n+      }\n+      override def reportFailure(t: Throwable): Unit = ()\n+    }\n+    val starter = Smuggle(new Semaphore(0))\n+    starter.drainPermits()\n+    val rdd = sc.parallelize(1 to 100, 4).mapPartitions {itr => starter.acquire(1); itr}\n+    val f = action(rdd)\n+    f.onComplete(_ => ())(fakeExecutionContext)\n+    // Here we verify that registering the callback didn't cause a thread to be consumed.\n+    assert(!executionContextInvoked.isCompleted)\n+    // Now allow the executors to proceed with task processing.\n+    starter.release(rdd.partitions.length)\n+    // Waiting for the result verifies that the tasks were successfully processed.\n+    // This mainly exists to verify that we didn't break task deserialization."
+  }, {
+    "author": {
+      "login": "reggert"
+    },
+    "body": "Unless I'm mistaken, the `Await.result` call will throw an exception if the job fails.\n",
+    "commit": "539ac43c3be54abb61b5a44450cc13cc196113b2",
+    "createdAt": "2015-12-08T02:53:57Z",
+    "diffHunk": "@@ -197,4 +197,34 @@ class AsyncRDDActionsSuite extends SparkFunSuite with BeforeAndAfterAll with Tim\n       Await.result(f, Duration(20, \"milliseconds\"))\n     }\n   }\n+\n+  private def testAsyncAction[R](action: RDD[Int] => FutureAction[R]): Unit = {\n+    val executionContextInvoked = Promise[Unit]\n+    val fakeExecutionContext = new ExecutionContext {\n+      override def execute(runnable: Runnable): Unit = {\n+        executionContextInvoked.success(())\n+      }\n+      override def reportFailure(t: Throwable): Unit = ()\n+    }\n+    val starter = Smuggle(new Semaphore(0))\n+    starter.drainPermits()\n+    val rdd = sc.parallelize(1 to 100, 4).mapPartitions {itr => starter.acquire(1); itr}\n+    val f = action(rdd)\n+    f.onComplete(_ => ())(fakeExecutionContext)\n+    // Here we verify that registering the callback didn't cause a thread to be consumed.\n+    assert(!executionContextInvoked.isCompleted)\n+    // Now allow the executors to proceed with task processing.\n+    starter.release(rdd.partitions.length)\n+    // Waiting for the result verifies that the tasks were successfully processed.\n+    // This mainly exists to verify that we didn't break task deserialization."
+  }, {
+    "author": {
+      "login": "reggert"
+    },
+    "body": "To clarify, in the event that we've broken task deserialization, I would expect to see a `NotSerializableException` or similar error thrown from the `Await.result` call.\n",
+    "commit": "539ac43c3be54abb61b5a44450cc13cc196113b2",
+    "createdAt": "2015-12-09T16:51:45Z",
+    "diffHunk": "@@ -197,4 +197,34 @@ class AsyncRDDActionsSuite extends SparkFunSuite with BeforeAndAfterAll with Tim\n       Await.result(f, Duration(20, \"milliseconds\"))\n     }\n   }\n+\n+  private def testAsyncAction[R](action: RDD[Int] => FutureAction[R]): Unit = {\n+    val executionContextInvoked = Promise[Unit]\n+    val fakeExecutionContext = new ExecutionContext {\n+      override def execute(runnable: Runnable): Unit = {\n+        executionContextInvoked.success(())\n+      }\n+      override def reportFailure(t: Throwable): Unit = ()\n+    }\n+    val starter = Smuggle(new Semaphore(0))\n+    starter.drainPermits()\n+    val rdd = sc.parallelize(1 to 100, 4).mapPartitions {itr => starter.acquire(1); itr}\n+    val f = action(rdd)\n+    f.onComplete(_ => ())(fakeExecutionContext)\n+    // Here we verify that registering the callback didn't cause a thread to be consumed.\n+    assert(!executionContextInvoked.isCompleted)\n+    // Now allow the executors to proceed with task processing.\n+    starter.release(rdd.partitions.length)\n+    // Waiting for the result verifies that the tasks were successfully processed.\n+    // This mainly exists to verify that we didn't break task deserialization."
+  }, {
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "Just tested the logic locally. `Task not serializable` will be throw from `mapPartitions` if I added some non-serializable reference to the closure. \n\nSince no place will call `executionContextInvoked.failure`, the only exception will be thrown from `Await.result(executionContextInvoked.future, atMost = 15.seconds)` is just TimeoutException.\n",
+    "commit": "539ac43c3be54abb61b5a44450cc13cc196113b2",
+    "createdAt": "2015-12-10T05:37:37Z",
+    "diffHunk": "@@ -197,4 +197,34 @@ class AsyncRDDActionsSuite extends SparkFunSuite with BeforeAndAfterAll with Tim\n       Await.result(f, Duration(20, \"milliseconds\"))\n     }\n   }\n+\n+  private def testAsyncAction[R](action: RDD[Int] => FutureAction[R]): Unit = {\n+    val executionContextInvoked = Promise[Unit]\n+    val fakeExecutionContext = new ExecutionContext {\n+      override def execute(runnable: Runnable): Unit = {\n+        executionContextInvoked.success(())\n+      }\n+      override def reportFailure(t: Throwable): Unit = ()\n+    }\n+    val starter = Smuggle(new Semaphore(0))\n+    starter.drainPermits()\n+    val rdd = sc.parallelize(1 to 100, 4).mapPartitions {itr => starter.acquire(1); itr}\n+    val f = action(rdd)\n+    f.onComplete(_ => ())(fakeExecutionContext)\n+    // Here we verify that registering the callback didn't cause a thread to be consumed.\n+    assert(!executionContextInvoked.isCompleted)\n+    // Now allow the executors to proceed with task processing.\n+    starter.release(rdd.partitions.length)\n+    // Waiting for the result verifies that the tasks were successfully processed.\n+    // This mainly exists to verify that we didn't break task deserialization."
+  }, {
+    "author": {
+      "login": "markhamstra"
+    },
+    "body": "How did you test it?  My expectation is the same as Richard's, that `Await.result` will throw the underlying exception.  For example:\n\n```\nscala> val fi: Future[Int] = Future { throw new java.lang.RuntimeException() }\nfi: scala.concurrent.Future[Int] = scala.concurrent.impl.Promise$DefaultPromise@3f200884\n\nscala> try { Await.result(fi, 3 seconds) } catch {\n     | case _: java.util.concurrent.TimeoutException => println(\"Timeout\")\n     | case _: java.lang.RuntimeException => println(\"Runtime\")\n     | case _: Throwable => println(\"Huh?\")\n     | }\nRuntime\nres1: AnyVal = ()\n```\n",
+    "commit": "539ac43c3be54abb61b5a44450cc13cc196113b2",
+    "createdAt": "2015-12-10T06:10:19Z",
+    "diffHunk": "@@ -197,4 +197,34 @@ class AsyncRDDActionsSuite extends SparkFunSuite with BeforeAndAfterAll with Tim\n       Await.result(f, Duration(20, \"milliseconds\"))\n     }\n   }\n+\n+  private def testAsyncAction[R](action: RDD[Int] => FutureAction[R]): Unit = {\n+    val executionContextInvoked = Promise[Unit]\n+    val fakeExecutionContext = new ExecutionContext {\n+      override def execute(runnable: Runnable): Unit = {\n+        executionContextInvoked.success(())\n+      }\n+      override def reportFailure(t: Throwable): Unit = ()\n+    }\n+    val starter = Smuggle(new Semaphore(0))\n+    starter.drainPermits()\n+    val rdd = sc.parallelize(1 to 100, 4).mapPartitions {itr => starter.acquire(1); itr}\n+    val f = action(rdd)\n+    f.onComplete(_ => ())(fakeExecutionContext)\n+    // Here we verify that registering the callback didn't cause a thread to be consumed.\n+    assert(!executionContextInvoked.isCompleted)\n+    // Now allow the executors to proceed with task processing.\n+    starter.release(rdd.partitions.length)\n+    // Waiting for the result verifies that the tasks were successfully processed.\n+    // This mainly exists to verify that we didn't break task deserialization."
+  }, {
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "The problem is here it uses `executionContextInvoked.future` to call `Await.result`. But the only place that completes the Promise is `executionContextInvoked.success(())`.\n",
+    "commit": "539ac43c3be54abb61b5a44450cc13cc196113b2",
+    "createdAt": "2015-12-10T06:18:22Z",
+    "diffHunk": "@@ -197,4 +197,34 @@ class AsyncRDDActionsSuite extends SparkFunSuite with BeforeAndAfterAll with Tim\n       Await.result(f, Duration(20, \"milliseconds\"))\n     }\n   }\n+\n+  private def testAsyncAction[R](action: RDD[Int] => FutureAction[R]): Unit = {\n+    val executionContextInvoked = Promise[Unit]\n+    val fakeExecutionContext = new ExecutionContext {\n+      override def execute(runnable: Runnable): Unit = {\n+        executionContextInvoked.success(())\n+      }\n+      override def reportFailure(t: Throwable): Unit = ()\n+    }\n+    val starter = Smuggle(new Semaphore(0))\n+    starter.drainPermits()\n+    val rdd = sc.parallelize(1 to 100, 4).mapPartitions {itr => starter.acquire(1); itr}\n+    val f = action(rdd)\n+    f.onComplete(_ => ())(fakeExecutionContext)\n+    // Here we verify that registering the callback didn't cause a thread to be consumed.\n+    assert(!executionContextInvoked.isCompleted)\n+    // Now allow the executors to proceed with task processing.\n+    starter.release(rdd.partitions.length)\n+    // Waiting for the result verifies that the tasks were successfully processed.\n+    // This mainly exists to verify that we didn't break task deserialization."
+  }, {
+    "author": {
+      "login": "markhamstra"
+    },
+    "body": "Ah, got it -- yes, that does appear to be swallowing any exception from `mapPartitions`.  Good eyes! \n",
+    "commit": "539ac43c3be54abb61b5a44450cc13cc196113b2",
+    "createdAt": "2015-12-10T06:34:54Z",
+    "diffHunk": "@@ -197,4 +197,34 @@ class AsyncRDDActionsSuite extends SparkFunSuite with BeforeAndAfterAll with Tim\n       Await.result(f, Duration(20, \"milliseconds\"))\n     }\n   }\n+\n+  private def testAsyncAction[R](action: RDD[Int] => FutureAction[R]): Unit = {\n+    val executionContextInvoked = Promise[Unit]\n+    val fakeExecutionContext = new ExecutionContext {\n+      override def execute(runnable: Runnable): Unit = {\n+        executionContextInvoked.success(())\n+      }\n+      override def reportFailure(t: Throwable): Unit = ()\n+    }\n+    val starter = Smuggle(new Semaphore(0))\n+    starter.drainPermits()\n+    val rdd = sc.parallelize(1 to 100, 4).mapPartitions {itr => starter.acquire(1); itr}\n+    val f = action(rdd)\n+    f.onComplete(_ => ())(fakeExecutionContext)\n+    // Here we verify that registering the callback didn't cause a thread to be consumed.\n+    assert(!executionContextInvoked.isCompleted)\n+    // Now allow the executors to proceed with task processing.\n+    starter.release(rdd.partitions.length)\n+    // Waiting for the result verifies that the tasks were successfully processed.\n+    // This mainly exists to verify that we didn't break task deserialization."
+  }, {
+    "author": {
+      "login": "reggert"
+    },
+    "body": "If `mapPartitions` throws an exception, won't that cause the test to fail before we even get to `Await.result`?\n",
+    "commit": "539ac43c3be54abb61b5a44450cc13cc196113b2",
+    "createdAt": "2015-12-11T05:04:40Z",
+    "diffHunk": "@@ -197,4 +197,34 @@ class AsyncRDDActionsSuite extends SparkFunSuite with BeforeAndAfterAll with Tim\n       Await.result(f, Duration(20, \"milliseconds\"))\n     }\n   }\n+\n+  private def testAsyncAction[R](action: RDD[Int] => FutureAction[R]): Unit = {\n+    val executionContextInvoked = Promise[Unit]\n+    val fakeExecutionContext = new ExecutionContext {\n+      override def execute(runnable: Runnable): Unit = {\n+        executionContextInvoked.success(())\n+      }\n+      override def reportFailure(t: Throwable): Unit = ()\n+    }\n+    val starter = Smuggle(new Semaphore(0))\n+    starter.drainPermits()\n+    val rdd = sc.parallelize(1 to 100, 4).mapPartitions {itr => starter.acquire(1); itr}\n+    val f = action(rdd)\n+    f.onComplete(_ => ())(fakeExecutionContext)\n+    // Here we verify that registering the callback didn't cause a thread to be consumed.\n+    assert(!executionContextInvoked.isCompleted)\n+    // Now allow the executors to proceed with task processing.\n+    starter.release(rdd.partitions.length)\n+    // Waiting for the result verifies that the tasks were successfully processed.\n+    // This mainly exists to verify that we didn't break task deserialization."
+  }, {
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "> If mapPartitions throws an exception, won't that cause the test to fail before we even get to Await.result?\n\nI'm not against `Await.result` here. I just wanted to point out the comment is wrong.\n",
+    "commit": "539ac43c3be54abb61b5a44450cc13cc196113b2",
+    "createdAt": "2015-12-11T05:10:47Z",
+    "diffHunk": "@@ -197,4 +197,34 @@ class AsyncRDDActionsSuite extends SparkFunSuite with BeforeAndAfterAll with Tim\n       Await.result(f, Duration(20, \"milliseconds\"))\n     }\n   }\n+\n+  private def testAsyncAction[R](action: RDD[Int] => FutureAction[R]): Unit = {\n+    val executionContextInvoked = Promise[Unit]\n+    val fakeExecutionContext = new ExecutionContext {\n+      override def execute(runnable: Runnable): Unit = {\n+        executionContextInvoked.success(())\n+      }\n+      override def reportFailure(t: Throwable): Unit = ()\n+    }\n+    val starter = Smuggle(new Semaphore(0))\n+    starter.drainPermits()\n+    val rdd = sc.parallelize(1 to 100, 4).mapPartitions {itr => starter.acquire(1); itr}\n+    val f = action(rdd)\n+    f.onComplete(_ => ())(fakeExecutionContext)\n+    // Here we verify that registering the callback didn't cause a thread to be consumed.\n+    assert(!executionContextInvoked.isCompleted)\n+    // Now allow the executors to proceed with task processing.\n+    starter.release(rdd.partitions.length)\n+    // Waiting for the result verifies that the tasks were successfully processed.\n+    // This mainly exists to verify that we didn't break task deserialization."
+  }, {
+    "author": {
+      "login": "reggert"
+    },
+    "body": "Oh, is that all? :-)\n\nComment line removed.\n",
+    "commit": "539ac43c3be54abb61b5a44450cc13cc196113b2",
+    "createdAt": "2015-12-13T16:35:39Z",
+    "diffHunk": "@@ -197,4 +197,34 @@ class AsyncRDDActionsSuite extends SparkFunSuite with BeforeAndAfterAll with Tim\n       Await.result(f, Duration(20, \"milliseconds\"))\n     }\n   }\n+\n+  private def testAsyncAction[R](action: RDD[Int] => FutureAction[R]): Unit = {\n+    val executionContextInvoked = Promise[Unit]\n+    val fakeExecutionContext = new ExecutionContext {\n+      override def execute(runnable: Runnable): Unit = {\n+        executionContextInvoked.success(())\n+      }\n+      override def reportFailure(t: Throwable): Unit = ()\n+    }\n+    val starter = Smuggle(new Semaphore(0))\n+    starter.drainPermits()\n+    val rdd = sc.parallelize(1 to 100, 4).mapPartitions {itr => starter.acquire(1); itr}\n+    val f = action(rdd)\n+    f.onComplete(_ => ())(fakeExecutionContext)\n+    // Here we verify that registering the callback didn't cause a thread to be consumed.\n+    assert(!executionContextInvoked.isCompleted)\n+    // Now allow the executors to proceed with task processing.\n+    starter.release(rdd.partitions.length)\n+    // Waiting for the result verifies that the tasks were successfully processed.\n+    // This mainly exists to verify that we didn't break task deserialization."
+  }],
+  "prId": 9264
+}]

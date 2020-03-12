@@ -1,0 +1,13 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "tgravescs"
+    },
+    "body": "might be nie to have assert for assignedAddrs where it returns more then 1.",
+    "commit": "d579c5d50ee793a09eebbb94f7998012ec81aa1e",
+    "createdAt": "2019-10-22T14:20:07Z",
+    "diffHunk": "@@ -80,12 +80,29 @@ class ExecutorResourceInfoSuite extends SparkFunSuite {\n \n   test(\"Don't allow release address that doesn't exist\") {\n     // Init Executor Resource.\n-    val info = new ExecutorResourceInfo(GPU, ArrayBuffer(\"0\", \"1\", \"2\", \"3\"))\n+    val info = new ExecutorResourceInfo(GPU, ArrayBuffer(\"0\", \"1\", \"2\", \"3\"), 1)\n     assert(!info.assignedAddrs.contains(\"4\"))\n     // Release an address that doesn't exist\n     val e = intercept[SparkException] {\n       info.release(Array(\"4\"))\n     }\n     assert(e.getMessage.contains(\"Try to release an address that doesn't exist.\"))\n   }\n+\n+  test(\"Ensure that we can acquire the same fractions of a resource from an executor\") {\n+    val slotSeq = Seq(10, 9, 8, 7, 6, 5, 4, 3, 2, 1)\n+    val addresses = ArrayBuffer(\"0\", \"1\", \"2\", \"3\")\n+    slotSeq.foreach { slots =>\n+      val info = new ExecutorResourceInfo(GPU, addresses, slots)\n+      for (_ <- 0 until slots) {\n+        addresses.foreach(addr => info.acquire(Seq(addr)))\n+      }\n+      addresses.foreach { addr =>\n+        assertThrows[SparkException] {\n+          info.acquire(Seq(addr))\n+        }\n+        assert(!info.availableAddrs.contains(addr))",
+    "line": 69
+  }],
+  "prId": 26078
+}]

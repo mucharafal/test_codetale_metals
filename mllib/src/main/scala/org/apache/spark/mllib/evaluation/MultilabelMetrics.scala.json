@@ -1,0 +1,146 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Is there much value in splitting the trait and implementation? it's private and used in one place.",
+    "commit": "7d83ac39df2a45fca2990e855802055f60804cc6",
+    "createdAt": "2019-05-27T13:30:57Z",
+    "diffHunk": "@@ -179,3 +167,160 @@ class MultilabelMetrics @Since(\"1.2.0\") (predictionAndLabels: RDD[(Array[Double]\n   @Since(\"1.2.0\")\n   lazy val labels: Array[Double] = tpPerClass.keys.toArray.sorted\n }\n+\n+\n+/**\n+ * Trait for statistical summary for multi-label metrics.\n+ */\n+private[evaluation] trait MultilabelSummary {"
+  }],
+  "prId": 24717
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "`labelSet ++= labels`?",
+    "commit": "7d83ac39df2a45fca2990e855802055f60804cc6",
+    "createdAt": "2019-05-27T13:31:36Z",
+    "diffHunk": "@@ -179,3 +167,160 @@ class MultilabelMetrics @Since(\"1.2.0\") (predictionAndLabels: RDD[(Array[Double]\n   @Since(\"1.2.0\")\n   lazy val labels: Array[Double] = tpPerClass.keys.toArray.sorted\n }\n+\n+\n+/**\n+ * Trait for statistical summary for multi-label metrics.\n+ */\n+private[evaluation] trait MultilabelSummary {\n+\n+  def numDocs: Long\n+\n+  def numLabels: Long\n+\n+  def subsetAccuracy: Double\n+\n+  def accuracy: Double\n+\n+  def hammingLoss: Double\n+\n+  def precision: Double\n+\n+  def recall: Double\n+\n+  def f1Measure: Double\n+\n+  def tpPerClass: Map[Double, Long]\n+\n+  def fpPerClass: Map[Double, Long]\n+\n+  def fnPerClass: Map[Double, Long]\n+}\n+\n+\n+private[evaluation] class MultilabelSummarizer extends MultilabelSummary with Serializable {\n+\n+  private var docCnt = 0L\n+  private val labelSet = mutable.Set.empty[Double]\n+  private var subsetAccuracyCnt = 0L\n+  private var accuracySum = 0.0\n+  private var hammingLossSum = 0L\n+  private var precisionSum = 0.0\n+  private var recallSum = 0.0\n+  private var f1MeasureSum = 0.0\n+  private val tpPerClass_ = mutable.Map.empty[Double, Long]\n+  private val fpPerClass_ = mutable.Map.empty[Double, Long]\n+  private val fnPerClass_ = mutable.Map.empty[Double, Long]\n+\n+  /**\n+   * Add a new sample (predictions and labels) to this summarizer, and update\n+   * the statistical summary.\n+   *\n+   * @return This MultilabelSummarizer object.\n+   */\n+  def add(predictions: Array[Double], labels: Array[Double]): this.type = {\n+    val intersection = predictions.intersect(labels)\n+\n+    docCnt += 1L\n+\n+    labels.foreach(labelSet.add)"
+  }],
+  "prId": 24717
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Can `sample` be written as `(label, prediction)` for clarity? I forget whether Scala allows nested tuples here",
+    "commit": "7d83ac39df2a45fca2990e855802055f60804cc6",
+    "createdAt": "2019-05-27T13:33:11Z",
+    "diffHunk": "@@ -38,76 +40,62 @@ class MultilabelMetrics @Since(\"1.2.0\") (predictionAndLabels: RDD[(Array[Double]\n       (r.getSeq[Double](0).toArray, r.getSeq[Double](1).toArray)\n     })\n \n-  private lazy val numDocs: Long = predictionAndLabels.count()\n+  /**\n+   * Use MultilabelSummarizer to calculate all summary statistics of predictions\n+   * and labels on one pass.\n+   */\n+  private lazy val summary: MultilabelSummary = {\n+    predictionAndLabels\n+      .treeAggregate(new MultilabelSummarizer)(\n+        (summary, sample) => summary.add(sample._1, sample._2),",
+    "line": 21
+  }, {
+    "author": {
+      "login": "zhengruifeng"
+    },
+    "body": "If I convert this to `(summary, (preds, l)) => summary.add(preds, l),` then the IDEA complains ",
+    "commit": "7d83ac39df2a45fca2990e855802055f60804cc6",
+    "createdAt": "2019-05-28T02:36:15Z",
+    "diffHunk": "@@ -38,76 +40,62 @@ class MultilabelMetrics @Since(\"1.2.0\") (predictionAndLabels: RDD[(Array[Double]\n       (r.getSeq[Double](0).toArray, r.getSeq[Double](1).toArray)\n     })\n \n-  private lazy val numDocs: Long = predictionAndLabels.count()\n+  /**\n+   * Use MultilabelSummarizer to calculate all summary statistics of predictions\n+   * and labels on one pass.\n+   */\n+  private lazy val summary: MultilabelSummary = {\n+    predictionAndLabels\n+      .treeAggregate(new MultilabelSummarizer)(\n+        (summary, sample) => summary.add(sample._1, sample._2),",
+    "line": 21
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "With a `{ case (...) =>` statement? OK no big deal",
+    "commit": "7d83ac39df2a45fca2990e855802055f60804cc6",
+    "createdAt": "2019-05-28T14:32:57Z",
+    "diffHunk": "@@ -38,76 +40,62 @@ class MultilabelMetrics @Since(\"1.2.0\") (predictionAndLabels: RDD[(Array[Double]\n       (r.getSeq[Double](0).toArray, r.getSeq[Double](1).toArray)\n     })\n \n-  private lazy val numDocs: Long = predictionAndLabels.count()\n+  /**\n+   * Use MultilabelSummarizer to calculate all summary statistics of predictions\n+   * and labels on one pass.\n+   */\n+  private lazy val summary: MultilabelSummary = {\n+    predictionAndLabels\n+      .treeAggregate(new MultilabelSummarizer)(\n+        (summary, sample) => summary.add(sample._1, sample._2),",
+    "line": 21
+  }],
+  "prId": 24717
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "I also wonder whether it's useful to make this lazy... can you really do anything with the class without computing this?",
+    "commit": "7d83ac39df2a45fca2990e855802055f60804cc6",
+    "createdAt": "2019-05-27T13:33:56Z",
+    "diffHunk": "@@ -38,76 +40,62 @@ class MultilabelMetrics @Since(\"1.2.0\") (predictionAndLabels: RDD[(Array[Double]\n       (r.getSeq[Double](0).toArray, r.getSeq[Double](1).toArray)\n     })\n \n-  private lazy val numDocs: Long = predictionAndLabels.count()\n+  /**\n+   * Use MultilabelSummarizer to calculate all summary statistics of predictions\n+   * and labels on one pass.\n+   */\n+  private lazy val summary: MultilabelSummary = {"
+  }, {
+    "author": {
+      "login": "zhengruifeng"
+    },
+    "body": "Just because all other impls make summary metrics lazy. Ok  I will make this not lazy. ",
+    "commit": "7d83ac39df2a45fca2990e855802055f60804cc6",
+    "createdAt": "2019-05-28T02:18:14Z",
+    "diffHunk": "@@ -38,76 +40,62 @@ class MultilabelMetrics @Since(\"1.2.0\") (predictionAndLabels: RDD[(Array[Double]\n       (r.getSeq[Double](0).toArray, r.getSeq[Double](1).toArray)\n     })\n \n-  private lazy val numDocs: Long = predictionAndLabels.count()\n+  /**\n+   * Use MultilabelSummarizer to calculate all summary statistics of predictions\n+   * and labels on one pass.\n+   */\n+  private lazy val summary: MultilabelSummary = {"
+  }],
+  "prId": 24717
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "I'd switch this to `Arrays.equals()` for slightly better performance, as I suppose that's the goal here.",
+    "commit": "7d83ac39df2a45fca2990e855802055f60804cc6",
+    "createdAt": "2019-05-27T13:35:14Z",
+    "diffHunk": "@@ -179,3 +167,160 @@ class MultilabelMetrics @Since(\"1.2.0\") (predictionAndLabels: RDD[(Array[Double]\n   @Since(\"1.2.0\")\n   lazy val labels: Array[Double] = tpPerClass.keys.toArray.sorted\n }\n+\n+\n+/**\n+ * Trait for statistical summary for multi-label metrics.\n+ */\n+private[evaluation] trait MultilabelSummary {\n+\n+  def numDocs: Long\n+\n+  def numLabels: Long\n+\n+  def subsetAccuracy: Double\n+\n+  def accuracy: Double\n+\n+  def hammingLoss: Double\n+\n+  def precision: Double\n+\n+  def recall: Double\n+\n+  def f1Measure: Double\n+\n+  def tpPerClass: Map[Double, Long]\n+\n+  def fpPerClass: Map[Double, Long]\n+\n+  def fnPerClass: Map[Double, Long]\n+}\n+\n+\n+private[evaluation] class MultilabelSummarizer extends MultilabelSummary with Serializable {\n+\n+  private var docCnt = 0L\n+  private val labelSet = mutable.Set.empty[Double]\n+  private var subsetAccuracyCnt = 0L\n+  private var accuracySum = 0.0\n+  private var hammingLossSum = 0L\n+  private var precisionSum = 0.0\n+  private var recallSum = 0.0\n+  private var f1MeasureSum = 0.0\n+  private val tpPerClass_ = mutable.Map.empty[Double, Long]\n+  private val fpPerClass_ = mutable.Map.empty[Double, Long]\n+  private val fnPerClass_ = mutable.Map.empty[Double, Long]\n+\n+  /**\n+   * Add a new sample (predictions and labels) to this summarizer, and update\n+   * the statistical summary.\n+   *\n+   * @return This MultilabelSummarizer object.\n+   */\n+  def add(predictions: Array[Double], labels: Array[Double]): this.type = {\n+    val intersection = predictions.intersect(labels)\n+\n+    docCnt += 1L\n+\n+    labels.foreach(labelSet.add)\n+\n+    if (predictions.deep == labels.deep) {"
+  }],
+  "prId": 24717
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Why the underscore?",
+    "commit": "7d83ac39df2a45fca2990e855802055f60804cc6",
+    "createdAt": "2019-05-27T13:57:35Z",
+    "diffHunk": "@@ -179,3 +167,160 @@ class MultilabelMetrics @Since(\"1.2.0\") (predictionAndLabels: RDD[(Array[Double]\n   @Since(\"1.2.0\")\n   lazy val labels: Array[Double] = tpPerClass.keys.toArray.sorted\n }\n+\n+\n+/**\n+ * Trait for statistical summary for multi-label metrics.\n+ */\n+private[evaluation] trait MultilabelSummary {\n+\n+  def numDocs: Long\n+\n+  def numLabels: Long\n+\n+  def subsetAccuracy: Double\n+\n+  def accuracy: Double\n+\n+  def hammingLoss: Double\n+\n+  def precision: Double\n+\n+  def recall: Double\n+\n+  def f1Measure: Double\n+\n+  def tpPerClass: Map[Double, Long]\n+\n+  def fpPerClass: Map[Double, Long]\n+\n+  def fnPerClass: Map[Double, Long]\n+}\n+\n+\n+private[evaluation] class MultilabelSummarizer extends MultilabelSummary with Serializable {\n+\n+  private var docCnt = 0L\n+  private val labelSet = mutable.Set.empty[Double]\n+  private var subsetAccuracyCnt = 0L\n+  private var accuracySum = 0.0\n+  private var hammingLossSum = 0L\n+  private var precisionSum = 0.0\n+  private var recallSum = 0.0\n+  private var f1MeasureSum = 0.0\n+  private val tpPerClass_ = mutable.Map.empty[Double, Long]"
+  }],
+  "prId": 24717
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "These shouldn't be lazy now. They just delegate to a non-lazy object that's already initialized.",
+    "commit": "7d83ac39df2a45fca2990e855802055f60804cc6",
+    "createdAt": "2019-05-28T14:39:58Z",
+    "diffHunk": "@@ -38,85 +40,65 @@ class MultilabelMetrics @Since(\"1.2.0\") (predictionAndLabels: RDD[(Array[Double]\n       (r.getSeq[Double](0).toArray, r.getSeq[Double](1).toArray)\n     })\n \n-  private lazy val numDocs: Long = predictionAndLabels.count()\n+  /**\n+   * Use MultilabelSummarizer to calculate all summary statistics of predictions\n+   * and labels on one pass.\n+   */\n+  private val summary: MultilabelSummarizer = {\n+    predictionAndLabels\n+      .treeAggregate(new MultilabelSummarizer)(\n+        (summary, sample) => summary.add(sample._1, sample._2),\n+        (sum1, sum2) => sum1.merge(sum2)\n+      )\n+  }\n \n-  private lazy val numLabels: Long = predictionAndLabels.flatMap { case (_, labels) =>\n-    labels}.distinct().count()\n \n   /**\n    * Returns subset accuracy\n    * (for equal sets of labels)\n    */\n   @Since(\"1.2.0\")\n-  lazy val subsetAccuracy: Double = predictionAndLabels.filter { case (predictions, labels) =>\n-    predictions.deep == labels.deep\n-  }.count().toDouble / numDocs\n+  lazy val subsetAccuracy: Double = summary.subsetAccuracy"
+  }],
+  "prId": 24717
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "I wonder why these use `foldLeft`? isn't it just a sum over values in the map, like `summary.tpPerClass.values.sum`?",
+    "commit": "7d83ac39df2a45fca2990e855802055f60804cc6",
+    "createdAt": "2019-05-28T14:41:31Z",
+    "diffHunk": "@@ -142,17 +124,17 @@ class MultilabelMetrics @Since(\"1.2.0\") (predictionAndLabels: RDD[(Array[Double]\n     if((p + r) == 0) 0.0 else 2 * p * r / (p + r)\n   }\n \n-  private lazy val sumTp = tpPerClass.foldLeft(0L) { case (sum, (_, tp)) => sum + tp }\n-  private lazy val sumFpClass = fpPerClass.foldLeft(0L) { case (sum, (_, fp)) => sum + fp }\n-  private lazy val sumFnClass = fnPerClass.foldLeft(0L) { case (sum, (_, fn)) => sum + fn }\n+  private lazy val sumTp = summary.tpPerClass.foldLeft(0L) { case (sum, (_, tp)) => sum + tp }"
+  }],
+  "prId": 24717
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Same point about .values.sum here I think",
+    "commit": "7d83ac39df2a45fca2990e855802055f60804cc6",
+    "createdAt": "2019-05-29T14:27:19Z",
+    "diffHunk": "@@ -142,17 +124,17 @@ class MultilabelMetrics @Since(\"1.2.0\") (predictionAndLabels: RDD[(Array[Double]\n     if((p + r) == 0) 0.0 else 2 * p * r / (p + r)\n   }\n \n-  private lazy val sumTp = tpPerClass.foldLeft(0L) { case (sum, (_, tp)) => sum + tp }\n-  private lazy val sumFpClass = fpPerClass.foldLeft(0L) { case (sum, (_, fp)) => sum + fp }\n-  private lazy val sumFnClass = fnPerClass.foldLeft(0L) { case (sum, (_, fn)) => sum + fn }\n+  private lazy val sumTp = summary.tpPerClass.values.sum\n+  private lazy val sumFpClass = summary.fpPerClass.values.sum\n+  private lazy val sumFnClass = summary.fnPerClass.values.sum\n \n   /**\n    * Returns micro-averaged label-based precision\n    * (equals to micro-averaged document-based precision)\n    */\n   @Since(\"1.2.0\")\n   lazy val microPrecision: Double = {\n-    val sumFp = fpPerClass.foldLeft(0L) { case(cum, (_, fp)) => cum + fp}\n+    val sumFp = summary.fpPerClass.foldLeft(0L) { case(cum, (_, fp)) => cum + fp}",
+    "line": 143
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "@zhengruifeng maybe we should change this too for completeness, but I'll merge later today either way",
+    "commit": "7d83ac39df2a45fca2990e855802055f60804cc6",
+    "createdAt": "2019-05-31T14:13:50Z",
+    "diffHunk": "@@ -142,17 +124,17 @@ class MultilabelMetrics @Since(\"1.2.0\") (predictionAndLabels: RDD[(Array[Double]\n     if((p + r) == 0) 0.0 else 2 * p * r / (p + r)\n   }\n \n-  private lazy val sumTp = tpPerClass.foldLeft(0L) { case (sum, (_, tp)) => sum + tp }\n-  private lazy val sumFpClass = fpPerClass.foldLeft(0L) { case (sum, (_, fp)) => sum + fp }\n-  private lazy val sumFnClass = fnPerClass.foldLeft(0L) { case (sum, (_, fn)) => sum + fn }\n+  private lazy val sumTp = summary.tpPerClass.values.sum\n+  private lazy val sumFpClass = summary.fpPerClass.values.sum\n+  private lazy val sumFnClass = summary.fnPerClass.values.sum\n \n   /**\n    * Returns micro-averaged label-based precision\n    * (equals to micro-averaged document-based precision)\n    */\n   @Since(\"1.2.0\")\n   lazy val microPrecision: Double = {\n-    val sumFp = fpPerClass.foldLeft(0L) { case(cum, (_, fp)) => cum + fp}\n+    val sumFp = summary.fpPerClass.foldLeft(0L) { case(cum, (_, fp)) => cum + fp}",
+    "line": 143
+  }, {
+    "author": {
+      "login": "zhengruifeng"
+    },
+    "body": "@srowen  I think I can change this place in MultilabelEvaluator",
+    "commit": "7d83ac39df2a45fca2990e855802055f60804cc6",
+    "createdAt": "2019-06-03T08:34:36Z",
+    "diffHunk": "@@ -142,17 +124,17 @@ class MultilabelMetrics @Since(\"1.2.0\") (predictionAndLabels: RDD[(Array[Double]\n     if((p + r) == 0) 0.0 else 2 * p * r / (p + r)\n   }\n \n-  private lazy val sumTp = tpPerClass.foldLeft(0L) { case (sum, (_, tp)) => sum + tp }\n-  private lazy val sumFpClass = fpPerClass.foldLeft(0L) { case (sum, (_, fp)) => sum + fp }\n-  private lazy val sumFnClass = fnPerClass.foldLeft(0L) { case (sum, (_, fn)) => sum + fn }\n+  private lazy val sumTp = summary.tpPerClass.values.sum\n+  private lazy val sumFpClass = summary.fpPerClass.values.sum\n+  private lazy val sumFnClass = summary.fnPerClass.values.sum\n \n   /**\n    * Returns micro-averaged label-based precision\n    * (equals to micro-averaged document-based precision)\n    */\n   @Since(\"1.2.0\")\n   lazy val microPrecision: Double = {\n-    val sumFp = fpPerClass.foldLeft(0L) { case(cum, (_, fp)) => cum + fp}\n+    val sumFp = summary.fpPerClass.foldLeft(0L) { case(cum, (_, fp)) => cum + fp}",
+    "line": 143
+  }],
+  "prId": 24717
+}]

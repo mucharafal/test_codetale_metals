@@ -1,0 +1,22 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "In #2002, I added a mechanism that allows environment variables to be mocked in tests.  Take a look at that PR, `SparkConf.getEnv` in particular.  By using a custom SparkConf subclass, you can mock environment variables on a per-test basis: https://github.com/apache/spark/pull/2002/files#diff-e9fb6be5f96766cce96c4d60aea2fc59R45\n\nIf we find ourselves doing this in multiple places (my PR, here, ...) it might be nice to add some test helper classes for doing this more generically.  That refactoring can happen in a separate PR, though, so for now it's probably fine to just copy my code snippet here.\n",
+    "commit": "e9bcf2cf6fe5b3aa1649c80c82f8ff240662f413",
+    "createdAt": "2014-09-05T17:26:47Z",
+    "diffHunk": "@@ -0,0 +1,60 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+\n+package org.apache.spark.deploy.worker\n+\n+import org.apache.spark.SparkConf\n+import org.scalatest.FunSuite\n+\n+\n+class WorkerArgumentsTest extends FunSuite {\n+\n+  test(\"Memory can't be set to 0 when cmd line args leave off M or G\") {\n+    val conf = new SparkConf\n+    val args = Array(\"-m\", \"10000\", \"spark://localhost:0000  \")\n+    intercept[IllegalStateException] {\n+      new WorkerArguments(args, conf)\n+    }\n+  }\n+\n+\n+/* For this test an environment property for SPARK_WORKER_MEMORY was set",
+    "line": 36
+  }, {
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "Oh, to be more specific: you'll have to change the code that reads the environment variable to use `SparkConf.getEnv` instead of `System.getEnv`; I only changed this for the environment variables used in my specific test because I didn't want to make a big cross-cutting change across the codebase (plus it would probably get broken by subsequent PRs; we should add a style checker rule that complains about System.getEnv uses if we plan on doing this change globally).\n",
+    "commit": "e9bcf2cf6fe5b3aa1649c80c82f8ff240662f413",
+    "createdAt": "2014-09-05T17:28:47Z",
+    "diffHunk": "@@ -0,0 +1,60 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+\n+package org.apache.spark.deploy.worker\n+\n+import org.apache.spark.SparkConf\n+import org.scalatest.FunSuite\n+\n+\n+class WorkerArgumentsTest extends FunSuite {\n+\n+  test(\"Memory can't be set to 0 when cmd line args leave off M or G\") {\n+    val conf = new SparkConf\n+    val args = Array(\"-m\", \"10000\", \"spark://localhost:0000  \")\n+    intercept[IllegalStateException] {\n+      new WorkerArguments(args, conf)\n+    }\n+  }\n+\n+\n+/* For this test an environment property for SPARK_WORKER_MEMORY was set",
+    "line": 36
+  }],
+  "prId": 2227
+}]

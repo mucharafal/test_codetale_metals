@@ -1,0 +1,85 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "This should probably catch `NonFatal` instead of throwable, no?\n",
+    "commit": "c5ac3106dadcc53b834c80c316325dbae0b37a2c",
+    "createdAt": "2015-10-20T01:45:31Z",
+    "diffHunk": "@@ -67,6 +68,46 @@ object HiveThriftServer2 extends Logging {\n     }\n   }\n \n+  def runScript(sqlContext: HiveContext) {\n+    val hiveConf = sqlContext.hiveconf\n+    val script = hiveConf.get(\"hive.server2.init.script\", null)\n+    if (script != null && !script.isEmpty) {\n+      getCommands(script).foreach { c =>\n+        try {\n+          LOG.warn(\"Running.. \" + c)\n+          sqlContext.runSqlHive(c).foreach { o => LOG.warn(o) }\n+        } catch {\n+          case t: Throwable => LOG.warn(\"Failed to run command \" + c, t)",
+    "line": 30
+  }],
+  "prId": 8355
+}, {
+  "comments": [{
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "Is this really a warning-level log message? This seems more like INFO to me.\n",
+    "commit": "c5ac3106dadcc53b834c80c316325dbae0b37a2c",
+    "createdAt": "2015-10-20T01:45:51Z",
+    "diffHunk": "@@ -67,6 +68,46 @@ object HiveThriftServer2 extends Logging {\n     }\n   }\n \n+  def runScript(sqlContext: HiveContext) {\n+    val hiveConf = sqlContext.hiveconf\n+    val script = hiveConf.get(\"hive.server2.init.script\", null)\n+    if (script != null && !script.isEmpty) {\n+      getCommands(script).foreach { c =>\n+        try {\n+          LOG.warn(\"Running.. \" + c)\n+          sqlContext.runSqlHive(c).foreach { o => LOG.warn(o) }\n+        } catch {\n+          case t: Throwable => LOG.warn(\"Failed to run command \" + c, t)\n+        }\n+      }\n+    }\n+  }\n+\n+  private def getCommands(input: String): Seq[String] = {\n+    LOG.warn(\"Reading script \" + input)",
+    "line": 37
+  }],
+  "prId": 8355
+}, {
+  "comments": [{
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "Same here: INFO log level?\n",
+    "commit": "c5ac3106dadcc53b834c80c316325dbae0b37a2c",
+    "createdAt": "2015-10-20T01:46:03Z",
+    "diffHunk": "@@ -67,6 +68,46 @@ object HiveThriftServer2 extends Logging {\n     }\n   }\n \n+  def runScript(sqlContext: HiveContext) {\n+    val hiveConf = sqlContext.hiveconf\n+    val script = hiveConf.get(\"hive.server2.init.script\", null)\n+    if (script != null && !script.isEmpty) {\n+      getCommands(script).foreach { c =>\n+        try {\n+          LOG.warn(\"Running.. \" + c)",
+    "line": 27
+  }],
+  "prId": 8355
+}, {
+  "comments": [{
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "Is this a standard conf? Googling it didn't turn up anything.\n",
+    "commit": "c5ac3106dadcc53b834c80c316325dbae0b37a2c",
+    "createdAt": "2015-10-20T01:48:05Z",
+    "diffHunk": "@@ -67,6 +68,46 @@ object HiveThriftServer2 extends Logging {\n     }\n   }\n \n+  def runScript(sqlContext: HiveContext) {\n+    val hiveConf = sqlContext.hiveconf\n+    val script = hiveConf.get(\"hive.server2.init.script\", null)",
+    "line": 23
+  }, {
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "I'm not super-familiar with this part of Hive, but a bit of sleuthing suggests that there's a `hive.server2.global.init.file.location` configuration for init scripts: https://cwiki.apache.org/confluence/display/Hive/Setting+Up+HiveServer2#SettingUpHiveServer2-OptionalGlobalInitFile\n\nWhy not use that?\n",
+    "commit": "c5ac3106dadcc53b834c80c316325dbae0b37a2c",
+    "createdAt": "2015-10-20T01:49:30Z",
+    "diffHunk": "@@ -67,6 +68,46 @@ object HiveThriftServer2 extends Logging {\n     }\n   }\n \n+  def runScript(sqlContext: HiveContext) {\n+    val hiveConf = sqlContext.hiveconf\n+    val script = hiveConf.get(\"hive.server2.init.script\", null)",
+    "line": 23
+  }, {
+    "author": {
+      "login": "chenghao-intel"
+    },
+    "body": "Actually Spark SQL can load the init scripts, and the default value of `hive.server2.global.init.file.location` is $HIVE_CONF_DIR, not $SPARK_CONF_DIR or the current classpath. \n\nSo this PR makes the same thing which is already supported, probably what we want is changing the default value to $SPARK_CONF_DIR?\n",
+    "commit": "c5ac3106dadcc53b834c80c316325dbae0b37a2c",
+    "createdAt": "2015-10-22T08:21:10Z",
+    "diffHunk": "@@ -67,6 +68,46 @@ object HiveThriftServer2 extends Logging {\n     }\n   }\n \n+  def runScript(sqlContext: HiveContext) {\n+    val hiveConf = sqlContext.hiveconf\n+    val script = hiveConf.get(\"hive.server2.init.script\", null)",
+    "line": 23
+  }, {
+    "author": {
+      "login": "chenghao-intel"
+    },
+    "body": "After I created the env variable `HIVE_CONF_DIR` and place the file `.hiverc` under that folder, I met another exception when connect the thriftserver with beeline:\n\n```\norg.apache.hive.service.cli.HiveSQLException: Failed to open new session: java.lang.RuntimeException: java.util.NoSuchElementException: key not found: SessionHandle [5a93b7b6-b011-49a4-a7c1-807bceac9800]\n    at org.apache.hive.service.cli.session.SessionManager.openSession(SessionManager.java:266)\n    at org.apache.spark.sql.hive.thriftserver.SparkSQLSessionManager.openSession(SparkSQLSessionManager.scala:64)\n    at org.apache.hive.service.cli.CLIService.openSessionWithImpersonation(CLIService.java:202)\n    at org.apache.hive.service.cli.thrift.ThriftCLIService.getSessionHandle(ThriftCLIService.java:402)\n    at org.apache.hive.service.cli.thrift.ThriftCLIService.OpenSession(ThriftCLIService.java:297)\n    at org.apache.hive.service.cli.thrift.TCLIService$Processor$OpenSession.getResult(TCLIService.java:1253)\n    at org.apache.hive.service.cli.thrift.TCLIService$Processor$OpenSession.getResult(TCLIService.java:1238)\n    at org.apache.thrift.ProcessFunction.process(ProcessFunction.java:39)\n    at org.apache.thrift.TBaseProcessor.process(TBaseProcessor.java:39)\n    at org.apache.hive.service.auth.TSetIpAddressProcessor.process(TSetIpAddressProcessor.java:56)\n    at org.apache.thrift.server.TThreadPoolServer$WorkerProcess.run(TThreadPoolServer.java:285)\n    at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1110)\n    at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:603)\n    at java.lang.Thread.run(Thread.java:722)\nCaused by: java.lang.RuntimeException: java.util.NoSuchElementException: key not found: SessionHandle [5a93b7b6-b011-49a4-a7c1-807bceac9800]\n    at org.apache.hive.service.cli.session.HiveSessionProxy.invoke(HiveSessionProxy.java:83)\n    at org.apache.hive.service.cli.session.HiveSessionProxy.access$000(HiveSessionProxy.java:36)\n    at org.apache.hive.service.cli.session.HiveSessionProxy$1.run(HiveSessionProxy.java:63)\n    at java.security.AccessController.doPrivileged(Native Method)\n    at javax.security.auth.Subject.doAs(Subject.java:415)\n    at org.apache.hadoop.security.UserGroupInformation.doAs(UserGroupInformation.java:1548)\n    at org.apache.hive.service.cli.session.HiveSessionProxy.invoke(HiveSessionProxy.java:59)\n    at $Proxy24.open(Unknown Source)\n    at org.apache.hive.service.cli.session.SessionManager.openSession(SessionManager.java:258)\n    ... 13 more\nCaused by: java.util.NoSuchElementException: key not found: SessionHandle [5a93b7b6-b011-49a4-a7c1-807bceac9800]\n    at scala.collection.MapLike$class.default(MapLike.scala:228)\n    at scala.collection.AbstractMap.default(Map.scala:58)\n    at scala.collection.mutable.HashMap.apply(HashMap.scala:64)\n    at org.apache.spark.sql.hive.thriftserver.server.SparkSQLOperationManager.newExecuteStatementOperation(SparkSQLOperationManager.scala:47)\n    at org.apache.hive.service.cli.session.HiveSessionImpl.executeStatementInternal(HiveSessionImpl.java:384)\n    at org.apache.hive.service.cli.session.HiveSessionImpl.access$000(HiveSessionImpl.java:78)\n    at org.apache.hive.service.cli.session.HiveSessionImpl$GlobalHivercFileProcessor.processCmd(HiveSessionImpl.java:172)\n    at org.apache.hadoop.hive.common.cli.HiveFileProcessor.processLine(HiveFileProcessor.java:87)\n    at org.apache.hadoop.hive.common.cli.HiveFileProcessor.processReader(HiveFileProcessor.java:66)\n    at org.apache.hadoop.hive.common.cli.HiveFileProcessor.processFile(HiveFileProcessor.java:37)\n    at org.apache.hive.service.cli.session.HiveSessionImpl.processGlobalInitFile(HiveSessionImpl.java:193)\n    at org.apache.hive.service.cli.session.HiveSessionImpl.open(HiveSessionImpl.java:146)\n    at sun.reflect.NativeMethodAccessorImpl.invoke0(Native Method)\n    at sun.reflect.NativeMethodAccessorImpl.invoke(NativeMethodAccessorImpl.java:57)\n    at sun.reflect.DelegatingMethodAccessorImpl.invoke(DelegatingMethodAccessorImpl.java:43)\n    at java.lang.reflect.Method.invoke(Method.java:601)\n    at org.apache.hive.service.cli.session.HiveSessionProxy.invoke(HiveSessionProxy.java:78)\n    ... 21 more\n```\n\nMaybe we can solve that in this PR.\n",
+    "commit": "c5ac3106dadcc53b834c80c316325dbae0b37a2c",
+    "createdAt": "2015-10-22T08:23:48Z",
+    "diffHunk": "@@ -67,6 +68,46 @@ object HiveThriftServer2 extends Logging {\n     }\n   }\n \n+  def runScript(sqlContext: HiveContext) {\n+    val hiveConf = sqlContext.hiveconf\n+    val script = hiveConf.get(\"hive.server2.init.script\", null)",
+    "line": 23
+  }, {
+    "author": {
+      "login": "vincentye38"
+    },
+    "body": "Do you resolve this HiveSQLException? I ran into the same exception.",
+    "commit": "c5ac3106dadcc53b834c80c316325dbae0b37a2c",
+    "createdAt": "2018-11-07T19:36:39Z",
+    "diffHunk": "@@ -67,6 +68,46 @@ object HiveThriftServer2 extends Logging {\n     }\n   }\n \n+  def runScript(sqlContext: HiveContext) {\n+    val hiveConf = sqlContext.hiveconf\n+    val script = hiveConf.get(\"hive.server2.init.script\", null)",
+    "line": 23
+  }],
+  "prId": 8355
+}]

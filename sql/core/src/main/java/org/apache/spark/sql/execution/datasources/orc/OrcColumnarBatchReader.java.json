@@ -1,0 +1,55 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "@cloud-fan . Can we keep this like Parquet? At the final empty batch, we need clear up this.",
+    "commit": "b78c6ec6e7579f861ddc95ed12de647992de8d0e",
+    "createdAt": "2018-01-09T16:46:51Z",
+    "diffHunk": "@@ -196,17 +234,26 @@ public void initBatch(\n    * by copying from ORC VectorizedRowBatch columns to Spark ColumnarBatch columns.\n    */\n   private boolean nextBatch() throws IOException {\n-    for (WritableColumnVector vector : columnVectors) {\n-      vector.reset();\n-    }\n-    columnarBatch.setNumRows(0);",
+    "line": 126
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "it's moved to https://github.com/apache/spark/pull/20205/files#diff-e594f7295e5408c01ace8175166313b6R253",
+    "commit": "b78c6ec6e7579f861ddc95ed12de647992de8d0e",
+    "createdAt": "2018-01-10T02:52:47Z",
+    "diffHunk": "@@ -196,17 +234,26 @@ public void initBatch(\n    * by copying from ORC VectorizedRowBatch columns to Spark ColumnarBatch columns.\n    */\n   private boolean nextBatch() throws IOException {\n-    for (WritableColumnVector vector : columnVectors) {\n-      vector.reset();\n-    }\n-    columnarBatch.setNumRows(0);",
+    "line": 126
+  }, {
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "Yep. I meant keeping here since we return at line 390 and 240. Parquet also does.\r\n  ",
+    "commit": "b78c6ec6e7579f861ddc95ed12de647992de8d0e",
+    "createdAt": "2018-01-10T03:12:51Z",
+    "diffHunk": "@@ -196,17 +234,26 @@ public void initBatch(\n    * by copying from ORC VectorizedRowBatch columns to Spark ColumnarBatch columns.\n    */\n   private boolean nextBatch() throws IOException {\n-    for (WritableColumnVector vector : columnVectors) {\n-      vector.reset();\n-    }\n-    columnarBatch.setNumRows(0);",
+    "line": 126
+  }],
+  "prId": 20205
+}, {
+  "comments": [{
+    "author": {
+      "login": "viirya"
+    },
+    "body": "nit: Shouldn't we respect MEMORY_MODE parameter here?",
+    "commit": "b78c6ec6e7579f861ddc95ed12de647992de8d0e",
+    "createdAt": "2018-01-10T08:24:52Z",
+    "diffHunk": "@@ -167,27 +172,61 @@ public void initBatch(\n     }\n \n     int capacity = DEFAULT_SIZE;\n-    if (MEMORY_MODE == MemoryMode.OFF_HEAP) {\n-      columnVectors = OffHeapColumnVector.allocateColumns(capacity, resultSchema);\n-    } else {\n-      columnVectors = OnHeapColumnVector.allocateColumns(capacity, resultSchema);\n-    }\n-    columnarBatch = new ColumnarBatch(resultSchema, columnVectors, capacity);\n \n-    if (partitionValues.numFields() > 0) {\n-      int partitionIdx = requiredFields.length;\n-      for (int i = 0; i < partitionValues.numFields(); i++) {\n-        ColumnVectorUtils.populate(columnVectors[i + partitionIdx], partitionValues, i);\n-        columnVectors[i + partitionIdx].setIsConstant();\n+    if (copyToSpark) {\n+      if (MEMORY_MODE == MemoryMode.OFF_HEAP) {\n+        columnVectors = OffHeapColumnVector.allocateColumns(capacity, resultSchema);\n+      } else {\n+        columnVectors = OnHeapColumnVector.allocateColumns(capacity, resultSchema);\n       }\n-    }\n \n-    // Initialize the missing columns once.\n-    for (int i = 0; i < requiredFields.length; i++) {\n-      if (requestedColIds[i] == -1) {\n-        columnVectors[i].putNulls(0, columnarBatch.capacity());\n-        columnVectors[i].setIsConstant();\n+      // Initialize the missing columns once.\n+      for (int i = 0; i < requiredFields.length; i++) {\n+        if (requestedColIds[i] == -1) {\n+          columnVectors[i].putNulls(0, capacity);\n+          columnVectors[i].setIsConstant();\n+        }\n+      }\n+\n+      if (partitionValues.numFields() > 0) {\n+        int partitionIdx = requiredFields.length;\n+        for (int i = 0; i < partitionValues.numFields(); i++) {\n+          ColumnVectorUtils.populate(columnVectors[i + partitionIdx], partitionValues, i);\n+          columnVectors[i + partitionIdx].setIsConstant();\n+        }\n+      }\n+\n+      columnarBatch = new ColumnarBatch(resultSchema, columnVectors, capacity);\n+    } else {\n+      // Just wrap the ORC column vector instead of copying it to Spark column vector.\n+      orcVectorWrappers = new org.apache.spark.sql.vectorized.ColumnVector[resultSchema.length()];\n+\n+      for (int i = 0; i < requiredFields.length; i++) {\n+        DataType dt = requiredFields[i].dataType();\n+        int colId = requestedColIds[i];\n+        // Initialize the missing columns once.\n+        if (colId == -1) {\n+          OnHeapColumnVector missingCol = new OnHeapColumnVector(capacity, dt);",
+    "line": 95
+  }],
+  "prId": 20205
+}, {
+  "comments": [{
+    "author": {
+      "login": "viirya"
+    },
+    "body": "ditto.",
+    "commit": "b78c6ec6e7579f861ddc95ed12de647992de8d0e",
+    "createdAt": "2018-01-10T08:25:10Z",
+    "diffHunk": "@@ -167,27 +172,61 @@ public void initBatch(\n     }\n \n     int capacity = DEFAULT_SIZE;\n-    if (MEMORY_MODE == MemoryMode.OFF_HEAP) {\n-      columnVectors = OffHeapColumnVector.allocateColumns(capacity, resultSchema);\n-    } else {\n-      columnVectors = OnHeapColumnVector.allocateColumns(capacity, resultSchema);\n-    }\n-    columnarBatch = new ColumnarBatch(resultSchema, columnVectors, capacity);\n \n-    if (partitionValues.numFields() > 0) {\n-      int partitionIdx = requiredFields.length;\n-      for (int i = 0; i < partitionValues.numFields(); i++) {\n-        ColumnVectorUtils.populate(columnVectors[i + partitionIdx], partitionValues, i);\n-        columnVectors[i + partitionIdx].setIsConstant();\n+    if (copyToSpark) {\n+      if (MEMORY_MODE == MemoryMode.OFF_HEAP) {\n+        columnVectors = OffHeapColumnVector.allocateColumns(capacity, resultSchema);\n+      } else {\n+        columnVectors = OnHeapColumnVector.allocateColumns(capacity, resultSchema);\n       }\n-    }\n \n-    // Initialize the missing columns once.\n-    for (int i = 0; i < requiredFields.length; i++) {\n-      if (requestedColIds[i] == -1) {\n-        columnVectors[i].putNulls(0, columnarBatch.capacity());\n-        columnVectors[i].setIsConstant();\n+      // Initialize the missing columns once.\n+      for (int i = 0; i < requiredFields.length; i++) {\n+        if (requestedColIds[i] == -1) {\n+          columnVectors[i].putNulls(0, capacity);\n+          columnVectors[i].setIsConstant();\n+        }\n+      }\n+\n+      if (partitionValues.numFields() > 0) {\n+        int partitionIdx = requiredFields.length;\n+        for (int i = 0; i < partitionValues.numFields(); i++) {\n+          ColumnVectorUtils.populate(columnVectors[i + partitionIdx], partitionValues, i);\n+          columnVectors[i + partitionIdx].setIsConstant();\n+        }\n+      }\n+\n+      columnarBatch = new ColumnarBatch(resultSchema, columnVectors, capacity);\n+    } else {\n+      // Just wrap the ORC column vector instead of copying it to Spark column vector.\n+      orcVectorWrappers = new org.apache.spark.sql.vectorized.ColumnVector[resultSchema.length()];\n+\n+      for (int i = 0; i < requiredFields.length; i++) {\n+        DataType dt = requiredFields[i].dataType();\n+        int colId = requestedColIds[i];\n+        // Initialize the missing columns once.\n+        if (colId == -1) {\n+          OnHeapColumnVector missingCol = new OnHeapColumnVector(capacity, dt);\n+          missingCol.putNulls(0, capacity);\n+          missingCol.setIsConstant();\n+          orcVectorWrappers[i] = missingCol;\n+        } else {\n+          orcVectorWrappers[i] = new OrcColumnVector(dt, batch.cols[colId]);\n+        }\n       }\n+\n+      if (partitionValues.numFields() > 0) {\n+        int partitionIdx = requiredFields.length;\n+        for (int i = 0; i < partitionValues.numFields(); i++) {\n+          DataType dt = partitionSchema.fields()[i].dataType();\n+          OnHeapColumnVector partitionCol = new OnHeapColumnVector(capacity, dt);",
+    "line": 108
+  }],
+  "prId": 20205
+}]

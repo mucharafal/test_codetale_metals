@@ -1,0 +1,73 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "mccheah"
+    },
+    "body": "Update formats in these scaladocs.",
+    "commit": "beebccf8acbaa1a8a14d6a256aa5ef0b7efefcec",
+    "createdAt": "2018-11-29T17:11:48Z",
+    "diffHunk": "@@ -18,48 +18,106 @@\n package org.apache.spark.sql.catalyst\n \n /**\n- * An identifier that optionally specifies a database.\n+ * An identifier that optionally specifies a database and catalog.\n  *\n  * Format (unquoted): \"name\" or \"db.name\"",
+    "line": 7
+  }],
+  "prId": 21978
+}, {
+  "comments": [{
+    "author": {
+      "login": "mccheah"
+    },
+    "body": "\"current\" meaning \"global\"?",
+    "commit": "beebccf8acbaa1a8a14d6a256aa5ef0b7efefcec",
+    "createdAt": "2018-11-29T17:12:10Z",
+    "diffHunk": "@@ -18,48 +18,106 @@\n package org.apache.spark.sql.catalyst\n \n /**\n- * An identifier that optionally specifies a database.\n+ * An identifier that optionally specifies a database and catalog.\n  *\n  * Format (unquoted): \"name\" or \"db.name\"\n  * Format (quoted): \"`name`\" or \"`db`.`name`\"\n  */\n-sealed trait IdentifierWithDatabase {\n+sealed trait IdentifierWithOptionalDatabaseAndCatalog {\n   val identifier: String\n \n   def database: Option[String]\n \n+  def catalog: Option[String]\n+\n   /*\n    * Escapes back-ticks within the identifier name with double-back-ticks.\n    */\n   private def quoteIdentifier(name: String): String = name.replace(\"`\", \"``\")\n \n   def quotedString: String = {\n-    val replacedId = quoteIdentifier(identifier)\n-    val replacedDb = database.map(quoteIdentifier(_))\n-\n-    if (replacedDb.isDefined) s\"`${replacedDb.get}`.`$replacedId`\" else s\"`$replacedId`\"\n+    // database is required if catalog is present\n+    assert(database.isDefined || catalog.isEmpty)\n+    def q(s: String): String = s\"`${quoteIdentifier(s)}`\"\n+    Seq(catalog.map(q), database.map(q), Some(q(identifier))).flatten.mkString(\".\")\n   }\n \n   def unquotedString: String = {\n-    if (database.isDefined) s\"${database.get}.$identifier\" else identifier\n+    Seq(catalog, database, Some(identifier)).flatten.mkString(\".\")\n   }\n \n   override def toString: String = quotedString\n }\n \n \n+object CatalogTableIdentifier {\n+  def apply(table: String): CatalogTableIdentifier =\n+    new CatalogTableIdentifier(table, None, None)\n+\n+  def apply(table: String, database: String): CatalogTableIdentifier =\n+    new CatalogTableIdentifier(table, Some(database), None)\n+\n+  def apply(table: String, database: String, catalog: String): CatalogTableIdentifier =\n+    new CatalogTableIdentifier(table, Some(database), Some(catalog))\n+}\n+\n /**\n- * Identifies a table in a database.\n- * If `database` is not defined, the current database is used.\n- * When we register a permanent function in the FunctionRegistry, we use\n- * unquotedString as the function name.\n+ * Identifies a table in a database and catalog.\n+ * If `database` is not defined, the current catalog's default database is used.\n+ * If `catalog` is not defined, the current catalog is used.",
+    "line": 62
+  }, {
+    "author": {
+      "login": "rdblue"
+    },
+    "body": "No, we want to move away from a special global catalog. I think that Spark should have a current catalog, like a current database, which is used to resolve references that don't have an explicit catalog. That would have a default, just like the current database has a default.",
+    "commit": "beebccf8acbaa1a8a14d6a256aa5ef0b7efefcec",
+    "createdAt": "2018-11-29T17:29:36Z",
+    "diffHunk": "@@ -18,48 +18,106 @@\n package org.apache.spark.sql.catalyst\n \n /**\n- * An identifier that optionally specifies a database.\n+ * An identifier that optionally specifies a database and catalog.\n  *\n  * Format (unquoted): \"name\" or \"db.name\"\n  * Format (quoted): \"`name`\" or \"`db`.`name`\"\n  */\n-sealed trait IdentifierWithDatabase {\n+sealed trait IdentifierWithOptionalDatabaseAndCatalog {\n   val identifier: String\n \n   def database: Option[String]\n \n+  def catalog: Option[String]\n+\n   /*\n    * Escapes back-ticks within the identifier name with double-back-ticks.\n    */\n   private def quoteIdentifier(name: String): String = name.replace(\"`\", \"``\")\n \n   def quotedString: String = {\n-    val replacedId = quoteIdentifier(identifier)\n-    val replacedDb = database.map(quoteIdentifier(_))\n-\n-    if (replacedDb.isDefined) s\"`${replacedDb.get}`.`$replacedId`\" else s\"`$replacedId`\"\n+    // database is required if catalog is present\n+    assert(database.isDefined || catalog.isEmpty)\n+    def q(s: String): String = s\"`${quoteIdentifier(s)}`\"\n+    Seq(catalog.map(q), database.map(q), Some(q(identifier))).flatten.mkString(\".\")\n   }\n \n   def unquotedString: String = {\n-    if (database.isDefined) s\"${database.get}.$identifier\" else identifier\n+    Seq(catalog, database, Some(identifier)).flatten.mkString(\".\")\n   }\n \n   override def toString: String = quotedString\n }\n \n \n+object CatalogTableIdentifier {\n+  def apply(table: String): CatalogTableIdentifier =\n+    new CatalogTableIdentifier(table, None, None)\n+\n+  def apply(table: String, database: String): CatalogTableIdentifier =\n+    new CatalogTableIdentifier(table, Some(database), None)\n+\n+  def apply(table: String, database: String, catalog: String): CatalogTableIdentifier =\n+    new CatalogTableIdentifier(table, Some(database), Some(catalog))\n+}\n+\n /**\n- * Identifies a table in a database.\n- * If `database` is not defined, the current database is used.\n- * When we register a permanent function in the FunctionRegistry, we use\n- * unquotedString as the function name.\n+ * Identifies a table in a database and catalog.\n+ * If `database` is not defined, the current catalog's default database is used.\n+ * If `catalog` is not defined, the current catalog is used.",
+    "line": 62
+  }, {
+    "author": {
+      "login": "mccheah"
+    },
+    "body": "Sounds good. When we add the logical side of leveraging catalogs we can revisit the API of how to set the current catalog.",
+    "commit": "beebccf8acbaa1a8a14d6a256aa5ef0b7efefcec",
+    "createdAt": "2018-11-29T21:01:13Z",
+    "diffHunk": "@@ -18,48 +18,106 @@\n package org.apache.spark.sql.catalyst\n \n /**\n- * An identifier that optionally specifies a database.\n+ * An identifier that optionally specifies a database and catalog.\n  *\n  * Format (unquoted): \"name\" or \"db.name\"\n  * Format (quoted): \"`name`\" or \"`db`.`name`\"\n  */\n-sealed trait IdentifierWithDatabase {\n+sealed trait IdentifierWithOptionalDatabaseAndCatalog {\n   val identifier: String\n \n   def database: Option[String]\n \n+  def catalog: Option[String]\n+\n   /*\n    * Escapes back-ticks within the identifier name with double-back-ticks.\n    */\n   private def quoteIdentifier(name: String): String = name.replace(\"`\", \"``\")\n \n   def quotedString: String = {\n-    val replacedId = quoteIdentifier(identifier)\n-    val replacedDb = database.map(quoteIdentifier(_))\n-\n-    if (replacedDb.isDefined) s\"`${replacedDb.get}`.`$replacedId`\" else s\"`$replacedId`\"\n+    // database is required if catalog is present\n+    assert(database.isDefined || catalog.isEmpty)\n+    def q(s: String): String = s\"`${quoteIdentifier(s)}`\"\n+    Seq(catalog.map(q), database.map(q), Some(q(identifier))).flatten.mkString(\".\")\n   }\n \n   def unquotedString: String = {\n-    if (database.isDefined) s\"${database.get}.$identifier\" else identifier\n+    Seq(catalog, database, Some(identifier)).flatten.mkString(\".\")\n   }\n \n   override def toString: String = quotedString\n }\n \n \n+object CatalogTableIdentifier {\n+  def apply(table: String): CatalogTableIdentifier =\n+    new CatalogTableIdentifier(table, None, None)\n+\n+  def apply(table: String, database: String): CatalogTableIdentifier =\n+    new CatalogTableIdentifier(table, Some(database), None)\n+\n+  def apply(table: String, database: String, catalog: String): CatalogTableIdentifier =\n+    new CatalogTableIdentifier(table, Some(database), Some(catalog))\n+}\n+\n /**\n- * Identifies a table in a database.\n- * If `database` is not defined, the current database is used.\n- * When we register a permanent function in the FunctionRegistry, we use\n- * unquotedString as the function name.\n+ * Identifies a table in a database and catalog.\n+ * If `database` is not defined, the current catalog's default database is used.\n+ * If `catalog` is not defined, the current catalog is used.",
+    "line": 62
+  }, {
+    "author": {
+      "login": "rdblue"
+    },
+    "body": "Agreed. This introduces the ability to expose a catalog to Spark. It doesn't actually add any user-facing operations.",
+    "commit": "beebccf8acbaa1a8a14d6a256aa5ef0b7efefcec",
+    "createdAt": "2018-11-29T21:12:02Z",
+    "diffHunk": "@@ -18,48 +18,106 @@\n package org.apache.spark.sql.catalyst\n \n /**\n- * An identifier that optionally specifies a database.\n+ * An identifier that optionally specifies a database and catalog.\n  *\n  * Format (unquoted): \"name\" or \"db.name\"\n  * Format (quoted): \"`name`\" or \"`db`.`name`\"\n  */\n-sealed trait IdentifierWithDatabase {\n+sealed trait IdentifierWithOptionalDatabaseAndCatalog {\n   val identifier: String\n \n   def database: Option[String]\n \n+  def catalog: Option[String]\n+\n   /*\n    * Escapes back-ticks within the identifier name with double-back-ticks.\n    */\n   private def quoteIdentifier(name: String): String = name.replace(\"`\", \"``\")\n \n   def quotedString: String = {\n-    val replacedId = quoteIdentifier(identifier)\n-    val replacedDb = database.map(quoteIdentifier(_))\n-\n-    if (replacedDb.isDefined) s\"`${replacedDb.get}`.`$replacedId`\" else s\"`$replacedId`\"\n+    // database is required if catalog is present\n+    assert(database.isDefined || catalog.isEmpty)\n+    def q(s: String): String = s\"`${quoteIdentifier(s)}`\"\n+    Seq(catalog.map(q), database.map(q), Some(q(identifier))).flatten.mkString(\".\")\n   }\n \n   def unquotedString: String = {\n-    if (database.isDefined) s\"${database.get}.$identifier\" else identifier\n+    Seq(catalog, database, Some(identifier)).flatten.mkString(\".\")\n   }\n \n   override def toString: String = quotedString\n }\n \n \n+object CatalogTableIdentifier {\n+  def apply(table: String): CatalogTableIdentifier =\n+    new CatalogTableIdentifier(table, None, None)\n+\n+  def apply(table: String, database: String): CatalogTableIdentifier =\n+    new CatalogTableIdentifier(table, Some(database), None)\n+\n+  def apply(table: String, database: String, catalog: String): CatalogTableIdentifier =\n+    new CatalogTableIdentifier(table, Some(database), Some(catalog))\n+}\n+\n /**\n- * Identifies a table in a database.\n- * If `database` is not defined, the current database is used.\n- * When we register a permanent function in the FunctionRegistry, we use\n- * unquotedString as the function name.\n+ * Identifies a table in a database and catalog.\n+ * If `database` is not defined, the current catalog's default database is used.\n+ * If `catalog` is not defined, the current catalog is used.",
+    "line": 62
+  }],
+  "prId": 21978
+}, {
+  "comments": [{
+    "author": {
+      "login": "jzhuge"
+    },
+    "body": "Default to `None`?",
+    "commit": "beebccf8acbaa1a8a14d6a256aa5ef0b7efefcec",
+    "createdAt": "2019-01-10T06:17:21Z",
+    "diffHunk": "@@ -18,30 +18,32 @@\n package org.apache.spark.sql.catalyst\n \n /**\n- * An identifier that optionally specifies a database.\n+ * An identifier that optionally specifies a database and catalog.\n  *\n  * Format (unquoted): \"name\" or \"db.name\"\n  * Format (quoted): \"`name`\" or \"`db`.`name`\"\n  */\n-sealed trait IdentifierWithDatabase {\n+sealed trait IdentifierWithOptionalDatabaseAndCatalog {\n   val identifier: String\n \n   def database: Option[String]\n \n+  def catalog: Option[String]",
+    "line": 16
+  }, {
+    "author": {
+      "login": "rdblue"
+    },
+    "body": "This is an abstract method definition and catalog is always implemented by a val.",
+    "commit": "beebccf8acbaa1a8a14d6a256aa5ef0b7efefcec",
+    "createdAt": "2019-01-14T18:08:31Z",
+    "diffHunk": "@@ -18,30 +18,32 @@\n package org.apache.spark.sql.catalyst\n \n /**\n- * An identifier that optionally specifies a database.\n+ * An identifier that optionally specifies a database and catalog.\n  *\n  * Format (unquoted): \"name\" or \"db.name\"\n  * Format (quoted): \"`name`\" or \"`db`.`name`\"\n  */\n-sealed trait IdentifierWithDatabase {\n+sealed trait IdentifierWithOptionalDatabaseAndCatalog {\n   val identifier: String\n \n   def database: Option[String]\n \n+  def catalog: Option[String]",
+    "line": 16
+  }],
+  "prId": 21978
+}]

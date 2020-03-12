@@ -1,0 +1,63 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "tdas"
+    },
+    "body": "since all the partitions do no need all the factories, the right thing to do is to put partition's factory in the partition object. This is so that the all factories are not serialized for all tasks.",
+    "commit": "f77b12ba92a868274ecdfea331786addb2d9ca83",
+    "createdAt": "2018-06-19T23:13:24Z",
+    "diffHunk": "@@ -51,7 +51,7 @@ class ContinuousDataSourceRDD(\n     sc: SparkContext,\n     dataQueueSize: Int,\n     epochPollIntervalMs: Long,\n-    @transient private val readerFactories: Seq[InputPartition[UnsafeRow]])\n+    private val readerFactories: Seq[InputPartition[UnsafeRow]])"
+  }, {
+    "author": {
+      "login": "jose-torres"
+    },
+    "body": "We need to be able to generate the full list of partitions from within a single task in order for coalesce to work.",
+    "commit": "f77b12ba92a868274ecdfea331786addb2d9ca83",
+    "createdAt": "2018-06-20T20:25:05Z",
+    "diffHunk": "@@ -51,7 +51,7 @@ class ContinuousDataSourceRDD(\n     sc: SparkContext,\n     dataQueueSize: Int,\n     epochPollIntervalMs: Long,\n-    @transient private val readerFactories: Seq[InputPartition[UnsafeRow]])\n+    private val readerFactories: Seq[InputPartition[UnsafeRow]])"
+  }, {
+    "author": {
+      "login": "tdas"
+    },
+    "body": "Wait. I dont see the `readerFactories` object to be used anywhere other than in getPartitions, where they are saved as part of `ContinuousDataSourceRDDPartition` objects. And RDD.compute() seems to picking it up from `ContinuousDataSourceRDDPartition` objects, and not from `readerFactories`. So I dont think `readerFactories` needs to be serialized.\r\n\r\nAt the very least, rename `readerFactories` to `readerInputPartitions` for consistency. \r\n ",
+    "commit": "f77b12ba92a868274ecdfea331786addb2d9ca83",
+    "createdAt": "2018-06-26T08:18:05Z",
+    "diffHunk": "@@ -51,7 +51,7 @@ class ContinuousDataSourceRDD(\n     sc: SparkContext,\n     dataQueueSize: Int,\n     epochPollIntervalMs: Long,\n-    @transient private val readerFactories: Seq[InputPartition[UnsafeRow]])\n+    private val readerFactories: Seq[InputPartition[UnsafeRow]])"
+  }, {
+    "author": {
+      "login": "jose-torres"
+    },
+    "body": "We list the partitions when computing the coalesce RDD. Should we instead be packing the partitions into the partitions of the coalesce RDD? I'd assumed it was valid to expect that rdd.partitions would work on executors, but maybe it's not.",
+    "commit": "f77b12ba92a868274ecdfea331786addb2d9ca83",
+    "createdAt": "2018-06-27T00:42:28Z",
+    "diffHunk": "@@ -51,7 +51,7 @@ class ContinuousDataSourceRDD(\n     sc: SparkContext,\n     dataQueueSize: Int,\n     epochPollIntervalMs: Long,\n-    @transient private val readerFactories: Seq[InputPartition[UnsafeRow]])\n+    private val readerFactories: Seq[InputPartition[UnsafeRow]])"
+  }],
+  "prId": 21560
+}, {
+  "comments": [{
+    "author": {
+      "login": "HeartSaVioR"
+    },
+    "body": "I'm wondering the method can be called in normal situation: when continuous query is gracefully terminated.",
+    "commit": "f77b12ba92a868274ecdfea331786addb2d9ca83",
+    "createdAt": "2018-06-21T04:04:06Z",
+    "diffHunk": "@@ -98,6 +98,10 @@ class ContinuousDataSourceRDD(\n   override def getPreferredLocations(split: Partition): Seq[String] = {\n     split.asInstanceOf[ContinuousDataSourceRDDPartition].inputPartition.preferredLocations()\n   }\n+\n+  override def clearDependencies(): Unit = {\n+    throw new IllegalStateException(\"Continuous RDDs cannot be checkpointed\")"
+  }, {
+    "author": {
+      "login": "jose-torres"
+    },
+    "body": "I don't know, I'm unfamiliar with this method. @tdas ",
+    "commit": "f77b12ba92a868274ecdfea331786addb2d9ca83",
+    "createdAt": "2018-06-25T20:21:01Z",
+    "diffHunk": "@@ -98,6 +98,10 @@ class ContinuousDataSourceRDD(\n   override def getPreferredLocations(split: Partition): Seq[String] = {\n     split.asInstanceOf[ContinuousDataSourceRDDPartition].inputPartition.preferredLocations()\n   }\n+\n+  override def clearDependencies(): Unit = {\n+    throw new IllegalStateException(\"Continuous RDDs cannot be checkpointed\")"
+  }, {
+    "author": {
+      "login": "tdas"
+    },
+    "body": "@HeartSaVioR No this method no intended for being called in normal circumstance. And less of a reason to call this in an internally generated RDD. ",
+    "commit": "f77b12ba92a868274ecdfea331786addb2d9ca83",
+    "createdAt": "2018-06-26T08:14:29Z",
+    "diffHunk": "@@ -98,6 +98,10 @@ class ContinuousDataSourceRDD(\n   override def getPreferredLocations(split: Partition): Seq[String] = {\n     split.asInstanceOf[ContinuousDataSourceRDDPartition].inputPartition.preferredLocations()\n   }\n+\n+  override def clearDependencies(): Unit = {\n+    throw new IllegalStateException(\"Continuous RDDs cannot be checkpointed\")"
+  }],
+  "prId": 21560
+}]

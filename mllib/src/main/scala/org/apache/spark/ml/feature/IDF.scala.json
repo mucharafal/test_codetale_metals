@@ -1,0 +1,100 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "I know this parallels 'idf' but 'df' often means 'dataframe'. I'd just call this documentFrequency or something",
+    "commit": "35ecf00d566ac3a865e2f451ffce6f817ba01d6e",
+    "createdAt": "2019-01-15T18:52:39Z",
+    "diffHunk": "@@ -151,6 +151,15 @@ class IDFModel private[ml] (\n   @Since(\"2.0.0\")\n   def idf: Vector = idfModel.idf.asML\n \n+  /** Returns the DF */\n+  @Since(\"3.0.0\")\n+  def df: Array[Long] = idfModel.df"
+  }, {
+    "author": {
+      "login": "purijatin"
+    },
+    "body": "Renamed it as `docFreq`. Thanks.",
+    "commit": "35ecf00d566ac3a865e2f451ffce6f817ba01d6e",
+    "createdAt": "2019-01-16T08:16:18Z",
+    "diffHunk": "@@ -151,6 +151,15 @@ class IDFModel private[ml] (\n   @Since(\"2.0.0\")\n   def idf: Vector = idfModel.idf.asML\n \n+  /** Returns the DF */\n+  @Since(\"3.0.0\")\n+  def df: Array[Long] = idfModel.df"
+  }],
+  "prId": 23549
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Unfortunately this is going to be a bit more complex, as it has to handle the case of older models saved without this info. See how some other implementations of save/load use versions to handle this.",
+    "commit": "35ecf00d566ac3a865e2f451ffce6f817ba01d6e",
+    "createdAt": "2019-01-15T18:53:25Z",
+    "diffHunk": "@@ -178,10 +187,10 @@ object IDFModel extends MLReadable[IDFModel] {\n       val metadata = DefaultParamsReader.loadMetadata(path, sc, className)\n       val dataPath = new Path(path, \"data\").toString\n       val data = sparkSession.read.parquet(dataPath)\n-      val Row(idf: Vector) = MLUtils.convertVectorColumnsToML(data, \"idf\")\n-        .select(\"idf\")\n-        .head()\n-      val model = new IDFModel(metadata.uid, new feature.IDFModel(OldVectors.fromML(idf)))\n+      val Row(idf: Vector, df: Seq[_], numDocs: Long) ="
+  }, {
+    "author": {
+      "login": "purijatin"
+    },
+    "body": "I have edited it now to add support for older models. Apologies, missed it previously.\r\n\r\nShould a test case be added to test for older models? I check PCASuite, FPGrowth and KMeanSuite where the models were changed with version. Didn't find test to check for older models. Think it is a norm. Can add if needed.\r\n\r\nSquashed the commits.",
+    "commit": "35ecf00d566ac3a865e2f451ffce6f817ba01d6e",
+    "createdAt": "2019-01-16T08:22:01Z",
+    "diffHunk": "@@ -178,10 +187,10 @@ object IDFModel extends MLReadable[IDFModel] {\n       val metadata = DefaultParamsReader.loadMetadata(path, sc, className)\n       val dataPath = new Path(path, \"data\").toString\n       val data = sparkSession.read.parquet(dataPath)\n-      val Row(idf: Vector) = MLUtils.convertVectorColumnsToML(data, \"idf\")\n-        .select(\"idf\")\n-        .head()\n-      val model = new IDFModel(metadata.uid, new feature.IDFModel(OldVectors.fromML(idf)))\n+      val Row(idf: Vector, df: Seq[_], numDocs: Long) ="
+  }],
+  "prId": 23549
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Does this fail if you just declare df as `Seq[Long]` upfront here rather than cast? ",
+    "commit": "35ecf00d566ac3a865e2f451ffce6f817ba01d6e",
+    "createdAt": "2019-01-16T15:08:27Z",
+    "diffHunk": "@@ -175,13 +185,25 @@ object IDFModel extends MLReadable[IDFModel] {\n     private val className = classOf[IDFModel].getName\n \n     override def load(path: String): IDFModel = {\n+      import org.json4s.DefaultFormats\n+      implicit val format = DefaultFormats\n       val metadata = DefaultParamsReader.loadMetadata(path, sc, className)\n+\n       val dataPath = new Path(path, \"data\").toString\n       val data = sparkSession.read.parquet(dataPath)\n-      val Row(idf: Vector) = MLUtils.convertVectorColumnsToML(data, \"idf\")\n-        .select(\"idf\")\n-        .head()\n-      val model = new IDFModel(metadata.uid, new feature.IDFModel(OldVectors.fromML(idf)))\n+      val model = if (majorVersion(metadata.sparkVersion) >= 3) {\n+        val Row(idf: Vector, df: Seq[_], numDocs: Long) ="
+  }, {
+    "author": {
+      "login": "purijatin"
+    },
+    "body": "Yes.\r\n\r\n> [error] [warn] /home/jatin/IdeaProjects/spark/mllib/src/main/scala/org/apache/spark/ml/feature/IDF.scala:195: non-variable type argument Long in type pattern Seq[Long] (the underlying of Seq[Long]) is unchecked since it is eliminated by erasure\r\n> [error] [warn]         val Row(idf: Vector, df: Seq[Long], numDocs: Long) =\r\n> [error] [warn] \r\n> [trace] Stack trace suppressed: run last mllib/compile:compile for the full output.\r\n> [error] (mllib/compile:compile) 1 fatal warnings\r\n> [error] Total time: 17 s, completed 16 Jan, 2019 8:46:42 PM\r\n",
+    "commit": "35ecf00d566ac3a865e2f451ffce6f817ba01d6e",
+    "createdAt": "2019-01-16T15:18:20Z",
+    "diffHunk": "@@ -175,13 +185,25 @@ object IDFModel extends MLReadable[IDFModel] {\n     private val className = classOf[IDFModel].getName\n \n     override def load(path: String): IDFModel = {\n+      import org.json4s.DefaultFormats\n+      implicit val format = DefaultFormats\n       val metadata = DefaultParamsReader.loadMetadata(path, sc, className)\n+\n       val dataPath = new Path(path, \"data\").toString\n       val data = sparkSession.read.parquet(dataPath)\n-      val Row(idf: Vector) = MLUtils.convertVectorColumnsToML(data, \"idf\")\n-        .select(\"idf\")\n-        .head()\n-      val model = new IDFModel(metadata.uid, new feature.IDFModel(OldVectors.fromML(idf)))\n+      val model = if (majorVersion(metadata.sparkVersion) >= 3) {\n+        val Row(idf: Vector, df: Seq[_], numDocs: Long) ="
+  }],
+  "prId": 23549
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Yeah some classes use the Spark version, some use a versioning mechanism. Let me ask dev@ whether one is preferred. For example I'm not sure if maybe it's a fine practice to just select all columns and see what is available rather than switch on Spark version.",
+    "commit": "35ecf00d566ac3a865e2f451ffce6f817ba01d6e",
+    "createdAt": "2019-01-16T15:08:50Z",
+    "diffHunk": "@@ -175,13 +185,25 @@ object IDFModel extends MLReadable[IDFModel] {\n     private val className = classOf[IDFModel].getName\n \n     override def load(path: String): IDFModel = {\n+      import org.json4s.DefaultFormats\n+      implicit val format = DefaultFormats\n       val metadata = DefaultParamsReader.loadMetadata(path, sc, className)\n+\n       val dataPath = new Path(path, \"data\").toString\n       val data = sparkSession.read.parquet(dataPath)\n-      val Row(idf: Vector) = MLUtils.convertVectorColumnsToML(data, \"idf\")\n-        .select(\"idf\")\n-        .head()\n-      val model = new IDFModel(metadata.uid, new feature.IDFModel(OldVectors.fromML(idf)))\n+      val model = if (majorVersion(metadata.sparkVersion) >= 3) {",
+    "line": 47
+  }, {
+    "author": {
+      "login": "purijatin"
+    },
+    "body": "I have committed a newer implementation that considers versioning of model instead of spark-version.\r\nCould you please review it? Thanks for the time and review.",
+    "commit": "35ecf00d566ac3a865e2f451ffce6f817ba01d6e",
+    "createdAt": "2019-01-17T11:29:48Z",
+    "diffHunk": "@@ -175,13 +185,25 @@ object IDFModel extends MLReadable[IDFModel] {\n     private val className = classOf[IDFModel].getName\n \n     override def load(path: String): IDFModel = {\n+      import org.json4s.DefaultFormats\n+      implicit val format = DefaultFormats\n       val metadata = DefaultParamsReader.loadMetadata(path, sc, className)\n+\n       val dataPath = new Path(path, \"data\").toString\n       val data = sparkSession.read.parquet(dataPath)\n-      val Row(idf: Vector) = MLUtils.convertVectorColumnsToML(data, \"idf\")\n-        .select(\"idf\")\n-        .head()\n-      val model = new IDFModel(metadata.uid, new feature.IDFModel(OldVectors.fromML(idf)))\n+      val model = if (majorVersion(metadata.sparkVersion) >= 3) {",
+    "line": 47
+  }],
+  "prId": 23549
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Yeah I guess in this case there is no way to know what the original doc frequencies were. Another option is to make these new fields an `Option` but I think it's not worth the indirection. It will be rare that someone loads an old model with new Spark version, and will be obvious that this data isn't present if they try to access it.",
+    "commit": "35ecf00d566ac3a865e2f451ffce6f817ba01d6e",
+    "createdAt": "2019-01-17T20:30:49Z",
+    "diffHunk": "@@ -178,10 +188,19 @@ object IDFModel extends MLReadable[IDFModel] {\n       val metadata = DefaultParamsReader.loadMetadata(path, sc, className)\n       val dataPath = new Path(path, \"data\").toString\n       val data = sparkSession.read.parquet(dataPath)\n-      val Row(idf: Vector) = MLUtils.convertVectorColumnsToML(data, \"idf\")\n-        .select(\"idf\")\n-        .head()\n-      val model = new IDFModel(metadata.uid, new feature.IDFModel(OldVectors.fromML(idf)))\n+\n+      val model = if (majorVersion(metadata.sparkVersion) >= 3) {\n+        val Row(idf: Vector, df: Seq[_], numDocs: Long) = data.select(\"idf\", \"docFreq\", \"numDocs\")\n+          .head()\n+        new IDFModel(metadata.uid, new feature.IDFModel(OldVectors.fromML(idf),\n+          df.asInstanceOf[Seq[Long]].toArray, numDocs))\n+      } else {\n+        val Row(idf: Vector) = MLUtils.convertVectorColumnsToML(data, \"idf\")\n+          .select(\"idf\")\n+          .head()\n+        new IDFModel(metadata.uid,",
+    "line": 56
+  }, {
+    "author": {
+      "login": "purijatin"
+    },
+    "body": "Yes.\r\n\r\nAnother problem with returning option is that, people using the class from spark 3 onwards, will get an option. And it would be confusing because it may mean that docFreq may not be present. But it always would be. We would then need to have doc explaining the scenario of None,complicating the doc. \r\n\r\nSecondly it would need to remain consistent with other models. Where all new fields added should return option. ",
+    "commit": "35ecf00d566ac3a865e2f451ffce6f817ba01d6e",
+    "createdAt": "2019-01-18T01:32:10Z",
+    "diffHunk": "@@ -178,10 +188,19 @@ object IDFModel extends MLReadable[IDFModel] {\n       val metadata = DefaultParamsReader.loadMetadata(path, sc, className)\n       val dataPath = new Path(path, \"data\").toString\n       val data = sparkSession.read.parquet(dataPath)\n-      val Row(idf: Vector) = MLUtils.convertVectorColumnsToML(data, \"idf\")\n-        .select(\"idf\")\n-        .head()\n-      val model = new IDFModel(metadata.uid, new feature.IDFModel(OldVectors.fromML(idf)))\n+\n+      val model = if (majorVersion(metadata.sparkVersion) >= 3) {\n+        val Row(idf: Vector, df: Seq[_], numDocs: Long) = data.select(\"idf\", \"docFreq\", \"numDocs\")\n+          .head()\n+        new IDFModel(metadata.uid, new feature.IDFModel(OldVectors.fromML(idf),\n+          df.asInstanceOf[Seq[Long]].toArray, numDocs))\n+      } else {\n+        val Row(idf: Vector) = MLUtils.convertVectorColumnsToML(data, \"idf\")\n+          .select(\"idf\")\n+          .head()\n+        new IDFModel(metadata.uid,",
+    "line": 56
+  }],
+  "prId": 23549
+}]

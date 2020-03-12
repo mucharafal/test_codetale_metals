@@ -1,0 +1,211 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "Update doc (not abstract in Python)\n",
+    "commit": "7334be978468cee2bb4b9e5b13e296392080246b",
+    "createdAt": "2016-01-12T02:24:58Z",
+    "diffHunk": "@@ -52,3 +71,141 @@ def _randomUID(cls):\n         concatenates the class name, \"_\", and 12 random hex chars.\n         \"\"\"\n         return cls.__name__ + \"_\" + uuid.uuid4().hex[12:]\n+\n+\n+@inherit_doc\n+class MLWriter(object):\n+    \"\"\"\n+    Abstract class for utility classes that can save ML instances."
+  }],
+  "prId": 10469
+}, {
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "Note that this and other classes for read/write are Experimental\n",
+    "commit": "7334be978468cee2bb4b9e5b13e296392080246b",
+    "createdAt": "2016-01-12T02:24:59Z",
+    "diffHunk": "@@ -52,3 +71,141 @@ def _randomUID(cls):\n         concatenates the class name, \"_\", and 12 random hex chars.\n         \"\"\"\n         return cls.__name__ + \"_\" + uuid.uuid4().hex[12:]\n+\n+\n+@inherit_doc\n+class MLWriter(object):\n+    \"\"\"\n+    Abstract class for utility classes that can save ML instances.\n+"
+  }],
+  "prId": 10469
+}, {
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "This method will need to copy Params over to the JVM model.  Please also update the doc test to test for some parameter value to make sure Params get copied.\n",
+    "commit": "7334be978468cee2bb4b9e5b13e296392080246b",
+    "createdAt": "2016-01-12T02:25:06Z",
+    "diffHunk": "@@ -52,3 +71,141 @@ def _randomUID(cls):\n         concatenates the class name, \"_\", and 12 random hex chars.\n         \"\"\"\n         return cls.__name__ + \"_\" + uuid.uuid4().hex[12:]\n+\n+\n+@inherit_doc\n+class MLWriter(object):\n+    \"\"\"\n+    Abstract class for utility classes that can save ML instances.\n+\n+    .. versionadded:: 2.0.0\n+    \"\"\"\n+\n+    def __init__(self, instance):\n+        self._jwrite = instance._java_obj.write()\n+\n+    @since(\"2.0.0\")\n+    def save(self, path):"
+  }, {
+    "author": {
+      "login": "yanboliang"
+    },
+    "body": "Here we call the peer java object to do save operation, and the Params has been copied at the construction of the peer java object. This is only the interface to operate the peer java object and we can add options to `MLWriter` by adding function methods of this class later on. All the Params are stored at Java side, we only provide interface to call peer java method. This implementation is very similar with [`DataFrameReader`](https://github.com/apache/spark/blob/master/python/pyspark/sql/readwriter.py#L44).\n",
+    "commit": "7334be978468cee2bb4b9e5b13e296392080246b",
+    "createdAt": "2016-01-25T10:52:12Z",
+    "diffHunk": "@@ -52,3 +71,141 @@ def _randomUID(cls):\n         concatenates the class name, \"_\", and 12 random hex chars.\n         \"\"\"\n         return cls.__name__ + \"_\" + uuid.uuid4().hex[12:]\n+\n+\n+@inherit_doc\n+class MLWriter(object):\n+    \"\"\"\n+    Abstract class for utility classes that can save ML instances.\n+\n+    .. versionadded:: 2.0.0\n+    \"\"\"\n+\n+    def __init__(self, instance):\n+        self._jwrite = instance._java_obj.write()\n+\n+    @since(\"2.0.0\")\n+    def save(self, path):"
+  }, {
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "This is the problematic workflow I had in mind:\n\n```\nlr = LinearRegression() // JVM object instantiated\nlr.setMaxIter(10) // Python value set, but not transferred to JVM object\nlr.save(...)  // new maxIter value is not saved\n```\n\nI think it will be easy to fix; just call `_transfer_params_to_java` in the init method of MLWriter.\n",
+    "commit": "7334be978468cee2bb4b9e5b13e296392080246b",
+    "createdAt": "2016-01-26T02:25:50Z",
+    "diffHunk": "@@ -52,3 +71,141 @@ def _randomUID(cls):\n         concatenates the class name, \"_\", and 12 random hex chars.\n         \"\"\"\n         return cls.__name__ + \"_\" + uuid.uuid4().hex[12:]\n+\n+\n+@inherit_doc\n+class MLWriter(object):\n+    \"\"\"\n+    Abstract class for utility classes that can save ML instances.\n+\n+    .. versionadded:: 2.0.0\n+    \"\"\"\n+\n+    def __init__(self, instance):\n+        self._jwrite = instance._java_obj.write()\n+\n+    @since(\"2.0.0\")\n+    def save(self, path):"
+  }],
+  "prId": 10469
+}, {
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "Will this annotation get inherited to classes which are added in later Spark versions?  (Can you please try generating the docs to see if it appears for LinearRegression?) If so, let's omit it.\n",
+    "commit": "7334be978468cee2bb4b9e5b13e296392080246b",
+    "createdAt": "2016-01-12T02:25:13Z",
+    "diffHunk": "@@ -52,3 +71,141 @@ def _randomUID(cls):\n         concatenates the class name, \"_\", and 12 random hex chars.\n         \"\"\"\n         return cls.__name__ + \"_\" + uuid.uuid4().hex[12:]\n+\n+\n+@inherit_doc\n+class MLWriter(object):\n+    \"\"\"\n+    Abstract class for utility classes that can save ML instances.\n+\n+    .. versionadded:: 2.0.0\n+    \"\"\"\n+\n+    def __init__(self, instance):\n+        self._jwrite = instance._java_obj.write()\n+\n+    @since(\"2.0.0\")\n+    def save(self, path):\n+        \"\"\"Saves the ML instances to the input path.\"\"\"\n+        self._jwrite.save(path)\n+\n+    @since(\"2.0.0\")\n+    def overwrite(self):\n+        \"\"\"Overwrites if the output path already exists.\"\"\"\n+        self._jwrite.overwrite()\n+        return self\n+\n+    @since(\"2.0.0\")\n+    def context(self, sqlContext):\n+        \"\"\"Sets the SQL context to use for saving.\"\"\"\n+        self._jwrite.context(sqlContext._ssql_ctx)\n+        return self\n+\n+\n+@inherit_doc\n+class MLWritable(object):\n+    \"\"\"\n+    Mixin for ML instances that provide MLWriter through their Scala\n+    implementation.\n+\n+    .. versionadded:: 2.0.0\n+    \"\"\"\n+\n+    @since(\"2.0.0\")"
+  }, {
+    "author": {
+      "login": "yanboliang"
+    },
+    "body": "Checked, and it will not exist in classes which are added in later Spark version.\n",
+    "commit": "7334be978468cee2bb4b9e5b13e296392080246b",
+    "createdAt": "2016-01-25T11:15:38Z",
+    "diffHunk": "@@ -52,3 +71,141 @@ def _randomUID(cls):\n         concatenates the class name, \"_\", and 12 random hex chars.\n         \"\"\"\n         return cls.__name__ + \"_\" + uuid.uuid4().hex[12:]\n+\n+\n+@inherit_doc\n+class MLWriter(object):\n+    \"\"\"\n+    Abstract class for utility classes that can save ML instances.\n+\n+    .. versionadded:: 2.0.0\n+    \"\"\"\n+\n+    def __init__(self, instance):\n+        self._jwrite = instance._java_obj.write()\n+\n+    @since(\"2.0.0\")\n+    def save(self, path):\n+        \"\"\"Saves the ML instances to the input path.\"\"\"\n+        self._jwrite.save(path)\n+\n+    @since(\"2.0.0\")\n+    def overwrite(self):\n+        \"\"\"Overwrites if the output path already exists.\"\"\"\n+        self._jwrite.overwrite()\n+        return self\n+\n+    @since(\"2.0.0\")\n+    def context(self, sqlContext):\n+        \"\"\"Sets the SQL context to use for saving.\"\"\"\n+        self._jwrite.context(sqlContext._ssql_ctx)\n+        return self\n+\n+\n+@inherit_doc\n+class MLWritable(object):\n+    \"\"\"\n+    Mixin for ML instances that provide MLWriter through their Scala\n+    implementation.\n+\n+    .. versionadded:: 2.0.0\n+    \"\"\"\n+\n+    @since(\"2.0.0\")"
+  }, {
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "Does that mean the annotation is not inherited at all?  If that's the case, then maybe we should remove the Since annotations (since these mix-ins are private anyways).\n",
+    "commit": "7334be978468cee2bb4b9e5b13e296392080246b",
+    "createdAt": "2016-01-26T21:30:37Z",
+    "diffHunk": "@@ -52,3 +71,141 @@ def _randomUID(cls):\n         concatenates the class name, \"_\", and 12 random hex chars.\n         \"\"\"\n         return cls.__name__ + \"_\" + uuid.uuid4().hex[12:]\n+\n+\n+@inherit_doc\n+class MLWriter(object):\n+    \"\"\"\n+    Abstract class for utility classes that can save ML instances.\n+\n+    .. versionadded:: 2.0.0\n+    \"\"\"\n+\n+    def __init__(self, instance):\n+        self._jwrite = instance._java_obj.write()\n+\n+    @since(\"2.0.0\")\n+    def save(self, path):\n+        \"\"\"Saves the ML instances to the input path.\"\"\"\n+        self._jwrite.save(path)\n+\n+    @since(\"2.0.0\")\n+    def overwrite(self):\n+        \"\"\"Overwrites if the output path already exists.\"\"\"\n+        self._jwrite.overwrite()\n+        return self\n+\n+    @since(\"2.0.0\")\n+    def context(self, sqlContext):\n+        \"\"\"Sets the SQL context to use for saving.\"\"\"\n+        self._jwrite.context(sqlContext._ssql_ctx)\n+        return self\n+\n+\n+@inherit_doc\n+class MLWritable(object):\n+    \"\"\"\n+    Mixin for ML instances that provide MLWriter through their Scala\n+    implementation.\n+\n+    .. versionadded:: 2.0.0\n+    \"\"\"\n+\n+    @since(\"2.0.0\")"
+  }, {
+    "author": {
+      "login": "yanboliang"
+    },
+    "body": "Yes, I removed the `Since` annotations.\n",
+    "commit": "7334be978468cee2bb4b9e5b13e296392080246b",
+    "createdAt": "2016-01-27T07:09:27Z",
+    "diffHunk": "@@ -52,3 +71,141 @@ def _randomUID(cls):\n         concatenates the class name, \"_\", and 12 random hex chars.\n         \"\"\"\n         return cls.__name__ + \"_\" + uuid.uuid4().hex[12:]\n+\n+\n+@inherit_doc\n+class MLWriter(object):\n+    \"\"\"\n+    Abstract class for utility classes that can save ML instances.\n+\n+    .. versionadded:: 2.0.0\n+    \"\"\"\n+\n+    def __init__(self, instance):\n+        self._jwrite = instance._java_obj.write()\n+\n+    @since(\"2.0.0\")\n+    def save(self, path):\n+        \"\"\"Saves the ML instances to the input path.\"\"\"\n+        self._jwrite.save(path)\n+\n+    @since(\"2.0.0\")\n+    def overwrite(self):\n+        \"\"\"Overwrites if the output path already exists.\"\"\"\n+        self._jwrite.overwrite()\n+        return self\n+\n+    @since(\"2.0.0\")\n+    def context(self, sqlContext):\n+        \"\"\"Sets the SQL context to use for saving.\"\"\"\n+        self._jwrite.context(sqlContext._ssql_ctx)\n+        return self\n+\n+\n+@inherit_doc\n+class MLWritable(object):\n+    \"\"\"\n+    Mixin for ML instances that provide MLWriter through their Scala\n+    implementation.\n+\n+    .. versionadded:: 2.0.0\n+    \"\"\"\n+\n+    @since(\"2.0.0\")"
+  }],
+  "prId": 10469
+}, {
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "The load implementation should go here.  To be analogous to the Scala implementation, we should have Model/Estimator.load methods call `[instance].read().load(...)`.  That will allow us to add options to the reader later on.\n\nIt will simplify things if we make MLReader only applicable for JavaWrapper subclasses.\n",
+    "commit": "7334be978468cee2bb4b9e5b13e296392080246b",
+    "createdAt": "2016-01-12T02:25:16Z",
+    "diffHunk": "@@ -52,3 +71,141 @@ def _randomUID(cls):\n         concatenates the class name, \"_\", and 12 random hex chars.\n         \"\"\"\n         return cls.__name__ + \"_\" + uuid.uuid4().hex[12:]\n+\n+\n+@inherit_doc\n+class MLWriter(object):\n+    \"\"\"\n+    Abstract class for utility classes that can save ML instances.\n+\n+    .. versionadded:: 2.0.0\n+    \"\"\"\n+\n+    def __init__(self, instance):\n+        self._jwrite = instance._java_obj.write()\n+\n+    @since(\"2.0.0\")\n+    def save(self, path):\n+        \"\"\"Saves the ML instances to the input path.\"\"\"\n+        self._jwrite.save(path)\n+\n+    @since(\"2.0.0\")\n+    def overwrite(self):\n+        \"\"\"Overwrites if the output path already exists.\"\"\"\n+        self._jwrite.overwrite()\n+        return self\n+\n+    @since(\"2.0.0\")\n+    def context(self, sqlContext):\n+        \"\"\"Sets the SQL context to use for saving.\"\"\"\n+        self._jwrite.context(sqlContext._ssql_ctx)\n+        return self\n+\n+\n+@inherit_doc\n+class MLWritable(object):\n+    \"\"\"\n+    Mixin for ML instances that provide MLWriter through their Scala\n+    implementation.\n+\n+    .. versionadded:: 2.0.0\n+    \"\"\"\n+\n+    @since(\"2.0.0\")\n+    def write(self):\n+        \"\"\"Returns an MLWriter instance for this ML instance.\"\"\"\n+        return MLWriter(self)\n+\n+    @since(\"2.0.0\")\n+    def save(self, path):\n+        \"\"\"Save this ML instance to the given path, a shortcut of `write().save(path)`.\"\"\"\n+        if not isinstance(path, basestring):\n+            raise TypeError(\"path should be a basestring, got type %s\" % type(path))\n+        self._java_obj.save(path)\n+\n+\n+@inherit_doc\n+class MLReader(object):\n+    \"\"\"\n+    Abstract class for utility classes that can load ML instances.\n+\n+    .. versionadded:: 2.0.0\n+    \"\"\"\n+\n+    def __init__(self, instance):\n+        self._instance = instance\n+        self._jread = instance._java_obj.read()\n+\n+    @since(\"2.0.0\")\n+    def load(self, path):\n+        \"\"\"Loads the ML component from the input path.\"\"\"\n+        self._instance.load(path)"
+  }],
+  "prId": 10469
+}, {
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "Rather than having this here, should we make this abstraction extend JavaWrapper?\n",
+    "commit": "7334be978468cee2bb4b9e5b13e296392080246b",
+    "createdAt": "2016-01-12T02:25:18Z",
+    "diffHunk": "@@ -52,3 +71,141 @@ def _randomUID(cls):\n         concatenates the class name, \"_\", and 12 random hex chars.\n         \"\"\"\n         return cls.__name__ + \"_\" + uuid.uuid4().hex[12:]\n+\n+\n+@inherit_doc\n+class MLWriter(object):\n+    \"\"\"\n+    Abstract class for utility classes that can save ML instances.\n+\n+    .. versionadded:: 2.0.0\n+    \"\"\"\n+\n+    def __init__(self, instance):\n+        self._jwrite = instance._java_obj.write()\n+\n+    @since(\"2.0.0\")\n+    def save(self, path):\n+        \"\"\"Saves the ML instances to the input path.\"\"\"\n+        self._jwrite.save(path)\n+\n+    @since(\"2.0.0\")\n+    def overwrite(self):\n+        \"\"\"Overwrites if the output path already exists.\"\"\"\n+        self._jwrite.overwrite()\n+        return self\n+\n+    @since(\"2.0.0\")\n+    def context(self, sqlContext):\n+        \"\"\"Sets the SQL context to use for saving.\"\"\"\n+        self._jwrite.context(sqlContext._ssql_ctx)\n+        return self\n+\n+\n+@inherit_doc\n+class MLWritable(object):\n+    \"\"\"\n+    Mixin for ML instances that provide MLWriter through their Scala\n+    implementation.\n+\n+    .. versionadded:: 2.0.0\n+    \"\"\"\n+\n+    @since(\"2.0.0\")\n+    def write(self):\n+        \"\"\"Returns an MLWriter instance for this ML instance.\"\"\"\n+        return MLWriter(self)\n+\n+    @since(\"2.0.0\")\n+    def save(self, path):\n+        \"\"\"Save this ML instance to the given path, a shortcut of `write().save(path)`.\"\"\"\n+        if not isinstance(path, basestring):\n+            raise TypeError(\"path should be a basestring, got type %s\" % type(path))\n+        self._java_obj.save(path)\n+\n+\n+@inherit_doc\n+class MLReader(object):\n+    \"\"\"\n+    Abstract class for utility classes that can load ML instances.\n+\n+    .. versionadded:: 2.0.0\n+    \"\"\"\n+\n+    def __init__(self, instance):\n+        self._instance = instance\n+        self._jread = instance._java_obj.read()\n+\n+    @since(\"2.0.0\")\n+    def load(self, path):\n+        \"\"\"Loads the ML component from the input path.\"\"\"\n+        self._instance.load(path)\n+\n+    @since(\"2.0.0\")\n+    def context(self, sqlContext):\n+        \"\"\"Sets the SQL context to use for loading.\"\"\"\n+        self._jread.context(sqlContext._ssql_ctx)\n+        return self\n+\n+\n+@inherit_doc\n+class MLReadable(object):\n+    \"\"\"\n+    Mixin for objects that provide MLReader using its Scala implementation.\n+\n+    .. versionadded:: 2.0.0\n+    \"\"\"\n+\n+    @classmethod\n+    def _java_loader_class(cls):"
+  }, {
+    "author": {
+      "login": "yanboliang"
+    },
+    "body": "`MLReadable` is a mixin, so can not a JavaWrapper abstraction. For example, to make `LinearRegression` support save/load, it should extend from both `JavaEstimator` and `MLReadable/MLWritable`. `JavaEstimator` has extend from `JavaWrapper`, and we can not make `MLReadable/MLWritable` also extend from `JavaWrapper`. Please correct me if I have misunderstand.\n",
+    "commit": "7334be978468cee2bb4b9e5b13e296392080246b",
+    "createdAt": "2016-01-25T11:04:21Z",
+    "diffHunk": "@@ -52,3 +71,141 @@ def _randomUID(cls):\n         concatenates the class name, \"_\", and 12 random hex chars.\n         \"\"\"\n         return cls.__name__ + \"_\" + uuid.uuid4().hex[12:]\n+\n+\n+@inherit_doc\n+class MLWriter(object):\n+    \"\"\"\n+    Abstract class for utility classes that can save ML instances.\n+\n+    .. versionadded:: 2.0.0\n+    \"\"\"\n+\n+    def __init__(self, instance):\n+        self._jwrite = instance._java_obj.write()\n+\n+    @since(\"2.0.0\")\n+    def save(self, path):\n+        \"\"\"Saves the ML instances to the input path.\"\"\"\n+        self._jwrite.save(path)\n+\n+    @since(\"2.0.0\")\n+    def overwrite(self):\n+        \"\"\"Overwrites if the output path already exists.\"\"\"\n+        self._jwrite.overwrite()\n+        return self\n+\n+    @since(\"2.0.0\")\n+    def context(self, sqlContext):\n+        \"\"\"Sets the SQL context to use for saving.\"\"\"\n+        self._jwrite.context(sqlContext._ssql_ctx)\n+        return self\n+\n+\n+@inherit_doc\n+class MLWritable(object):\n+    \"\"\"\n+    Mixin for ML instances that provide MLWriter through their Scala\n+    implementation.\n+\n+    .. versionadded:: 2.0.0\n+    \"\"\"\n+\n+    @since(\"2.0.0\")\n+    def write(self):\n+        \"\"\"Returns an MLWriter instance for this ML instance.\"\"\"\n+        return MLWriter(self)\n+\n+    @since(\"2.0.0\")\n+    def save(self, path):\n+        \"\"\"Save this ML instance to the given path, a shortcut of `write().save(path)`.\"\"\"\n+        if not isinstance(path, basestring):\n+            raise TypeError(\"path should be a basestring, got type %s\" % type(path))\n+        self._java_obj.save(path)\n+\n+\n+@inherit_doc\n+class MLReader(object):\n+    \"\"\"\n+    Abstract class for utility classes that can load ML instances.\n+\n+    .. versionadded:: 2.0.0\n+    \"\"\"\n+\n+    def __init__(self, instance):\n+        self._instance = instance\n+        self._jread = instance._java_obj.read()\n+\n+    @since(\"2.0.0\")\n+    def load(self, path):\n+        \"\"\"Loads the ML component from the input path.\"\"\"\n+        self._instance.load(path)\n+\n+    @since(\"2.0.0\")\n+    def context(self, sqlContext):\n+        \"\"\"Sets the SQL context to use for loading.\"\"\"\n+        self._jread.context(sqlContext._ssql_ctx)\n+        return self\n+\n+\n+@inherit_doc\n+class MLReadable(object):\n+    \"\"\"\n+    Mixin for objects that provide MLReader using its Scala implementation.\n+\n+    .. versionadded:: 2.0.0\n+    \"\"\"\n+\n+    @classmethod\n+    def _java_loader_class(cls):"
+  }, {
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "Right, good point.\n",
+    "commit": "7334be978468cee2bb4b9e5b13e296392080246b",
+    "createdAt": "2016-01-26T02:27:51Z",
+    "diffHunk": "@@ -52,3 +71,141 @@ def _randomUID(cls):\n         concatenates the class name, \"_\", and 12 random hex chars.\n         \"\"\"\n         return cls.__name__ + \"_\" + uuid.uuid4().hex[12:]\n+\n+\n+@inherit_doc\n+class MLWriter(object):\n+    \"\"\"\n+    Abstract class for utility classes that can save ML instances.\n+\n+    .. versionadded:: 2.0.0\n+    \"\"\"\n+\n+    def __init__(self, instance):\n+        self._jwrite = instance._java_obj.write()\n+\n+    @since(\"2.0.0\")\n+    def save(self, path):\n+        \"\"\"Saves the ML instances to the input path.\"\"\"\n+        self._jwrite.save(path)\n+\n+    @since(\"2.0.0\")\n+    def overwrite(self):\n+        \"\"\"Overwrites if the output path already exists.\"\"\"\n+        self._jwrite.overwrite()\n+        return self\n+\n+    @since(\"2.0.0\")\n+    def context(self, sqlContext):\n+        \"\"\"Sets the SQL context to use for saving.\"\"\"\n+        self._jwrite.context(sqlContext._ssql_ctx)\n+        return self\n+\n+\n+@inherit_doc\n+class MLWritable(object):\n+    \"\"\"\n+    Mixin for ML instances that provide MLWriter through their Scala\n+    implementation.\n+\n+    .. versionadded:: 2.0.0\n+    \"\"\"\n+\n+    @since(\"2.0.0\")\n+    def write(self):\n+        \"\"\"Returns an MLWriter instance for this ML instance.\"\"\"\n+        return MLWriter(self)\n+\n+    @since(\"2.0.0\")\n+    def save(self, path):\n+        \"\"\"Save this ML instance to the given path, a shortcut of `write().save(path)`.\"\"\"\n+        if not isinstance(path, basestring):\n+            raise TypeError(\"path should be a basestring, got type %s\" % type(path))\n+        self._java_obj.save(path)\n+\n+\n+@inherit_doc\n+class MLReader(object):\n+    \"\"\"\n+    Abstract class for utility classes that can load ML instances.\n+\n+    .. versionadded:: 2.0.0\n+    \"\"\"\n+\n+    def __init__(self, instance):\n+        self._instance = instance\n+        self._jread = instance._java_obj.read()\n+\n+    @since(\"2.0.0\")\n+    def load(self, path):\n+        \"\"\"Loads the ML component from the input path.\"\"\"\n+        self._instance.load(path)\n+\n+    @since(\"2.0.0\")\n+    def context(self, sqlContext):\n+        \"\"\"Sets the SQL context to use for loading.\"\"\"\n+        self._jread.context(sqlContext._ssql_ctx)\n+        return self\n+\n+\n+@inherit_doc\n+class MLReadable(object):\n+    \"\"\"\n+    Mixin for objects that provide MLReader using its Scala implementation.\n+\n+    .. versionadded:: 2.0.0\n+    \"\"\"\n+\n+    @classmethod\n+    def _java_loader_class(cls):"
+  }],
+  "prId": 10469
+}, {
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "I'm hoping this and EstimatorMLReadable will not be needed if we can make a generic MLReadable which works for any JavaWrapper type.\n",
+    "commit": "7334be978468cee2bb4b9e5b13e296392080246b",
+    "createdAt": "2016-01-12T02:25:22Z",
+    "diffHunk": "@@ -52,3 +71,141 @@ def _randomUID(cls):\n         concatenates the class name, \"_\", and 12 random hex chars.\n         \"\"\"\n         return cls.__name__ + \"_\" + uuid.uuid4().hex[12:]\n+\n+\n+@inherit_doc\n+class MLWriter(object):\n+    \"\"\"\n+    Abstract class for utility classes that can save ML instances.\n+\n+    .. versionadded:: 2.0.0\n+    \"\"\"\n+\n+    def __init__(self, instance):\n+        self._jwrite = instance._java_obj.write()\n+\n+    @since(\"2.0.0\")\n+    def save(self, path):\n+        \"\"\"Saves the ML instances to the input path.\"\"\"\n+        self._jwrite.save(path)\n+\n+    @since(\"2.0.0\")\n+    def overwrite(self):\n+        \"\"\"Overwrites if the output path already exists.\"\"\"\n+        self._jwrite.overwrite()\n+        return self\n+\n+    @since(\"2.0.0\")\n+    def context(self, sqlContext):\n+        \"\"\"Sets the SQL context to use for saving.\"\"\"\n+        self._jwrite.context(sqlContext._ssql_ctx)\n+        return self\n+\n+\n+@inherit_doc\n+class MLWritable(object):\n+    \"\"\"\n+    Mixin for ML instances that provide MLWriter through their Scala\n+    implementation.\n+\n+    .. versionadded:: 2.0.0\n+    \"\"\"\n+\n+    @since(\"2.0.0\")\n+    def write(self):\n+        \"\"\"Returns an MLWriter instance for this ML instance.\"\"\"\n+        return MLWriter(self)\n+\n+    @since(\"2.0.0\")\n+    def save(self, path):\n+        \"\"\"Save this ML instance to the given path, a shortcut of `write().save(path)`.\"\"\"\n+        if not isinstance(path, basestring):\n+            raise TypeError(\"path should be a basestring, got type %s\" % type(path))\n+        self._java_obj.save(path)\n+\n+\n+@inherit_doc\n+class MLReader(object):\n+    \"\"\"\n+    Abstract class for utility classes that can load ML instances.\n+\n+    .. versionadded:: 2.0.0\n+    \"\"\"\n+\n+    def __init__(self, instance):\n+        self._instance = instance\n+        self._jread = instance._java_obj.read()\n+\n+    @since(\"2.0.0\")\n+    def load(self, path):\n+        \"\"\"Loads the ML component from the input path.\"\"\"\n+        self._instance.load(path)\n+\n+    @since(\"2.0.0\")\n+    def context(self, sqlContext):\n+        \"\"\"Sets the SQL context to use for loading.\"\"\"\n+        self._jread.context(sqlContext._ssql_ctx)\n+        return self\n+\n+\n+@inherit_doc\n+class MLReadable(object):\n+    \"\"\"\n+    Mixin for objects that provide MLReader using its Scala implementation.\n+\n+    .. versionadded:: 2.0.0\n+    \"\"\"\n+\n+    @classmethod\n+    def _java_loader_class(cls):\n+        \"\"\"\n+        Returns the full class name of the Java loader. The default\n+        implementation replaces \"pyspark\" by \"org.apache.spark\" in\n+        the Python full class name.\n+        \"\"\"\n+        java_package = cls.__module__.replace(\"pyspark\", \"org.apache.spark\")\n+        return \".\".join([java_package, cls.__name__])\n+\n+    @classmethod\n+    def _load_java(cls, path):\n+        \"\"\"\n+        Load a Java model from the given path.\n+        \"\"\"\n+        java_class = cls._java_loader_class()\n+        java_obj = _jvm()\n+        for name in java_class.split(\".\"):\n+            java_obj = getattr(java_obj, name)\n+        return java_obj.load(path)\n+\n+    @classmethod\n+    @since(\"2.0.0\")\n+    def read(self):\n+        \"\"\"Returns an MLReader instance for this class.\"\"\"\n+        return MLReader(self)\n+\n+\n+@inherit_doc\n+class TransformerMLReadable(MLReadable):"
+  }],
+  "prId": 10469
+}, {
+  "comments": [{
+    "author": {
+      "login": "yanboliang"
+    },
+    "body": "Transfer all params from peer java object.\n",
+    "commit": "7334be978468cee2bb4b9e5b13e296392080246b",
+    "createdAt": "2016-01-26T15:24:15Z",
+    "diffHunk": "@@ -52,3 +71,133 @@ def _randomUID(cls):\n         concatenates the class name, \"_\", and 12 random hex chars.\n         \"\"\"\n         return cls.__name__ + \"_\" + uuid.uuid4().hex[12:]\n+\n+\n+@inherit_doc\n+class MLWriter(object):\n+    \"\"\"\n+    .. note:: Experimental\n+\n+    Utility class that can save ML instances.\n+\n+    .. versionadded:: 2.0.0\n+    \"\"\"\n+\n+    def __init__(self, instance):\n+        instance._transfer_params_to_java()\n+        self._jwrite = instance._java_obj.write()\n+\n+    @since(\"2.0.0\")\n+    def save(self, path):\n+        \"\"\"Saves the ML instances to the input path.\"\"\"\n+        self._jwrite.save(path)\n+\n+    @since(\"2.0.0\")\n+    def overwrite(self):\n+        \"\"\"Overwrites if the output path already exists.\"\"\"\n+        self._jwrite.overwrite()\n+        return self\n+\n+    @since(\"2.0.0\")\n+    def context(self, sqlContext):\n+        \"\"\"Sets the SQL context to use for saving.\"\"\"\n+        self._jwrite.context(sqlContext._ssql_ctx)\n+        return self\n+\n+\n+@inherit_doc\n+class MLWritable(object):\n+    \"\"\"\n+    .. note:: Experimental\n+\n+    Mixin for ML instances that provide MLWriter through their Scala\n+    implementation.\n+\n+    .. versionadded:: 2.0.0\n+    \"\"\"\n+\n+    @since(\"2.0.0\")\n+    def write(self):\n+        \"\"\"Returns an MLWriter instance for this ML instance.\"\"\"\n+        return MLWriter(self)\n+\n+    @since(\"2.0.0\")\n+    def save(self, path):\n+        \"\"\"Save this ML instance to the given path, a shortcut of `write().save(path)`.\"\"\"\n+        if not isinstance(path, basestring):\n+            raise TypeError(\"path should be a basestring, got type %s\" % type(path))\n+        self.write().save(path)\n+\n+\n+@inherit_doc\n+class MLReader(object):\n+    \"\"\"\n+    .. note:: Experimental\n+\n+    Utility class that can load ML instances.\n+\n+    .. versionadded:: 2.0.0\n+    \"\"\"\n+\n+    def __init__(self, instance):\n+        self._instance = instance\n+        self._jread = instance._java_obj.read()\n+\n+    @since(\"2.0.0\")\n+    def load(self, path):\n+        \"\"\"Loads the ML component from the input path.\"\"\"\n+        java_obj = self._jread.load(path)\n+        self._instance._java_obj = java_obj\n+        self._instance.uid = java_obj.uid()\n+        self._instance._transfer_params_from_java(True)"
+  }],
+  "prId": 10469
+}, {
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "Actually, this is a general mix-in; it does not rely on a Scala implementation.  It is MLWriter which uses the Scala implementation.\n",
+    "commit": "7334be978468cee2bb4b9e5b13e296392080246b",
+    "createdAt": "2016-01-26T21:30:30Z",
+    "diffHunk": "@@ -52,3 +71,133 @@ def _randomUID(cls):\n         concatenates the class name, \"_\", and 12 random hex chars.\n         \"\"\"\n         return cls.__name__ + \"_\" + uuid.uuid4().hex[12:]\n+\n+\n+@inherit_doc\n+class MLWriter(object):\n+    \"\"\"\n+    .. note:: Experimental\n+\n+    Utility class that can save ML instances.\n+\n+    .. versionadded:: 2.0.0\n+    \"\"\"\n+\n+    def __init__(self, instance):\n+        instance._transfer_params_to_java()\n+        self._jwrite = instance._java_obj.write()\n+\n+    @since(\"2.0.0\")\n+    def save(self, path):\n+        \"\"\"Saves the ML instances to the input path.\"\"\"\n+        self._jwrite.save(path)\n+\n+    @since(\"2.0.0\")\n+    def overwrite(self):\n+        \"\"\"Overwrites if the output path already exists.\"\"\"\n+        self._jwrite.overwrite()\n+        return self\n+\n+    @since(\"2.0.0\")\n+    def context(self, sqlContext):\n+        \"\"\"Sets the SQL context to use for saving.\"\"\"\n+        self._jwrite.context(sqlContext._ssql_ctx)\n+        return self\n+\n+\n+@inherit_doc\n+class MLWritable(object):\n+    \"\"\"\n+    .. note:: Experimental\n+\n+    Mixin for ML instances that provide MLWriter through their Scala"
+  }],
+  "prId": 10469
+}, {
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "How about we rename this to MLJavaWriter or JavaMLWriter?\n",
+    "commit": "7334be978468cee2bb4b9e5b13e296392080246b",
+    "createdAt": "2016-01-26T21:30:32Z",
+    "diffHunk": "@@ -52,3 +71,133 @@ def _randomUID(cls):\n         concatenates the class name, \"_\", and 12 random hex chars.\n         \"\"\"\n         return cls.__name__ + \"_\" + uuid.uuid4().hex[12:]\n+\n+\n+@inherit_doc\n+class MLWriter(object):"
+  }],
+  "prId": 10469
+}, {
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "Add this check to MLWriter.save too\n",
+    "commit": "7334be978468cee2bb4b9e5b13e296392080246b",
+    "createdAt": "2016-01-26T21:30:39Z",
+    "diffHunk": "@@ -52,3 +71,133 @@ def _randomUID(cls):\n         concatenates the class name, \"_\", and 12 random hex chars.\n         \"\"\"\n         return cls.__name__ + \"_\" + uuid.uuid4().hex[12:]\n+\n+\n+@inherit_doc\n+class MLWriter(object):\n+    \"\"\"\n+    .. note:: Experimental\n+\n+    Utility class that can save ML instances.\n+\n+    .. versionadded:: 2.0.0\n+    \"\"\"\n+\n+    def __init__(self, instance):\n+        instance._transfer_params_to_java()\n+        self._jwrite = instance._java_obj.write()\n+\n+    @since(\"2.0.0\")\n+    def save(self, path):\n+        \"\"\"Saves the ML instances to the input path.\"\"\"\n+        self._jwrite.save(path)\n+\n+    @since(\"2.0.0\")\n+    def overwrite(self):\n+        \"\"\"Overwrites if the output path already exists.\"\"\"\n+        self._jwrite.overwrite()\n+        return self\n+\n+    @since(\"2.0.0\")\n+    def context(self, sqlContext):\n+        \"\"\"Sets the SQL context to use for saving.\"\"\"\n+        self._jwrite.context(sqlContext._ssql_ctx)\n+        return self\n+\n+\n+@inherit_doc\n+class MLWritable(object):\n+    \"\"\"\n+    .. note:: Experimental\n+\n+    Mixin for ML instances that provide MLWriter through their Scala\n+    implementation.\n+\n+    .. versionadded:: 2.0.0\n+    \"\"\"\n+\n+    @since(\"2.0.0\")\n+    def write(self):\n+        \"\"\"Returns an MLWriter instance for this ML instance.\"\"\"\n+        return MLWriter(self)\n+\n+    @since(\"2.0.0\")\n+    def save(self, path):\n+        \"\"\"Save this ML instance to the given path, a shortcut of `write().save(path)`.\"\"\"\n+        if not isinstance(path, basestring):"
+  }],
+  "prId": 10469
+}, {
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "How about we rename this to MLJavaReader or JavaMLReader?\n",
+    "commit": "7334be978468cee2bb4b9e5b13e296392080246b",
+    "createdAt": "2016-01-26T21:30:52Z",
+    "diffHunk": "@@ -52,3 +71,133 @@ def _randomUID(cls):\n         concatenates the class name, \"_\", and 12 random hex chars.\n         \"\"\"\n         return cls.__name__ + \"_\" + uuid.uuid4().hex[12:]\n+\n+\n+@inherit_doc\n+class MLWriter(object):\n+    \"\"\"\n+    .. note:: Experimental\n+\n+    Utility class that can save ML instances.\n+\n+    .. versionadded:: 2.0.0\n+    \"\"\"\n+\n+    def __init__(self, instance):\n+        instance._transfer_params_to_java()\n+        self._jwrite = instance._java_obj.write()\n+\n+    @since(\"2.0.0\")\n+    def save(self, path):\n+        \"\"\"Saves the ML instances to the input path.\"\"\"\n+        self._jwrite.save(path)\n+\n+    @since(\"2.0.0\")\n+    def overwrite(self):\n+        \"\"\"Overwrites if the output path already exists.\"\"\"\n+        self._jwrite.overwrite()\n+        return self\n+\n+    @since(\"2.0.0\")\n+    def context(self, sqlContext):\n+        \"\"\"Sets the SQL context to use for saving.\"\"\"\n+        self._jwrite.context(sqlContext._ssql_ctx)\n+        return self\n+\n+\n+@inherit_doc\n+class MLWritable(object):\n+    \"\"\"\n+    .. note:: Experimental\n+\n+    Mixin for ML instances that provide MLWriter through their Scala\n+    implementation.\n+\n+    .. versionadded:: 2.0.0\n+    \"\"\"\n+\n+    @since(\"2.0.0\")\n+    def write(self):\n+        \"\"\"Returns an MLWriter instance for this ML instance.\"\"\"\n+        return MLWriter(self)\n+\n+    @since(\"2.0.0\")\n+    def save(self, path):\n+        \"\"\"Save this ML instance to the given path, a shortcut of `write().save(path)`.\"\"\"\n+        if not isinstance(path, basestring):\n+            raise TypeError(\"path should be a basestring, got type %s\" % type(path))\n+        self.write().save(path)\n+\n+\n+@inherit_doc\n+class MLReader(object):"
+  }],
+  "prId": 10469
+}, {
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "Could this be kept more general by putting JVM-specific things in MLReader?\n",
+    "commit": "7334be978468cee2bb4b9e5b13e296392080246b",
+    "createdAt": "2016-01-26T21:30:55Z",
+    "diffHunk": "@@ -52,3 +71,133 @@ def _randomUID(cls):\n         concatenates the class name, \"_\", and 12 random hex chars.\n         \"\"\"\n         return cls.__name__ + \"_\" + uuid.uuid4().hex[12:]\n+\n+\n+@inherit_doc\n+class MLWriter(object):\n+    \"\"\"\n+    .. note:: Experimental\n+\n+    Utility class that can save ML instances.\n+\n+    .. versionadded:: 2.0.0\n+    \"\"\"\n+\n+    def __init__(self, instance):\n+        instance._transfer_params_to_java()\n+        self._jwrite = instance._java_obj.write()\n+\n+    @since(\"2.0.0\")\n+    def save(self, path):\n+        \"\"\"Saves the ML instances to the input path.\"\"\"\n+        self._jwrite.save(path)\n+\n+    @since(\"2.0.0\")\n+    def overwrite(self):\n+        \"\"\"Overwrites if the output path already exists.\"\"\"\n+        self._jwrite.overwrite()\n+        return self\n+\n+    @since(\"2.0.0\")\n+    def context(self, sqlContext):\n+        \"\"\"Sets the SQL context to use for saving.\"\"\"\n+        self._jwrite.context(sqlContext._ssql_ctx)\n+        return self\n+\n+\n+@inherit_doc\n+class MLWritable(object):\n+    \"\"\"\n+    .. note:: Experimental\n+\n+    Mixin for ML instances that provide MLWriter through their Scala\n+    implementation.\n+\n+    .. versionadded:: 2.0.0\n+    \"\"\"\n+\n+    @since(\"2.0.0\")\n+    def write(self):\n+        \"\"\"Returns an MLWriter instance for this ML instance.\"\"\"\n+        return MLWriter(self)\n+\n+    @since(\"2.0.0\")\n+    def save(self, path):\n+        \"\"\"Save this ML instance to the given path, a shortcut of `write().save(path)`.\"\"\"\n+        if not isinstance(path, basestring):\n+            raise TypeError(\"path should be a basestring, got type %s\" % type(path))\n+        self.write().save(path)\n+\n+\n+@inherit_doc\n+class MLReader(object):\n+    \"\"\"\n+    .. note:: Experimental\n+\n+    Utility class that can load ML instances.\n+\n+    .. versionadded:: 2.0.0\n+    \"\"\"\n+\n+    def __init__(self, instance):\n+        self._instance = instance\n+        self._jread = instance._java_obj.read()\n+\n+    @since(\"2.0.0\")\n+    def load(self, path):\n+        \"\"\"Loads the ML component from the input path.\"\"\"\n+        java_obj = self._jread.load(path)\n+        self._instance._java_obj = java_obj\n+        self._instance.uid = java_obj.uid()\n+        self._instance._transfer_params_from_java(True)\n+        return self._instance\n+\n+    @since(\"2.0.0\")\n+    def context(self, sqlContext):\n+        \"\"\"Sets the SQL context to use for loading.\"\"\"\n+        self._jread.context(sqlContext._ssql_ctx)\n+        return self\n+\n+\n+@inherit_doc\n+class MLReadable(object):\n+    \"\"\"\n+    .. note:: Experimental\n+\n+    Mixin for objects that provide MLReader using its Scala implementation."
+  }],
+  "prId": 10469
+}, {
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "This could be done within the MLReader init method (if we want to make MLReadable more general and not JVM-specific).\n",
+    "commit": "7334be978468cee2bb4b9e5b13e296392080246b",
+    "createdAt": "2016-01-26T21:31:15Z",
+    "diffHunk": "@@ -52,3 +71,133 @@ def _randomUID(cls):\n         concatenates the class name, \"_\", and 12 random hex chars.\n         \"\"\"\n         return cls.__name__ + \"_\" + uuid.uuid4().hex[12:]\n+\n+\n+@inherit_doc\n+class MLWriter(object):\n+    \"\"\"\n+    .. note:: Experimental\n+\n+    Utility class that can save ML instances.\n+\n+    .. versionadded:: 2.0.0\n+    \"\"\"\n+\n+    def __init__(self, instance):\n+        instance._transfer_params_to_java()\n+        self._jwrite = instance._java_obj.write()\n+\n+    @since(\"2.0.0\")\n+    def save(self, path):\n+        \"\"\"Saves the ML instances to the input path.\"\"\"\n+        self._jwrite.save(path)\n+\n+    @since(\"2.0.0\")\n+    def overwrite(self):\n+        \"\"\"Overwrites if the output path already exists.\"\"\"\n+        self._jwrite.overwrite()\n+        return self\n+\n+    @since(\"2.0.0\")\n+    def context(self, sqlContext):\n+        \"\"\"Sets the SQL context to use for saving.\"\"\"\n+        self._jwrite.context(sqlContext._ssql_ctx)\n+        return self\n+\n+\n+@inherit_doc\n+class MLWritable(object):\n+    \"\"\"\n+    .. note:: Experimental\n+\n+    Mixin for ML instances that provide MLWriter through their Scala\n+    implementation.\n+\n+    .. versionadded:: 2.0.0\n+    \"\"\"\n+\n+    @since(\"2.0.0\")\n+    def write(self):\n+        \"\"\"Returns an MLWriter instance for this ML instance.\"\"\"\n+        return MLWriter(self)\n+\n+    @since(\"2.0.0\")\n+    def save(self, path):\n+        \"\"\"Save this ML instance to the given path, a shortcut of `write().save(path)`.\"\"\"\n+        if not isinstance(path, basestring):\n+            raise TypeError(\"path should be a basestring, got type %s\" % type(path))\n+        self.write().save(path)\n+\n+\n+@inherit_doc\n+class MLReader(object):\n+    \"\"\"\n+    .. note:: Experimental\n+\n+    Utility class that can load ML instances.\n+\n+    .. versionadded:: 2.0.0\n+    \"\"\"\n+\n+    def __init__(self, instance):\n+        self._instance = instance\n+        self._jread = instance._java_obj.read()\n+\n+    @since(\"2.0.0\")\n+    def load(self, path):\n+        \"\"\"Loads the ML component from the input path.\"\"\"\n+        java_obj = self._jread.load(path)\n+        self._instance._java_obj = java_obj\n+        self._instance.uid = java_obj.uid()\n+        self._instance._transfer_params_from_java(True)\n+        return self._instance\n+\n+    @since(\"2.0.0\")\n+    def context(self, sqlContext):\n+        \"\"\"Sets the SQL context to use for loading.\"\"\"\n+        self._jread.context(sqlContext._ssql_ctx)\n+        return self\n+\n+\n+@inherit_doc\n+class MLReadable(object):\n+    \"\"\"\n+    .. note:: Experimental\n+\n+    Mixin for objects that provide MLReader using its Scala implementation.\n+\n+    .. versionadded:: 2.0.0\n+    \"\"\"\n+\n+    @classmethod\n+    def _java_loader_class(cls):\n+        \"\"\"\n+        Returns the full class name of the Java loader. The default\n+        implementation replaces \"pyspark\" by \"org.apache.spark\" in\n+        the Python full class name.\n+        \"\"\"\n+        java_package = cls.__module__.replace(\"pyspark\", \"org.apache.spark\")\n+        return \".\".join([java_package, cls.__name__])\n+\n+    @classmethod\n+    def _load_java_obj(cls):\n+        \"\"\"Load the peer Java object.\"\"\"\n+        java_class = cls._java_loader_class()\n+        java_obj = _jvm()\n+        for name in java_class.split(\".\"):\n+            java_obj = getattr(java_obj, name)\n+        return java_obj\n+\n+    @classmethod\n+    @since(\"2.0.0\")\n+    def read(cls):\n+        \"\"\"Returns an MLReader instance for this class.\"\"\"\n+        instance = cls()"
+  }],
+  "prId": 10469
+}]

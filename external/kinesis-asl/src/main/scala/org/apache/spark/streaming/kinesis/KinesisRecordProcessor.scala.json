@@ -1,0 +1,142 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Is this clause a bit simpler as ...\r\n\r\n```\r\nfor (start <- 0 until batch.size by maxRecords) {\r\n  addRecords(batch.sublist(start, math.min(start + maxRecords, batch.size)), checkpointer)\r\n}\r\n```",
+    "commit": "4528c505721d3b3ef7abd54d344e10b6cf16900a",
+    "createdAt": "2016-12-02T08:09:09Z",
+    "diffHunk": "@@ -56,6 +56,38 @@ private[kinesis] class KinesisRecordProcessor[T](receiver: KinesisReceiver[T], w\n     logInfo(s\"Initialized workerId $workerId with shardId $shardId\")\n   }\n \n+  private def addRecords(batch: List[Record], checkpointer: IRecordProcessorCheckpointer): Unit = {\n+    receiver.addRecords(shardId, batch)\n+    logDebug(s\"Stored: Worker $workerId stored ${batch.size} records for shardId $shardId\")\n+    receiver.setCheckpointer(shardId, checkpointer)\n+  }\n+\n+  /**\n+   * Limit the number of processed records from Kinesis stream. This is because the KCL cannot\n+   * control the number of aggregated records to be fetched even if we set `MaxRecords`\n+   * in `KinesisClientLibConfiguration`. For example, if we set 10 to the number of max records\n+   * in a worker and a producer aggregates two records into one message, the worker possibly\n+   * 20 records every callback function called.\n+   */\n+  private def processRecordsWithLimit(\n+      batch: List[Record], checkpointer: IRecordProcessorCheckpointer): Unit = {\n+    val maxRecords = receiver.getCurrentLimit\n+    if (batch.size() <= maxRecords) {\n+      addRecords(batch, checkpointer)\n+    } else {\n+      val numIter = batch.size / maxRecords"
+  }, {
+    "author": {
+      "login": "maropu"
+    },
+    "body": "Thanks! I'll fix",
+    "commit": "4528c505721d3b3ef7abd54d344e10b6cf16900a",
+    "createdAt": "2016-12-02T08:12:28Z",
+    "diffHunk": "@@ -56,6 +56,38 @@ private[kinesis] class KinesisRecordProcessor[T](receiver: KinesisReceiver[T], w\n     logInfo(s\"Initialized workerId $workerId with shardId $shardId\")\n   }\n \n+  private def addRecords(batch: List[Record], checkpointer: IRecordProcessorCheckpointer): Unit = {\n+    receiver.addRecords(shardId, batch)\n+    logDebug(s\"Stored: Worker $workerId stored ${batch.size} records for shardId $shardId\")\n+    receiver.setCheckpointer(shardId, checkpointer)\n+  }\n+\n+  /**\n+   * Limit the number of processed records from Kinesis stream. This is because the KCL cannot\n+   * control the number of aggregated records to be fetched even if we set `MaxRecords`\n+   * in `KinesisClientLibConfiguration`. For example, if we set 10 to the number of max records\n+   * in a worker and a producer aggregates two records into one message, the worker possibly\n+   * 20 records every callback function called.\n+   */\n+  private def processRecordsWithLimit(\n+      batch: List[Record], checkpointer: IRecordProcessorCheckpointer): Unit = {\n+    val maxRecords = receiver.getCurrentLimit\n+    if (batch.size() <= maxRecords) {\n+      addRecords(batch, checkpointer)\n+    } else {\n+      val numIter = batch.size / maxRecords"
+  }],
+  "prId": 16114
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "I think the for loop even takes care of this case, but no big deal either way. It seems like a reasonable change.",
+    "commit": "4528c505721d3b3ef7abd54d344e10b6cf16900a",
+    "createdAt": "2016-12-03T10:26:11Z",
+    "diffHunk": "@@ -56,6 +56,31 @@ private[kinesis] class KinesisRecordProcessor[T](receiver: KinesisReceiver[T], w\n     logInfo(s\"Initialized workerId $workerId with shardId $shardId\")\n   }\n \n+  private def addRecords(batch: List[Record], checkpointer: IRecordProcessorCheckpointer): Unit = {\n+    receiver.addRecords(shardId, batch)\n+    logDebug(s\"Stored: Worker $workerId stored ${batch.size} records for shardId $shardId\")\n+    receiver.setCheckpointer(shardId, checkpointer)\n+  }\n+\n+  /**\n+   * Limit the number of processed records from Kinesis stream. This is because the KCL cannot\n+   * control the number of aggregated records to be fetched even if we set `MaxRecords`\n+   * in `KinesisClientLibConfiguration`. For example, if we set 10 to the number of max records\n+   * in a worker and a producer aggregates two records into one message, the worker possibly\n+   * 20 records every callback function called.\n+   */\n+  private def processRecordsWithLimit(\n+      batch: List[Record], checkpointer: IRecordProcessorCheckpointer): Unit = {\n+    val maxRecords = receiver.getCurrentLimit\n+    if (batch.size() <= maxRecords) {\n+      addRecords(batch, checkpointer)"
+  }, {
+    "author": {
+      "login": "maropu"
+    },
+    "body": "Aha, I see. I'll fix, thanks!",
+    "commit": "4528c505721d3b3ef7abd54d344e10b6cf16900a",
+    "createdAt": "2016-12-03T10:40:07Z",
+    "diffHunk": "@@ -56,6 +56,31 @@ private[kinesis] class KinesisRecordProcessor[T](receiver: KinesisReceiver[T], w\n     logInfo(s\"Initialized workerId $workerId with shardId $shardId\")\n   }\n \n+  private def addRecords(batch: List[Record], checkpointer: IRecordProcessorCheckpointer): Unit = {\n+    receiver.addRecords(shardId, batch)\n+    logDebug(s\"Stored: Worker $workerId stored ${batch.size} records for shardId $shardId\")\n+    receiver.setCheckpointer(shardId, checkpointer)\n+  }\n+\n+  /**\n+   * Limit the number of processed records from Kinesis stream. This is because the KCL cannot\n+   * control the number of aggregated records to be fetched even if we set `MaxRecords`\n+   * in `KinesisClientLibConfiguration`. For example, if we set 10 to the number of max records\n+   * in a worker and a producer aggregates two records into one message, the worker possibly\n+   * 20 records every callback function called.\n+   */\n+  private def processRecordsWithLimit(\n+      batch: List[Record], checkpointer: IRecordProcessorCheckpointer): Unit = {\n+    val maxRecords = receiver.getCurrentLimit\n+    if (batch.size() <= maxRecords) {\n+      addRecords(batch, checkpointer)"
+  }],
+  "prId": 16114
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Hm, it just occurred to me that you would have a problem here if batch.size and maxRecords were both over Int.MaxValue / 2, and maxRecords were a bit smaller than batch.size. The addition below overflows.\r\n\r\nIt seems like a corner case but I note above you already defensively capped the maxRecords at Int.MaxValue so maybe it's less unlikely than it sounds.\r\n\r\nYou can fix it by letting the addition and min comparison take place over longs and then convert back to int.\r\n\r\nAlternatively I think this is even simpler in Scala, though I imagine there's some extra overhead here:\r\n\r\n```\r\nbatch.grouped(maxRecords).foreach(batch => addRecords(batch, checkpointer))\r\n```\r\n\r\nI don't know of a good reviewer for this component but I think I'm comfortable merging a straightforward change like this.",
+    "commit": "4528c505721d3b3ef7abd54d344e10b6cf16900a",
+    "createdAt": "2016-12-03T12:50:56Z",
+    "diffHunk": "@@ -56,6 +56,27 @@ private[kinesis] class KinesisRecordProcessor[T](receiver: KinesisReceiver[T], w\n     logInfo(s\"Initialized workerId $workerId with shardId $shardId\")\n   }\n \n+  private def addRecords(batch: List[Record], checkpointer: IRecordProcessorCheckpointer): Unit = {\n+    receiver.addRecords(shardId, batch)\n+    logDebug(s\"Stored: Worker $workerId stored ${batch.size} records for shardId $shardId\")\n+    receiver.setCheckpointer(shardId, checkpointer)\n+  }\n+\n+  /**\n+   * Limit the number of processed records from Kinesis stream. This is because the KCL cannot\n+   * control the number of aggregated records to be fetched even if we set `MaxRecords`\n+   * in `KinesisClientLibConfiguration`. For example, if we set 10 to the number of max records\n+   * in a worker and a producer aggregates two records into one message, the worker possibly\n+   * 20 records every callback function called.\n+   */\n+  private def processRecordsWithLimit(\n+      batch: List[Record], checkpointer: IRecordProcessorCheckpointer): Unit = {\n+    val maxRecords = receiver.getCurrentLimit\n+    for (start <- 0 until batch.size by maxRecords) {"
+  }, {
+    "author": {
+      "login": "maropu"
+    },
+    "body": "Actually, since each kinesis shard has strict read limits of throughput (http://docs.aws.amazon.com/streams/latest/dev/service-sizes-and-limits.html), `batch.size` hardly exceeds `Int.MaxValue / 2`. But, since I like your idea in terms of code clearness, I fixed.",
+    "commit": "4528c505721d3b3ef7abd54d344e10b6cf16900a",
+    "createdAt": "2016-12-03T14:40:49Z",
+    "diffHunk": "@@ -56,6 +56,27 @@ private[kinesis] class KinesisRecordProcessor[T](receiver: KinesisReceiver[T], w\n     logInfo(s\"Initialized workerId $workerId with shardId $shardId\")\n   }\n \n+  private def addRecords(batch: List[Record], checkpointer: IRecordProcessorCheckpointer): Unit = {\n+    receiver.addRecords(shardId, batch)\n+    logDebug(s\"Stored: Worker $workerId stored ${batch.size} records for shardId $shardId\")\n+    receiver.setCheckpointer(shardId, checkpointer)\n+  }\n+\n+  /**\n+   * Limit the number of processed records from Kinesis stream. This is because the KCL cannot\n+   * control the number of aggregated records to be fetched even if we set `MaxRecords`\n+   * in `KinesisClientLibConfiguration`. For example, if we set 10 to the number of max records\n+   * in a worker and a producer aggregates two records into one message, the worker possibly\n+   * 20 records every callback function called.\n+   */\n+  private def processRecordsWithLimit(\n+      batch: List[Record], checkpointer: IRecordProcessorCheckpointer): Unit = {\n+    val maxRecords = receiver.getCurrentLimit\n+    for (start <- 0 until batch.size by maxRecords) {"
+  }],
+  "prId": 16114
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "BTW is this supposed to be called on every batch or once at the end? I don't know how it works.",
+    "commit": "4528c505721d3b3ef7abd54d344e10b6cf16900a",
+    "createdAt": "2016-12-03T12:51:11Z",
+    "diffHunk": "@@ -56,6 +56,27 @@ private[kinesis] class KinesisRecordProcessor[T](receiver: KinesisReceiver[T], w\n     logInfo(s\"Initialized workerId $workerId with shardId $shardId\")\n   }\n \n+  private def addRecords(batch: List[Record], checkpointer: IRecordProcessorCheckpointer): Unit = {\n+    receiver.addRecords(shardId, batch)\n+    logDebug(s\"Stored: Worker $workerId stored ${batch.size} records for shardId $shardId\")\n+    receiver.setCheckpointer(shardId, checkpointer)"
+  }, {
+    "author": {
+      "login": "maropu"
+    },
+    "body": "yea, you're right and this code overwrites `checkpointer` every the callback function called (maybe, every 1 sec.). I'm not sure what an original author thinks about though, it seems this is waste of codes. But, I also not sure that it is worth fixing this and this fix is out of scope in this jira. If necessary, I'm pleased to fix in follow-up activities.",
+    "commit": "4528c505721d3b3ef7abd54d344e10b6cf16900a",
+    "createdAt": "2016-12-03T14:51:01Z",
+    "diffHunk": "@@ -56,6 +56,27 @@ private[kinesis] class KinesisRecordProcessor[T](receiver: KinesisReceiver[T], w\n     logInfo(s\"Initialized workerId $workerId with shardId $shardId\")\n   }\n \n+  private def addRecords(batch: List[Record], checkpointer: IRecordProcessorCheckpointer): Unit = {\n+    receiver.addRecords(shardId, batch)\n+    logDebug(s\"Stored: Worker $workerId stored ${batch.size} records for shardId $shardId\")\n+    receiver.setCheckpointer(shardId, checkpointer)"
+  }],
+  "prId": 16114
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Sorry, one last comment -- `batch` is used for the overall data set and each subset. They should be named differently for clarity.\r\n\r\nIt's also my fault for not realizing the collections here were Java not Scala, and you have to convert to use the nice Scala idiom. I think it's OK as it's just going to wrap and not copy the class, but it does bear being careful about performance here.",
+    "commit": "4528c505721d3b3ef7abd54d344e10b6cf16900a",
+    "createdAt": "2016-12-06T22:15:23Z",
+    "diffHunk": "@@ -68,9 +69,16 @@ private[kinesis] class KinesisRecordProcessor[T](receiver: KinesisReceiver[T], w\n   override def processRecords(batch: List[Record], checkpointer: IRecordProcessorCheckpointer) {\n     if (!receiver.isStopped()) {\n       try {\n-        receiver.addRecords(shardId, batch)\n-        logDebug(s\"Stored: Worker $workerId stored ${batch.size} records for shardId $shardId\")\n-        receiver.setCheckpointer(shardId, checkpointer)\n+        // Limit the number of processed records from Kinesis stream. This is because the KCL cannot\n+        // control the number of aggregated records to be fetched even if we set `MaxRecords`\n+        // in `KinesisClientLibConfiguration`. For example, if we set 10 to the number of max\n+        // records in a worker and a producer aggregates two records into one message, the worker\n+        // possibly 20 records every callback function called.\n+        batch.asScala.grouped(receiver.getCurrentLimit).foreach { batch =>"
+  }, {
+    "author": {
+      "login": "maropu"
+    },
+    "body": "yea, I also think, when `maxRecords` is small and `batch` is large, many iterations cause a little overheads. So, I restored the code to the previous java-style one.",
+    "commit": "4528c505721d3b3ef7abd54d344e10b6cf16900a",
+    "createdAt": "2016-12-07T01:30:57Z",
+    "diffHunk": "@@ -68,9 +69,16 @@ private[kinesis] class KinesisRecordProcessor[T](receiver: KinesisReceiver[T], w\n   override def processRecords(batch: List[Record], checkpointer: IRecordProcessorCheckpointer) {\n     if (!receiver.isStopped()) {\n       try {\n-        receiver.addRecords(shardId, batch)\n-        logDebug(s\"Stored: Worker $workerId stored ${batch.size} records for shardId $shardId\")\n-        receiver.setCheckpointer(shardId, checkpointer)\n+        // Limit the number of processed records from Kinesis stream. This is because the KCL cannot\n+        // control the number of aggregated records to be fetched even if we set `MaxRecords`\n+        // in `KinesisClientLibConfiguration`. For example, if we set 10 to the number of max\n+        // records in a worker and a producer aggregates two records into one message, the worker\n+        // possibly 20 records every callback function called.\n+        batch.asScala.grouped(receiver.getCurrentLimit).foreach { batch =>"
+  }],
+  "prId": 16114
+}, {
+  "comments": [{
+    "author": {
+      "login": "brkyvz"
+    },
+    "body": "this should be outside, after the `foreach`",
+    "commit": "4528c505721d3b3ef7abd54d344e10b6cf16900a",
+    "createdAt": "2016-12-07T00:26:46Z",
+    "diffHunk": "@@ -68,9 +69,16 @@ private[kinesis] class KinesisRecordProcessor[T](receiver: KinesisReceiver[T], w\n   override def processRecords(batch: List[Record], checkpointer: IRecordProcessorCheckpointer) {\n     if (!receiver.isStopped()) {\n       try {\n-        receiver.addRecords(shardId, batch)\n-        logDebug(s\"Stored: Worker $workerId stored ${batch.size} records for shardId $shardId\")\n-        receiver.setCheckpointer(shardId, checkpointer)\n+        // Limit the number of processed records from Kinesis stream. This is because the KCL cannot\n+        // control the number of aggregated records to be fetched even if we set `MaxRecords`\n+        // in `KinesisClientLibConfiguration`. For example, if we set 10 to the number of max\n+        // records in a worker and a producer aggregates two records into one message, the worker\n+        // possibly 20 records every callback function called.\n+        batch.asScala.grouped(receiver.getCurrentLimit).foreach { batch =>\n+          receiver.addRecords(shardId, batch.asJava)\n+          logDebug(s\"Stored: Worker $workerId stored ${batch.size} records for shardId $shardId\")\n+          receiver.setCheckpointer(shardId, checkpointer)"
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Yeah, that's what I suspected at https://github.com/apache/spark/pull/16114#discussion_r90756702 -- thanks for confirming",
+    "commit": "4528c505721d3b3ef7abd54d344e10b6cf16900a",
+    "createdAt": "2016-12-07T00:49:34Z",
+    "diffHunk": "@@ -68,9 +69,16 @@ private[kinesis] class KinesisRecordProcessor[T](receiver: KinesisReceiver[T], w\n   override def processRecords(batch: List[Record], checkpointer: IRecordProcessorCheckpointer) {\n     if (!receiver.isStopped()) {\n       try {\n-        receiver.addRecords(shardId, batch)\n-        logDebug(s\"Stored: Worker $workerId stored ${batch.size} records for shardId $shardId\")\n-        receiver.setCheckpointer(shardId, checkpointer)\n+        // Limit the number of processed records from Kinesis stream. This is because the KCL cannot\n+        // control the number of aggregated records to be fetched even if we set `MaxRecords`\n+        // in `KinesisClientLibConfiguration`. For example, if we set 10 to the number of max\n+        // records in a worker and a producer aggregates two records into one message, the worker\n+        // possibly 20 records every callback function called.\n+        batch.asScala.grouped(receiver.getCurrentLimit).foreach { batch =>\n+          receiver.addRecords(shardId, batch.asJava)\n+          logDebug(s\"Stored: Worker $workerId stored ${batch.size} records for shardId $shardId\")\n+          receiver.setCheckpointer(shardId, checkpointer)"
+  }, {
+    "author": {
+      "login": "maropu"
+    },
+    "body": "thanks, I'll fix",
+    "commit": "4528c505721d3b3ef7abd54d344e10b6cf16900a",
+    "createdAt": "2016-12-07T01:09:45Z",
+    "diffHunk": "@@ -68,9 +69,16 @@ private[kinesis] class KinesisRecordProcessor[T](receiver: KinesisReceiver[T], w\n   override def processRecords(batch: List[Record], checkpointer: IRecordProcessorCheckpointer) {\n     if (!receiver.isStopped()) {\n       try {\n-        receiver.addRecords(shardId, batch)\n-        logDebug(s\"Stored: Worker $workerId stored ${batch.size} records for shardId $shardId\")\n-        receiver.setCheckpointer(shardId, checkpointer)\n+        // Limit the number of processed records from Kinesis stream. This is because the KCL cannot\n+        // control the number of aggregated records to be fetched even if we set `MaxRecords`\n+        // in `KinesisClientLibConfiguration`. For example, if we set 10 to the number of max\n+        // records in a worker and a producer aggregates two records into one message, the worker\n+        // possibly 20 records every callback function called.\n+        batch.asScala.grouped(receiver.getCurrentLimit).foreach { batch =>\n+          receiver.addRecords(shardId, batch.asJava)\n+          logDebug(s\"Stored: Worker $workerId stored ${batch.size} records for shardId $shardId\")\n+          receiver.setCheckpointer(shardId, checkpointer)"
+  }],
+  "prId": 16114
+}, {
+  "comments": [{
+    "author": {
+      "login": "brkyvz"
+    },
+    "body": "I would leave this comment inside the `for` loop, because IIRC `addRecords` will be a blocking call where it needs to be written to the WAL",
+    "commit": "4528c505721d3b3ef7abd54d344e10b6cf16900a",
+    "createdAt": "2016-12-07T17:08:22Z",
+    "diffHunk": "@@ -68,7 +68,16 @@ private[kinesis] class KinesisRecordProcessor[T](receiver: KinesisReceiver[T], w\n   override def processRecords(batch: List[Record], checkpointer: IRecordProcessorCheckpointer) {\n     if (!receiver.isStopped()) {\n       try {\n-        receiver.addRecords(shardId, batch)\n+        // Limit the number of processed records from Kinesis stream. This is because the KCL cannot\n+        // control the number of aggregated records to be fetched even if we set `MaxRecords`\n+        // in `KinesisClientLibConfiguration`. For example, if we set 10 to the number of max\n+        // records in a worker and a producer aggregates two records into one message, the worker\n+        // possibly 20 records every callback function called.\n+        val maxRecords = receiver.getCurrentLimit\n+        for (start <- 0 until batch.size by maxRecords) {\n+          val miniBatch = batch.subList(start, math.min(start + maxRecords, batch.size))\n+          receiver.addRecords(shardId, miniBatch)\n+        }\n         logDebug(s\"Stored: Worker $workerId stored ${batch.size} records for shardId $shardId\")"
+  }, {
+    "author": {
+      "login": "maropu"
+    },
+    "body": "okay",
+    "commit": "4528c505721d3b3ef7abd54d344e10b6cf16900a",
+    "createdAt": "2016-12-08T00:28:08Z",
+    "diffHunk": "@@ -68,7 +68,16 @@ private[kinesis] class KinesisRecordProcessor[T](receiver: KinesisReceiver[T], w\n   override def processRecords(batch: List[Record], checkpointer: IRecordProcessorCheckpointer) {\n     if (!receiver.isStopped()) {\n       try {\n-        receiver.addRecords(shardId, batch)\n+        // Limit the number of processed records from Kinesis stream. This is because the KCL cannot\n+        // control the number of aggregated records to be fetched even if we set `MaxRecords`\n+        // in `KinesisClientLibConfiguration`. For example, if we set 10 to the number of max\n+        // records in a worker and a producer aggregates two records into one message, the worker\n+        // possibly 20 records every callback function called.\n+        val maxRecords = receiver.getCurrentLimit\n+        for (start <- 0 until batch.size by maxRecords) {\n+          val miniBatch = batch.subList(start, math.min(start + maxRecords, batch.size))\n+          receiver.addRecords(shardId, miniBatch)\n+        }\n         logDebug(s\"Stored: Worker $workerId stored ${batch.size} records for shardId $shardId\")"
+  }],
+  "prId": 16114
+}]

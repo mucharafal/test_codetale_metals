@@ -1,0 +1,31 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "This seems like another way of converting interval to duration: make sure the `months` field is 0. Shall we also take it into account in the new `getDuration` method?",
+    "commit": "edad25e70cb07319acc4235b603fc5cd16ed2433",
+    "createdAt": "2019-10-28T17:00:12Z",
+    "diffHunk": "@@ -31,7 +31,7 @@ private object Triggers {\n \n   def convert(interval: String): Long = {\n     val cal = IntervalUtils.fromString(interval)\n-    if (cal.months > 0) {\n+    if (cal.months != 0) {",
+    "line": 5
+  }, {
+    "author": {
+      "login": "MaxGekk"
+    },
+    "body": "We can change `getDuration()` to:\r\n```scala\r\n  def getDuration(\r\n      interval: CalendarInterval,\r\n      targetUnit: TimeUnit,\r\n      daysPerMonth: Option[Int] = Some(31)): Long = {\r\n    val monthsDuration = daysPerMonth\r\n      .map { days =>\r\n        Math.multiplyExact(days * DateTimeUtils.MICROS_PER_DAY, interval.months)\r\n      }.getOrElse {\r\n        if (interval.months == 0) {\r\n          0L\r\n        } else {\r\n          throw new IllegalArgumentException(s\"Doesn't support month or year interval: $interval\")\r\n        }\r\n      }\r\n    val result = Math.addExact(interval.microseconds, monthsDuration)\r\n    targetUnit.convert(result, TimeUnit.MICROSECONDS)\r\n  }\r\n```\r\nand call `getDuration(cal, TimeUnit.MILLISECONDS, None)`",
+    "commit": "edad25e70cb07319acc4235b603fc5cd16ed2433",
+    "createdAt": "2019-10-28T18:26:39Z",
+    "diffHunk": "@@ -31,7 +31,7 @@ private object Triggers {\n \n   def convert(interval: String): Long = {\n     val cal = IntervalUtils.fromString(interval)\n-    if (cal.months > 0) {\n+    if (cal.months != 0) {",
+    "line": 5
+  }, {
+    "author": {
+      "login": "MaxGekk"
+    },
+    "body": "but I am not sure that this check should be inside of `getDuration()`",
+    "commit": "edad25e70cb07319acc4235b603fc5cd16ed2433",
+    "createdAt": "2019-10-28T19:29:57Z",
+    "diffHunk": "@@ -31,7 +31,7 @@ private object Triggers {\n \n   def convert(interval: String): Long = {\n     val cal = IntervalUtils.fromString(interval)\n-    if (cal.months > 0) {\n+    if (cal.months != 0) {",
+    "line": 5
+  }],
+  "prId": 26177
+}]

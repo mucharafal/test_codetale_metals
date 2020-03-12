@@ -1,0 +1,43 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "hvanhovell"
+    },
+    "body": "I think we need to use a different RNG. `java.util.Random` only has 48 bits of state, which is less than the 122 bits we need for UUID generation. Something like [PCG](http://pcg-random.org/) or a Mersenne twister would work.",
+    "commit": "75b80a249c9e5492e6fe159ac527feaea4f46c5a",
+    "createdAt": "2018-03-14T10:41:10Z",
+    "diffHunk": "@@ -0,0 +1,38 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst.util\n+\n+import java.util.UUID\n+\n+import scala.util.Random\n+\n+/**\n+ * This class is used to generate a UUID from Pseudo-Random Numbers produced by\n+ * Scala Random.\n+ *\n+ * For the algorithm, see RFC 4122: A Universally Unique IDentifier (UUID) URN Namespace,\n+ * section 4.4 \"Algorithms for Creating a UUID from Truly Random or Pseudo-Random Numbers\".\n+ */\n+case class RandomUUIDGenerator(random: Random) {\n+  def getNextUUID(): UUID = {\n+    val mostSigBits = (random.nextLong() & 0xFFFFFFFFFFFF0FFFL) | 0x0000000000004000L\n+    val leastSigBits = (random.nextLong() | 0x8000000000000000L) & 0xBFFFFFFFFFFFFFFFL\n+\n+    new UUID(mostSigBits, leastSigBits)",
+    "line": 39
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "Ok. Mersenne Twister is used in the update.",
+    "commit": "75b80a249c9e5492e6fe159ac527feaea4f46c5a",
+    "createdAt": "2018-03-15T03:00:09Z",
+    "diffHunk": "@@ -0,0 +1,38 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst.util\n+\n+import java.util.UUID\n+\n+import scala.util.Random\n+\n+/**\n+ * This class is used to generate a UUID from Pseudo-Random Numbers produced by\n+ * Scala Random.\n+ *\n+ * For the algorithm, see RFC 4122: A Universally Unique IDentifier (UUID) URN Namespace,\n+ * section 4.4 \"Algorithms for Creating a UUID from Truly Random or Pseudo-Random Numbers\".\n+ */\n+case class RandomUUIDGenerator(random: Random) {\n+  def getNextUUID(): UUID = {\n+    val mostSigBits = (random.nextLong() & 0xFFFFFFFFFFFF0FFFL) | 0x0000000000004000L\n+    val leastSigBits = (random.nextLong() | 0x8000000000000000L) & 0xBFFFFFFFFFFFFFFFL\n+\n+    new UUID(mostSigBits, leastSigBits)",
+    "line": 39
+  }],
+  "prId": 20817
+}, {
+  "comments": [{
+    "author": {
+      "login": "hvanhovell"
+    },
+    "body": "Perhaps we should also create a version that creates a  UTF8String directly.",
+    "commit": "75b80a249c9e5492e6fe159ac527feaea4f46c5a",
+    "createdAt": "2018-03-15T14:52:55Z",
+    "diffHunk": "@@ -0,0 +1,39 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst.util\n+\n+import java.util.UUID\n+\n+import org.apache.commons.math3.random.MersenneTwister\n+\n+/**\n+ * This class is used to generate a UUID from Pseudo-Random Numbers.\n+ *\n+ * For the algorithm, see RFC 4122: A Universally Unique IDentifier (UUID) URN Namespace,\n+ * section 4.4 \"Algorithms for Creating a UUID from Truly Random or Pseudo-Random Numbers\".\n+ */\n+case class RandomUUIDGenerator(randomSeed: Long) {\n+  private val random = new MersenneTwister(randomSeed)\n+\n+  def getNextUUID(): UUID = {",
+    "line": 35
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "Sounds good. I've added it.",
+    "commit": "75b80a249c9e5492e6fe159ac527feaea4f46c5a",
+    "createdAt": "2018-03-16T04:29:51Z",
+    "diffHunk": "@@ -0,0 +1,39 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst.util\n+\n+import java.util.UUID\n+\n+import org.apache.commons.math3.random.MersenneTwister\n+\n+/**\n+ * This class is used to generate a UUID from Pseudo-Random Numbers.\n+ *\n+ * For the algorithm, see RFC 4122: A Universally Unique IDentifier (UUID) URN Namespace,\n+ * section 4.4 \"Algorithms for Creating a UUID from Truly Random or Pseudo-Random Numbers\".\n+ */\n+case class RandomUUIDGenerator(randomSeed: Long) {\n+  private val random = new MersenneTwister(randomSeed)\n+\n+  def getNextUUID(): UUID = {",
+    "line": 35
+  }],
+  "prId": 20817
+}]

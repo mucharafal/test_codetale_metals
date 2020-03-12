@@ -1,0 +1,60 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Rather than repeat a default, just perform the check if both are set.",
+    "commit": "7ac2cd493e6fc0c8e1da678c6b9af43be0789602",
+    "createdAt": "2017-12-11T13:17:50Z",
+    "diffHunk": "@@ -291,6 +291,18 @@ private[deploy] class SparkSubmitArguments(args: Seq[String], env: Map[String, S\n     if (proxyUser != null && principal != null) {\n       SparkSubmit.printErrorAndExit(\"Only one of --proxy-user or --principal can be provided.\")\n     }\n+\n+    val executorTimeoutThreshold = Utils.timeStringAsSeconds(\n+      sparkProperties.getOrElse(\"spark.network.timeout\", \"120s\"))\n+    val executorHeartbeatInterval = Utils.timeStringAsSeconds(\n+      sparkProperties.getOrElse(\"spark.executor.heartbeatInterval\", \"10s\"))"
+  }, {
+    "author": {
+      "login": "caneGuy"
+    },
+    "body": "Since some one may only set spark.executor.heartbeatInterval without setting spark.network.timeout.So i just get with default value.Does this make sense?Since we may not need to check if both are not set. Thanks! ",
+    "commit": "7ac2cd493e6fc0c8e1da678c6b9af43be0789602",
+    "createdAt": "2017-12-11T15:29:40Z",
+    "diffHunk": "@@ -291,6 +291,18 @@ private[deploy] class SparkSubmitArguments(args: Seq[String], env: Map[String, S\n     if (proxyUser != null && principal != null) {\n       SparkSubmit.printErrorAndExit(\"Only one of --proxy-user or --principal can be provided.\")\n     }\n+\n+    val executorTimeoutThreshold = Utils.timeStringAsSeconds(\n+      sparkProperties.getOrElse(\"spark.network.timeout\", \"120s\"))\n+    val executorHeartbeatInterval = Utils.timeStringAsSeconds(\n+      sparkProperties.getOrElse(\"spark.executor.heartbeatInterval\", \"10s\"))"
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "OK true. This still seems like the wrong place to validate, as they're not arguments to spark-submit, and this requires duplicating default values. @vanzin where would you put this check?",
+    "commit": "7ac2cd493e6fc0c8e1da678c6b9af43be0789602",
+    "createdAt": "2017-12-11T15:52:36Z",
+    "diffHunk": "@@ -291,6 +291,18 @@ private[deploy] class SparkSubmitArguments(args: Seq[String], env: Map[String, S\n     if (proxyUser != null && principal != null) {\n       SparkSubmit.printErrorAndExit(\"Only one of --proxy-user or --principal can be provided.\")\n     }\n+\n+    val executorTimeoutThreshold = Utils.timeStringAsSeconds(\n+      sparkProperties.getOrElse(\"spark.network.timeout\", \"120s\"))\n+    val executorHeartbeatInterval = Utils.timeStringAsSeconds(\n+      sparkProperties.getOrElse(\"spark.executor.heartbeatInterval\", \"10s\"))"
+  }, {
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "The best place is probably `SparkConf.validateSettings`. I don't see a way to not duplicate the defaults, though - they're already duplicated in a bunch of places. The right way would be to create a config constant, but that would be a much noisier change.",
+    "commit": "7ac2cd493e6fc0c8e1da678c6b9af43be0789602",
+    "createdAt": "2017-12-11T19:38:19Z",
+    "diffHunk": "@@ -291,6 +291,18 @@ private[deploy] class SparkSubmitArguments(args: Seq[String], env: Map[String, S\n     if (proxyUser != null && principal != null) {\n       SparkSubmit.printErrorAndExit(\"Only one of --proxy-user or --principal can be provided.\")\n     }\n+\n+    val executorTimeoutThreshold = Utils.timeStringAsSeconds(\n+      sparkProperties.getOrElse(\"spark.network.timeout\", \"120s\"))\n+    val executorHeartbeatInterval = Utils.timeStringAsSeconds(\n+      sparkProperties.getOrElse(\"spark.executor.heartbeatInterval\", \"10s\"))"
+  }, {
+    "author": {
+      "login": "caneGuy"
+    },
+    "body": "I have thought about add a config constant,but it will affect many other codes,so i simply change here. @srowen @vanzin ",
+    "commit": "7ac2cd493e6fc0c8e1da678c6b9af43be0789602",
+    "createdAt": "2017-12-12T01:34:28Z",
+    "diffHunk": "@@ -291,6 +291,18 @@ private[deploy] class SparkSubmitArguments(args: Seq[String], env: Map[String, S\n     if (proxyUser != null && principal != null) {\n       SparkSubmit.printErrorAndExit(\"Only one of --proxy-user or --principal can be provided.\")\n     }\n+\n+    val executorTimeoutThreshold = Utils.timeStringAsSeconds(\n+      sparkProperties.getOrElse(\"spark.network.timeout\", \"120s\"))\n+    val executorHeartbeatInterval = Utils.timeStringAsSeconds(\n+      sparkProperties.getOrElse(\"spark.executor.heartbeatInterval\", \"10s\"))"
+  }, {
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "This is the wrong place for the check, see discussion.",
+    "commit": "7ac2cd493e6fc0c8e1da678c6b9af43be0789602",
+    "createdAt": "2017-12-12T01:41:10Z",
+    "diffHunk": "@@ -291,6 +291,18 @@ private[deploy] class SparkSubmitArguments(args: Seq[String], env: Map[String, S\n     if (proxyUser != null && principal != null) {\n       SparkSubmit.printErrorAndExit(\"Only one of --proxy-user or --principal can be provided.\")\n     }\n+\n+    val executorTimeoutThreshold = Utils.timeStringAsSeconds(\n+      sparkProperties.getOrElse(\"spark.network.timeout\", \"120s\"))\n+    val executorHeartbeatInterval = Utils.timeStringAsSeconds(\n+      sparkProperties.getOrElse(\"spark.executor.heartbeatInterval\", \"10s\"))"
+  }, {
+    "author": {
+      "login": "caneGuy"
+    },
+    "body": "Done @vanzin Thanks",
+    "commit": "7ac2cd493e6fc0c8e1da678c6b9af43be0789602",
+    "createdAt": "2017-12-12T03:36:12Z",
+    "diffHunk": "@@ -291,6 +291,18 @@ private[deploy] class SparkSubmitArguments(args: Seq[String], env: Map[String, S\n     if (proxyUser != null && principal != null) {\n       SparkSubmit.printErrorAndExit(\"Only one of --proxy-user or --principal can be provided.\")\n     }\n+\n+    val executorTimeoutThreshold = Utils.timeStringAsSeconds(\n+      sparkProperties.getOrElse(\"spark.network.timeout\", \"120s\"))\n+    val executorHeartbeatInterval = Utils.timeStringAsSeconds(\n+      sparkProperties.getOrElse(\"spark.executor.heartbeatInterval\", \"10s\"))"
+  }],
+  "prId": 19942
+}]

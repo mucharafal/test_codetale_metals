@@ -1,0 +1,31 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "gaborgsomogyi"
+    },
+    "body": "Just for my own understanding what will happen when column dropped in `schemaNew`?",
+    "commit": "7a5ff4dd81bdc87543b8653156c5eaa13940e7ec",
+    "createdAt": "2019-03-26T09:41:28Z",
+    "diffHunk": "@@ -40,14 +40,19 @@ class StateSchemaCompatibilityChecker(\n       logDebug(s\"Schema file for provider $providerId exists. Comparing with provided schema.\")\n       val (storedKeySchema, storedValueSchema) = readSchemaFile()\n \n-      def fieldToType: StructField => (DataType, Boolean) = f => (f.dataType, f.nullable)\n-\n-      def typesEq(schema1: StructType, schema2: StructType): Boolean = {\n-        (schema1.length == schema2.length) && schema1.map(fieldToType) == schema2.map(fieldToType)\n+      def fieldCompatible(fieldOld: StructField, fieldNew: StructField): Boolean = {\n+        // compatibility for nullable\n+        // - same: OK\n+        // - non-nullable -> nullable: OK\n+        // - nullable -> non-nullable: Not compatible\n+        (fieldOld.dataType == fieldNew.dataType) &&\n+          ((fieldOld.nullable == fieldNew.nullable) ||\n+            (!fieldOld.nullable && fieldNew.nullable))\n       }\n \n-      def namesEq(schema1: StructType, schema2: StructType): Boolean = {\n-        schema1.fieldNames.sameElements(schema2.fieldNames)\n+      def schemaCompatible(schemaOld: StructType, schemaNew: StructType): Boolean = {\n+        (schemaOld.length == schemaNew.length) &&",
+    "line": 56
+  }, {
+    "author": {
+      "login": "HeartSaVioR"
+    },
+    "body": "Undefined behavior, as state would be stored in file as unsafe byte array, and we just rely on new schema to parse it. It might be fine while reading if all column(s) is(are) dropped from rightmost, but the some of information in row (like numFields) would be incorrect so not sure which operation refers it and finally make query crash. If column(s) is(are) dropped from other spots, query would be crashed sooner.",
+    "commit": "7a5ff4dd81bdc87543b8653156c5eaa13940e7ec",
+    "createdAt": "2019-03-26T11:24:17Z",
+    "diffHunk": "@@ -40,14 +40,19 @@ class StateSchemaCompatibilityChecker(\n       logDebug(s\"Schema file for provider $providerId exists. Comparing with provided schema.\")\n       val (storedKeySchema, storedValueSchema) = readSchemaFile()\n \n-      def fieldToType: StructField => (DataType, Boolean) = f => (f.dataType, f.nullable)\n-\n-      def typesEq(schema1: StructType, schema2: StructType): Boolean = {\n-        (schema1.length == schema2.length) && schema1.map(fieldToType) == schema2.map(fieldToType)\n+      def fieldCompatible(fieldOld: StructField, fieldNew: StructField): Boolean = {\n+        // compatibility for nullable\n+        // - same: OK\n+        // - non-nullable -> nullable: OK\n+        // - nullable -> non-nullable: Not compatible\n+        (fieldOld.dataType == fieldNew.dataType) &&\n+          ((fieldOld.nullable == fieldNew.nullable) ||\n+            (!fieldOld.nullable && fieldNew.nullable))\n       }\n \n-      def namesEq(schema1: StructType, schema2: StructType): Boolean = {\n-        schema1.fieldNames.sameElements(schema2.fieldNames)\n+      def schemaCompatible(schemaOld: StructType, schemaNew: StructType): Boolean = {\n+        (schemaOld.length == schemaNew.length) &&",
+    "line": 56
+  }, {
+    "author": {
+      "login": "gaborgsomogyi"
+    },
+    "body": "Thanks for explaining.",
+    "commit": "7a5ff4dd81bdc87543b8653156c5eaa13940e7ec",
+    "createdAt": "2019-03-26T12:07:58Z",
+    "diffHunk": "@@ -40,14 +40,19 @@ class StateSchemaCompatibilityChecker(\n       logDebug(s\"Schema file for provider $providerId exists. Comparing with provided schema.\")\n       val (storedKeySchema, storedValueSchema) = readSchemaFile()\n \n-      def fieldToType: StructField => (DataType, Boolean) = f => (f.dataType, f.nullable)\n-\n-      def typesEq(schema1: StructType, schema2: StructType): Boolean = {\n-        (schema1.length == schema2.length) && schema1.map(fieldToType) == schema2.map(fieldToType)\n+      def fieldCompatible(fieldOld: StructField, fieldNew: StructField): Boolean = {\n+        // compatibility for nullable\n+        // - same: OK\n+        // - non-nullable -> nullable: OK\n+        // - nullable -> non-nullable: Not compatible\n+        (fieldOld.dataType == fieldNew.dataType) &&\n+          ((fieldOld.nullable == fieldNew.nullable) ||\n+            (!fieldOld.nullable && fieldNew.nullable))\n       }\n \n-      def namesEq(schema1: StructType, schema2: StructType): Boolean = {\n-        schema1.fieldNames.sameElements(schema2.fieldNames)\n+      def schemaCompatible(schemaOld: StructType, schemaNew: StructType): Boolean = {\n+        (schemaOld.length == schemaNew.length) &&",
+    "line": 56
+  }],
+  "prId": 24173
+}]

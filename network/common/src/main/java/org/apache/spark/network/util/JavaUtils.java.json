@@ -1,0 +1,83 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Why `new Double`? Not only it looks unnecessary but you're reducing the range of the result (double = 53 bits vs. long = 64 bits).\n",
+    "commit": "11f699948b70ed6dadb4653e2c55013fd60a074d",
+    "createdAt": "2015-04-20T23:28:12Z",
+    "diffHunk": "@@ -186,5 +196,80 @@ public static long timeStringAsMs(String str) {\n   public static long timeStringAsSec(String str) {\n     return parseTimeString(str, TimeUnit.SECONDS);\n   }\n+  \n+  /**\n+   * Convert a passed byte string (e.g. 50b, 100kb, or 250mb) to a ByteUnit for\n+   * internal use. If no suffix is provided a direct conversion of the provided default is \n+   * attempted.\n+   */\n+  private static long parseByteString(String str, ByteUnit unit) {\n+    String lower = str.toLowerCase().trim();\n \n+    try {\n+      String suffix;\n+      long val;\n+      Matcher m = Pattern.compile(\"([0-9]+)([a-z]+)?\").matcher(lower);\n+      if (m.matches()) {\n+        val = Long.parseLong(m.group(1));\n+        suffix = m.group(2);\n+      } else {\n+        throw new NumberFormatException(\"Failed to parse byte string: \" + str);\n+      }\n+\n+      // Check for invalid suffixes\n+      if (suffix != null && !byteSuffixes.containsKey(suffix)) {\n+        throw new NumberFormatException(\"Invalid suffix: \\\"\" + suffix + \"\\\"\");\n+      }\n+\n+      // If suffix is valid use that, otherwise none was provided and use the default passed\n+      return new Double("
+  }],
+  "prId": 5574
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "final\n",
+    "commit": "11f699948b70ed6dadb4653e2c55013fd60a074d",
+    "createdAt": "2015-04-20T23:29:08Z",
+    "diffHunk": "@@ -137,6 +137,16 @@ private static boolean isSymlink(File file) throws IOException {\n       .put(\"d\", TimeUnit.DAYS)\n       .build();\n \n+  private static ImmutableMap<String, ByteUnit> byteSuffixes ="
+  }],
+  "prId": 5574
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "nit: \n\n```\nif (!m.matches()) {\n  throw...\n}\n\nString suffix = ...;\nlong val = ...;\n```\n",
+    "commit": "11f699948b70ed6dadb4653e2c55013fd60a074d",
+    "createdAt": "2015-04-20T23:30:10Z",
+    "diffHunk": "@@ -186,5 +196,80 @@ public static long timeStringAsMs(String str) {\n   public static long timeStringAsSec(String str) {\n     return parseTimeString(str, TimeUnit.SECONDS);\n   }\n+  \n+  /**\n+   * Convert a passed byte string (e.g. 50b, 100kb, or 250mb) to a ByteUnit for\n+   * internal use. If no suffix is provided a direct conversion of the provided default is \n+   * attempted.\n+   */\n+  private static long parseByteString(String str, ByteUnit unit) {\n+    String lower = str.toLowerCase().trim();\n \n+    try {\n+      String suffix;\n+      long val;\n+      Matcher m = Pattern.compile(\"([0-9]+)([a-z]+)?\").matcher(lower);\n+      if (m.matches()) {"
+  }],
+  "prId": 5574
+}, {
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "I would also accept `kb, mb, gb` etc. I think these are pretty common short forms.\n",
+    "commit": "11f699948b70ed6dadb4653e2c55013fd60a074d",
+    "createdAt": "2015-04-21T00:41:57Z",
+    "diffHunk": "@@ -137,6 +137,16 @@ private static boolean isSymlink(File file) throws IOException {\n       .put(\"d\", TimeUnit.DAYS)\n       .build();\n \n+  private static ImmutableMap<String, ByteUnit> byteSuffixes =\n+    ImmutableMap.<String, ByteUnit>builder()\n+      .put(\"b\", ByteUnit.BYTE)\n+      .put(\"k\", ByteUnit.KiB)\n+      .put(\"m\", ByteUnit.MiB)\n+      .put(\"g\", ByteUnit.GiB)\n+      .put(\"t\", ByteUnit.TiB)\n+      .put(\"p\", ByteUnit.PiB)"
+  }],
+  "prId": 5574
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "nit: `if (`\n",
+    "commit": "11f699948b70ed6dadb4653e2c55013fd60a074d",
+    "createdAt": "2015-04-22T18:37:00Z",
+    "diffHunk": "@@ -186,5 +199,84 @@ public static long timeStringAsMs(String str) {\n   public static long timeStringAsSec(String str) {\n     return parseTimeString(str, TimeUnit.SECONDS);\n   }\n+  \n+  /**\n+   * Convert a passed byte string (e.g. 50b, 100kb, or 250mb) to a ByteUnit for\n+   * internal use. If no suffix is provided a direct conversion of the provided default is \n+   * attempted.\n+   */\n+  private static long parseByteString(String str, ByteUnit unit) {\n+    String lower = str.toLowerCase().trim();\n+\n+    try {\n+      Matcher m = Pattern.compile(\"([0-9]+)([a-z]+)?\").matcher(lower);\n+      Matcher fractionMatcher = Pattern.compile(\"([0-9]*\\\\.[0-9]*)([a-z]+)?\").matcher(lower);\n+      \n+      if(m.matches()) {"
+  }],
+  "prId": 5574
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "hmmm... why bother with the match then?\n",
+    "commit": "11f699948b70ed6dadb4653e2c55013fd60a074d",
+    "createdAt": "2015-04-22T21:03:22Z",
+    "diffHunk": "@@ -186,5 +199,84 @@ public static long timeStringAsMs(String str) {\n   public static long timeStringAsSec(String str) {\n     return parseTimeString(str, TimeUnit.SECONDS);\n   }\n+  \n+  /**\n+   * Convert a passed byte string (e.g. 50b, 100kb, or 250mb) to a ByteUnit for\n+   * internal use. If no suffix is provided a direct conversion of the provided default is \n+   * attempted.\n+   */\n+  private static long parseByteString(String str, ByteUnit unit) {\n+    String lower = str.toLowerCase().trim();\n+\n+    try {\n+      Matcher m = Pattern.compile(\"([0-9]+)([a-z]+)?\").matcher(lower);\n+      Matcher fractionMatcher = Pattern.compile(\"([0-9]*\\\\.[0-9]*)([a-z]+)?\").matcher(lower);\n+      \n+      if(m.matches()) {\n+        long val = Long.parseLong(m.group(1));\n+        String suffix = m.group(2);\n+\n+        // Check for invalid suffixes\n+        if (suffix != null && !byteSuffixes.containsKey(suffix)) {\n+          throw new NumberFormatException(\"Invalid suffix: \\\"\" + suffix + \"\\\"\");\n+        }\n+\n+        // If suffix is valid use that, otherwise none was provided and use the default passed\n+        return unit.interpret(val, suffix != null ? byteSuffixes.get(suffix) : unit);  \n+      } else if (fractionMatcher.matches()) {\n+        double val = Double.parseDouble(fractionMatcher.group(1));\n+\n+        throw new NumberFormatException(\"Fractional values are not supported. Input was: \" + val);"
+  }, {
+    "author": {
+      "login": "ilganeli"
+    },
+    "body": "I wanted to have a separate error message. Otherwise, it appears that the error has to do with parsing the suffix, not the numerical value. This seemed like the cleanest way to check for a fractional value. \n",
+    "commit": "11f699948b70ed6dadb4653e2c55013fd60a074d",
+    "createdAt": "2015-04-22T21:20:56Z",
+    "diffHunk": "@@ -186,5 +199,84 @@ public static long timeStringAsMs(String str) {\n   public static long timeStringAsSec(String str) {\n     return parseTimeString(str, TimeUnit.SECONDS);\n   }\n+  \n+  /**\n+   * Convert a passed byte string (e.g. 50b, 100kb, or 250mb) to a ByteUnit for\n+   * internal use. If no suffix is provided a direct conversion of the provided default is \n+   * attempted.\n+   */\n+  private static long parseByteString(String str, ByteUnit unit) {\n+    String lower = str.toLowerCase().trim();\n+\n+    try {\n+      Matcher m = Pattern.compile(\"([0-9]+)([a-z]+)?\").matcher(lower);\n+      Matcher fractionMatcher = Pattern.compile(\"([0-9]*\\\\.[0-9]*)([a-z]+)?\").matcher(lower);\n+      \n+      if(m.matches()) {\n+        long val = Long.parseLong(m.group(1));\n+        String suffix = m.group(2);\n+\n+        // Check for invalid suffixes\n+        if (suffix != null && !byteSuffixes.containsKey(suffix)) {\n+          throw new NumberFormatException(\"Invalid suffix: \\\"\" + suffix + \"\\\"\");\n+        }\n+\n+        // If suffix is valid use that, otherwise none was provided and use the default passed\n+        return unit.interpret(val, suffix != null ? byteSuffixes.get(suffix) : unit);  \n+      } else if (fractionMatcher.matches()) {\n+        double val = Double.parseDouble(fractionMatcher.group(1));\n+\n+        throw new NumberFormatException(\"Fractional values are not supported. Input was: \" + val);"
+  }, {
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "In that case, `Double.parseDouble` is redundant, you can just use `fractionMatcher.group(1)` to get the match. Also, in the `fractionMatcher` regex, it should be `+` instead of `*`.\n",
+    "commit": "11f699948b70ed6dadb4653e2c55013fd60a074d",
+    "createdAt": "2015-04-22T21:23:59Z",
+    "diffHunk": "@@ -186,5 +199,84 @@ public static long timeStringAsMs(String str) {\n   public static long timeStringAsSec(String str) {\n     return parseTimeString(str, TimeUnit.SECONDS);\n   }\n+  \n+  /**\n+   * Convert a passed byte string (e.g. 50b, 100kb, or 250mb) to a ByteUnit for\n+   * internal use. If no suffix is provided a direct conversion of the provided default is \n+   * attempted.\n+   */\n+  private static long parseByteString(String str, ByteUnit unit) {\n+    String lower = str.toLowerCase().trim();\n+\n+    try {\n+      Matcher m = Pattern.compile(\"([0-9]+)([a-z]+)?\").matcher(lower);\n+      Matcher fractionMatcher = Pattern.compile(\"([0-9]*\\\\.[0-9]*)([a-z]+)?\").matcher(lower);\n+      \n+      if(m.matches()) {\n+        long val = Long.parseLong(m.group(1));\n+        String suffix = m.group(2);\n+\n+        // Check for invalid suffixes\n+        if (suffix != null && !byteSuffixes.containsKey(suffix)) {\n+          throw new NumberFormatException(\"Invalid suffix: \\\"\" + suffix + \"\\\"\");\n+        }\n+\n+        // If suffix is valid use that, otherwise none was provided and use the default passed\n+        return unit.interpret(val, suffix != null ? byteSuffixes.get(suffix) : unit);  \n+      } else if (fractionMatcher.matches()) {\n+        double val = Double.parseDouble(fractionMatcher.group(1));\n+\n+        throw new NumberFormatException(\"Fractional values are not supported. Input was: \" + val);"
+  }],
+  "prId": 5574
+}]

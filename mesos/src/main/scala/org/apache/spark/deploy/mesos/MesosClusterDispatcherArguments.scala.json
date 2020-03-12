@@ -1,0 +1,88 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "`case value =>` or maybe I misunderstand why it's written this way\n",
+    "commit": "946202de791f39529ef0aa05cadc0c65c1cd3f70",
+    "createdAt": "2016-09-19T08:50:25Z",
+    "diffHunk": "@@ -73,37 +94,55 @@ private[mesos] class MesosClusterDispatcherArguments(args: Array[String], conf:\n       propertiesFile = value\n       parse(tail)\n \n+    case (\"--conf\") :: value :: tail =>\n+      MesosClusterDispatcher.\n+        parseSparkConfProperty(value, (k: String, v: String) => confProperties(k) = v)\n+      parse(tail)\n+\n     case (\"--help\") :: tail =>\n-      printUsageAndExit(0)\n+        printUsageAndExit(0)\n+\n+    case (\"--verbose\") :: tail =>\n+      verbose = true\n+      parse(tail)\n \n     case Nil =>\n-      if (masterUrl == null) {\n+      if (Option(masterUrl).isEmpty) {\n         // scalastyle:off println\n-        System.err.println(\"--master is required\")\n+        MesosClusterDispatcher.printStream.println(\"--master is required\")\n         // scalastyle:on println\n         printUsageAndExit(1)\n       }\n \n-    case _ =>\n+    case value@_ =>"
+  }, {
+    "author": {
+      "login": "skonto"
+    },
+    "body": "Its the same thing case value => less verbose. Will change it.\n",
+    "commit": "946202de791f39529ef0aa05cadc0c65c1cd3f70",
+    "createdAt": "2016-09-19T10:17:52Z",
+    "diffHunk": "@@ -73,37 +94,55 @@ private[mesos] class MesosClusterDispatcherArguments(args: Array[String], conf:\n       propertiesFile = value\n       parse(tail)\n \n+    case (\"--conf\") :: value :: tail =>\n+      MesosClusterDispatcher.\n+        parseSparkConfProperty(value, (k: String, v: String) => confProperties(k) = v)\n+      parse(tail)\n+\n     case (\"--help\") :: tail =>\n-      printUsageAndExit(0)\n+        printUsageAndExit(0)\n+\n+    case (\"--verbose\") :: tail =>\n+      verbose = true\n+      parse(tail)\n \n     case Nil =>\n-      if (masterUrl == null) {\n+      if (Option(masterUrl).isEmpty) {\n         // scalastyle:off println\n-        System.err.println(\"--master is required\")\n+        MesosClusterDispatcher.printStream.println(\"--master is required\")\n         // scalastyle:on println\n         printUsageAndExit(1)\n       }\n \n-    case _ =>\n+    case value@_ =>"
+  }, {
+    "author": {
+      "login": "skonto"
+    },
+    "body": "fixed.\n",
+    "commit": "946202de791f39529ef0aa05cadc0c65c1cd3f70",
+    "createdAt": "2016-09-19T12:06:03Z",
+    "diffHunk": "@@ -73,37 +94,55 @@ private[mesos] class MesosClusterDispatcherArguments(args: Array[String], conf:\n       propertiesFile = value\n       parse(tail)\n \n+    case (\"--conf\") :: value :: tail =>\n+      MesosClusterDispatcher.\n+        parseSparkConfProperty(value, (k: String, v: String) => confProperties(k) = v)\n+      parse(tail)\n+\n     case (\"--help\") :: tail =>\n-      printUsageAndExit(0)\n+        printUsageAndExit(0)\n+\n+    case (\"--verbose\") :: tail =>\n+      verbose = true\n+      parse(tail)\n \n     case Nil =>\n-      if (masterUrl == null) {\n+      if (Option(masterUrl).isEmpty) {\n         // scalastyle:off println\n-        System.err.println(\"--master is required\")\n+        MesosClusterDispatcher.printStream.println(\"--master is required\")\n         // scalastyle:on println\n         printUsageAndExit(1)\n       }\n \n-    case _ =>\n+    case value@_ =>"
+  }],
+  "prId": 14650
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "This seems like it differs from Mesos to non-Mesos implementations. Here you can update props with --conf but wouldn't this be identical elsewhere? I may have missed the purpose.\n",
+    "commit": "946202de791f39529ef0aa05cadc0c65c1cd3f70",
+    "createdAt": "2016-09-19T08:56:43Z",
+    "diffHunk": "@@ -18,23 +18,43 @@\n package org.apache.spark.deploy.mesos\n \n import scala.annotation.tailrec\n+import scala.collection.mutable\n \n-import org.apache.spark.SparkConf\n import org.apache.spark.util.{IntParam, Utils}\n-\n+import org.apache.spark.SparkConf\n \n private[mesos] class MesosClusterDispatcherArguments(args: Array[String], conf: SparkConf) {\n-  var host = Utils.localHostName()\n-  var port = 7077\n-  var name = \"Spark Cluster\"\n-  var webUiPort = 8081\n+  var host: String = Utils.localHostName()\n+  var port: Int = 7077\n+  var name: String = \"Spark Cluster\"\n+  var webUiPort: Int = 8081\n+  var verbose: Boolean = false\n   var masterUrl: String = _\n   var zookeeperUrl: Option[String] = None\n   var propertiesFile: String = _\n+  val confProperties: mutable.HashMap[String, String] =\n+    new mutable.HashMap[String, String]()\n \n   parse(args.toList)\n \n+  // scalastyle:on println\n   propertiesFile = Utils.loadDefaultSparkProperties(conf, propertiesFile)\n+  Utils.updateSparkConfigFromProperties(conf, confProperties)",
+    "line": 31
+  }, {
+    "author": {
+      "login": "skonto"
+    },
+    "body": "Logic differs wrt to others (I would have to refactor everything otherwise which is not wise given code size for now). I just added support for the --conf option, that is the same across implementations, and re-used common code for parsing stuff. \n",
+    "commit": "946202de791f39529ef0aa05cadc0c65c1cd3f70",
+    "createdAt": "2016-09-19T10:05:28Z",
+    "diffHunk": "@@ -18,23 +18,43 @@\n package org.apache.spark.deploy.mesos\n \n import scala.annotation.tailrec\n+import scala.collection.mutable\n \n-import org.apache.spark.SparkConf\n import org.apache.spark.util.{IntParam, Utils}\n-\n+import org.apache.spark.SparkConf\n \n private[mesos] class MesosClusterDispatcherArguments(args: Array[String], conf: SparkConf) {\n-  var host = Utils.localHostName()\n-  var port = 7077\n-  var name = \"Spark Cluster\"\n-  var webUiPort = 8081\n+  var host: String = Utils.localHostName()\n+  var port: Int = 7077\n+  var name: String = \"Spark Cluster\"\n+  var webUiPort: Int = 8081\n+  var verbose: Boolean = false\n   var masterUrl: String = _\n   var zookeeperUrl: Option[String] = None\n   var propertiesFile: String = _\n+  val confProperties: mutable.HashMap[String, String] =\n+    new mutable.HashMap[String, String]()\n \n   parse(args.toList)\n \n+  // scalastyle:on println\n   propertiesFile = Utils.loadDefaultSparkProperties(conf, propertiesFile)\n+  Utils.updateSparkConfigFromProperties(conf, confProperties)",
+    "line": 31
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "I guess I mean, why isn't this same code then called elsewhere? You know more about this than I, but I suppose I'd expect more parallel similarity between the Mesos and non-Mesos code, for supporting the same functionality. There's a method factored out here but not reused. Marcelo may understand this more anyway.\n",
+    "commit": "946202de791f39529ef0aa05cadc0c65c1cd3f70",
+    "createdAt": "2016-09-19T15:25:46Z",
+    "diffHunk": "@@ -18,23 +18,43 @@\n package org.apache.spark.deploy.mesos\n \n import scala.annotation.tailrec\n+import scala.collection.mutable\n \n-import org.apache.spark.SparkConf\n import org.apache.spark.util.{IntParam, Utils}\n-\n+import org.apache.spark.SparkConf\n \n private[mesos] class MesosClusterDispatcherArguments(args: Array[String], conf: SparkConf) {\n-  var host = Utils.localHostName()\n-  var port = 7077\n-  var name = \"Spark Cluster\"\n-  var webUiPort = 8081\n+  var host: String = Utils.localHostName()\n+  var port: Int = 7077\n+  var name: String = \"Spark Cluster\"\n+  var webUiPort: Int = 8081\n+  var verbose: Boolean = false\n   var masterUrl: String = _\n   var zookeeperUrl: Option[String] = None\n   var propertiesFile: String = _\n+  val confProperties: mutable.HashMap[String, String] =\n+    new mutable.HashMap[String, String]()\n \n   parse(args.toList)\n \n+  // scalastyle:on println\n   propertiesFile = Utils.loadDefaultSparkProperties(conf, propertiesFile)\n+  Utils.updateSparkConfigFromProperties(conf, confProperties)",
+    "line": 31
+  }, {
+    "author": {
+      "login": "skonto"
+    },
+    "body": "Non-mesos code either does not support --conf or it does not need in all cases to set Spark confguration. Check [here](https://github.com/apache/spark/blob/master/yarn/src/main/scala/org/apache/spark/deploy/yarn/ApplicationMasterArguments.scala) and [here](https://github.com/apache/spark/blob/master/yarn/src/main/scala/org/apache/spark/deploy/yarn/ApplicationMaster.scala#L753). If you compare the same functionality (the one about loading the properties file) with the MesosClusterDispatcherArguments file, things are completely different, even before my PR. Check [here](https://github.com/apache/spark/blob/master/mesos/src/main/scala/org/apache/spark/deploy/mesos/MesosClusterDispatcherArguments.scala#L37).\n\nSo I dont expect any parallel similarity since for example in this case ApplicationMaster does not need to get the spark configuration in a Spark Config.\n",
+    "commit": "946202de791f39529ef0aa05cadc0c65c1cd3f70",
+    "createdAt": "2016-09-21T09:07:04Z",
+    "diffHunk": "@@ -18,23 +18,43 @@\n package org.apache.spark.deploy.mesos\n \n import scala.annotation.tailrec\n+import scala.collection.mutable\n \n-import org.apache.spark.SparkConf\n import org.apache.spark.util.{IntParam, Utils}\n-\n+import org.apache.spark.SparkConf\n \n private[mesos] class MesosClusterDispatcherArguments(args: Array[String], conf: SparkConf) {\n-  var host = Utils.localHostName()\n-  var port = 7077\n-  var name = \"Spark Cluster\"\n-  var webUiPort = 8081\n+  var host: String = Utils.localHostName()\n+  var port: Int = 7077\n+  var name: String = \"Spark Cluster\"\n+  var webUiPort: Int = 8081\n+  var verbose: Boolean = false\n   var masterUrl: String = _\n   var zookeeperUrl: Option[String] = None\n   var propertiesFile: String = _\n+  val confProperties: mutable.HashMap[String, String] =\n+    new mutable.HashMap[String, String]()\n \n   parse(args.toList)\n \n+  // scalastyle:on println\n   propertiesFile = Utils.loadDefaultSparkProperties(conf, propertiesFile)\n+  Utils.updateSparkConfigFromProperties(conf, confProperties)",
+    "line": 31
+  }],
+  "prId": 14650
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Does `import MesosClusterDispatcher._` work to get these methods? Kinda noisy to see the class name repeated everywhere.\n",
+    "commit": "946202de791f39529ef0aa05cadc0c65c1cd3f70",
+    "createdAt": "2016-09-21T17:55:32Z",
+    "diffHunk": "@@ -73,37 +94,55 @@ private[mesos] class MesosClusterDispatcherArguments(args: Array[String], conf:\n       propertiesFile = value\n       parse(tail)\n \n+    case (\"--conf\") :: value :: tail =>\n+      MesosClusterDispatcher.\n+        parseSparkConfProperty(value, (k: String, v: String) => confProperties(k) = v)\n+      parse(tail)\n+\n     case (\"--help\") :: tail =>\n-      printUsageAndExit(0)\n+        printUsageAndExit(0)\n+\n+    case (\"--verbose\") :: tail =>\n+      verbose = true\n+      parse(tail)\n \n     case Nil =>\n-      if (masterUrl == null) {\n+      if (Option(masterUrl).isEmpty) {\n         // scalastyle:off println\n-        System.err.println(\"--master is required\")\n+        MesosClusterDispatcher.printStream.println(\"--master is required\")\n         // scalastyle:on println\n         printUsageAndExit(1)\n       }\n \n-    case _ =>\n+    case value =>\n+      // scalastyle:off println\n+      MesosClusterDispatcher.printStream.println(s\"Unrecognized option: '${value.head}'\")",
+    "line": 94
+  }, {
+    "author": {
+      "login": "skonto"
+    },
+    "body": "I guess it is noisy too [here](https://github.com/apache/spark/blob/master/core/src/main/scala/org/apache/spark/deploy/SparkSubmitArguments.scala) as well. Counted 34 appearances of SparkSubmit. I just followed the same idea I thought since it was previously reviewed I should do the same, guessing it was used for reasons of clarity.\n",
+    "commit": "946202de791f39529ef0aa05cadc0c65c1cd3f70",
+    "createdAt": "2016-09-22T09:56:23Z",
+    "diffHunk": "@@ -73,37 +94,55 @@ private[mesos] class MesosClusterDispatcherArguments(args: Array[String], conf:\n       propertiesFile = value\n       parse(tail)\n \n+    case (\"--conf\") :: value :: tail =>\n+      MesosClusterDispatcher.\n+        parseSparkConfProperty(value, (k: String, v: String) => confProperties(k) = v)\n+      parse(tail)\n+\n     case (\"--help\") :: tail =>\n-      printUsageAndExit(0)\n+        printUsageAndExit(0)\n+\n+    case (\"--verbose\") :: tail =>\n+      verbose = true\n+      parse(tail)\n \n     case Nil =>\n-      if (masterUrl == null) {\n+      if (Option(masterUrl).isEmpty) {\n         // scalastyle:off println\n-        System.err.println(\"--master is required\")\n+        MesosClusterDispatcher.printStream.println(\"--master is required\")\n         // scalastyle:on println\n         printUsageAndExit(1)\n       }\n \n-    case _ =>\n+    case value =>\n+      // scalastyle:off println\n+      MesosClusterDispatcher.printStream.println(s\"Unrecognized option: '${value.head}'\")",
+    "line": 94
+  }],
+  "prId": 14650
+}]

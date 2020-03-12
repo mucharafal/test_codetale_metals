@@ -1,0 +1,64 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "I just realized there is already a method for this: MLUtils.appendBias\nUsing that might be good since it's more human-readable.\n",
+    "commit": "0b8a9a889a637d46a629c98e2ad1cc2b5ec375b5",
+    "createdAt": "2014-12-09T19:45:56Z",
+    "diffHunk": "@@ -138,6 +138,45 @@ class GradientDescentSuite extends FunSuite with MLlibTestSparkContext with Matc\n       \"The different between newWeights with/without regularization \" +\n         \"should be initialWeightsWithIntercept.\")\n   }\n+\n+  test(\"iteration should end with convergence tolerance\") {\n+    val nPoints = 10000\n+    val A = 2.0\n+    val B = -1.5\n+\n+    val initialB = -1.0\n+    val initialWeights = Array(initialB)\n+\n+    val gradient = new LogisticGradient()\n+    val updater = new SimpleUpdater()\n+    val stepSize = 1.0\n+    val numIterations = 10\n+    val regParam = 0\n+    val miniBatchFrac = 1.0\n+    val convergenceTolerance = 5.0e-1\n+\n+    // Add a extra variable consisting of all 1.0's for the intercept.",
+    "line": 44
+  }, {
+    "author": {
+      "login": "Lewuathe"
+    },
+    "body": "I just copied the first test case(\"Assert the loss is decreasing.\") Should I also change first case?\n",
+    "commit": "0b8a9a889a637d46a629c98e2ad1cc2b5ec375b5",
+    "createdAt": "2014-12-10T00:54:24Z",
+    "diffHunk": "@@ -138,6 +138,45 @@ class GradientDescentSuite extends FunSuite with MLlibTestSparkContext with Matc\n       \"The different between newWeights with/without regularization \" +\n         \"should be initialWeightsWithIntercept.\")\n   }\n+\n+  test(\"iteration should end with convergence tolerance\") {\n+    val nPoints = 10000\n+    val A = 2.0\n+    val B = -1.5\n+\n+    val initialB = -1.0\n+    val initialWeights = Array(initialB)\n+\n+    val gradient = new LogisticGradient()\n+    val updater = new SimpleUpdater()\n+    val stepSize = 1.0\n+    val numIterations = 10\n+    val regParam = 0\n+    val miniBatchFrac = 1.0\n+    val convergenceTolerance = 5.0e-1\n+\n+    // Add a extra variable consisting of all 1.0's for the intercept.",
+    "line": 44
+  }, {
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "Oh, I see.  Yes, please--thanks!  (It doesn't make the code any longer, does it?)\n",
+    "commit": "0b8a9a889a637d46a629c98e2ad1cc2b5ec375b5",
+    "createdAt": "2014-12-10T01:18:57Z",
+    "diffHunk": "@@ -138,6 +138,45 @@ class GradientDescentSuite extends FunSuite with MLlibTestSparkContext with Matc\n       \"The different between newWeights with/without regularization \" +\n         \"should be initialWeightsWithIntercept.\")\n   }\n+\n+  test(\"iteration should end with convergence tolerance\") {\n+    val nPoints = 10000\n+    val A = 2.0\n+    val B = -1.5\n+\n+    val initialB = -1.0\n+    val initialWeights = Array(initialB)\n+\n+    val gradient = new LogisticGradient()\n+    val updater = new SimpleUpdater()\n+    val stepSize = 1.0\n+    val numIterations = 10\n+    val regParam = 0\n+    val miniBatchFrac = 1.0\n+    val convergenceTolerance = 5.0e-1\n+\n+    // Add a extra variable consisting of all 1.0's for the intercept.",
+    "line": 44
+  }],
+  "prId": 3636
+}, {
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "\"doesn't satisfy convergence tolerance\" --> \"convergenceTolerance failed to stop optimization early\"\n",
+    "commit": "0b8a9a889a637d46a629c98e2ad1cc2b5ec375b5",
+    "createdAt": "2014-12-09T19:45:59Z",
+    "diffHunk": "@@ -138,6 +138,45 @@ class GradientDescentSuite extends FunSuite with MLlibTestSparkContext with Matc\n       \"The different between newWeights with/without regularization \" +\n         \"should be initialWeightsWithIntercept.\")\n   }\n+\n+  test(\"iteration should end with convergence tolerance\") {\n+    val nPoints = 10000\n+    val A = 2.0\n+    val B = -1.5\n+\n+    val initialB = -1.0\n+    val initialWeights = Array(initialB)\n+\n+    val gradient = new LogisticGradient()\n+    val updater = new SimpleUpdater()\n+    val stepSize = 1.0\n+    val numIterations = 10\n+    val regParam = 0\n+    val miniBatchFrac = 1.0\n+    val convergenceTolerance = 5.0e-1\n+\n+    // Add a extra variable consisting of all 1.0's for the intercept.\n+    val testData = GradientDescentSuite.generateGDInput(A, B, nPoints, 42)\n+    val data = testData.map { case LabeledPoint(label, features) =>\n+      label -> Vectors.dense(1.0 +: features.toArray)\n+    }\n+\n+    val dataRDD = sc.parallelize(data, 2).cache()\n+    val initialWeightsWithIntercept = Vectors.dense(1.0 +: initialWeights.toArray)\n+\n+    val (_, loss) = GradientDescent.runMiniBatchSGD(\n+      dataRDD,\n+      gradient,\n+      updater,\n+      stepSize,\n+      numIterations,\n+      regParam,\n+      miniBatchFrac,\n+      initialWeightsWithIntercept,\n+      convergenceTolerance)\n+\n+    assert(loss.length < numIterations, \"doesn't satisfy convergence tolerance\")"
+  }],
+  "prId": 3636
+}, {
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "No need for extra \\\" at end of comment.\n",
+    "commit": "0b8a9a889a637d46a629c98e2ad1cc2b5ec375b5",
+    "createdAt": "2014-12-12T01:57:28Z",
+    "diffHunk": "@@ -138,6 +138,45 @@ class GradientDescentSuite extends FunSuite with MLlibTestSparkContext with Matc\n       \"The different between newWeights with/without regularization \" +\n         \"should be initialWeightsWithIntercept.\")\n   }\n+\n+  test(\"iteration should end with convergence tolerance\") {\n+    val nPoints = 10000\n+    val A = 2.0\n+    val B = -1.5\n+\n+    val initialB = -1.0\n+    val initialWeights = Array(initialB)\n+\n+    val gradient = new LogisticGradient()\n+    val updater = new SimpleUpdater()\n+    val stepSize = 1.0\n+    val numIterations = 10\n+    val regParam = 0\n+    val miniBatchFrac = 1.0\n+    val convergenceTolerance = 5.0e-1\n+\n+    // Add a extra variable consisting of all 1.0's for the intercept.\n+    val testData = GradientDescentSuite.generateGDInput(A, B, nPoints, 42)\n+    val data = testData.map { case LabeledPoint(label, features) =>\n+      label -> MLUtils.appendBias(features)\n+    }\n+\n+    val dataRDD = sc.parallelize(data, 2).cache()\n+    val initialWeightsWithIntercept = Vectors.dense(1.0 +: initialWeights.toArray)\n+\n+    val (_, loss) = GradientDescent.runMiniBatchSGD(\n+      dataRDD,\n+      gradient,\n+      updater,\n+      stepSize,\n+      numIterations,\n+      regParam,\n+      miniBatchFrac,\n+      initialWeightsWithIntercept,\n+      convergenceTolerance)\n+\n+    assert(loss.length < numIterations, \"convergenceTolerance failed to stop optimization early\\\"\")"
+  }],
+  "prId": 3636
+}, {
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "MLUtils.appendBias appends (to the end), so the extra 1.0 should probably go at the end for consistency.\n",
+    "commit": "0b8a9a889a637d46a629c98e2ad1cc2b5ec375b5",
+    "createdAt": "2014-12-12T01:57:29Z",
+    "diffHunk": "@@ -138,6 +138,45 @@ class GradientDescentSuite extends FunSuite with MLlibTestSparkContext with Matc\n       \"The different between newWeights with/without regularization \" +\n         \"should be initialWeightsWithIntercept.\")\n   }\n+\n+  test(\"iteration should end with convergence tolerance\") {\n+    val nPoints = 10000\n+    val A = 2.0\n+    val B = -1.5\n+\n+    val initialB = -1.0\n+    val initialWeights = Array(initialB)\n+\n+    val gradient = new LogisticGradient()\n+    val updater = new SimpleUpdater()\n+    val stepSize = 1.0\n+    val numIterations = 10\n+    val regParam = 0\n+    val miniBatchFrac = 1.0\n+    val convergenceTolerance = 5.0e-1\n+\n+    // Add a extra variable consisting of all 1.0's for the intercept.\n+    val testData = GradientDescentSuite.generateGDInput(A, B, nPoints, 42)\n+    val data = testData.map { case LabeledPoint(label, features) =>\n+      label -> MLUtils.appendBias(features)\n+    }\n+\n+    val dataRDD = sc.parallelize(data, 2).cache()\n+    val initialWeightsWithIntercept = Vectors.dense(1.0 +: initialWeights.toArray)"
+  }],
+  "prId": 3636
+}]

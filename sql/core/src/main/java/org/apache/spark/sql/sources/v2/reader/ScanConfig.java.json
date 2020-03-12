@@ -1,0 +1,42 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "rdblue"
+    },
+    "body": "I think this should return the scan's output schema. Otherwise the only way to get it is during pushdown.",
+    "commit": "51cda76897353344427aaa666e29be408263eeb1",
+    "createdAt": "2018-08-07T18:47:43Z",
+    "diffHunk": "@@ -18,22 +18,16 @@\n package org.apache.spark.sql.sources.v2.reader;\n \n import org.apache.spark.annotation.InterfaceStability;\n-import org.apache.spark.sql.Row;\n-import org.apache.spark.sql.catalyst.InternalRow;\n-\n-import java.util.List;\n \n /**\n- * A mix-in interface for {@link DataSourceReader}. Data source readers can implement this\n- * interface to output {@link Row} instead of {@link InternalRow}.\n- * This is an experimental and unstable interface.\n+ * An interface that carries query specific information for the data scan. Currently it's used to\n+ * hold operator pushdown result and streaming offsets. This is defined as an empty interface, and\n+ * data sources should define their own {@link ScanConfig} classes.\n+ *\n+ * For APIs that take a {@link ScanConfig} as input, like\n+ * {@link ReadSupport#planInputPartitions(ScanConfig)} and\n+ * {@link ReadSupport#createReaderFactory(ScanConfig)}, implementations mostly need to cast the\n+ * input {@link ScanConfig} to the concrete {@link ScanConfig} class of the data source.\n  */\n-@InterfaceStability.Unstable\n-public interface SupportsDeprecatedScanRow extends DataSourceReader {\n-  default List<InputPartition<InternalRow>> planInputPartitions() {\n-    throw new IllegalStateException(\n-        \"planInputPartitions not supported by default within SupportsDeprecatedScanRow\");\n-  }\n-\n-  List<InputPartition<Row>> planRowInputPartitions();\n-}\n+@InterfaceStability.Evolving\n+public interface ScanConfig {}"
+  }, {
+    "author": {
+      "login": "rdblue"
+    },
+    "body": "I think this should also report pushed predicates, even if the methods default to `new Expression[0]`. Then plan outputs can be based on the scan config, not on tracking the results of pushdown in some other object.",
+    "commit": "51cda76897353344427aaa666e29be408263eeb1",
+    "createdAt": "2018-08-07T18:50:38Z",
+    "diffHunk": "@@ -18,22 +18,16 @@\n package org.apache.spark.sql.sources.v2.reader;\n \n import org.apache.spark.annotation.InterfaceStability;\n-import org.apache.spark.sql.Row;\n-import org.apache.spark.sql.catalyst.InternalRow;\n-\n-import java.util.List;\n \n /**\n- * A mix-in interface for {@link DataSourceReader}. Data source readers can implement this\n- * interface to output {@link Row} instead of {@link InternalRow}.\n- * This is an experimental and unstable interface.\n+ * An interface that carries query specific information for the data scan. Currently it's used to\n+ * hold operator pushdown result and streaming offsets. This is defined as an empty interface, and\n+ * data sources should define their own {@link ScanConfig} classes.\n+ *\n+ * For APIs that take a {@link ScanConfig} as input, like\n+ * {@link ReadSupport#planInputPartitions(ScanConfig)} and\n+ * {@link ReadSupport#createReaderFactory(ScanConfig)}, implementations mostly need to cast the\n+ * input {@link ScanConfig} to the concrete {@link ScanConfig} class of the data source.\n  */\n-@InterfaceStability.Unstable\n-public interface SupportsDeprecatedScanRow extends DataSourceReader {\n-  default List<InputPartition<InternalRow>> planInputPartitions() {\n-    throw new IllegalStateException(\n-        \"planInputPartitions not supported by default within SupportsDeprecatedScanRow\");\n-  }\n-\n-  List<InputPartition<Row>> planRowInputPartitions();\n-}\n+@InterfaceStability.Evolving\n+public interface ScanConfig {}"
+  }],
+  "prId": 22009
+}, {
+  "comments": [{
+    "author": {
+      "login": "rdblue"
+    },
+    "body": "Can you rebase this on #21921? `SupportsDeprecatedScanRow` should no longer be defined.",
+    "commit": "51cda76897353344427aaa666e29be408263eeb1",
+    "createdAt": "2018-08-07T18:49:09Z",
+    "diffHunk": "@@ -18,22 +18,16 @@\n package org.apache.spark.sql.sources.v2.reader;\n \n import org.apache.spark.annotation.InterfaceStability;\n-import org.apache.spark.sql.Row;\n-import org.apache.spark.sql.catalyst.InternalRow;\n-\n-import java.util.List;\n \n /**\n- * A mix-in interface for {@link DataSourceReader}. Data source readers can implement this\n- * interface to output {@link Row} instead of {@link InternalRow}.\n- * This is an experimental and unstable interface.\n+ * An interface that carries query specific information for the data scan. Currently it's used to\n+ * hold operator pushdown result and streaming offsets. This is defined as an empty interface, and\n+ * data sources should define their own {@link ScanConfig} classes.\n+ *\n+ * For APIs that take a {@link ScanConfig} as input, like\n+ * {@link ReadSupport#planInputPartitions(ScanConfig)} and\n+ * {@link ReadSupport#createReaderFactory(ScanConfig)}, implementations mostly need to cast the\n+ * input {@link ScanConfig} to the concrete {@link ScanConfig} class of the data source.\n  */\n-@InterfaceStability.Unstable\n-public interface SupportsDeprecatedScanRow extends DataSourceReader {"
+  }],
+  "prId": 22009
+}, {
+  "comments": [{
+    "author": {
+      "login": "rdblue"
+    },
+    "body": "Nit: use of \"currently\" in docs.",
+    "commit": "51cda76897353344427aaa666e29be408263eeb1",
+    "createdAt": "2018-08-09T18:52:12Z",
+    "diffHunk": "@@ -0,0 +1,44 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.sources.v2.reader;\n+\n+import org.apache.spark.annotation.InterfaceStability;\n+import org.apache.spark.sql.types.StructType;\n+\n+/**\n+ * An interface that carries query specific information for the data scan. Currently it's used to"
+  }],
+  "prId": 22009
+}]

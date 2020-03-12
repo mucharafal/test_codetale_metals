@@ -1,0 +1,100 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "can we avoid to do it per comparison? is there any places we can do a cleanup at the end?",
+    "commit": "51ec9a026b137d843efd1d3a615bed64d88cb4bb",
+    "createdAt": "2017-07-11T05:45:17Z",
+    "diffHunk": "@@ -211,7 +211,10 @@ public int compare(Object baseObj1, long baseOff1, Object baseObj2, long baseOff\n       // TODO: Why are the sizes -1?\n       row1.pointTo(baseObj1, baseOff1, -1);\n       row2.pointTo(baseObj2, baseOff2, -1);\n-      return ordering.compare(row1, row2);\n+      int comparison = ordering.compare(row1, row2);\n+      row1.pointTo(null, 0L, -1);\n+      row2.pointTo(null, 0L, -1);"
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Good idea @cloud-fan . Looks like `RowComparator` and `KVComparator` could be cleaned up in `UnsafeExternalSorter.cleanupResources` and `UnsafeInMemorySorter.free`. @davies I know this is from a long while back, but does that make sense? Seems like reasonable places to simply 'flush' the references, and won't hurt anything.\r\n\r\nI am not 100% sure there's not another path to take care of, or if this frees the ref soon enough to avoid the problem. Thoughts @j-baker ?",
+    "commit": "51ec9a026b137d843efd1d3a615bed64d88cb4bb",
+    "createdAt": "2017-07-17T10:11:25Z",
+    "diffHunk": "@@ -211,7 +211,10 @@ public int compare(Object baseObj1, long baseOff1, Object baseObj2, long baseOff\n       // TODO: Why are the sizes -1?\n       row1.pointTo(baseObj1, baseOff1, -1);\n       row2.pointTo(baseObj2, baseOff2, -1);\n-      return ordering.compare(row1, row2);\n+      int comparison = ordering.compare(row1, row2);\n+      row1.pointTo(null, 0L, -1);\n+      row2.pointTo(null, 0L, -1);"
+  }, {
+    "author": {
+      "login": "kiszk"
+    },
+    "body": "@cloud-fan @srowen It is good idea to do this cleanup only once at the end. Now, I am curious how to implement this cleanup.\r\n\r\nWhile @srowen proposed to use `nsafeExternalSorter.cleanupResources` and `UnsafeInMemorySorter.free` that will be called when a task is finished, to do cleanup here does not seem to work in this case. This is because [this issue](https://issues.apache.org/jira/browse/SPARK-21319) occurs before completing a task since `UnsafeExternalSorter` instance is registered into the task `taskContext` at [here](https://github.com/apache/spark/blob/master/core/src/main/java/org/apache/spark/util/collection/unsafe/sort/UnsafeExternalSorter.java#L159-L161). This cleanup approach will not be performed before an OOM occurs during execution of the task.\r\n\r\nIIUC, the end of sort is [here](https://github.com/apache/spark/blob/master/core/src/main/java/org/apache/spark/util/collection/unsafe/sort/UnsafeInMemorySorter.java#L345). This line calls [this sort method](https://github.com/apache/spark/blob/master/core/src/main/scala/org/apache/spark/util/collection/Sorter.scala#L36). Either to do the cleanup at the first part or to do the cleanup after checking type of a given comparator at the second part could work.\r\n\r\nWhat do you think?",
+    "commit": "51ec9a026b137d843efd1d3a615bed64d88cb4bb",
+    "createdAt": "2017-07-17T17:00:04Z",
+    "diffHunk": "@@ -211,7 +211,10 @@ public int compare(Object baseObj1, long baseOff1, Object baseObj2, long baseOff\n       // TODO: Why are the sizes -1?\n       row1.pointTo(baseObj1, baseOff1, -1);\n       row2.pointTo(baseObj2, baseOff2, -1);\n-      return ordering.compare(row1, row2);\n+      int comparison = ordering.compare(row1, row2);\n+      row1.pointTo(null, 0L, -1);\n+      row2.pointTo(null, 0L, -1);"
+  }, {
+    "author": {
+      "login": "j-baker"
+    },
+    "body": "So I feel like if the thing ends up in memory, this is correct - but otherwise the comparator is used in the [UnsafeSorterSpillMerger](https://github.com/apache/spark/blob/master/core/src/main/java/org/apache/spark/util/collection/unsafe/sort/UnsafeSorterSpillMerger.java#L51).\r\n\r\nSince we're handing back an iterator, am I right in thinking that without some periodic cleanup task you always stand a risk from this kind of leak unless you clear after each comparison or have some kind of async cleanup task?",
+    "commit": "51ec9a026b137d843efd1d3a615bed64d88cb4bb",
+    "createdAt": "2017-07-18T16:30:44Z",
+    "diffHunk": "@@ -211,7 +211,10 @@ public int compare(Object baseObj1, long baseOff1, Object baseObj2, long baseOff\n       // TODO: Why are the sizes -1?\n       row1.pointTo(baseObj1, baseOff1, -1);\n       row2.pointTo(baseObj2, baseOff2, -1);\n-      return ordering.compare(row1, row2);\n+      int comparison = ordering.compare(row1, row2);\n+      row1.pointTo(null, 0L, -1);\n+      row2.pointTo(null, 0L, -1);"
+  }, {
+    "author": {
+      "login": "j-baker"
+    },
+    "body": "I suppose that if you assume that you can only use these sorters once, then you can probably null out the reference to the comparator in the UnsafeExternalSorter once you've constructed the UnsafeSorterSpillMerger using it, and that would also solve the problem I've been seeing (the callback keeping a strong reference).\r\n\r\nIt'd still feel weird that you have a comparator that could potentially be responsible for the liveness of hundreds of megabytes of memory, though.",
+    "commit": "51ec9a026b137d843efd1d3a615bed64d88cb4bb",
+    "createdAt": "2017-07-19T07:42:40Z",
+    "diffHunk": "@@ -211,7 +211,10 @@ public int compare(Object baseObj1, long baseOff1, Object baseObj2, long baseOff\n       // TODO: Why are the sizes -1?\n       row1.pointTo(baseObj1, baseOff1, -1);\n       row2.pointTo(baseObj2, baseOff2, -1);\n-      return ordering.compare(row1, row2);\n+      int comparison = ordering.compare(row1, row2);\n+      row1.pointTo(null, 0L, -1);\n+      row2.pointTo(null, 0L, -1);"
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "each spill reader in `UnsafeSorterSpillMerger` has a buffer to keep the current record. When the comparator is used in `UnsafeSorterSpillMerger`,  the data it refers is already referred by spill readers, so there is no memory leak problem.",
+    "commit": "51ec9a026b137d843efd1d3a615bed64d88cb4bb",
+    "createdAt": "2017-07-19T08:09:41Z",
+    "diffHunk": "@@ -211,7 +211,10 @@ public int compare(Object baseObj1, long baseOff1, Object baseObj2, long baseOff\n       // TODO: Why are the sizes -1?\n       row1.pointTo(baseObj1, baseOff1, -1);\n       row2.pointTo(baseObj2, baseOff2, -1);\n-      return ordering.compare(row1, row2);\n+      int comparison = ordering.compare(row1, row2);\n+      row1.pointTo(null, 0L, -1);\n+      row2.pointTo(null, 0L, -1);"
+  }, {
+    "author": {
+      "login": "j-baker"
+    },
+    "body": "But after we finish with the merger, the spill readers will disappear but the last buffers being used in the spill readers will remain, no?",
+    "commit": "51ec9a026b137d843efd1d3a615bed64d88cb4bb",
+    "createdAt": "2017-07-19T08:43:03Z",
+    "diffHunk": "@@ -211,7 +211,10 @@ public int compare(Object baseObj1, long baseOff1, Object baseObj2, long baseOff\n       // TODO: Why are the sizes -1?\n       row1.pointTo(baseObj1, baseOff1, -1);\n       row2.pointTo(baseObj2, baseOff2, -1);\n-      return ordering.compare(row1, row2);\n+      int comparison = ordering.compare(row1, row2);\n+      row1.pointTo(null, 0L, -1);\n+      row2.pointTo(null, 0L, -1);"
+  }, {
+    "author": {
+      "login": "j-baker"
+    },
+    "body": "maybe it's worth having a clone method on the comparator and making sure we clone the comparator before passing it to anything?",
+    "commit": "51ec9a026b137d843efd1d3a615bed64d88cb4bb",
+    "createdAt": "2017-07-19T08:43:53Z",
+    "diffHunk": "@@ -211,7 +211,10 @@ public int compare(Object baseObj1, long baseOff1, Object baseObj2, long baseOff\n       // TODO: Why are the sizes -1?\n       row1.pointTo(baseObj1, baseOff1, -1);\n       row2.pointTo(baseObj2, baseOff2, -1);\n-      return ordering.compare(row1, row2);\n+      int comparison = ordering.compare(row1, row2);\n+      row1.pointTo(null, 0L, -1);\n+      row2.pointTo(null, 0L, -1);"
+  }, {
+    "author": {
+      "login": "j-baker"
+    },
+    "body": "...I'll update this PR.",
+    "commit": "51ec9a026b137d843efd1d3a615bed64d88cb4bb",
+    "createdAt": "2017-07-19T08:44:01Z",
+    "diffHunk": "@@ -211,7 +211,10 @@ public int compare(Object baseObj1, long baseOff1, Object baseObj2, long baseOff\n       // TODO: Why are the sizes -1?\n       row1.pointTo(baseObj1, baseOff1, -1);\n       row2.pointTo(baseObj2, baseOff2, -1);\n-      return ordering.compare(row1, row2);\n+      int comparison = ordering.compare(row1, row2);\n+      row1.pointTo(null, 0L, -1);\n+      row2.pointTo(null, 0L, -1);"
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "The merger reads data from spill files lazily, so when the merging finishes, it's end of the task.",
+    "commit": "51ec9a026b137d843efd1d3a615bed64d88cb4bb",
+    "createdAt": "2017-07-19T11:36:45Z",
+    "diffHunk": "@@ -211,7 +211,10 @@ public int compare(Object baseObj1, long baseOff1, Object baseObj2, long baseOff\n       // TODO: Why are the sizes -1?\n       row1.pointTo(baseObj1, baseOff1, -1);\n       row2.pointTo(baseObj2, baseOff2, -1);\n-      return ordering.compare(row1, row2);\n+      int comparison = ordering.compare(row1, row2);\n+      row1.pointTo(null, 0L, -1);\n+      row2.pointTo(null, 0L, -1);"
+  }, {
+    "author": {
+      "login": "j-baker"
+    },
+    "body": "Then why would we be seeing the OOMs? If at the end of the task the taskcompletionlistener fires and is removed, then the whole comparator becomes unreachable and we have no problem here.\r\n\r\nMy job looks something like:\r\n\r\ndataset.sortWithinPartitions().coalescePartitions() - would not we potentially finish doing some merging before reaching the end of the task?",
+    "commit": "51ec9a026b137d843efd1d3a615bed64d88cb4bb",
+    "createdAt": "2017-07-19T12:42:51Z",
+    "diffHunk": "@@ -211,7 +211,10 @@ public int compare(Object baseObj1, long baseOff1, Object baseObj2, long baseOff\n       // TODO: Why are the sizes -1?\n       row1.pointTo(baseObj1, baseOff1, -1);\n       row2.pointTo(baseObj2, baseOff2, -1);\n-      return ordering.compare(row1, row2);\n+      int comparison = ordering.compare(row1, row2);\n+      row1.pointTo(null, 0L, -1);\n+      row2.pointTo(null, 0L, -1);"
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "i see, some partition may finish merging but some do not, and the merger which is finished is not referred, but it changed the comparator and make it keep the input rows it compared last time.",
+    "commit": "51ec9a026b137d843efd1d3a615bed64d88cb4bb",
+    "createdAt": "2017-07-19T12:56:36Z",
+    "diffHunk": "@@ -211,7 +211,10 @@ public int compare(Object baseObj1, long baseOff1, Object baseObj2, long baseOff\n       // TODO: Why are the sizes -1?\n       row1.pointTo(baseObj1, baseOff1, -1);\n       row2.pointTo(baseObj2, baseOff2, -1);\n-      return ordering.compare(row1, row2);\n+      int comparison = ordering.compare(row1, row2);\n+      row1.pointTo(null, 0L, -1);\n+      row2.pointTo(null, 0L, -1);"
+  }],
+  "prId": 18543
+}]

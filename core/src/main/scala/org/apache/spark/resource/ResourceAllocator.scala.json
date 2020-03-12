@@ -1,0 +1,80 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "tgravescs"
+    },
+    "body": "I think we should clarify, here its actually not fractional its a multiple. I think if its called tasksPerAddress that will help ",
+    "commit": "d579c5d50ee793a09eebbb94f7998012ec81aa1e",
+    "createdAt": "2019-10-10T15:19:02Z",
+    "diffHunk": "@@ -30,27 +30,35 @@ trait ResourceAllocator {\n \n   protected def resourceName: String\n   protected def resourceAddresses: Seq[String]\n+  protected def resourcesPerAddress: Int\n \n   /**\n-   * Map from an address to its availability, the value `true` means the address is available,\n-   * while value `false` means the address is assigned.\n+   * Map from an address to its availability, a value > 0 means the address is available,\n+   * while value of 0 means the address is fully assigned.\n+   *\n+   * For task resources ([[org.apache.spark.scheduler.ExecutorResourceInfo]]), this value\n+   * can be fractional."
+  }, {
+    "author": {
+      "login": "abellina"
+    },
+    "body": "good catch.",
+    "commit": "d579c5d50ee793a09eebbb94f7998012ec81aa1e",
+    "createdAt": "2019-10-10T19:48:58Z",
+    "diffHunk": "@@ -30,27 +30,35 @@ trait ResourceAllocator {\n \n   protected def resourceName: String\n   protected def resourceAddresses: Seq[String]\n+  protected def resourcesPerAddress: Int\n \n   /**\n-   * Map from an address to its availability, the value `true` means the address is available,\n-   * while value `false` means the address is assigned.\n+   * Map from an address to its availability, a value > 0 means the address is available,\n+   * while value of 0 means the address is fully assigned.\n+   *\n+   * For task resources ([[org.apache.spark.scheduler.ExecutorResourceInfo]]), this value\n+   * can be fractional."
+  }],
+  "prId": 26078
+}, {
+  "comments": [{
+    "author": {
+      "login": "tgravescs"
+    },
+    "body": "can you add comment saying can see the same addr multiple times when slotsPeraddress > 1",
+    "commit": "d579c5d50ee793a09eebbb94f7998012ec81aa1e",
+    "createdAt": "2019-10-22T14:39:52Z",
+    "diffHunk": "@@ -30,27 +30,36 @@ trait ResourceAllocator {\n \n   protected def resourceName: String\n   protected def resourceAddresses: Seq[String]\n+  protected def slotsPerAddress: Int\n \n   /**\n-   * Map from an address to its availability, the value `true` means the address is available,\n-   * while value `false` means the address is assigned.\n+   * Map from an address to its availability, a value > 0 means the address is available,\n+   * while value of 0 means the address is fully assigned.\n+   *\n+   * For task resources ([[org.apache.spark.scheduler.ExecutorResourceInfo]]), this value\n+   * can be a multiple, such that each address can be allocated up to [[slotsPerAddress]]\n+   * times.\n+   *\n    * TODO Use [[OpenHashMap]] instead to gain better performance.\n    */\n-  private lazy val addressAvailabilityMap = mutable.HashMap(resourceAddresses.map(_ -> true): _*)\n+  private lazy val addressAvailabilityMap = {\n+    mutable.HashMap(resourceAddresses.map(_ -> slotsPerAddress): _*)\n+  }\n \n   /**\n    * Sequence of currently available resource addresses.\n    */\n-  def availableAddrs: Seq[String] = addressAvailabilityMap.flatMap { case (addr, available) =>\n-    if (available) Some(addr) else None\n-  }.toSeq\n+  def availableAddrs: Seq[String] = addressAvailabilityMap\n+    .flatMap { case (addr, available) =>\n+      (0 until available).map(_ => addr)\n+    }.toSeq\n \n   /**\n    * Sequence of currently assigned resource addresses.",
+    "line": 39
+  }],
+  "prId": 26078
+}, {
+  "comments": [{
+    "author": {
+      "login": "jiangxb1987"
+    },
+    "body": "Does it worth add `synchronized` to the `addressAvailabilityMap` to ensure thread safe?",
+    "commit": "d579c5d50ee793a09eebbb94f7998012ec81aa1e",
+    "createdAt": "2019-10-29T21:49:18Z",
+    "diffHunk": "@@ -86,8 +103,8 @@ trait ResourceAllocator {\n           s\"address $address doesn't exist.\")\n       }\n       val isAvailable = addressAvailabilityMap(address)\n-      if (!isAvailable) {\n-        addressAvailabilityMap(address) = true\n+      if (isAvailable < slotsPerAddress) {\n+        addressAvailabilityMap(address) = addressAvailabilityMap(address) + 1",
+    "line": 70
+  }, {
+    "author": {
+      "login": "abellina"
+    },
+    "body": "`ResourceAllocator` _should_ only used from a single thread (it is documented that way).\r\n\r\nFor its public interface, here is the access pattern:\r\n\r\n- `CoarseGrainedSchedulerBackend` and `Master` event loop are calling into `acquire` and `release`. They are also using `availableAddrs`, and are calling `toBuffer` on it before handing off that state. This is a single thread pattern.\r\n\r\n- A class extending `ResourceAllocator` (`WorkerResourceInfo`), has some potential issues: The `WorkerInfo` class is calling into `availableAddrs` and `assignedAddrs` but those calls appear to be coming from the UI (looking at the `resourcesInfo*` functions), e.g. `JsonProtocol` and `MasterPage` call this. There are other calls to the `resourceInfo*` functions, but those are from the event loop. Is this what you were worried about @jiangxb1987?\r\n\r\nNote this issue is not directly related to this PR, as this PR didn't change that access pattern, or the datastructure. That said, I do believe that a request from the UI could result in at least an exception (if not worse). Let me know and I can handle here, or open another PR that would address it.",
+    "commit": "d579c5d50ee793a09eebbb94f7998012ec81aa1e",
+    "createdAt": "2019-11-01T20:46:31Z",
+    "diffHunk": "@@ -86,8 +103,8 @@ trait ResourceAllocator {\n           s\"address $address doesn't exist.\")\n       }\n       val isAvailable = addressAvailabilityMap(address)\n-      if (!isAvailable) {\n-        addressAvailabilityMap(address) = true\n+      if (isAvailable < slotsPerAddress) {\n+        addressAvailabilityMap(address) = addressAvailabilityMap(address) + 1",
+    "line": 70
+  }, {
+    "author": {
+      "login": "tgravescs"
+    },
+    "body": "yeah I think the only issue here are with UI accessing, and I probably missed this in the reviews for the standalone support. I was thinking it was just read but its doing a flatMap in there.\r\nBut I do think we should protect that. That said it is a separate issue not introduced by this so I think we should file a separate jira for it, @jiangxb1987 are you ok with that?",
+    "commit": "d579c5d50ee793a09eebbb94f7998012ec81aa1e",
+    "createdAt": "2019-11-04T14:53:31Z",
+    "diffHunk": "@@ -86,8 +103,8 @@ trait ResourceAllocator {\n           s\"address $address doesn't exist.\")\n       }\n       val isAvailable = addressAvailabilityMap(address)\n-      if (!isAvailable) {\n-        addressAvailabilityMap(address) = true\n+      if (isAvailable < slotsPerAddress) {\n+        addressAvailabilityMap(address) = addressAvailabilityMap(address) + 1",
+    "line": 70
+  }, {
+    "author": {
+      "login": "jiangxb1987"
+    },
+    "body": "sure, it worth a separate jira.",
+    "commit": "d579c5d50ee793a09eebbb94f7998012ec81aa1e",
+    "createdAt": "2019-11-05T06:33:27Z",
+    "diffHunk": "@@ -86,8 +103,8 @@ trait ResourceAllocator {\n           s\"address $address doesn't exist.\")\n       }\n       val isAvailable = addressAvailabilityMap(address)\n-      if (!isAvailable) {\n-        addressAvailabilityMap(address) = true\n+      if (isAvailable < slotsPerAddress) {\n+        addressAvailabilityMap(address) = addressAvailabilityMap(address) + 1",
+    "line": 70
+  }, {
+    "author": {
+      "login": "abellina"
+    },
+    "body": "https://issues.apache.org/jira/browse/SPARK-29780",
+    "commit": "d579c5d50ee793a09eebbb94f7998012ec81aa1e",
+    "createdAt": "2019-11-06T23:25:20Z",
+    "diffHunk": "@@ -86,8 +103,8 @@ trait ResourceAllocator {\n           s\"address $address doesn't exist.\")\n       }\n       val isAvailable = addressAvailabilityMap(address)\n-      if (!isAvailable) {\n-        addressAvailabilityMap(address) = true\n+      if (isAvailable < slotsPerAddress) {\n+        addressAvailabilityMap(address) = addressAvailabilityMap(address) + 1",
+    "line": 70
+  }],
+  "prId": 26078
+}]

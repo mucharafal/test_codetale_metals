@@ -1,0 +1,20 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "mridulm"
+    },
+    "body": "You can dereference the option to avoid get in inner loop\n",
+    "commit": "53ed1708112fbf66b04fe89502e534ca3270d15c",
+    "createdAt": "2016-11-02T15:46:22Z",
+    "diffHunk": "@@ -30,7 +30,21 @@ private[spark] class PartitionedAppendOnlyMap[K, V]\n \n   def partitionedDestructiveSortedIterator(keyComparator: Option[Comparator[K]])\n     : Iterator[((Int, K), V)] = {\n-    val comparator = keyComparator.map(partitionKeyComparator).getOrElse(partitionComparator)\n+    val comparator : Comparator[(Int, K)] =\n+      if (keyComparator.isEmpty) {\n+        partitionComparator\n+      } else {\n+        new Comparator[(Int, K)] {\n+          override def compare(a: (Int, K), b: (Int, K)): Int = {\n+          val partitionDiff = a._1 - b._1\n+          if (partitionDiff != 0) {\n+            partitionDiff\n+          } else {\n+            keyComparator.get.compare(a._2, b._2)\n+          }"
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Yeah I think Github collapsed it but there's this and other suggestions at ... https://github.com/apache/spark/pull/15736#pullrequestreview-6801163\n",
+    "commit": "53ed1708112fbf66b04fe89502e534ca3270d15c",
+    "createdAt": "2016-11-02T16:01:37Z",
+    "diffHunk": "@@ -30,7 +30,21 @@ private[spark] class PartitionedAppendOnlyMap[K, V]\n \n   def partitionedDestructiveSortedIterator(keyComparator: Option[Comparator[K]])\n     : Iterator[((Int, K), V)] = {\n-    val comparator = keyComparator.map(partitionKeyComparator).getOrElse(partitionComparator)\n+    val comparator : Comparator[(Int, K)] =\n+      if (keyComparator.isEmpty) {\n+        partitionComparator\n+      } else {\n+        new Comparator[(Int, K)] {\n+          override def compare(a: (Int, K), b: (Int, K)): Int = {\n+          val partitionDiff = a._1 - b._1\n+          if (partitionDiff != 0) {\n+            partitionDiff\n+          } else {\n+            keyComparator.get.compare(a._2, b._2)\n+          }"
+  }],
+  "prId": 15736
+}]

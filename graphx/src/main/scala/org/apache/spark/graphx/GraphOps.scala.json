@@ -1,0 +1,106 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "I think this will unnecessarily break binary compatibility though. Typically that's resolved by using overloads rather than new optional params. However, that would mean a new method for at least the 3 you modified here. Would it not be applicable to the others? which compounds the issue.\r\n\r\nHow about just adding it to the 'with options' version, by overloading it further?",
+    "commit": "830f6ed4760fc903dff32e7d2041e9bebc60c969",
+    "createdAt": "2019-11-14T15:12:42Z",
+    "diffHunk": "@@ -420,8 +420,9 @@ class GraphOps[VD: ClassTag, ED: ClassTag](graph: Graph[VD, ED]) extends Seriali\n    *\n    * @see [[org.apache.spark.graphx.lib.PageRank$#run]]\n    */\n-  def staticPageRank(numIter: Int, resetProb: Double = 0.15): Graph[Double, Double] = {\n-    PageRank.run(graph, numIter, resetProb)\n+  def staticPageRank(numIter: Int, resetProb: Double = 0.15,"
+  }, {
+    "author": {
+      "login": "JoanFM"
+    },
+    "body": "Should I do the same I did for every method? or not breaking GraphOps interface might be enough?",
+    "commit": "830f6ed4760fc903dff32e7d2041e9bebc60c969",
+    "createdAt": "2019-11-14T16:01:18Z",
+    "diffHunk": "@@ -420,8 +420,9 @@ class GraphOps[VD: ClassTag, ED: ClassTag](graph: Graph[VD, ED]) extends Seriali\n    *\n    * @see [[org.apache.spark.graphx.lib.PageRank$#run]]\n    */\n-  def staticPageRank(numIter: Int, resetProb: Double = 0.15): Graph[Double, Double] = {\n-    PageRank.run(graph, numIter, resetProb)\n+  def staticPageRank(numIter: Int, resetProb: Double = 0.15,"
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "I'm wondering if you can add this new option in just one method, the most full-featured one, rather than every overload.",
+    "commit": "830f6ed4760fc903dff32e7d2041e9bebc60c969",
+    "createdAt": "2019-11-14T16:11:56Z",
+    "diffHunk": "@@ -420,8 +420,9 @@ class GraphOps[VD: ClassTag, ED: ClassTag](graph: Graph[VD, ED]) extends Seriali\n    *\n    * @see [[org.apache.spark.graphx.lib.PageRank$#run]]\n    */\n-  def staticPageRank(numIter: Int, resetProb: Double = 0.15): Graph[Double, Double] = {\n-    PageRank.run(graph, numIter, resetProb)\n+  def staticPageRank(numIter: Int, resetProb: Double = 0.15,"
+  }, {
+    "author": {
+      "login": "JoanFM"
+    },
+    "body": "Well, I could skip the change in run method and call directly runWithOptions from the overloaded version of staticPageRank, but I think runWithOptions would definitively need the new parameter, and for staticPageRank I can either overload (as it is now in the latest commit) or add a new parameter.",
+    "commit": "830f6ed4760fc903dff32e7d2041e9bebc60c969",
+    "createdAt": "2019-11-14T17:17:30Z",
+    "diffHunk": "@@ -420,8 +420,9 @@ class GraphOps[VD: ClassTag, ED: ClassTag](graph: Graph[VD, ED]) extends Seriali\n    *\n    * @see [[org.apache.spark.graphx.lib.PageRank$#run]]\n    */\n-  def staticPageRank(numIter: Int, resetProb: Double = 0.15): Graph[Double, Double] = {\n-    PageRank.run(graph, numIter, resetProb)\n+  def staticPageRank(numIter: Int, resetProb: Double = 0.15,"
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "The problem is that adding a new parameter, even with default, means the existing method signature no longer exists in the bytecode. while we can make breaking changes for Spark 3, I don't know if this is worth it. Hence, trying to figure out where an overload works, without adding a large number of them. ",
+    "commit": "830f6ed4760fc903dff32e7d2041e9bebc60c969",
+    "createdAt": "2019-11-14T17:21:37Z",
+    "diffHunk": "@@ -420,8 +420,9 @@ class GraphOps[VD: ClassTag, ED: ClassTag](graph: Graph[VD, ED]) extends Seriali\n    *\n    * @see [[org.apache.spark.graphx.lib.PageRank$#run]]\n    */\n-  def staticPageRank(numIter: Int, resetProb: Double = 0.15): Graph[Double, Double] = {\n-    PageRank.run(graph, numIter, resetProb)\n+  def staticPageRank(numIter: Int, resetProb: Double = 0.15,"
+  }, {
+    "author": {
+      "login": "JoanFM"
+    },
+    "body": "Ok, I get it, I think we need staticPageRank and runWithOptions with the new interface. But the runWithOptions has the complete logic so in order not to duplicate code we would need to abstract the inner loop to a private function. Would it break?",
+    "commit": "830f6ed4760fc903dff32e7d2041e9bebc60c969",
+    "createdAt": "2019-11-14T17:36:29Z",
+    "diffHunk": "@@ -420,8 +420,9 @@ class GraphOps[VD: ClassTag, ED: ClassTag](graph: Graph[VD, ED]) extends Seriali\n    *\n    * @see [[org.apache.spark.graphx.lib.PageRank$#run]]\n    */\n-  def staticPageRank(numIter: Int, resetProb: Double = 0.15): Graph[Double, Double] = {\n-    PageRank.run(graph, numIter, resetProb)\n+  def staticPageRank(numIter: Int, resetProb: Double = 0.15,"
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Refactoring, private functions are all fine.",
+    "commit": "830f6ed4760fc903dff32e7d2041e9bebc60c969",
+    "createdAt": "2019-11-14T17:43:04Z",
+    "diffHunk": "@@ -420,8 +420,9 @@ class GraphOps[VD: ClassTag, ED: ClassTag](graph: Graph[VD, ED]) extends Seriali\n    *\n    * @see [[org.apache.spark.graphx.lib.PageRank$#run]]\n    */\n-  def staticPageRank(numIter: Int, resetProb: Double = 0.15): Graph[Double, Double] = {\n-    PageRank.run(graph, numIter, resetProb)\n+  def staticPageRank(numIter: Int, resetProb: Double = 0.15,"
+  }, {
+    "author": {
+      "login": "JoanFM"
+    },
+    "body": "Did some changes",
+    "commit": "830f6ed4760fc903dff32e7d2041e9bebc60c969",
+    "createdAt": "2019-11-15T09:22:17Z",
+    "diffHunk": "@@ -420,8 +420,9 @@ class GraphOps[VD: ClassTag, ED: ClassTag](graph: Graph[VD, ED]) extends Seriali\n    *\n    * @see [[org.apache.spark.graphx.lib.PageRank$#run]]\n    */\n-  def staticPageRank(numIter: Int, resetProb: Double = 0.15): Graph[Double, Double] = {\n-    PageRank.run(graph, numIter, resetProb)\n+  def staticPageRank(numIter: Int, resetProb: Double = 0.15,"
+  }, {
+    "author": {
+      "login": "JoanFM"
+    },
+    "body": "Let me know if the changes now are fine, thank you very much",
+    "commit": "830f6ed4760fc903dff32e7d2041e9bebc60c969",
+    "createdAt": "2019-11-19T07:36:01Z",
+    "diffHunk": "@@ -420,8 +420,9 @@ class GraphOps[VD: ClassTag, ED: ClassTag](graph: Graph[VD, ED]) extends Seriali\n    *\n    * @see [[org.apache.spark.graphx.lib.PageRank$#run]]\n    */\n-  def staticPageRank(numIter: Int, resetProb: Double = 0.15): Graph[Double, Double] = {\n-    PageRank.run(graph, numIter, resetProb)\n+  def staticPageRank(numIter: Int, resetProb: Double = 0.15,"
+  }],
+  "prId": 26523
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Why do we need this in GraphOps?",
+    "commit": "830f6ed4760fc903dff32e7d2041e9bebc60c969",
+    "createdAt": "2019-11-19T15:40:34Z",
+    "diffHunk": "@@ -424,6 +424,18 @@ class GraphOps[VD: ClassTag, ED: ClassTag](graph: Graph[VD, ED]) extends Seriali\n     PageRank.run(graph, numIter, resetProb)\n   }\n \n+  /**\n+   * Run PageRank for a fixed number of iterations returning a graph with vertex attributes\n+   * containing the PageRank and edge attributes the normalized edge weight, optionally including\n+   * including a previous pageRank computation to be used as a start point for the new iterations\n+   *\n+   * @see [[org.apache.spark.graphx.lib.PageRank$#runWithOptionsWithPreviousPageRank]]\n+   */\n+  def staticPageRank(numIter: Int, resetProb: Double,",
+    "line": 11
+  }, {
+    "author": {
+      "login": "JoanFM"
+    },
+    "body": "Well, to have another version of staticPageRank, it seem natural to have in the same place as the function it overloads, also it needs to be visible from Graph.",
+    "commit": "830f6ed4760fc903dff32e7d2041e9bebc60c969",
+    "createdAt": "2019-11-19T21:24:41Z",
+    "diffHunk": "@@ -424,6 +424,18 @@ class GraphOps[VD: ClassTag, ED: ClassTag](graph: Graph[VD, ED]) extends Seriali\n     PageRank.run(graph, numIter, resetProb)\n   }\n \n+  /**\n+   * Run PageRank for a fixed number of iterations returning a graph with vertex attributes\n+   * containing the PageRank and edge attributes the normalized edge weight, optionally including\n+   * including a previous pageRank computation to be used as a start point for the new iterations\n+   *\n+   * @see [[org.apache.spark.graphx.lib.PageRank$#runWithOptionsWithPreviousPageRank]]\n+   */\n+  def staticPageRank(numIter: Int, resetProb: Double,",
+    "line": 11
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Oops right, disregard. I lost track.",
+    "commit": "830f6ed4760fc903dff32e7d2041e9bebc60c969",
+    "createdAt": "2019-11-19T21:32:11Z",
+    "diffHunk": "@@ -424,6 +424,18 @@ class GraphOps[VD: ClassTag, ED: ClassTag](graph: Graph[VD, ED]) extends Seriali\n     PageRank.run(graph, numIter, resetProb)\n   }\n \n+  /**\n+   * Run PageRank for a fixed number of iterations returning a graph with vertex attributes\n+   * containing the PageRank and edge attributes the normalized edge weight, optionally including\n+   * including a previous pageRank computation to be used as a start point for the new iterations\n+   *\n+   * @see [[org.apache.spark.graphx.lib.PageRank$#runWithOptionsWithPreviousPageRank]]\n+   */\n+  def staticPageRank(numIter: Int, resetProb: Double,",
+    "line": 11
+  }],
+  "prId": 26523
+}]

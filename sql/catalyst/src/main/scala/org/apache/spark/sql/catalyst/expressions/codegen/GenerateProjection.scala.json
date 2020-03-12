@@ -1,0 +1,13 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "I made `SpecificRow` a inner class of `SpecificProjection` here, so that we can access these mutable states easily.\n",
+    "commit": "eb3a221d95839ff57b7579f87cbceaaf9ff19653",
+    "createdAt": "2015-07-14T06:53:23Z",
+    "diffHunk": "@@ -151,85 +151,96 @@ object GenerateProjection extends CodeGenerator[Seq[Expression], Projection] {\n         s\"\"\"if (!nullBits[$i]) arr[$i] = c$i;\"\"\"\n     }.mkString(\"\\n      \")\n \n+    val mutableStates = ctx.mutableStates.map {\n+      case (jt, name, _) => s\"private $jt $name;\"\n+    }.mkString(\"\\n      \")\n+\n+    val initStates = ctx.mutableStates.zipWithIndex.map {\n+      case ((jt, name, _), index) => s\"$name = (${ctx.boxedType(jt)}) states[$index];\"\n+    }.mkString(\"\\n        \")\n+\n     val code = s\"\"\"\n-    public SpecificProjection generate($exprType[] expr) {\n-      return new SpecificProjection(expr);\n+    public SpecificProjection generate($exprType[] expr, Object[] states) {\n+      return new SpecificProjection(expr, states);\n     }\n \n     class SpecificProjection extends ${classOf[BaseProject].getName} {\n       private $exprType[] expressions = null;\n+      $mutableStates\n \n-      public SpecificProjection($exprType[] expr) {\n+      public SpecificProjection($exprType[] expr, Object[] states) {\n         expressions = expr;\n+        $initStates\n       }\n \n       @Override\n       public Object apply(Object r) {\n-        return new SpecificRow(expressions, (InternalRow) r);\n+        return new SpecificRow((InternalRow) r);\n       }\n-    }\n \n-    final class SpecificRow extends ${classOf[MutableRow].getName} {\n+      final class SpecificRow extends ${classOf[MutableRow].getName} {",
+    "line": 29
+  }],
+  "prId": 7392
+}]

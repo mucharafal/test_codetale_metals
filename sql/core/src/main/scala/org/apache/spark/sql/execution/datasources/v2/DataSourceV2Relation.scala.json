@@ -1,0 +1,49 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "Looks not directly related with this PR but I think this is a good place to ask. Why do we make a readsupport in write path?\r\n\r\nhttps://github.com/apache/spark/blob/e06da95cd9423f55cdb154a2778b0bddf7be984c/sql/core/src/main/scala/org/apache/spark/sql/DataFrameWriter.scala#L249\r\n\r\nRetrieving the physical schema of the underlying storage is potentially expensive. Actually even worse: it looks odd that write path requires read side's schema. Which schema should we expect here in write path?",
+    "commit": "51cda76897353344427aaa666e29be408263eeb1",
+    "createdAt": "2018-10-10T08:34:20Z",
+    "diffHunk": "@@ -169,15 +174,16 @@ object DataSourceV2Relation {\n       options: Map[String, String],\n       tableIdent: Option[TableIdentifier] = None,\n       userSpecifiedSchema: Option[StructType] = None): DataSourceV2Relation = {\n-    val reader = source.createReader(options, userSpecifiedSchema)\n+    val readSupport = source.createReadSupport(options, userSpecifiedSchema)",
+    "line": 145
+  }, {
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "This looks a regression comparing 2.3 - Data Source V2 is under heavy development so I understand but this is quite crucial. From a cursory look, this is introduced in https://github.com/apache/spark/commit/5fef6e3513d6023a837c427d183006d153c7102b\r\n\r\nI would suggest to partially revert this commit from branch-2.4.",
+    "commit": "51cda76897353344427aaa666e29be408263eeb1",
+    "createdAt": "2018-10-10T08:51:59Z",
+    "diffHunk": "@@ -169,15 +174,16 @@ object DataSourceV2Relation {\n       options: Map[String, String],\n       tableIdent: Option[TableIdentifier] = None,\n       userSpecifiedSchema: Option[StructType] = None): DataSourceV2Relation = {\n-    val reader = source.createReader(options, userSpecifiedSchema)\n+    val readSupport = source.createReadSupport(options, userSpecifiedSchema)",
+    "line": 145
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "This is kind of a behavior change. Now when we append data to a data source, the data source must be readable, to provide a schema, which will be used to validate the input data schema.\r\n\r\nI don't have a strong feeling. Data source v2 is marked as involving so necessary behavior change is fine. cc @rdblue ",
+    "commit": "51cda76897353344427aaa666e29be408263eeb1",
+    "createdAt": "2018-10-10T09:35:31Z",
+    "diffHunk": "@@ -169,15 +174,16 @@ object DataSourceV2Relation {\n       options: Map[String, String],\n       tableIdent: Option[TableIdentifier] = None,\n       userSpecifiedSchema: Option[StructType] = None): DataSourceV2Relation = {\n-    val reader = source.createReader(options, userSpecifiedSchema)\n+    val readSupport = source.createReadSupport(options, userSpecifiedSchema)",
+    "line": 145
+  }, {
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "Another point is which schema you would expect the datasource return in that case. For instance, `spark.range(1).write.format(\"source\").save()`. It's odd that `source` should provide a schema. I mean it's logically weird. How does the source provide the schema?",
+    "commit": "51cda76897353344427aaa666e29be408263eeb1",
+    "createdAt": "2018-10-10T10:35:52Z",
+    "diffHunk": "@@ -169,15 +174,16 @@ object DataSourceV2Relation {\n       options: Map[String, String],\n       tableIdent: Option[TableIdentifier] = None,\n       userSpecifiedSchema: Option[StructType] = None): DataSourceV2Relation = {\n-    val reader = source.createReader(options, userSpecifiedSchema)\n+    val readSupport = source.createReadSupport(options, userSpecifiedSchema)",
+    "line": 145
+  }, {
+    "author": {
+      "login": "rdblue"
+    },
+    "body": "In the long term, I don't think that sources should use the reader to get a schema. This is a temporary hack until we have catalog support, which is really where schemas should come from.\r\n\r\nThe way this works in our version (which is substantially ahead of upstream Spark, unfortunately), is that a Table is loaded by a Catalog. The schema reported by that table is used to validate writes. That way, the table can report it's schema and Spark knows that data written must be compatible with that schema, but the source isn't required to be readable.",
+    "commit": "51cda76897353344427aaa666e29be408263eeb1",
+    "createdAt": "2018-10-19T21:01:12Z",
+    "diffHunk": "@@ -169,15 +174,16 @@ object DataSourceV2Relation {\n       options: Map[String, String],\n       tableIdent: Option[TableIdentifier] = None,\n       userSpecifiedSchema: Option[StructType] = None): DataSourceV2Relation = {\n-    val reader = source.createReader(options, userSpecifiedSchema)\n+    val readSupport = source.createReadSupport(options, userSpecifiedSchema)",
+    "line": 145
+  }],
+  "prId": 22009
+}]

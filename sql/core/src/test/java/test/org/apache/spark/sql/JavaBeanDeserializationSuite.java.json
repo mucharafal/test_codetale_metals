@@ -1,0 +1,177 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "maropu"
+    },
+    "body": "We need to read test data from a file instead of `spark.createDataFrame(...`?",
+    "commit": "24a1b195bad49e05353b80c85d30e32e8c898a52",
+    "createdAt": "2019-02-21T12:03:38Z",
+    "diffHunk": "@@ -115,6 +115,37 @@ public void testBeanWithMapFieldsDeserialization() {\n     Assert.assertEquals(records, MAP_RECORDS);\n   }\n \n+  private static final List<RecordSpark22000> RECORDS_SPARK_22000 = new ArrayList<>();\n+\n+  static {\n+    RECORDS_SPARK_22000.add(new RecordSpark22000(\"1\", \"j123@aaa.com\", 2, 11));\n+    RECORDS_SPARK_22000.add(new RecordSpark22000(\"2\", \"j123@aaa.com\", 3, 12));\n+    RECORDS_SPARK_22000.add(new RecordSpark22000(\"3\", \"j123@aaa.com\", 4, 13));\n+    RECORDS_SPARK_22000.add(new RecordSpark22000(\"4\", \"j123@aaa.com\", 5, 14));\n+  }\n+\n+  @Test\n+  public void testSpark22000() {\n+    // Here we try to convert the type of 'ref' field, from integer to string.\n+    // Before applying SPARK-22000, Spark called toString() against variable which type might be primitive.\n+    // SPARK-22000 it calls String.valueOf() which finally calls toString() but handles boxing\n+    // if the type is primitive.\n+    Encoder<RecordSpark22000> encoder = Encoders.bean(RecordSpark22000.class);\n+\n+    Dataset<RecordSpark22000> dataset = spark\n+      .read()\n+      .format(\"csv\")\n+      .option(\"header\", \"true\")\n+      .option(\"mode\", \"DROPMALFORMED\")\n+      .schema(\"ref int, userId string, x int, y int\")\n+      .load(\"src/test/resources/test-data/spark-22000.csv\")"
+  }, {
+    "author": {
+      "login": "HeartSaVioR"
+    },
+    "body": "I guess not. Let me try to change not to use file.",
+    "commit": "24a1b195bad49e05353b80c85d30e32e8c898a52",
+    "createdAt": "2019-02-21T12:15:32Z",
+    "diffHunk": "@@ -115,6 +115,37 @@ public void testBeanWithMapFieldsDeserialization() {\n     Assert.assertEquals(records, MAP_RECORDS);\n   }\n \n+  private static final List<RecordSpark22000> RECORDS_SPARK_22000 = new ArrayList<>();\n+\n+  static {\n+    RECORDS_SPARK_22000.add(new RecordSpark22000(\"1\", \"j123@aaa.com\", 2, 11));\n+    RECORDS_SPARK_22000.add(new RecordSpark22000(\"2\", \"j123@aaa.com\", 3, 12));\n+    RECORDS_SPARK_22000.add(new RecordSpark22000(\"3\", \"j123@aaa.com\", 4, 13));\n+    RECORDS_SPARK_22000.add(new RecordSpark22000(\"4\", \"j123@aaa.com\", 5, 14));\n+  }\n+\n+  @Test\n+  public void testSpark22000() {\n+    // Here we try to convert the type of 'ref' field, from integer to string.\n+    // Before applying SPARK-22000, Spark called toString() against variable which type might be primitive.\n+    // SPARK-22000 it calls String.valueOf() which finally calls toString() but handles boxing\n+    // if the type is primitive.\n+    Encoder<RecordSpark22000> encoder = Encoders.bean(RecordSpark22000.class);\n+\n+    Dataset<RecordSpark22000> dataset = spark\n+      .read()\n+      .format(\"csv\")\n+      .option(\"header\", \"true\")\n+      .option(\"mode\", \"DROPMALFORMED\")\n+      .schema(\"ref int, userId string, x int, y int\")\n+      .load(\"src/test/resources/test-data/spark-22000.csv\")"
+  }, {
+    "author": {
+      "login": "maropu"
+    },
+    "body": "Thanks!",
+    "commit": "24a1b195bad49e05353b80c85d30e32e8c898a52",
+    "createdAt": "2019-02-21T12:16:39Z",
+    "diffHunk": "@@ -115,6 +115,37 @@ public void testBeanWithMapFieldsDeserialization() {\n     Assert.assertEquals(records, MAP_RECORDS);\n   }\n \n+  private static final List<RecordSpark22000> RECORDS_SPARK_22000 = new ArrayList<>();\n+\n+  static {\n+    RECORDS_SPARK_22000.add(new RecordSpark22000(\"1\", \"j123@aaa.com\", 2, 11));\n+    RECORDS_SPARK_22000.add(new RecordSpark22000(\"2\", \"j123@aaa.com\", 3, 12));\n+    RECORDS_SPARK_22000.add(new RecordSpark22000(\"3\", \"j123@aaa.com\", 4, 13));\n+    RECORDS_SPARK_22000.add(new RecordSpark22000(\"4\", \"j123@aaa.com\", 5, 14));\n+  }\n+\n+  @Test\n+  public void testSpark22000() {\n+    // Here we try to convert the type of 'ref' field, from integer to string.\n+    // Before applying SPARK-22000, Spark called toString() against variable which type might be primitive.\n+    // SPARK-22000 it calls String.valueOf() which finally calls toString() but handles boxing\n+    // if the type is primitive.\n+    Encoder<RecordSpark22000> encoder = Encoders.bean(RecordSpark22000.class);\n+\n+    Dataset<RecordSpark22000> dataset = spark\n+      .read()\n+      .format(\"csv\")\n+      .option(\"header\", \"true\")\n+      .option(\"mode\", \"DROPMALFORMED\")\n+      .schema(\"ref int, userId string, x int, y int\")\n+      .load(\"src/test/resources/test-data/spark-22000.csv\")"
+  }],
+  "prId": 23854
+}, {
+  "comments": [{
+    "author": {
+      "login": "maropu"
+    },
+    "body": "We need to override `toString`, `hashCode`, and `equals` for the test?",
+    "commit": "24a1b195bad49e05353b80c85d30e32e8c898a52",
+    "createdAt": "2019-02-21T12:11:18Z",
+    "diffHunk": "@@ -252,4 +283,73 @@ public String toString() {\n       return String.format(\"[%d,%d]\", startTime, endTime);\n     }\n   }\n+\n+  public static class RecordSpark22000 {\n+    private String ref;\n+    private String userId;\n+    private int x;\n+    private int y;\n+\n+    public RecordSpark22000() { }\n+\n+    RecordSpark22000(String ref, String userId, int x, int y) {\n+      this.ref = ref;\n+      this.userId = userId;\n+      this.x = x;\n+      this.y = y;\n+    }\n+\n+    public String getRef() {\n+      return ref;\n+    }\n+\n+    public void setRef(String ref) {\n+      this.ref = ref;\n+    }\n+\n+    public String getUserId() {\n+      return userId;\n+    }\n+\n+    public void setUserId(String userId) {\n+      this.userId = userId;\n+    }\n+\n+    public int getX() {\n+      return x;\n+    }\n+\n+    public void setX(int x) {\n+      this.x = x;\n+    }\n+\n+    public int getY() {\n+      return y;\n+    }\n+\n+    public void setY(int y) {\n+      this.y = y;\n+    }\n+\n+    @Override\n+    public boolean equals(Object o) {\n+      if (this == o) return true;\n+      if (o == null || getClass() != o.getClass()) return false;\n+      RecordSpark22000 that = (RecordSpark22000) o;\n+      return x == that.x &&\n+              y == that.y &&\n+              Objects.equals(ref, that.ref) &&\n+              Objects.equals(userId, that.userId);\n+    }\n+\n+    @Override\n+    public int hashCode() {\n+      return Objects.hash(ref, userId, x, y);\n+    }\n+\n+    @Override\n+    public String toString() {\n+      return String.format(\"ref='%s', userId='%s', x=%d, y=%d\", ref, userId, x, y);\n+    }",
+    "line": 266
+  }, {
+    "author": {
+      "login": "HeartSaVioR"
+    },
+    "body": "It would be easier to test with them, otherwise we need to add code for comparison anyway. Other existing tests also leveraged them.",
+    "commit": "24a1b195bad49e05353b80c85d30e32e8c898a52",
+    "createdAt": "2019-02-21T12:16:41Z",
+    "diffHunk": "@@ -252,4 +283,73 @@ public String toString() {\n       return String.format(\"[%d,%d]\", startTime, endTime);\n     }\n   }\n+\n+  public static class RecordSpark22000 {\n+    private String ref;\n+    private String userId;\n+    private int x;\n+    private int y;\n+\n+    public RecordSpark22000() { }\n+\n+    RecordSpark22000(String ref, String userId, int x, int y) {\n+      this.ref = ref;\n+      this.userId = userId;\n+      this.x = x;\n+      this.y = y;\n+    }\n+\n+    public String getRef() {\n+      return ref;\n+    }\n+\n+    public void setRef(String ref) {\n+      this.ref = ref;\n+    }\n+\n+    public String getUserId() {\n+      return userId;\n+    }\n+\n+    public void setUserId(String userId) {\n+      this.userId = userId;\n+    }\n+\n+    public int getX() {\n+      return x;\n+    }\n+\n+    public void setX(int x) {\n+      this.x = x;\n+    }\n+\n+    public int getY() {\n+      return y;\n+    }\n+\n+    public void setY(int y) {\n+      this.y = y;\n+    }\n+\n+    @Override\n+    public boolean equals(Object o) {\n+      if (this == o) return true;\n+      if (o == null || getClass() != o.getClass()) return false;\n+      RecordSpark22000 that = (RecordSpark22000) o;\n+      return x == that.x &&\n+              y == that.y &&\n+              Objects.equals(ref, that.ref) &&\n+              Objects.equals(userId, that.userId);\n+    }\n+\n+    @Override\n+    public int hashCode() {\n+      return Objects.hash(ref, userId, x, y);\n+    }\n+\n+    @Override\n+    public String toString() {\n+      return String.format(\"ref='%s', userId='%s', x=%d, y=%d\", ref, userId, x, y);\n+    }",
+    "line": 266
+  }, {
+    "author": {
+      "login": "HeartSaVioR"
+    },
+    "body": "Now this discussion is placed in the wrong place (Github pasted this discussion to the new class while this discussion is for other class which still exists). I'll just mark this as resolved to avoid confusion.",
+    "commit": "24a1b195bad49e05353b80c85d30e32e8c898a52",
+    "createdAt": "2019-02-25T07:15:57Z",
+    "diffHunk": "@@ -252,4 +283,73 @@ public String toString() {\n       return String.format(\"[%d,%d]\", startTime, endTime);\n     }\n   }\n+\n+  public static class RecordSpark22000 {\n+    private String ref;\n+    private String userId;\n+    private int x;\n+    private int y;\n+\n+    public RecordSpark22000() { }\n+\n+    RecordSpark22000(String ref, String userId, int x, int y) {\n+      this.ref = ref;\n+      this.userId = userId;\n+      this.x = x;\n+      this.y = y;\n+    }\n+\n+    public String getRef() {\n+      return ref;\n+    }\n+\n+    public void setRef(String ref) {\n+      this.ref = ref;\n+    }\n+\n+    public String getUserId() {\n+      return userId;\n+    }\n+\n+    public void setUserId(String userId) {\n+      this.userId = userId;\n+    }\n+\n+    public int getX() {\n+      return x;\n+    }\n+\n+    public void setX(int x) {\n+      this.x = x;\n+    }\n+\n+    public int getY() {\n+      return y;\n+    }\n+\n+    public void setY(int y) {\n+      this.y = y;\n+    }\n+\n+    @Override\n+    public boolean equals(Object o) {\n+      if (this == o) return true;\n+      if (o == null || getClass() != o.getClass()) return false;\n+      RecordSpark22000 that = (RecordSpark22000) o;\n+      return x == that.x &&\n+              y == that.y &&\n+              Objects.equals(ref, that.ref) &&\n+              Objects.equals(userId, that.userId);\n+    }\n+\n+    @Override\n+    public int hashCode() {\n+      return Objects.hash(ref, userId, x, y);\n+    }\n+\n+    @Override\n+    public String toString() {\n+      return String.format(\"ref='%s', userId='%s', x=%d, y=%d\", ref, userId, x, y);\n+    }",
+    "line": 266
+  }],
+  "prId": 23854
+}, {
+  "comments": [{
+    "author": {
+      "login": "maropu"
+    },
+    "body": "Can you add tests for more types other than `int`?",
+    "commit": "24a1b195bad49e05353b80c85d30e32e8c898a52",
+    "createdAt": "2019-02-21T12:30:49Z",
+    "diffHunk": "@@ -115,6 +115,37 @@ public void testBeanWithMapFieldsDeserialization() {\n     Assert.assertEquals(records, MAP_RECORDS);\n   }\n \n+  private static final List<RecordSpark22000> RECORDS_SPARK_22000 = new ArrayList<>();\n+\n+  static {\n+    RECORDS_SPARK_22000.add(new RecordSpark22000(\"1\", \"j123@aaa.com\", 2, 11));\n+    RECORDS_SPARK_22000.add(new RecordSpark22000(\"2\", \"j123@aaa.com\", 3, 12));\n+    RECORDS_SPARK_22000.add(new RecordSpark22000(\"3\", \"j123@aaa.com\", 4, 13));\n+    RECORDS_SPARK_22000.add(new RecordSpark22000(\"4\", \"j123@aaa.com\", 5, 14));\n+  }\n+\n+  @Test\n+  public void testSpark22000() {\n+    // Here we try to convert the type of 'ref' field, from integer to string.\n+    // Before applying SPARK-22000, Spark called toString() against variable which type might be primitive.\n+    // SPARK-22000 it calls String.valueOf() which finally calls toString() but handles boxing\n+    // if the type is primitive.\n+    Encoder<RecordSpark22000> encoder = Encoders.bean(RecordSpark22000.class);\n+\n+    Dataset<RecordSpark22000> dataset = spark\n+      .read()\n+      .format(\"csv\")\n+      .option(\"header\", \"true\")\n+      .option(\"mode\", \"DROPMALFORMED\")\n+      .schema(\"ref int, userId string, x int, y int\")"
+  }],
+  "prId": 23854
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "All the static initialization could just be in a static block rather than split it up, but could this all be local to the new test method if that's the only place it's used?",
+    "commit": "24a1b195bad49e05353b80c85d30e32e8c898a52",
+    "createdAt": "2019-02-21T14:38:45Z",
+    "diffHunk": "@@ -115,6 +124,70 @@ public void testBeanWithMapFieldsDeserialization() {\n     Assert.assertEquals(records, MAP_RECORDS);\n   }\n \n+  private static final List<Row> ROWS_SPARK_22000 = new ArrayList<>();"
+  }, {
+    "author": {
+      "login": "HeartSaVioR"
+    },
+    "body": "I just followed the approach the test class already has, but I agree they can be local to new test method. Will address.",
+    "commit": "24a1b195bad49e05353b80c85d30e32e8c898a52",
+    "createdAt": "2019-02-21T20:58:01Z",
+    "diffHunk": "@@ -115,6 +124,70 @@ public void testBeanWithMapFieldsDeserialization() {\n     Assert.assertEquals(records, MAP_RECORDS);\n   }\n \n+  private static final List<Row> ROWS_SPARK_22000 = new ArrayList<>();"
+  }],
+  "prId": 23854
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "`final` just to be tidy?",
+    "commit": "24a1b195bad49e05353b80c85d30e32e8c898a52",
+    "createdAt": "2019-02-21T14:39:14Z",
+    "diffHunk": "@@ -252,4 +325,116 @@ public String toString() {\n       return String.format(\"[%d,%d]\", startTime, endTime);\n     }\n   }\n+\n+  public static class RecordSpark22000 {"
+  }],
+  "prId": 23854
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Does this need toString? I understand hashCode and equals",
+    "commit": "24a1b195bad49e05353b80c85d30e32e8c898a52",
+    "createdAt": "2019-02-21T14:39:38Z",
+    "diffHunk": "@@ -252,4 +325,116 @@ public String toString() {\n       return String.format(\"[%d,%d]\", startTime, endTime);\n     }\n   }\n+\n+  public static class RecordSpark22000 {\n+    private String shortField;\n+    private String intField;\n+    private String longField;\n+    private String floatField;\n+    private String doubleField;\n+    private String stringField;\n+    private String booleanField;\n+    private String timestampField;\n+\n+    public RecordSpark22000() { }\n+\n+    public String getShortField() {\n+      return shortField;\n+    }\n+\n+    public void setShortField(String shortField) {\n+      this.shortField = shortField;\n+    }\n+\n+    public String getIntField() {\n+      return intField;\n+    }\n+\n+    public void setIntField(String intField) {\n+      this.intField = intField;\n+    }\n+\n+    public String getLongField() {\n+      return longField;\n+    }\n+\n+    public void setLongField(String longField) {\n+      this.longField = longField;\n+    }\n+\n+    public String getFloatField() {\n+      return floatField;\n+    }\n+\n+    public void setFloatField(String floatField) {\n+      this.floatField = floatField;\n+    }\n+\n+    public String getDoubleField() {\n+      return doubleField;\n+    }\n+\n+    public void setDoubleField(String doubleField) {\n+      this.doubleField = doubleField;\n+    }\n+\n+    public String getStringField() {\n+      return stringField;\n+    }\n+\n+    public void setStringField(String stringField) {\n+      this.stringField = stringField;\n+    }\n+\n+    public String getBooleanField() {\n+      return booleanField;\n+    }\n+\n+    public void setBooleanField(String booleanField) {\n+      this.booleanField = booleanField;\n+    }\n+\n+    public String getTimestampField() {\n+      return timestampField;\n+    }\n+\n+    public void setTimestampField(String timestampField) {\n+      this.timestampField = timestampField;\n+    }\n+\n+    @Override\n+    public boolean equals(Object o) {\n+      if (this == o) return true;\n+      if (o == null || getClass() != o.getClass()) return false;\n+      RecordSpark22000 that = (RecordSpark22000) o;\n+      return Objects.equals(shortField, that.shortField) &&\n+              Objects.equals(intField, that.intField) &&\n+              Objects.equals(longField, that.longField) &&\n+              Objects.equals(floatField, that.floatField) &&\n+              Objects.equals(doubleField, that.doubleField) &&\n+              Objects.equals(stringField, that.stringField) &&\n+              Objects.equals(booleanField, that.booleanField) &&\n+              Objects.equals(timestampField, that.timestampField);\n+    }\n+\n+    @Override\n+    public int hashCode() {\n+      return Objects.hash(shortField, intField, longField, floatField, doubleField, stringField,\n+              booleanField, timestampField);\n+    }\n+\n+    @Override\n+    public String toString() {",
+    "line": 239
+  }, {
+    "author": {
+      "login": "HeartSaVioR"
+    },
+    "body": "It will help to compare expected and actual when test fails. Otherwise they would've seen as `Object.toString()` does and it doesn't provide any information why they are not equal.",
+    "commit": "24a1b195bad49e05353b80c85d30e32e8c898a52",
+    "createdAt": "2019-02-21T20:56:32Z",
+    "diffHunk": "@@ -252,4 +325,116 @@ public String toString() {\n       return String.format(\"[%d,%d]\", startTime, endTime);\n     }\n   }\n+\n+  public static class RecordSpark22000 {\n+    private String shortField;\n+    private String intField;\n+    private String longField;\n+    private String floatField;\n+    private String doubleField;\n+    private String stringField;\n+    private String booleanField;\n+    private String timestampField;\n+\n+    public RecordSpark22000() { }\n+\n+    public String getShortField() {\n+      return shortField;\n+    }\n+\n+    public void setShortField(String shortField) {\n+      this.shortField = shortField;\n+    }\n+\n+    public String getIntField() {\n+      return intField;\n+    }\n+\n+    public void setIntField(String intField) {\n+      this.intField = intField;\n+    }\n+\n+    public String getLongField() {\n+      return longField;\n+    }\n+\n+    public void setLongField(String longField) {\n+      this.longField = longField;\n+    }\n+\n+    public String getFloatField() {\n+      return floatField;\n+    }\n+\n+    public void setFloatField(String floatField) {\n+      this.floatField = floatField;\n+    }\n+\n+    public String getDoubleField() {\n+      return doubleField;\n+    }\n+\n+    public void setDoubleField(String doubleField) {\n+      this.doubleField = doubleField;\n+    }\n+\n+    public String getStringField() {\n+      return stringField;\n+    }\n+\n+    public void setStringField(String stringField) {\n+      this.stringField = stringField;\n+    }\n+\n+    public String getBooleanField() {\n+      return booleanField;\n+    }\n+\n+    public void setBooleanField(String booleanField) {\n+      this.booleanField = booleanField;\n+    }\n+\n+    public String getTimestampField() {\n+      return timestampField;\n+    }\n+\n+    public void setTimestampField(String timestampField) {\n+      this.timestampField = timestampField;\n+    }\n+\n+    @Override\n+    public boolean equals(Object o) {\n+      if (this == o) return true;\n+      if (o == null || getClass() != o.getClass()) return false;\n+      RecordSpark22000 that = (RecordSpark22000) o;\n+      return Objects.equals(shortField, that.shortField) &&\n+              Objects.equals(intField, that.intField) &&\n+              Objects.equals(longField, that.longField) &&\n+              Objects.equals(floatField, that.floatField) &&\n+              Objects.equals(doubleField, that.doubleField) &&\n+              Objects.equals(stringField, that.stringField) &&\n+              Objects.equals(booleanField, that.booleanField) &&\n+              Objects.equals(timestampField, that.timestampField);\n+    }\n+\n+    @Override\n+    public int hashCode() {\n+      return Objects.hash(shortField, intField, longField, floatField, doubleField, stringField,\n+              booleanField, timestampField);\n+    }\n+\n+    @Override\n+    public String toString() {",
+    "line": 239
+  }],
+  "prId": 23854
+}, {
+  "comments": [{
+    "author": {
+      "login": "maropu"
+    },
+    "body": "Could you add more tests for upcast failure cases?",
+    "commit": "24a1b195bad49e05353b80c85d30e32e8c898a52",
+    "createdAt": "2019-02-24T05:22:32Z",
+    "diffHunk": "@@ -115,6 +119,74 @@ public void testBeanWithMapFieldsDeserialization() {\n     Assert.assertEquals(records, MAP_RECORDS);\n   }\n \n+  @Test\n+  public void testSpark22000() {\n+    List<Row> inputRows = new ArrayList<>();",
+    "line": 22
+  }, {
+    "author": {
+      "login": "HeartSaVioR"
+    },
+    "body": "Honestly I'm not sure which cases other that this fail without upcast. Could you please share if you have any? I'll add them once I'm aware of some cases.",
+    "commit": "24a1b195bad49e05353b80c85d30e32e8c898a52",
+    "createdAt": "2019-02-25T00:20:17Z",
+    "diffHunk": "@@ -115,6 +119,74 @@ public void testBeanWithMapFieldsDeserialization() {\n     Assert.assertEquals(records, MAP_RECORDS);\n   }\n \n+  @Test\n+  public void testSpark22000() {\n+    List<Row> inputRows = new ArrayList<>();",
+    "line": 22
+  }, {
+    "author": {
+      "login": "maropu"
+    },
+    "body": "How about this case?\r\n```\r\n\r\nscala> :paste\r\nclass BeanClass extends Serializable {\r\n  private var id: Int = _\r\n  def getId(): Int = id\r\n  def setId(i: Int): Unit = { id = i }\r\n}\r\nimplicit val encoder = org.apache.spark.sql.Encoders.bean(classOf[BeanClass])\r\nSeq(\"1\", \"2\", \"a\").toDF(\"id\").as[BeanClass].collect\r\n\r\norg.apache.spark.sql.AnalysisException: Cannot up cast `id` from string to int as it may truncate\r\nThe type path of the target object is:\r\n- field (class: \"int\",\r\nname: \"id\")\r\n- root class: \"BeanClass\"\r\nYou can either add an explicit cast to the input data or choose a higher precision type of the field in the target object;\r\n  at org.apache.spark.sql.catalyst.analysis.Analyzer$ResolveUpCast$.org$apache$spark$sql$catalyst$analysis$Analyzer$ResolveUpCast$$fail(Analyzer.scala:2536)\r\n  at org.apache.spark.sql.catalyst.analysis.Analyzer$ResolveUpCast$$anonfun$apply$29$$anonfun$applyOrElse$129.applyOrElse(Analyzer.scala:2552)\r\n  at org.apache.spark.sql.catalyst.analysis.Analyzer$ResolveUpCast$$anonfun$apply$29$$anonfun$applyOrElse$129.applyOrElse(Analyzer.scala:2547)\r\n  at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$transformDown$1(TreeNode.scala:258)\r\n  at org.apache.spark.sql.catalyst.trees.CurrentOrigin$.withOrigin(TreeNode.scala:72)\r\n  at org.apache.spark.sql.catalyst.trees.TreeNode.transformDown(TreeNode.scala:258)\r\n  at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$transformDown$3(TreeNode.scala:263)\r\n  at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$mapChildren$1(TreeNode.scala:328)\r\n  at org.apache.spark.sql.catalyst.trees.TreeNode.mapProductIterator(TreeNode.scala:189)\r\n  at org.apache.spark.sql.catalyst.trees.TreeNode.mapChildren(TreeNode.scala:326)\r\n  at org.apache.spark.sql.catalyst.trees.TreeNode.transformDown(TreeNode.scala:263)\r\n  at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$transformDown$3(TreeNode.scala:263)\r\n  at org.apache.spark.sql.catalyst.trees.TreeNode.$anonfun$mapChildren$2(TreeNode.scala:345)\r\n```",
+    "commit": "24a1b195bad49e05353b80c85d30e32e8c898a52",
+    "createdAt": "2019-02-25T06:04:22Z",
+    "diffHunk": "@@ -115,6 +119,74 @@ public void testBeanWithMapFieldsDeserialization() {\n     Assert.assertEquals(records, MAP_RECORDS);\n   }\n \n+  @Test\n+  public void testSpark22000() {\n+    List<Row> inputRows = new ArrayList<>();",
+    "line": 22
+  }, {
+    "author": {
+      "login": "HeartSaVioR"
+    },
+    "body": "Ah OK I misread your comment. Looks like you would like to have another test which can't be mitigated with upcast so the query is failing even with upcast. I'll add it. Thanks!",
+    "commit": "24a1b195bad49e05353b80c85d30e32e8c898a52",
+    "createdAt": "2019-02-25T06:40:06Z",
+    "diffHunk": "@@ -115,6 +119,74 @@ public void testBeanWithMapFieldsDeserialization() {\n     Assert.assertEquals(records, MAP_RECORDS);\n   }\n \n+  @Test\n+  public void testSpark22000() {\n+    List<Row> inputRows = new ArrayList<>();",
+    "line": 22
+  }, {
+    "author": {
+      "login": "maropu"
+    },
+    "body": "Thanks!",
+    "commit": "24a1b195bad49e05353b80c85d30e32e8c898a52",
+    "createdAt": "2019-02-25T06:41:16Z",
+    "diffHunk": "@@ -115,6 +119,74 @@ public void testBeanWithMapFieldsDeserialization() {\n     Assert.assertEquals(records, MAP_RECORDS);\n   }\n \n+  @Test\n+  public void testSpark22000() {\n+    List<Row> inputRows = new ArrayList<>();",
+    "line": 22
+  }, {
+    "author": {
+      "login": "HeartSaVioR"
+    },
+    "body": "Addressed.",
+    "commit": "24a1b195bad49e05353b80c85d30e32e8c898a52",
+    "createdAt": "2019-02-25T07:17:46Z",
+    "diffHunk": "@@ -115,6 +119,74 @@ public void testBeanWithMapFieldsDeserialization() {\n     Assert.assertEquals(records, MAP_RECORDS);\n   }\n \n+  @Test\n+  public void testSpark22000() {\n+    List<Row> inputRows = new ArrayList<>();",
+    "line": 22
+  }],
+  "prId": 23854
+}]

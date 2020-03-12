@@ -1,0 +1,32 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "rxin"
+    },
+    "body": "this is not a legit comparison actually -- i'm not sure if you can sort directly on interval data types this way.\n\n(the problem is that the number of seconds or days can be greater than month)\n",
+    "commit": "632062d6893ecc1206920381cd5de1799c6295ea",
+    "createdAt": "2015-07-07T20:41:36Z",
+    "diffHunk": "@@ -0,0 +1,54 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.types\n+\n+import scala.math.Ordering\n+import scala.reflect.runtime.universe.typeTag\n+\n+import org.apache.spark.annotation.DeveloperApi\n+import org.apache.spark.sql.catalyst.ScalaReflectionLock\n+import org.apache.spark.sql.catalyst.util.TypeUtils\n+\n+\n+/**\n+ * :: DeveloperApi ::\n+ * The data type representing time intervals.\n+ *\n+ * Please use the singleton [[DataTypes.IntervalType]].\n+ */\n+@DeveloperApi\n+class IntervalType private() extends AtomicType {\n+  // The companion object and this class is separated so the companion object also subclasses\n+  // this type. Otherwise, the companion object would be of type \"IntervalType$\" in byte code.\n+  // Defined with a private constructor so the companion object is the only possible instantiation.\n+  private[sql] type InternalType = Array[Byte]\n+\n+  @transient private[sql] lazy val tag = ScalaReflectionLock.synchronized { typeTag[InternalType] }\n+\n+  private[sql] val ordering = new Ordering[InternalType] {\n+    def compare(x: Array[Byte], y: Array[Byte]): Int = {\n+      TypeUtils.compareBinary(x, y)"
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "Can we just assume there are 30 days in a month and transform months to microseconds and compare them?\n",
+    "commit": "632062d6893ecc1206920381cd5de1799c6295ea",
+    "createdAt": "2015-07-08T03:19:35Z",
+    "diffHunk": "@@ -0,0 +1,54 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.types\n+\n+import scala.math.Ordering\n+import scala.reflect.runtime.universe.typeTag\n+\n+import org.apache.spark.annotation.DeveloperApi\n+import org.apache.spark.sql.catalyst.ScalaReflectionLock\n+import org.apache.spark.sql.catalyst.util.TypeUtils\n+\n+\n+/**\n+ * :: DeveloperApi ::\n+ * The data type representing time intervals.\n+ *\n+ * Please use the singleton [[DataTypes.IntervalType]].\n+ */\n+@DeveloperApi\n+class IntervalType private() extends AtomicType {\n+  // The companion object and this class is separated so the companion object also subclasses\n+  // this type. Otherwise, the companion object would be of type \"IntervalType$\" in byte code.\n+  // Defined with a private constructor so the companion object is the only possible instantiation.\n+  private[sql] type InternalType = Array[Byte]\n+\n+  @transient private[sql] lazy val tag = ScalaReflectionLock.synchronized { typeTag[InternalType] }\n+\n+  private[sql] val ordering = new Ordering[InternalType] {\n+    def compare(x: Array[Byte], y: Array[Byte]): Int = {\n+      TypeUtils.compareBinary(x, y)"
+  }],
+  "prId": 7226
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "I didn't make it extend `AtomicType` here, as I haven't figured out how to compare intervals. `30 days` and `1 months` may have different compare result in different context. \n",
+    "commit": "632062d6893ecc1206920381cd5de1799c6295ea",
+    "createdAt": "2015-07-08T04:39:56Z",
+    "diffHunk": "@@ -0,0 +1,37 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.types\n+\n+import org.apache.spark.annotation.DeveloperApi\n+\n+\n+/**\n+ * :: DeveloperApi ::\n+ * The data type representing time intervals.\n+ *\n+ * Please use the singleton [[DataTypes.IntervalType]].\n+ */\n+@DeveloperApi\n+class IntervalType private() extends DataType {",
+    "line": 30
+  }],
+  "prId": 7226
+}]

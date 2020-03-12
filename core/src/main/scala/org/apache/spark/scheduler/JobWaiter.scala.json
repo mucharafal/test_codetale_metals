@@ -1,0 +1,57 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "@zsxwing, this `if` statement fixes a subtle bug that we found in your JobWaiter future: if a job has no tasks, then it is marked as finished immediately and `taskSucceeded` will not be called, so we need to complete the promise here.  We noticed this because a test in AsyncRDDActionsSuite was hanging.\n",
+    "commit": "17edbcd06086b6a8cad922b4c535eb2a6265b2e3",
+    "createdAt": "2015-07-14T02:50:20Z",
+    "diffHunk": "@@ -28,12 +31,18 @@ private[spark] class JobWaiter[T](\n     resultHandler: (Int, T) => Unit)\n   extends JobListener {\n \n+  private val promise = Promise[Unit]\n+\n   private var finishedTasks = 0\n \n   // Is the job as a whole finished (succeeded or failed)?\n   @volatile\n   private var _jobFinished = totalTasks == 0\n \n+  if (_jobFinished) {"
+  }],
+  "prId": 7385
+}, {
+  "comments": [{
+    "author": {
+      "login": "tdas"
+    },
+    "body": "Stepping back. If we are using promise anyway, why do we need a separate variable called \"jobFinished\"? The promise is sufficient in keeping the state of whether the job has finished or not. \n\n```\nval promise = Promise[JobResult]\n\ndef jobFinished(...) = promise.isCompleted()\n```\n\nThe rest of the code needs to use `jobFinished` instead of `_jobFinished`\n",
+    "commit": "17edbcd06086b6a8cad922b4c535eb2a6265b2e3",
+    "createdAt": "2015-07-15T00:04:42Z",
+    "diffHunk": "@@ -28,12 +31,18 @@ private[spark] class JobWaiter[T](\n     resultHandler: (Int, T) => Unit)\n   extends JobListener {\n \n+  private val promise = Promise[Unit]"
+  }],
+  "prId": 7385
+}, {
+  "comments": [{
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "This line can be removed. Right?\n",
+    "commit": "17edbcd06086b6a8cad922b4c535eb2a6265b2e3",
+    "createdAt": "2015-07-15T10:35:30Z",
+    "diffHunk": "@@ -50,28 +72,19 @@ private[spark] class JobWaiter[T](\n   }\n \n   override def taskSucceeded(index: Int, result: Any): Unit = synchronized {\n-    if (_jobFinished) {\n+    if (isCompleted) {\n       throw new UnsupportedOperationException(\"taskSucceeded() called on a finished JobWaiter\")\n     }\n     resultHandler(index, result.asInstanceOf[T])\n     finishedTasks += 1\n     if (finishedTasks == totalTasks) {\n-      _jobFinished = true\n-      jobResult = JobSucceeded\n+      promise.trySuccess()\n       this.notifyAll()"
+  }],
+  "prId": 7385
+}, {
+  "comments": [{
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "This line can be removed too\n",
+    "commit": "17edbcd06086b6a8cad922b4c535eb2a6265b2e3",
+    "createdAt": "2015-07-15T10:35:41Z",
+    "diffHunk": "@@ -50,28 +72,19 @@ private[spark] class JobWaiter[T](\n   }\n \n   override def taskSucceeded(index: Int, result: Any): Unit = synchronized {\n-    if (_jobFinished) {\n+    if (isCompleted) {\n       throw new UnsupportedOperationException(\"taskSucceeded() called on a finished JobWaiter\")\n     }\n     resultHandler(index, result.asInstanceOf[T])\n     finishedTasks += 1\n     if (finishedTasks == totalTasks) {\n-      _jobFinished = true\n-      jobResult = JobSucceeded\n+      promise.trySuccess()\n       this.notifyAll()\n     }\n   }\n \n   override def jobFailed(exception: Exception): Unit = synchronized {\n-    _jobFinished = true\n-    jobResult = JobFailed(exception)\n+    promise.tryFailure(exception)\n     this.notifyAll()"
+  }],
+  "prId": 7385
+}, {
+  "comments": [{
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "Looks `tryFailure` would be simpler.\n",
+    "commit": "17edbcd06086b6a8cad922b4c535eb2a6265b2e3",
+    "createdAt": "2015-07-20T06:55:55Z",
+    "diffHunk": "@@ -50,28 +72,23 @@ private[spark] class JobWaiter[T](\n   }\n \n   override def taskSucceeded(index: Int, result: Any): Unit = synchronized {\n-    if (_jobFinished) {\n+    if (isCompleted) {\n       throw new UnsupportedOperationException(\"taskSucceeded() called on a finished JobWaiter\")\n     }\n     resultHandler(index, result.asInstanceOf[T])\n     finishedTasks += 1\n     if (finishedTasks == totalTasks) {\n-      _jobFinished = true\n-      jobResult = JobSucceeded\n-      this.notifyAll()\n+      promise.success()\n     }\n   }\n \n   override def jobFailed(exception: Exception): Unit = synchronized {\n-    _jobFinished = true\n-    jobResult = JobFailed(exception)\n-    this.notifyAll()\n-  }\n-\n-  def awaitResult(): JobResult = synchronized {\n-    while (!_jobFinished) {\n-      this.wait()\n+    // There are certain situations where jobFailed can be called multiple times for the same\n+    // job. We guard against this by making this method idempotent.\n+    if (!isCompleted) {\n+      promise.failure(exception)",
+    "line": 88
+  }],
+  "prId": 7385
+}]

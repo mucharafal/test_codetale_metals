@@ -1,0 +1,191 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "Can this labelAttribute be prepared upon model fitting/construction?  Everything except the name of the output column should be available then.  Btw, the attribute name should be from getPredictionCol, not \"label\"\n\nAlso, can this be computed in validateAndTransformSchema so that transformSchema computes it?\n",
+    "commit": "449f824fa633ea5b742af8cc8a078cd1561178f5",
+    "createdAt": "2016-04-20T20:51:53Z",
+    "diffHunk": "@@ -115,7 +116,16 @@ abstract class ClassificationModel[FeaturesType, M <: ClassificationModel[Featur\n         }\n         predictUDF(col(getFeaturesCol))\n       }\n-      outputData = outputData.withColumn(getPredictionCol, predUDF)\n+      // determine number of classes either from metadata if provided.\n+      val labelSchema = dataset.schema($(labelCol))\n+      // extract label metadata from label column if present, or create a nominal attribute\n+      // to output the number of labels\n+      val labelAttribute = Attribute.fromStructField(labelSchema) match {"
+  }, {
+    "author": {
+      "login": "yanboliang"
+    },
+    "body": "Reply to your concerns:\n1, The `labelAttribute` only be prepared when model transform. We can add supporting for model fitting, but I'm not sure someone required this feature.\n2, I think the attribute name should be `label`. Its values are the labels set such as `Yes, No`, although it's one of the attributes in prediction column metadata.\n3, we can not do it in `PredictorParams.validateAndTransformSchema`, because we did not use the return value of `validateAndTransformSchema` as the output DataFrame schema (You can refer the code [here](https://github.com/apache/spark/blob/master/mllib/src/main/scala/org/apache/spark/ml/classification/Classifier.scala#L96)). The output DataFrame and its schema are generated at `ClassificationModel.transform` by \"withColumn\" directly.\n",
+    "commit": "449f824fa633ea5b742af8cc8a078cd1561178f5",
+    "createdAt": "2016-04-22T15:00:01Z",
+    "diffHunk": "@@ -115,7 +116,16 @@ abstract class ClassificationModel[FeaturesType, M <: ClassificationModel[Featur\n         }\n         predictUDF(col(getFeaturesCol))\n       }\n-      outputData = outputData.withColumn(getPredictionCol, predUDF)\n+      // determine number of classes either from metadata if provided.\n+      val labelSchema = dataset.schema($(labelCol))\n+      // extract label metadata from label column if present, or create a nominal attribute\n+      // to output the number of labels\n+      val labelAttribute = Attribute.fromStructField(labelSchema) match {"
+  }, {
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "1. Thinking more about this, we should definitely prepare the labelAttribute during model fitting/construction.  During fitting, we know the schema of the output column (since it matches the label column, except for the name).  We should not use the labelCol schema during transformation since that could be a completely different label (thought that's unlikely).\n2. The attribute name is supposed to match the column name.  The reason we need this duplicated info is for AttributeGroups, which store attributes for each element in a Vector column.\n3. By \"compute it in validateAndTransformSchema,\" I mean that we should make the output schema during schema validation as precise as possible.  In this case, that means we should add metadata to the output column in transformSchema.  I suspect you can create a helper method in ClassifierParams which computes the metadata so that you can use the same code path for both schema validation and the actual transform() method.\n",
+    "commit": "449f824fa633ea5b742af8cc8a078cd1561178f5",
+    "createdAt": "2016-04-25T17:32:59Z",
+    "diffHunk": "@@ -115,7 +116,16 @@ abstract class ClassificationModel[FeaturesType, M <: ClassificationModel[Featur\n         }\n         predictUDF(col(getFeaturesCol))\n       }\n-      outputData = outputData.withColumn(getPredictionCol, predUDF)\n+      // determine number of classes either from metadata if provided.\n+      val labelSchema = dataset.schema($(labelCol))\n+      // extract label metadata from label column if present, or create a nominal attribute\n+      // to output the number of labels\n+      val labelAttribute = Attribute.fromStructField(labelSchema) match {"
+  }, {
+    "author": {
+      "login": "yanboliang"
+    },
+    "body": "Reply:\n1, I agree that it's better to extract labelAttribute during model fitting, but it need to be transferred to model as an argument of model construction which may take API breaking change. Is this reasonable? Actually [`OneVsRestModel`](https://github.com/apache/spark/blob/master/mllib/src/main/scala/org/apache/spark/ml/classification/OneVsRest.scala#L136) has already done similar work.\n2, I referred that [`OneVsRest`](https://github.com/apache/spark/blob/master/mllib/src/main/scala/org/apache/spark/ml/classification/OneVsRest.scala#L347) and found the attribute was named as `label`. May be we should fix it as well.\n3, Agree.\n",
+    "commit": "449f824fa633ea5b742af8cc8a078cd1561178f5",
+    "createdAt": "2016-04-26T15:04:31Z",
+    "diffHunk": "@@ -115,7 +116,16 @@ abstract class ClassificationModel[FeaturesType, M <: ClassificationModel[Featur\n         }\n         predictUDF(col(getFeaturesCol))\n       }\n-      outputData = outputData.withColumn(getPredictionCol, predUDF)\n+      // determine number of classes either from metadata if provided.\n+      val labelSchema = dataset.schema($(labelCol))\n+      // extract label metadata from label column if present, or create a nominal attribute\n+      // to output the number of labels\n+      val labelAttribute = Attribute.fromStructField(labelSchema) match {"
+  }, {
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "1.  This is why we try to keep the constructors private for as long as possible.  : )  But we could get around it by creating a `private[ml]` setter method which can set the labelAttribute after the model is created.\n2. You're right; I think that's a bug technically.  Here's a JIRA: https://issues.apache.org/jira/browse/SPARK-14926\n",
+    "commit": "449f824fa633ea5b742af8cc8a078cd1561178f5",
+    "createdAt": "2016-04-26T18:49:53Z",
+    "diffHunk": "@@ -115,7 +116,16 @@ abstract class ClassificationModel[FeaturesType, M <: ClassificationModel[Featur\n         }\n         predictUDF(col(getFeaturesCol))\n       }\n-      outputData = outputData.withColumn(getPredictionCol, predUDF)\n+      // determine number of classes either from metadata if provided.\n+      val labelSchema = dataset.schema($(labelCol))\n+      // extract label metadata from label column if present, or create a nominal attribute\n+      // to output the number of labels\n+      val labelAttribute = Attribute.fromStructField(labelSchema) match {"
+  }],
+  "prId": 12066
+}, {
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "`private[classification]` for now\n",
+    "commit": "449f824fa633ea5b742af8cc8a078cd1561178f5",
+    "createdAt": "2016-04-28T18:04:29Z",
+    "diffHunk": "@@ -37,8 +37,38 @@ private[spark] trait ClassifierParams\n       schema: StructType,\n       fitting: Boolean,\n       featuresDataType: DataType): StructType = {\n-    val parentSchema = super.validateAndTransformSchema(schema, fitting, featuresDataType)\n-    SchemaUtils.appendColumn(parentSchema, $(rawPredictionCol), new VectorUDT)\n+    // TODO: Support casting Array[Double] and Array[Float] to Vector when FeaturesType = Vector\n+    SchemaUtils.checkColumnType(schema, $(featuresCol), featuresDataType)\n+    if (fitting) {\n+      SchemaUtils.checkNumericType(schema, $(labelCol))\n+    }\n+    val newSchema = SchemaUtils.appendColumn(schema, $(predictionCol), DoubleType,\n+      nullable = false, generatePredictionMetadata(schema))\n+    SchemaUtils.appendColumn(newSchema, $(rawPredictionCol), new VectorUDT)\n+  }\n+\n+  protected def generatePredictionMetadata(schema: StructType): Metadata = {"
+  }],
+  "prId": 12066
+}, {
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "OneVsRest does not apply here since it does not inherit from Classifier (yet).\n",
+    "commit": "449f824fa633ea5b742af8cc8a078cd1561178f5",
+    "createdAt": "2016-04-28T18:04:32Z",
+    "diffHunk": "@@ -37,8 +37,38 @@ private[spark] trait ClassifierParams\n       schema: StructType,\n       fitting: Boolean,\n       featuresDataType: DataType): StructType = {\n-    val parentSchema = super.validateAndTransformSchema(schema, fitting, featuresDataType)\n-    SchemaUtils.appendColumn(parentSchema, $(rawPredictionCol), new VectorUDT)\n+    // TODO: Support casting Array[Double] and Array[Float] to Vector when FeaturesType = Vector\n+    SchemaUtils.checkColumnType(schema, $(featuresCol), featuresDataType)\n+    if (fitting) {\n+      SchemaUtils.checkNumericType(schema, $(labelCol))\n+    }\n+    val newSchema = SchemaUtils.appendColumn(schema, $(predictionCol), DoubleType,\n+      nullable = false, generatePredictionMetadata(schema))\n+    SchemaUtils.appendColumn(newSchema, $(rawPredictionCol), new VectorUDT)\n+  }\n+\n+  protected def generatePredictionMetadata(schema: StructType): Metadata = {\n+    // The label column for base binary classifier of OneVsRest will not be retained during"
+  }, {
+    "author": {
+      "login": "yanboliang"
+    },
+    "body": "Yes. The annotation is to clarify if the current `Classifier` is act as the base binary classifier of OneVsRest estimator(rather than the OneVsRest itself), its label column will not be retained and we should check whether it exists.\n",
+    "commit": "449f824fa633ea5b742af8cc8a078cd1561178f5",
+    "createdAt": "2016-04-29T13:52:52Z",
+    "diffHunk": "@@ -37,8 +37,38 @@ private[spark] trait ClassifierParams\n       schema: StructType,\n       fitting: Boolean,\n       featuresDataType: DataType): StructType = {\n-    val parentSchema = super.validateAndTransformSchema(schema, fitting, featuresDataType)\n-    SchemaUtils.appendColumn(parentSchema, $(rawPredictionCol), new VectorUDT)\n+    // TODO: Support casting Array[Double] and Array[Float] to Vector when FeaturesType = Vector\n+    SchemaUtils.checkColumnType(schema, $(featuresCol), featuresDataType)\n+    if (fitting) {\n+      SchemaUtils.checkNumericType(schema, $(labelCol))\n+    }\n+    val newSchema = SchemaUtils.appendColumn(schema, $(predictionCol), DoubleType,\n+      nullable = false, generatePredictionMetadata(schema))\n+    SchemaUtils.appendColumn(newSchema, $(rawPredictionCol), new VectorUDT)\n+  }\n+\n+  protected def generatePredictionMetadata(schema: StructType): Metadata = {\n+    // The label column for base binary classifier of OneVsRest will not be retained during"
+  }, {
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "Right, thanks\n",
+    "commit": "449f824fa633ea5b742af8cc8a078cd1561178f5",
+    "createdAt": "2016-04-29T17:44:41Z",
+    "diffHunk": "@@ -37,8 +37,38 @@ private[spark] trait ClassifierParams\n       schema: StructType,\n       fitting: Boolean,\n       featuresDataType: DataType): StructType = {\n-    val parentSchema = super.validateAndTransformSchema(schema, fitting, featuresDataType)\n-    SchemaUtils.appendColumn(parentSchema, $(rawPredictionCol), new VectorUDT)\n+    // TODO: Support casting Array[Double] and Array[Float] to Vector when FeaturesType = Vector\n+    SchemaUtils.checkColumnType(schema, $(featuresCol), featuresDataType)\n+    if (fitting) {\n+      SchemaUtils.checkNumericType(schema, $(labelCol))\n+    }\n+    val newSchema = SchemaUtils.appendColumn(schema, $(predictionCol), DoubleType,\n+      nullable = false, generatePredictionMetadata(schema))\n+    SchemaUtils.appendColumn(newSchema, $(rawPredictionCol), new VectorUDT)\n+  }\n+\n+  protected def generatePredictionMetadata(schema: StructType): Metadata = {\n+    // The label column for base binary classifier of OneVsRest will not be retained during"
+  }],
+  "prId": 12066
+}, {
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "typo: \"either\"?\n",
+    "commit": "449f824fa633ea5b742af8cc8a078cd1561178f5",
+    "createdAt": "2016-04-28T18:04:33Z",
+    "diffHunk": "@@ -37,8 +37,38 @@ private[spark] trait ClassifierParams\n       schema: StructType,\n       fitting: Boolean,\n       featuresDataType: DataType): StructType = {\n-    val parentSchema = super.validateAndTransformSchema(schema, fitting, featuresDataType)\n-    SchemaUtils.appendColumn(parentSchema, $(rawPredictionCol), new VectorUDT)\n+    // TODO: Support casting Array[Double] and Array[Float] to Vector when FeaturesType = Vector\n+    SchemaUtils.checkColumnType(schema, $(featuresCol), featuresDataType)\n+    if (fitting) {\n+      SchemaUtils.checkNumericType(schema, $(labelCol))\n+    }\n+    val newSchema = SchemaUtils.appendColumn(schema, $(predictionCol), DoubleType,\n+      nullable = false, generatePredictionMetadata(schema))\n+    SchemaUtils.appendColumn(newSchema, $(rawPredictionCol), new VectorUDT)\n+  }\n+\n+  protected def generatePredictionMetadata(schema: StructType): Metadata = {\n+    // The label column for base binary classifier of OneVsRest will not be retained during\n+    // model transformation, so we should not handle label column metadata as well.\n+    if (schema.fieldNames.contains($(labelCol))) {\n+      // determine number of classes either from metadata if provided."
+  }],
+  "prId": 12066
+}, {
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "You could do `NominalAttribute.defaultAttr.withName($(predictionCol))` instead of Metadata.empty\n",
+    "commit": "449f824fa633ea5b742af8cc8a078cd1561178f5",
+    "createdAt": "2016-04-28T18:04:35Z",
+    "diffHunk": "@@ -37,8 +37,38 @@ private[spark] trait ClassifierParams\n       schema: StructType,\n       fitting: Boolean,\n       featuresDataType: DataType): StructType = {\n-    val parentSchema = super.validateAndTransformSchema(schema, fitting, featuresDataType)\n-    SchemaUtils.appendColumn(parentSchema, $(rawPredictionCol), new VectorUDT)\n+    // TODO: Support casting Array[Double] and Array[Float] to Vector when FeaturesType = Vector\n+    SchemaUtils.checkColumnType(schema, $(featuresCol), featuresDataType)\n+    if (fitting) {\n+      SchemaUtils.checkNumericType(schema, $(labelCol))\n+    }\n+    val newSchema = SchemaUtils.appendColumn(schema, $(predictionCol), DoubleType,\n+      nullable = false, generatePredictionMetadata(schema))\n+    SchemaUtils.appendColumn(newSchema, $(rawPredictionCol), new VectorUDT)\n+  }\n+\n+  protected def generatePredictionMetadata(schema: StructType): Metadata = {\n+    // The label column for base binary classifier of OneVsRest will not be retained during\n+    // model transformation, so we should not handle label column metadata as well.\n+    if (schema.fieldNames.contains($(labelCol))) {\n+      // determine number of classes either from metadata if provided.\n+      val labelSchema = schema($(labelCol))\n+      MetadataUtils.getNumClasses(labelSchema) match {\n+        case Some(numClasses) =>\n+          // extract label metadata from label column if present, or create a nominal attribute\n+          // to output the number of labels\n+          val labelAttribute = Attribute.fromStructField(labelSchema) match {\n+            case _: NumericAttribute | UnresolvedAttribute =>\n+              NominalAttribute.defaultAttr.withName($(predictionCol)).withNumValues(numClasses)\n+            case attr: Attribute => attr\n+          }\n+          labelAttribute.toMetadata()\n+        case None =>\n+          Metadata.empty"
+  }],
+  "prId": 12066
+}, {
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "Here, you could pass in numClasses, which is now available from the model.  generatePredictionMetadata could take an optional numClasses argument.\n",
+    "commit": "449f824fa633ea5b742af8cc8a078cd1561178f5",
+    "createdAt": "2016-04-28T18:04:37Z",
+    "diffHunk": "@@ -62,6 +92,14 @@ abstract class Classifier[\n   /** @group setParam */\n   def setRawPredictionCol(value: String): E = set(rawPredictionCol, value).asInstanceOf[E]\n \n+  override def fit(dataset: Dataset[_]): M = {\n+    // This handles a few items such as schema validation.\n+    // Developers only need to implement train().\n+    transformSchema(dataset.schema, logging = true)\n+    copyValues(train(dataset).setParent(this))\n+      .setPredictionMetadata(generatePredictionMetadata(dataset.schema))"
+  }, {
+    "author": {
+      "login": "yanboliang"
+    },
+    "body": "It looks like weird to set `predictionMetadata` which is a member variable of the model object with another member variable(`numClasses`) of this object. \nThink more, `generatePredictionMetadata` usually was called by `validateAndTransformSchema`, looking at the API:\n\n```\noverride protected def validateAndTransformSchema(\n      schema: StructType,\n      fitting: Boolean,\n      featuresDataType: DataType): StructType = {\n   ......generatePredictionMetadata()...\n  }\n```\n\nIt transform the old schema to the new one. It's also strange that we pass in an argument `numClasses`, or whether we have possibility to add other metadata and also passed in as arguments in future? I think this should be further defined and it has exceed the scope of this PR. Let's do it in a separate one? I'm open to hear your thoughts. Thanks.\n",
+    "commit": "449f824fa633ea5b742af8cc8a078cd1561178f5",
+    "createdAt": "2016-04-29T13:45:57Z",
+    "diffHunk": "@@ -62,6 +92,14 @@ abstract class Classifier[\n   /** @group setParam */\n   def setRawPredictionCol(value: String): E = set(rawPredictionCol, value).asInstanceOf[E]\n \n+  override def fit(dataset: Dataset[_]): M = {\n+    // This handles a few items such as schema validation.\n+    // Developers only need to implement train().\n+    transformSchema(dataset.schema, logging = true)\n+    copyValues(train(dataset).setParent(this))\n+      .setPredictionMetadata(generatePredictionMetadata(dataset.schema))"
+  }, {
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "The scenario I'd like to address is the following:\n- Training data has no metadata for label column\n- Classifier.transformSchema should make a best-effort at adding metadata.  In this case, it will note the predictionCol is a Nominal value and set its name.\n- During training, the algorithm identifies the number of classes from the data.\n- The ClassificationModel knows the number of classes, so it should set that in the transform and transformSchema calls.\n  This happens with NaiveBayes, for example.\n\nAre you referring to the fact that ClassificationModel.transformSchema calls ClassifierParams.validateAndTransformSchema, and the validateAndTransformSchema method does not take numClasses as an argument?  We can modify validateAndTransformSchema to take an optional numClasses argument.\n\nvalidateAndTransformSchema is technically a public API (unfortunately), so we could:\n- deprecate the current validateAndTransformSchema\n- make a new copy which takes the numClasses argument.  This copy could be made `private[classification]`.\n- switch all uses to the new copy\n\nI do think this work is in the scope of this PR; I don't see much benefit to adding metadata if we don't make a best-effort attempt, and I don't think it will be too much extra code.\n",
+    "commit": "449f824fa633ea5b742af8cc8a078cd1561178f5",
+    "createdAt": "2016-04-29T17:54:21Z",
+    "diffHunk": "@@ -62,6 +92,14 @@ abstract class Classifier[\n   /** @group setParam */\n   def setRawPredictionCol(value: String): E = set(rawPredictionCol, value).asInstanceOf[E]\n \n+  override def fit(dataset: Dataset[_]): M = {\n+    // This handles a few items such as schema validation.\n+    // Developers only need to implement train().\n+    transformSchema(dataset.schema, logging = true)\n+    copyValues(train(dataset).setParent(this))\n+      .setPredictionMetadata(generatePredictionMetadata(dataset.schema))"
+  }, {
+    "author": {
+      "login": "yanboliang"
+    },
+    "body": "Make sense, I will update this PR soon.\n",
+    "commit": "449f824fa633ea5b742af8cc8a078cd1561178f5",
+    "createdAt": "2016-04-30T04:40:28Z",
+    "diffHunk": "@@ -62,6 +92,14 @@ abstract class Classifier[\n   /** @group setParam */\n   def setRawPredictionCol(value: String): E = set(rawPredictionCol, value).asInstanceOf[E]\n \n+  override def fit(dataset: Dataset[_]): M = {\n+    // This handles a few items such as schema validation.\n+    // Developers only need to implement train().\n+    transformSchema(dataset.schema, logging = true)\n+    copyValues(train(dataset).setParent(this))\n+      .setPredictionMetadata(generatePredictionMetadata(dataset.schema))"
+  }],
+  "prId": 12066
+}, {
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "Set `predictionMetadata.withName(getPredictionCol)` here in case user updated predictionCol name.\n",
+    "commit": "449f824fa633ea5b742af8cc8a078cd1561178f5",
+    "createdAt": "2016-04-28T18:04:38Z",
+    "diffHunk": "@@ -116,22 +165,7 @@ abstract class ClassificationModel[FeaturesType, M <: ClassificationModel[Featur\n         }\n         predictUDF(col(getFeaturesCol))\n       }\n-      // The label column for base binary classifier of OneVsRest will not be retained during\n-      // model transformation, so we should not handle label column metadata as well.\n-      if (dataset.schema.fieldNames.contains($(labelCol))) {\n-        // determine number of classes either from metadata if provided.\n-        val labelSchema = dataset.schema($(labelCol))\n-        // extract label metadata from label column if present, or create a nominal attribute\n-        // to output the number of labels\n-        val labelAttribute = Attribute.fromStructField(labelSchema) match {\n-          case _: NumericAttribute | UnresolvedAttribute =>\n-            NominalAttribute.defaultAttr.withName(\"label\").withNumValues(numClasses)\n-          case attr: Attribute => attr\n-        }\n-        outputData = outputData.withColumn(getPredictionCol, predUDF, labelAttribute.toMetadata)\n-      } else {\n-        outputData = outputData.withColumn(getPredictionCol, predUDF)\n-      }\n+      outputData = outputData.withColumn(getPredictionCol, predUDF, predictionMetadata)"
+  }],
+  "prId": 12066
+}, {
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "set `attr.withName(getPredictionCol)`\n",
+    "commit": "449f824fa633ea5b742af8cc8a078cd1561178f5",
+    "createdAt": "2016-04-28T18:05:35Z",
+    "diffHunk": "@@ -36,8 +37,38 @@ private[spark] trait ClassifierParams\n       schema: StructType,\n       fitting: Boolean,\n       featuresDataType: DataType): StructType = {\n-    val parentSchema = super.validateAndTransformSchema(schema, fitting, featuresDataType)\n-    SchemaUtils.appendColumn(parentSchema, $(rawPredictionCol), new VectorUDT)\n+    // TODO: Support casting Array[Double] and Array[Float] to Vector when FeaturesType = Vector\n+    SchemaUtils.checkColumnType(schema, $(featuresCol), featuresDataType)\n+    if (fitting) {\n+      SchemaUtils.checkNumericType(schema, $(labelCol))\n+    }\n+    val newSchema = SchemaUtils.appendColumn(schema, $(predictionCol), DoubleType,\n+      nullable = false, generatePredictionMetadata(schema))\n+    SchemaUtils.appendColumn(newSchema, $(rawPredictionCol), new VectorUDT)\n+  }\n+\n+  protected def generatePredictionMetadata(schema: StructType): Metadata = {\n+    // The label column for base binary classifier of OneVsRest will not be retained during\n+    // model transformation, so we should not handle label column metadata as well.\n+    if (schema.fieldNames.contains($(labelCol))) {\n+      // determine number of classes either from metadata if provided.\n+      val labelSchema = schema($(labelCol))\n+      MetadataUtils.getNumClasses(labelSchema) match {\n+        case Some(numClasses) =>\n+          // extract label metadata from label column if present, or create a nominal attribute\n+          // to output the number of labels\n+          val labelAttribute = Attribute.fromStructField(labelSchema) match {\n+            case _: NumericAttribute | UnresolvedAttribute =>\n+              NominalAttribute.defaultAttr.withName($(predictionCol)).withNumValues(numClasses)\n+            case attr: Attribute => attr"
+  }],
+  "prId": 12066
+}, {
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "Set `predictionMetadata.withName(getPredictionCol)`\n",
+    "commit": "449f824fa633ea5b742af8cc8a078cd1561178f5",
+    "createdAt": "2016-04-29T17:59:03Z",
+    "diffHunk": "@@ -179,7 +230,7 @@ abstract class ClassificationModel[FeaturesType, M <: ClassificationModel[Featur\n         }\n         predictUDF(col(getFeaturesCol))\n       }\n-      outputData = outputData.withColumn(getPredictionCol, predUDF)\n+      outputData = outputData.withColumn(getPredictionCol, predUDF, predictionMetadata)",
+    "line": 135
+  }, {
+    "author": {
+      "login": "yanboliang"
+    },
+    "body": "The type of `predictionMetadata` is `Metadata` rather than `Attribute`, so we can not use `withName` method. Actually `predictionMetadata` has been set name using `getPredictionCol` in `generatePredictionMetadata`.\n",
+    "commit": "449f824fa633ea5b742af8cc8a078cd1561178f5",
+    "createdAt": "2016-05-03T13:17:35Z",
+    "diffHunk": "@@ -179,7 +230,7 @@ abstract class ClassificationModel[FeaturesType, M <: ClassificationModel[Featur\n         }\n         predictUDF(col(getFeaturesCol))\n       }\n-      outputData = outputData.withColumn(getPredictionCol, predUDF)\n+      outputData = outputData.withColumn(getPredictionCol, predUDF, predictionMetadata)",
+    "line": 135
+  }, {
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "The problem is that the name may be different.  transform can be given a new output column name, so we may need to update the name\n",
+    "commit": "449f824fa633ea5b742af8cc8a078cd1561178f5",
+    "createdAt": "2016-05-16T23:02:23Z",
+    "diffHunk": "@@ -179,7 +230,7 @@ abstract class ClassificationModel[FeaturesType, M <: ClassificationModel[Featur\n         }\n         predictUDF(col(getFeaturesCol))\n       }\n-      outputData = outputData.withColumn(getPredictionCol, predUDF)\n+      outputData = outputData.withColumn(getPredictionCol, predUDF, predictionMetadata)",
+    "line": 135
+  }],
+  "prId": 12066
+}]

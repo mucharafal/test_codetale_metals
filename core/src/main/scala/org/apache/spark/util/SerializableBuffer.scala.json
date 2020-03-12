@@ -1,0 +1,69 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "Super-minor nit, but there should be an extra newline before the `com.*` import group here.\n",
+    "commit": "08c05d19104f5dbc3200cf217d74deb27e74b525",
+    "createdAt": "2015-05-22T21:36:05Z",
+    "diffHunk": "@@ -20,13 +20,16 @@ package org.apache.spark.util\n import java.io.{EOFException, IOException, ObjectInputStream, ObjectOutputStream}\n import java.nio.ByteBuffer\n import java.nio.channels.Channels\n+import com.esotericsoftware.kryo.{Kryo, KryoSerializable}"
+  }],
+  "prId": 6361
+}, {
+  "comments": [{
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "Do we need to register this with Kryo anywhere?\n",
+    "commit": "08c05d19104f5dbc3200cf217d74deb27e74b525",
+    "createdAt": "2015-06-01T05:57:19Z",
+    "diffHunk": "@@ -21,12 +21,16 @@ import java.io.{EOFException, IOException, ObjectInputStream, ObjectOutputStream\n import java.nio.ByteBuffer\n import java.nio.channels.Channels\n \n+import com.esotericsoftware.kryo.{Kryo, KryoSerializable}\n+import com.esotericsoftware.kryo.io.{Input, Output}\n+\n /**\n  * A wrapper around a java.nio.ByteBuffer that is serializable through Java serialization, to make\n  * it easier to pass ByteBuffers in case class messages.\n  */\n private[spark]\n-class SerializableBuffer(@transient var buffer: ByteBuffer) extends Serializable {\n+class SerializableBuffer(@transient var buffer: ByteBuffer)\n+  extends Serializable with KryoSerializable {",
+    "line": 14
+  }, {
+    "author": {
+      "login": "coolfrood"
+    },
+    "body": "This is not necessary because Kryo will use its own serialization by default.  However, registering with Kryo saves a few bytes by not requiring the full class name to be put in. I'll add it to the list of registered classes.\n",
+    "commit": "08c05d19104f5dbc3200cf217d74deb27e74b525",
+    "createdAt": "2015-06-01T15:30:58Z",
+    "diffHunk": "@@ -21,12 +21,16 @@ import java.io.{EOFException, IOException, ObjectInputStream, ObjectOutputStream\n import java.nio.ByteBuffer\n import java.nio.channels.Channels\n \n+import com.esotericsoftware.kryo.{Kryo, KryoSerializable}\n+import com.esotericsoftware.kryo.io.{Input, Output}\n+\n /**\n  * A wrapper around a java.nio.ByteBuffer that is serializable through Java serialization, to make\n  * it easier to pass ByteBuffers in case class messages.\n  */\n private[spark]\n-class SerializableBuffer(@transient var buffer: ByteBuffer) extends Serializable {\n+class SerializableBuffer(@transient var buffer: ByteBuffer)\n+  extends Serializable with KryoSerializable {",
+    "line": 14
+  }, {
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "I think that one gotcha is that users can configure Kryo to require that classes are registered and throw an error if they're not.\n\nIt might be nice to try running some of the basic Kryo jobs with that setting enabled (I think it's called something like `registrationRequired`, if you want to grep for that).\n",
+    "commit": "08c05d19104f5dbc3200cf217d74deb27e74b525",
+    "createdAt": "2015-06-01T15:43:41Z",
+    "diffHunk": "@@ -21,12 +21,16 @@ import java.io.{EOFException, IOException, ObjectInputStream, ObjectOutputStream\n import java.nio.ByteBuffer\n import java.nio.channels.Channels\n \n+import com.esotericsoftware.kryo.{Kryo, KryoSerializable}\n+import com.esotericsoftware.kryo.io.{Input, Output}\n+\n /**\n  * A wrapper around a java.nio.ByteBuffer that is serializable through Java serialization, to make\n  * it easier to pass ByteBuffers in case class messages.\n  */\n private[spark]\n-class SerializableBuffer(@transient var buffer: ByteBuffer) extends Serializable {\n+class SerializableBuffer(@transient var buffer: ByteBuffer)\n+  extends Serializable with KryoSerializable {",
+    "line": 14
+  }, {
+    "author": {
+      "login": "markhamstra"
+    },
+    "body": "`spark.kryo.registrationRequired` -- and it is important to get this right, since registered vs. unregistered can make a large difference in the size of users' serialized classes.\n",
+    "commit": "08c05d19104f5dbc3200cf217d74deb27e74b525",
+    "createdAt": "2015-06-01T16:23:22Z",
+    "diffHunk": "@@ -21,12 +21,16 @@ import java.io.{EOFException, IOException, ObjectInputStream, ObjectOutputStream\n import java.nio.ByteBuffer\n import java.nio.channels.Channels\n \n+import com.esotericsoftware.kryo.{Kryo, KryoSerializable}\n+import com.esotericsoftware.kryo.io.{Input, Output}\n+\n /**\n  * A wrapper around a java.nio.ByteBuffer that is serializable through Java serialization, to make\n  * it easier to pass ByteBuffers in case class messages.\n  */\n private[spark]\n-class SerializableBuffer(@transient var buffer: ByteBuffer) extends Serializable {\n+class SerializableBuffer(@transient var buffer: ByteBuffer)\n+  extends Serializable with KryoSerializable {",
+    "line": 14
+  }, {
+    "author": {
+      "login": "coolfrood"
+    },
+    "body": "I see.  So it is important to make sure that anything that Spark serializes with kryo internally is registered with it?\n",
+    "commit": "08c05d19104f5dbc3200cf217d74deb27e74b525",
+    "createdAt": "2015-06-01T16:51:49Z",
+    "diffHunk": "@@ -21,12 +21,16 @@ import java.io.{EOFException, IOException, ObjectInputStream, ObjectOutputStream\n import java.nio.ByteBuffer\n import java.nio.channels.Channels\n \n+import com.esotericsoftware.kryo.{Kryo, KryoSerializable}\n+import com.esotericsoftware.kryo.io.{Input, Output}\n+\n /**\n  * A wrapper around a java.nio.ByteBuffer that is serializable through Java serialization, to make\n  * it easier to pass ByteBuffers in case class messages.\n  */\n private[spark]\n-class SerializableBuffer(@transient var buffer: ByteBuffer) extends Serializable {\n+class SerializableBuffer(@transient var buffer: ByteBuffer)\n+  extends Serializable with KryoSerializable {",
+    "line": 14
+  }, {
+    "author": {
+      "login": "squito"
+    },
+    "body": "yes, see eg. the test for registration of HighlyCompressedMapStatus in `KryoSerializerSuite`.\n",
+    "commit": "08c05d19104f5dbc3200cf217d74deb27e74b525",
+    "createdAt": "2015-06-01T17:38:47Z",
+    "diffHunk": "@@ -21,12 +21,16 @@ import java.io.{EOFException, IOException, ObjectInputStream, ObjectOutputStream\n import java.nio.ByteBuffer\n import java.nio.channels.Channels\n \n+import com.esotericsoftware.kryo.{Kryo, KryoSerializable}\n+import com.esotericsoftware.kryo.io.{Input, Output}\n+\n /**\n  * A wrapper around a java.nio.ByteBuffer that is serializable through Java serialization, to make\n  * it easier to pass ByteBuffers in case class messages.\n  */\n private[spark]\n-class SerializableBuffer(@transient var buffer: ByteBuffer) extends Serializable {\n+class SerializableBuffer(@transient var buffer: ByteBuffer)\n+  extends Serializable with KryoSerializable {",
+    "line": 14
+  }],
+  "prId": 6361
+}]

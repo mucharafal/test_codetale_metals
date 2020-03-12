@@ -1,0 +1,23 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "Can we really avoid `AttributeReference(name, _, _, _)` pattern per https://github.com/databricks/scala-style-guide#pattern-matching?",
+    "commit": "8d822eea805e1b2dc40b866ca8ac4893e53ad51b",
+    "createdAt": "2018-08-13T08:17:25Z",
+    "diffHunk": "@@ -0,0 +1,56 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.execution\n+\n+import org.apache.spark.sql.catalyst.expressions._\n+import org.apache.spark.sql.types._\n+\n+/**\n+ * A Scala extractor that projects an expression over a given schema. Data types,\n+ * field indexes and field counts of complex type extractors and attributes\n+ * are adjusted to fit the schema. All other expressions are left as-is. This\n+ * class is motivated by columnar nested schema pruning.\n+ */\n+private[execution] case class ProjectionOverSchema(schema: StructType) {\n+  private val fieldNames = schema.fieldNames.toSet\n+\n+  def unapply(expr: Expression): Option[Expression] = getProjection(expr)\n+\n+  private def getProjection(expr: Expression): Option[Expression] =\n+    expr match {\n+      case a @ AttributeReference(name, _, _, _) if fieldNames.contains(name) =>"
+  }],
+  "prId": 21889
+}, {
+  "comments": [{
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "For instance, these `, _, _, _), _, _,` looks excessive.",
+    "commit": "8d822eea805e1b2dc40b866ca8ac4893e53ad51b",
+    "createdAt": "2018-08-13T08:18:12Z",
+    "diffHunk": "@@ -0,0 +1,56 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.execution\n+\n+import org.apache.spark.sql.catalyst.expressions._\n+import org.apache.spark.sql.types._\n+\n+/**\n+ * A Scala extractor that projects an expression over a given schema. Data types,\n+ * field indexes and field counts of complex type extractors and attributes\n+ * are adjusted to fit the schema. All other expressions are left as-is. This\n+ * class is motivated by columnar nested schema pruning.\n+ */\n+private[execution] case class ProjectionOverSchema(schema: StructType) {\n+  private val fieldNames = schema.fieldNames.toSet\n+\n+  def unapply(expr: Expression): Option[Expression] = getProjection(expr)\n+\n+  private def getProjection(expr: Expression): Option[Expression] =\n+    expr match {\n+      case a @ AttributeReference(name, _, _, _) if fieldNames.contains(name) =>\n+        Some(a.copy(dataType = schema(name).dataType)(a.exprId, a.qualifier))\n+      case GetArrayItem(child, arrayItemOrdinal) =>\n+        getProjection(child).map { projection => GetArrayItem(projection, arrayItemOrdinal) }\n+      case GetArrayStructFields(child, StructField(name, _, _, _), _, _, containsNull) =>"
+  }],
+  "prId": 21889
+}]

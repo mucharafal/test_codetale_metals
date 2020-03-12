@@ -1,0 +1,84 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "viirya"
+    },
+    "body": "This should be `StreamCallback.onFailure`.",
+    "commit": "6e1a05b088cabddc986e0a3d8e126095f0f7b32b",
+    "createdAt": "2019-01-11T06:44:06Z",
+    "diffHunk": "@@ -112,6 +119,13 @@ private void failOutstandingRequests(Throwable cause) {\n         logger.warn(\"ChunkReceivedCallback.onFailure throws exception\", e);\n       }\n     }\n+    for (Map.Entry<StreamChunkId, StreamCallback> entry : outstandingFetchAsStreams.entrySet()) {\n+      try {\n+        entry.getValue().onFailure(entry.getKey().toString(), cause);\n+      } catch (Exception e) {\n+        logger.warn(\"ChunkReceivedCallback.onFailure throws exception\", e);"
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "`fetchChunk` adds both `ChunkReceivedCallback` and `StreamCallback` for a chunk request. Will we trigger both two callback's `onFailure` methods here?",
+    "commit": "6e1a05b088cabddc986e0a3d8e126095f0f7b32b",
+    "createdAt": "2019-01-11T06:55:55Z",
+    "diffHunk": "@@ -112,6 +119,13 @@ private void failOutstandingRequests(Throwable cause) {\n         logger.warn(\"ChunkReceivedCallback.onFailure throws exception\", e);\n       }\n     }\n+    for (Map.Entry<StreamChunkId, StreamCallback> entry : outstandingFetchAsStreams.entrySet()) {\n+      try {\n+        entry.getValue().onFailure(entry.getKey().toString(), cause);\n+      } catch (Exception e) {\n+        logger.warn(\"ChunkReceivedCallback.onFailure throws exception\", e);"
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "These 2 callbacks are individual, we only need to take care one of them, and discard the other.",
+    "commit": "6e1a05b088cabddc986e0a3d8e126095f0f7b32b",
+    "createdAt": "2019-01-11T12:36:23Z",
+    "diffHunk": "@@ -112,6 +119,13 @@ private void failOutstandingRequests(Throwable cause) {\n         logger.warn(\"ChunkReceivedCallback.onFailure throws exception\", e);\n       }\n     }\n+    for (Map.Entry<StreamChunkId, StreamCallback> entry : outstandingFetchAsStreams.entrySet()) {\n+      try {\n+        entry.getValue().onFailure(entry.getKey().toString(), cause);\n+      } catch (Exception e) {\n+        logger.warn(\"ChunkReceivedCallback.onFailure throws exception\", e);"
+  }],
+  "prId": 23510
+}, {
+  "comments": [{
+    "author": {
+      "login": "Ngone51"
+    },
+    "body": "Also remove this `callback` from `outstandingFetchAsStreams` ?",
+    "commit": "6e1a05b088cabddc986e0a3d8e126095f0f7b32b",
+    "createdAt": "2019-01-13T15:06:56Z",
+    "diffHunk": "@@ -171,6 +186,21 @@ public void handle(ResponseMessage message) throws Exception {\n         listener.onSuccess(resp.streamChunkId.chunkIndex, resp.body());\n         resp.body().release();\n       }\n+      // The response is `ChunkFetchSuccess`. It's either because the request was a normal chunk\n+      // fetch request, or the server side is an old version that doesn't support fetch chunk as\n+      // stream. So the next line is either a no-op, or remove the callback that will never be\n+      // called later.\n+      outstandingFetchAsStreams.remove(resp.streamChunkId);\n+    } else if (message instanceof ChunkFetchStreamResponse) {\n+      ChunkFetchStreamResponse resp = (ChunkFetchStreamResponse) message;\n+      StreamCallback callback = outstandingFetchAsStreams.get(resp.streamChunkId);",
+    "line": 84
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "good catch!",
+    "commit": "6e1a05b088cabddc986e0a3d8e126095f0f7b32b",
+    "createdAt": "2019-01-14T03:38:46Z",
+    "diffHunk": "@@ -171,6 +186,21 @@ public void handle(ResponseMessage message) throws Exception {\n         listener.onSuccess(resp.streamChunkId.chunkIndex, resp.body());\n         resp.body().release();\n       }\n+      // The response is `ChunkFetchSuccess`. It's either because the request was a normal chunk\n+      // fetch request, or the server side is an old version that doesn't support fetch chunk as\n+      // stream. So the next line is either a no-op, or remove the callback that will never be\n+      // called later.\n+      outstandingFetchAsStreams.remove(resp.streamChunkId);\n+    } else if (message instanceof ChunkFetchStreamResponse) {\n+      ChunkFetchStreamResponse resp = (ChunkFetchStreamResponse) message;\n+      StreamCallback callback = outstandingFetchAsStreams.get(resp.streamChunkId);",
+    "line": 84
+  }],
+  "prId": 23510
+}, {
+  "comments": [{
+    "author": {
+      "login": "yucai"
+    },
+    "body": "indent？",
+    "commit": "6e1a05b088cabddc986e0a3d8e126095f0f7b32b",
+    "createdAt": "2019-01-14T08:09:52Z",
+    "diffHunk": "@@ -81,6 +77,17 @@ public void removeFetchRequest(StreamChunkId streamChunkId) {\n     outstandingFetches.remove(streamChunkId);\n   }\n \n+  public void addFetchAsStreamRequest(\n+      StreamChunkId streamChunkId,\n+      StreamCallback callback) {\n+      updateTimeOfLastRequest();"
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "Spark uses 4 space indentation for multi-line method parameters",
+    "commit": "6e1a05b088cabddc986e0a3d8e126095f0f7b32b",
+    "createdAt": "2019-01-14T10:21:40Z",
+    "diffHunk": "@@ -81,6 +77,17 @@ public void removeFetchRequest(StreamChunkId streamChunkId) {\n     outstandingFetches.remove(streamChunkId);\n   }\n \n+  public void addFetchAsStreamRequest(\n+      StreamChunkId streamChunkId,\n+      StreamCallback callback) {\n+      updateTimeOfLastRequest();"
+  }, {
+    "author": {
+      "login": "yucai"
+    },
+    "body": "I mean `updateTimeOfLastRequest();`, it is not parameters and should be 2 space indentation ?",
+    "commit": "6e1a05b088cabddc986e0a3d8e126095f0f7b32b",
+    "createdAt": "2019-01-14T11:24:04Z",
+    "diffHunk": "@@ -81,6 +77,17 @@ public void removeFetchRequest(StreamChunkId streamChunkId) {\n     outstandingFetches.remove(streamChunkId);\n   }\n \n+  public void addFetchAsStreamRequest(\n+      StreamChunkId streamChunkId,\n+      StreamCallback callback) {\n+      updateTimeOfLastRequest();"
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "ah missed this one!",
+    "commit": "6e1a05b088cabddc986e0a3d8e126095f0f7b32b",
+    "createdAt": "2019-01-14T11:40:42Z",
+    "diffHunk": "@@ -81,6 +77,17 @@ public void removeFetchRequest(StreamChunkId streamChunkId) {\n     outstandingFetches.remove(streamChunkId);\n   }\n \n+  public void addFetchAsStreamRequest(\n+      StreamChunkId streamChunkId,\n+      StreamCallback callback) {\n+      updateTimeOfLastRequest();"
+  }],
+  "prId": 23510
+}]

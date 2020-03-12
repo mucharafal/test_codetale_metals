@@ -1,0 +1,105 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "indent by 2 spaces, see the style guide: https://cwiki.apache.org/confluence/display/SPARK/Spark+Code+Style+Guide\n",
+    "commit": "2f43ff3c6d1a4a428e5cbe8f4a4e4347274fc95c",
+    "createdAt": "2015-07-02T00:42:21Z",
+    "diffHunk": "@@ -71,6 +92,27 @@ private[spark] class RDDCheckpointData[T: ClassTag](@transient rdd: RDD[T])\n     RDDCheckpointData.synchronized { cpFile }\n   }\n \n+  // Get the iterator used to write checkpoint data to HDFS\n+  def getCheckpointIterator(\n+    rddIterator: Iterator[T],\n+    context: TaskContext,\n+    partitionId: Int): Iterator[T] = {"
+  }],
+  "prId": 7021
+}, {
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "can you make this a real java doc:\n\n```\n/**\n * Wrap the given iterator in a checkpointing iterator, which checkpoints values\n * as the original iterator is consumed. This allows us to checkpoint the RDD\n * without computing it more than once (SPARK-8582).\n */\n```\n",
+    "commit": "2f43ff3c6d1a4a428e5cbe8f4a4e4347274fc95c",
+    "createdAt": "2015-07-06T19:06:20Z",
+    "diffHunk": "@@ -66,6 +88,27 @@ private[spark] class RDDCheckpointData[T: ClassTag](@transient rdd: RDD[T])\n     cpFile\n   }\n \n+  // Get the iterator used to write checkpoint data to HDFS",
+    "line": 43
+  }],
+  "prId": 7021
+}, {
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "shouldn't this read from `RDDCheckpointData.rddCheckpointDataPath`?\n",
+    "commit": "2f43ff3c6d1a4a428e5cbe8f4a4e4347274fc95c",
+    "createdAt": "2015-07-06T19:07:07Z",
+    "diffHunk": "@@ -66,6 +88,27 @@ private[spark] class RDDCheckpointData[T: ClassTag](@transient rdd: RDD[T])\n     cpFile\n   }\n \n+  // Get the iterator used to write checkpoint data to HDFS\n+  def getCheckpointIterator(\n+      rddIterator: Iterator[T],\n+      context: TaskContext,\n+      partitionId: Int): Iterator[T] = {\n+    RDDCheckpointData.synchronized {\n+      if (cpState == Initialized) {\n+        // Create the output path for the checkpoint\n+        val path = new Path(checkpointDir.get, \"rdd-\" + rddId)",
+    "line": 51
+  }, {
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "actually, the path here should just be `checkpointPath`. Right now this duplicates some code.\n",
+    "commit": "2f43ff3c6d1a4a428e5cbe8f4a4e4347274fc95c",
+    "createdAt": "2015-07-06T19:14:12Z",
+    "diffHunk": "@@ -66,6 +88,27 @@ private[spark] class RDDCheckpointData[T: ClassTag](@transient rdd: RDD[T])\n     cpFile\n   }\n \n+  // Get the iterator used to write checkpoint data to HDFS\n+  def getCheckpointIterator(\n+      rddIterator: Iterator[T],\n+      context: TaskContext,\n+      partitionId: Int): Iterator[T] = {\n+    RDDCheckpointData.synchronized {\n+      if (cpState == Initialized) {\n+        // Create the output path for the checkpoint\n+        val path = new Path(checkpointDir.get, \"rdd-\" + rddId)",
+    "line": 51
+  }],
+  "prId": 7021
+}, {
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "please make all of these private\n",
+    "commit": "2f43ff3c6d1a4a428e5cbe8f4a4e4347274fc95c",
+    "createdAt": "2015-07-06T19:10:20Z",
+    "diffHunk": "@@ -44,6 +46,26 @@ private[spark] class RDDCheckpointData[T: ClassTag](@transient rdd: RDD[T])\n \n   import CheckpointState._\n \n+  // Because SparkContext is transient in RDD, so we can't get the id and checkpointDir later.\n+  // So keep a copy of the id and checkpointDir.\n+  // The id of RDD\n+  val rddId: Int = rdd.id\n+\n+  // The path the checkpoint data will write to.\n+  val checkpointDir = rdd.context.checkpointDir\n+  @transient var checkpointPath: Path = null\n+  @transient var fs: FileSystem = null\n+  if (checkpointDir.isDefined) {\n+    checkpointPath = new Path(checkpointDir.get, \"rdd-\" + rddId)\n+    fs = checkpointPath.getFileSystem(rdd.context.hadoopConfiguration)\n+    if (!fs.mkdirs(checkpointPath)) {\n+      throw new SparkException(\"Failed to create checkpoint path \" + checkpointPath)\n+    }\n+  }\n+\n+  val broadcastedConf = rdd.context.broadcast(",
+    "line": 33
+  }],
+  "prId": 7021
+}, {
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "these don't need to be vars right? In fact, `fs`, `rddId` and `checkpointDir` don't even need to exist. You can just do\n\n```\n@transient private val checkpointPath: Path = {\n  val path = RDDCheckpointData.rddCheckpointDataPath(rdd.context, rdd.id)\n  val fs = path.getFileSystem(rdd.context.hadoopConfiguration)\n  if (!fs.mkdirs(path)) {\n    ...\n  }\n  path\n}\n```\n",
+    "commit": "2f43ff3c6d1a4a428e5cbe8f4a4e4347274fc95c",
+    "createdAt": "2015-07-06T19:15:34Z",
+    "diffHunk": "@@ -44,6 +46,26 @@ private[spark] class RDDCheckpointData[T: ClassTag](@transient rdd: RDD[T])\n \n   import CheckpointState._\n \n+  // Because SparkContext is transient in RDD, so we can't get the id and checkpointDir later.\n+  // So keep a copy of the id and checkpointDir.\n+  // The id of RDD\n+  val rddId: Int = rdd.id\n+\n+  // The path the checkpoint data will write to.\n+  val checkpointDir = rdd.context.checkpointDir\n+  @transient var checkpointPath: Path = null\n+  @transient var fs: FileSystem = null\n+  if (checkpointDir.isDefined) {\n+    checkpointPath = new Path(checkpointDir.get, \"rdd-\" + rddId)\n+    fs = checkpointPath.getFileSystem(rdd.context.hadoopConfiguration)\n+    if (!fs.mkdirs(checkpointPath)) {\n+      throw new SparkException(\"Failed to create checkpoint path \" + checkpointPath)\n+    }\n+  }",
+    "line": 31
+  }],
+  "prId": 7021
+}, {
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "Not sure if I understand this comment. How did it work before then? Even before this patch `doCheckpoint` directly calls `rdd.id`\n",
+    "commit": "2f43ff3c6d1a4a428e5cbe8f4a4e4347274fc95c",
+    "createdAt": "2015-07-06T19:17:12Z",
+    "diffHunk": "@@ -44,6 +46,26 @@ private[spark] class RDDCheckpointData[T: ClassTag](@transient rdd: RDD[T])\n \n   import CheckpointState._\n \n+  // Because SparkContext is transient in RDD, so we can't get the id and checkpointDir later.\n+  // So keep a copy of the id and checkpointDir.",
+    "line": 17
+  }],
+  "prId": 7021
+}, {
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "no need to declare another variable here? Just use `checkpointPath`\n",
+    "commit": "2f43ff3c6d1a4a428e5cbe8f4a4e4347274fc95c",
+    "createdAt": "2015-07-06T19:17:41Z",
+    "diffHunk": "@@ -82,25 +125,13 @@ private[spark] class RDDCheckpointData[T: ClassTag](@transient rdd: RDD[T])\n       }\n     }\n \n-    // Create the output path for the checkpoint\n-    val path = RDDCheckpointData.rddCheckpointDataPath(rdd.context, rdd.id).get\n-    val fs = path.getFileSystem(rdd.context.hadoopConfiguration)\n-    if (!fs.mkdirs(path)) {\n-      throw new SparkException(s\"Failed to create checkpoint path $path\")\n-    }\n-\n-    // Save to file, and reload it as an RDD\n-    val broadcastedConf = rdd.context.broadcast(\n-      new SerializableConfiguration(rdd.context.hadoopConfiguration))\n+    val path = checkpointPath",
+    "line": 81
+  }],
+  "prId": 7021
+}, {
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "The state transition here is incorrect. At this point the RDD has not been checkpointed yet. It's not safe to truncate the RDD's lineage until we drain the iterator.\n",
+    "commit": "2f43ff3c6d1a4a428e5cbe8f4a4e4347274fc95c",
+    "createdAt": "2015-07-06T23:47:49Z",
+    "diffHunk": "@@ -114,7 +145,7 @@ private[spark] class RDDCheckpointData[T: ClassTag](@transient rdd: RDD[T])\n       rdd.markCheckpointed(newRDD)   // Update the RDD's dependencies and partitions\n       cpState = Checkpointed",
+    "line": 97
+  }],
+  "prId": 7021
+}]

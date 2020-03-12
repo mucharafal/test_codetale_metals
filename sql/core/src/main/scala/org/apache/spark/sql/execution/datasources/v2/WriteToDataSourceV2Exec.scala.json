@@ -1,0 +1,22 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "mccheah"
+    },
+    "body": "I'm not sure why we have to specifically tell the writer to use append mode. Can you elaborate? I think I'm missing something. It would be simpler to remove this branch entirely if possible.",
+    "commit": "99ebc001d2563ad579e5e9a0211606cec4e396be",
+    "createdAt": "2019-05-14T01:11:51Z",
+    "diffHunk": "@@ -47,6 +51,60 @@ case class WriteToDataSourceV2(batchWrite: BatchWrite, query: LogicalPlan)\n   override def output: Seq[Attribute] = Nil\n }\n \n+/**\n+ * Physical plan node for v2 create table as select.\n+ *\n+ * A new table will be created using the schema of the query, and rows from the query are appended.\n+ * If either table creation or the append fails, the table will be deleted. This implementation does\n+ * not provide an atomic CTAS.\n+ */\n+case class CreateTableAsSelectExec(\n+    catalog: TableCatalog,\n+    ident: Identifier,\n+    partitioning: Seq[Transform],\n+    query: SparkPlan,\n+    properties: Map[String, String],\n+    writeOptions: CaseInsensitiveStringMap,\n+    ifNotExists: Boolean) extends V2TableWriteExec {\n+\n+  import org.apache.spark.sql.catalog.v2.CatalogV2Implicits.IdentifierHelper\n+\n+  override protected def doExecute(): RDD[InternalRow] = {\n+    if (catalog.tableExists(ident)) {\n+      if (ifNotExists) {\n+        return sparkContext.parallelize(Seq.empty, 1)\n+      }\n+\n+      throw new TableAlreadyExistsException(ident)\n+    }\n+\n+    Utils.tryWithSafeFinallyAndFailureCallbacks({\n+      catalog.createTable(ident, query.schema, partitioning.toArray, properties.asJava) match {\n+        case table: SupportsWrite =>\n+          val builder = table.newWriteBuilder(writeOptions)\n+              .withInputDataSchema(query.schema)\n+              .withQueryId(UUID.randomUUID().toString)\n+          val batchWrite = builder match {\n+            case supportsSaveMode: SupportsSaveMode =>\n+              supportsSaveMode.mode(SaveMode.Append).buildForBatch()",
+    "line": 58
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "I think `SupportsSaveMode` is a hack in `TableProvider` only. Seems we don't need to deal with it for `TableCatalog`. Anyway it will be removed soon.",
+    "commit": "99ebc001d2563ad579e5e9a0211606cec4e396be",
+    "createdAt": "2019-05-14T05:53:50Z",
+    "diffHunk": "@@ -47,6 +51,60 @@ case class WriteToDataSourceV2(batchWrite: BatchWrite, query: LogicalPlan)\n   override def output: Seq[Attribute] = Nil\n }\n \n+/**\n+ * Physical plan node for v2 create table as select.\n+ *\n+ * A new table will be created using the schema of the query, and rows from the query are appended.\n+ * If either table creation or the append fails, the table will be deleted. This implementation does\n+ * not provide an atomic CTAS.\n+ */\n+case class CreateTableAsSelectExec(\n+    catalog: TableCatalog,\n+    ident: Identifier,\n+    partitioning: Seq[Transform],\n+    query: SparkPlan,\n+    properties: Map[String, String],\n+    writeOptions: CaseInsensitiveStringMap,\n+    ifNotExists: Boolean) extends V2TableWriteExec {\n+\n+  import org.apache.spark.sql.catalog.v2.CatalogV2Implicits.IdentifierHelper\n+\n+  override protected def doExecute(): RDD[InternalRow] = {\n+    if (catalog.tableExists(ident)) {\n+      if (ifNotExists) {\n+        return sparkContext.parallelize(Seq.empty, 1)\n+      }\n+\n+      throw new TableAlreadyExistsException(ident)\n+    }\n+\n+    Utils.tryWithSafeFinallyAndFailureCallbacks({\n+      catalog.createTable(ident, query.schema, partitioning.toArray, properties.asJava) match {\n+        case table: SupportsWrite =>\n+          val builder = table.newWriteBuilder(writeOptions)\n+              .withInputDataSchema(query.schema)\n+              .withQueryId(UUID.randomUUID().toString)\n+          val batchWrite = builder match {\n+            case supportsSaveMode: SupportsSaveMode =>\n+              supportsSaveMode.mode(SaveMode.Append).buildForBatch()",
+    "line": 58
+  }],
+  "prId": 24570
+}]

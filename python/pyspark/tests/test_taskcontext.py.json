@@ -1,0 +1,128 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "ConeyLiu"
+    },
+    "body": "I have passed tests in python3.6. However, it failed in python2.7. It seems that the python workers aren't reused even the config is set in python2.7.\r\nI tested here with:\r\n```python\r\ndef f(iterator):\r\n  yield os.getpid()\r\n\r\nnormal_result = rdd.mapPartitions(f).collect()\r\nverify(normal_result)   # it passed\r\n\r\nnormal_result = rdd.mapPartitions(f).collect()\r\nnormal_result = rdd.mapPartitions(f).collect()\r\nnormal_result = rdd.mapPartitions(f).collect()\r\nverify(normal_result)  # it failed with pids have changed\r\n``` \r\n\r\nHi @srowen, would you know some background about this? Thanks a lot.",
+    "commit": "a3d14c83de89775e5bba7f5a94cc2101dacbe9bb",
+    "createdAt": "2019-10-25T01:49:59Z",
+    "diffHunk": "@@ -181,6 +224,40 @@ def context_barrier(x):\n         for pid in pids:\n             self.assertTrue(pid in worker_pids)\n \n+    def test_task_context_correct_with_python_worker_reuse(self):\n+        \"\"\"Verify the task context correct when reused python worker\"\"\"\n+        # start a normal job first to start all workers and get all worker pids\n+        worker_pids = self.sc.parallelize(range(2), 2).map(lambda x: os.getpid()).collect()\n+        # the worker will reuse in this barrier job\n+        rdd = self.sc.parallelize(range(10), 2)\n+\n+        def context(iterator):\n+            tp = TaskContext.get().partitionId()\n+            try:\n+                bp = BarrierTaskContext.get().partitionId()\n+            except RuntimeError:\n+                bp = -1\n+\n+            yield (tp, bp, os.getpid())\n+\n+        def verify(result, task_context_target, barrier_context_target):\n+            tps = list(map(lambda x: x[0], result))\n+            bps = list(map(lambda x: x[1], result))\n+            pids = list(map(lambda x: x[2], result))\n+            self.assertTrue(tps == task_context_target)\n+            self.assertTrue(bps == barrier_context_target)\n+            for pid in pids:\n+                self.assertTrue(pid in worker_pids)\n+        # normal stage after normal stage\n+        normal_result = rdd.mapPartitions(context).collect()\n+        verify(normal_result, [0, 1], [-1, -1])\n+        # barrier stage after normal stage\n+        barrier_result = rdd.barrier().mapPartitions(context).collect()",
+    "line": 89
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "If you're target 3.0 for this change, that's fine. We don't support 2.x in Spark 3.0. I have no idea otherwise.",
+    "commit": "a3d14c83de89775e5bba7f5a94cc2101dacbe9bb",
+    "createdAt": "2019-10-25T02:49:14Z",
+    "diffHunk": "@@ -181,6 +224,40 @@ def context_barrier(x):\n         for pid in pids:\n             self.assertTrue(pid in worker_pids)\n \n+    def test_task_context_correct_with_python_worker_reuse(self):\n+        \"\"\"Verify the task context correct when reused python worker\"\"\"\n+        # start a normal job first to start all workers and get all worker pids\n+        worker_pids = self.sc.parallelize(range(2), 2).map(lambda x: os.getpid()).collect()\n+        # the worker will reuse in this barrier job\n+        rdd = self.sc.parallelize(range(10), 2)\n+\n+        def context(iterator):\n+            tp = TaskContext.get().partitionId()\n+            try:\n+                bp = BarrierTaskContext.get().partitionId()\n+            except RuntimeError:\n+                bp = -1\n+\n+            yield (tp, bp, os.getpid())\n+\n+        def verify(result, task_context_target, barrier_context_target):\n+            tps = list(map(lambda x: x[0], result))\n+            bps = list(map(lambda x: x[1], result))\n+            pids = list(map(lambda x: x[2], result))\n+            self.assertTrue(tps == task_context_target)\n+            self.assertTrue(bps == barrier_context_target)\n+            for pid in pids:\n+                self.assertTrue(pid in worker_pids)\n+        # normal stage after normal stage\n+        normal_result = rdd.mapPartitions(context).collect()\n+        verify(normal_result, [0, 1], [-1, -1])\n+        # barrier stage after normal stage\n+        barrier_result = rdd.barrier().mapPartitions(context).collect()",
+    "line": 89
+  }, {
+    "author": {
+      "login": "ConeyLiu"
+    },
+    "body": "OK, thanks a lot.",
+    "commit": "a3d14c83de89775e5bba7f5a94cc2101dacbe9bb",
+    "createdAt": "2019-10-25T03:08:49Z",
+    "diffHunk": "@@ -181,6 +224,40 @@ def context_barrier(x):\n         for pid in pids:\n             self.assertTrue(pid in worker_pids)\n \n+    def test_task_context_correct_with_python_worker_reuse(self):\n+        \"\"\"Verify the task context correct when reused python worker\"\"\"\n+        # start a normal job first to start all workers and get all worker pids\n+        worker_pids = self.sc.parallelize(range(2), 2).map(lambda x: os.getpid()).collect()\n+        # the worker will reuse in this barrier job\n+        rdd = self.sc.parallelize(range(10), 2)\n+\n+        def context(iterator):\n+            tp = TaskContext.get().partitionId()\n+            try:\n+                bp = BarrierTaskContext.get().partitionId()\n+            except RuntimeError:\n+                bp = -1\n+\n+            yield (tp, bp, os.getpid())\n+\n+        def verify(result, task_context_target, barrier_context_target):\n+            tps = list(map(lambda x: x[0], result))\n+            bps = list(map(lambda x: x[1], result))\n+            pids = list(map(lambda x: x[2], result))\n+            self.assertTrue(tps == task_context_target)\n+            self.assertTrue(bps == barrier_context_target)\n+            for pid in pids:\n+                self.assertTrue(pid in worker_pids)\n+        # normal stage after normal stage\n+        normal_result = rdd.mapPartitions(context).collect()\n+        verify(normal_result, [0, 1], [-1, -1])\n+        # barrier stage after normal stage\n+        barrier_result = rdd.barrier().mapPartitions(context).collect()",
+    "line": 89
+  }],
+  "prId": 26239
+}, {
+  "comments": [{
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "nit: I would remove this",
+    "commit": "a3d14c83de89775e5bba7f5a94cc2101dacbe9bb",
+    "createdAt": "2019-10-28T10:15:01Z",
+    "diffHunk": "@@ -214,6 +294,7 @@ def tearDown(self):\n         os.unlink(self.tempFile.name)\n         self.sc.stop()\n \n+"
+  }, {
+    "author": {
+      "login": "ConeyLiu"
+    },
+    "body": "updated",
+    "commit": "a3d14c83de89775e5bba7f5a94cc2101dacbe9bb",
+    "createdAt": "2019-10-29T04:21:53Z",
+    "diffHunk": "@@ -214,6 +294,7 @@ def tearDown(self):\n         os.unlink(self.tempFile.name)\n         self.sc.stop()\n \n+"
+  }],
+  "prId": 26239
+}, {
+  "comments": [{
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "`[[tps], [bps], [pids]] = result`",
+    "commit": "a3d14c83de89775e5bba7f5a94cc2101dacbe9bb",
+    "createdAt": "2019-10-31T01:50:55Z",
+    "diffHunk": "@@ -181,6 +227,40 @@ def context_barrier(x):\n         for pid in pids:\n             self.assertTrue(pid in worker_pids)\n \n+    def test_task_context_correct_with_python_worker_reuse(self):\n+        \"\"\"Verify the task context correct when reused python worker\"\"\"\n+        # start a normal job first to start all workers and get all worker pids\n+        worker_pids = self.sc.parallelize(xrange(2), 2).map(lambda x: os.getpid()).collect()\n+        # the worker will reuse in this barrier job\n+        rdd = self.sc.parallelize(xrange(10), 2)\n+\n+        def context(iterator):\n+            tp = TaskContext.get().partitionId()\n+            try:\n+                bp = BarrierTaskContext.get().partitionId()\n+            except Exception:\n+                bp = -1\n+\n+            yield (tp, bp, os.getpid())\n+\n+        def verify(result, task_context_target, barrier_context_target):\n+            tps = list(map(lambda x: x[0], result))\n+            bps = list(map(lambda x: x[1], result))\n+            pids = list(map(lambda x: x[2], result))"
+  }, {
+    "author": {
+      "login": "ConeyLiu"
+    },
+    "body": "result is a list(tuple), maybe  `tps, bps, pids = zip(*result)` if you think current too noise.",
+    "commit": "a3d14c83de89775e5bba7f5a94cc2101dacbe9bb",
+    "createdAt": "2019-10-31T02:16:40Z",
+    "diffHunk": "@@ -181,6 +227,40 @@ def context_barrier(x):\n         for pid in pids:\n             self.assertTrue(pid in worker_pids)\n \n+    def test_task_context_correct_with_python_worker_reuse(self):\n+        \"\"\"Verify the task context correct when reused python worker\"\"\"\n+        # start a normal job first to start all workers and get all worker pids\n+        worker_pids = self.sc.parallelize(xrange(2), 2).map(lambda x: os.getpid()).collect()\n+        # the worker will reuse in this barrier job\n+        rdd = self.sc.parallelize(xrange(10), 2)\n+\n+        def context(iterator):\n+            tp = TaskContext.get().partitionId()\n+            try:\n+                bp = BarrierTaskContext.get().partitionId()\n+            except Exception:\n+                bp = -1\n+\n+            yield (tp, bp, os.getpid())\n+\n+        def verify(result, task_context_target, barrier_context_target):\n+            tps = list(map(lambda x: x[0], result))\n+            bps = list(map(lambda x: x[1], result))\n+            pids = list(map(lambda x: x[2], result))"
+  }, {
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "Yeah, either way should be fine. ",
+    "commit": "a3d14c83de89775e5bba7f5a94cc2101dacbe9bb",
+    "createdAt": "2019-10-31T02:23:10Z",
+    "diffHunk": "@@ -181,6 +227,40 @@ def context_barrier(x):\n         for pid in pids:\n             self.assertTrue(pid in worker_pids)\n \n+    def test_task_context_correct_with_python_worker_reuse(self):\n+        \"\"\"Verify the task context correct when reused python worker\"\"\"\n+        # start a normal job first to start all workers and get all worker pids\n+        worker_pids = self.sc.parallelize(xrange(2), 2).map(lambda x: os.getpid()).collect()\n+        # the worker will reuse in this barrier job\n+        rdd = self.sc.parallelize(xrange(10), 2)\n+\n+        def context(iterator):\n+            tp = TaskContext.get().partitionId()\n+            try:\n+                bp = BarrierTaskContext.get().partitionId()\n+            except Exception:\n+                bp = -1\n+\n+            yield (tp, bp, os.getpid())\n+\n+        def verify(result, task_context_target, barrier_context_target):\n+            tps = list(map(lambda x: x[0], result))\n+            bps = list(map(lambda x: x[1], result))\n+            pids = list(map(lambda x: x[2], result))"
+  }, {
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "BTW, iterable unpacking works with list(tuple) too",
+    "commit": "a3d14c83de89775e5bba7f5a94cc2101dacbe9bb",
+    "createdAt": "2019-10-31T02:24:40Z",
+    "diffHunk": "@@ -181,6 +227,40 @@ def context_barrier(x):\n         for pid in pids:\n             self.assertTrue(pid in worker_pids)\n \n+    def test_task_context_correct_with_python_worker_reuse(self):\n+        \"\"\"Verify the task context correct when reused python worker\"\"\"\n+        # start a normal job first to start all workers and get all worker pids\n+        worker_pids = self.sc.parallelize(xrange(2), 2).map(lambda x: os.getpid()).collect()\n+        # the worker will reuse in this barrier job\n+        rdd = self.sc.parallelize(xrange(10), 2)\n+\n+        def context(iterator):\n+            tp = TaskContext.get().partitionId()\n+            try:\n+                bp = BarrierTaskContext.get().partitionId()\n+            except Exception:\n+                bp = -1\n+\n+            yield (tp, bp, os.getpid())\n+\n+        def verify(result, task_context_target, barrier_context_target):\n+            tps = list(map(lambda x: x[0], result))\n+            bps = list(map(lambda x: x[1], result))\n+            pids = list(map(lambda x: x[2], result))"
+  }, {
+    "author": {
+      "login": "ConeyLiu"
+    },
+    "body": "Not very familiar with python, I tried but got failed.\r\n```\r\nIn [15]: result = [(1, 2, 3), (4, 5, 6)]                                                                                                                                                \r\n\r\nIn [16]: [[a], [b], [c]] = result                                                                                                                                                       \r\n---------------------------------------------------------------------------\r\nValueError                                Traceback (most recent call last)\r\n<ipython-input-16-20ce771eb68a> in <module>\r\n----> 1 [[a], [b], [c]] = result\r\n\r\nValueError: not enough values to unpack (expected 3, got 2)\r\n```",
+    "commit": "a3d14c83de89775e5bba7f5a94cc2101dacbe9bb",
+    "createdAt": "2019-10-31T02:32:59Z",
+    "diffHunk": "@@ -181,6 +227,40 @@ def context_barrier(x):\n         for pid in pids:\n             self.assertTrue(pid in worker_pids)\n \n+    def test_task_context_correct_with_python_worker_reuse(self):\n+        \"\"\"Verify the task context correct when reused python worker\"\"\"\n+        # start a normal job first to start all workers and get all worker pids\n+        worker_pids = self.sc.parallelize(xrange(2), 2).map(lambda x: os.getpid()).collect()\n+        # the worker will reuse in this barrier job\n+        rdd = self.sc.parallelize(xrange(10), 2)\n+\n+        def context(iterator):\n+            tp = TaskContext.get().partitionId()\n+            try:\n+                bp = BarrierTaskContext.get().partitionId()\n+            except Exception:\n+                bp = -1\n+\n+            yield (tp, bp, os.getpid())\n+\n+        def verify(result, task_context_target, barrier_context_target):\n+            tps = list(map(lambda x: x[0], result))\n+            bps = list(map(lambda x: x[1], result))\n+            pids = list(map(lambda x: x[2], result))"
+  }],
+  "prId": 26239
+}, {
+  "comments": [{
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "I think we don't need this method.",
+    "commit": "a3d14c83de89775e5bba7f5a94cc2101dacbe9bb",
+    "createdAt": "2019-10-31T01:51:39Z",
+    "diffHunk": "@@ -181,6 +227,40 @@ def context_barrier(x):\n         for pid in pids:\n             self.assertTrue(pid in worker_pids)\n \n+    def test_task_context_correct_with_python_worker_reuse(self):\n+        \"\"\"Verify the task context correct when reused python worker\"\"\"\n+        # start a normal job first to start all workers and get all worker pids\n+        worker_pids = self.sc.parallelize(xrange(2), 2).map(lambda x: os.getpid()).collect()\n+        # the worker will reuse in this barrier job\n+        rdd = self.sc.parallelize(xrange(10), 2)\n+\n+        def context(iterator):\n+            tp = TaskContext.get().partitionId()\n+            try:\n+                bp = BarrierTaskContext.get().partitionId()\n+            except Exception:\n+                bp = -1\n+\n+            yield (tp, bp, os.getpid())\n+\n+        def verify(result, task_context_target, barrier_context_target):"
+  }, {
+    "author": {
+      "login": "ConeyLiu"
+    },
+    "body": "we need `verify` three times. Too noise if remove it?",
+    "commit": "a3d14c83de89775e5bba7f5a94cc2101dacbe9bb",
+    "createdAt": "2019-10-31T02:17:20Z",
+    "diffHunk": "@@ -181,6 +227,40 @@ def context_barrier(x):\n         for pid in pids:\n             self.assertTrue(pid in worker_pids)\n \n+    def test_task_context_correct_with_python_worker_reuse(self):\n+        \"\"\"Verify the task context correct when reused python worker\"\"\"\n+        # start a normal job first to start all workers and get all worker pids\n+        worker_pids = self.sc.parallelize(xrange(2), 2).map(lambda x: os.getpid()).collect()\n+        # the worker will reuse in this barrier job\n+        rdd = self.sc.parallelize(xrange(10), 2)\n+\n+        def context(iterator):\n+            tp = TaskContext.get().partitionId()\n+            try:\n+                bp = BarrierTaskContext.get().partitionId()\n+            except Exception:\n+                bp = -1\n+\n+            yield (tp, bp, os.getpid())\n+\n+        def verify(result, task_context_target, barrier_context_target):"
+  }, {
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "Once we resolve https://github.com/apache/spark/pull/26239#discussion_r340931081, I think it won't be too long.",
+    "commit": "a3d14c83de89775e5bba7f5a94cc2101dacbe9bb",
+    "createdAt": "2019-10-31T02:22:41Z",
+    "diffHunk": "@@ -181,6 +227,40 @@ def context_barrier(x):\n         for pid in pids:\n             self.assertTrue(pid in worker_pids)\n \n+    def test_task_context_correct_with_python_worker_reuse(self):\n+        \"\"\"Verify the task context correct when reused python worker\"\"\"\n+        # start a normal job first to start all workers and get all worker pids\n+        worker_pids = self.sc.parallelize(xrange(2), 2).map(lambda x: os.getpid()).collect()\n+        # the worker will reuse in this barrier job\n+        rdd = self.sc.parallelize(xrange(10), 2)\n+\n+        def context(iterator):\n+            tp = TaskContext.get().partitionId()\n+            try:\n+                bp = BarrierTaskContext.get().partitionId()\n+            except Exception:\n+                bp = -1\n+\n+            yield (tp, bp, os.getpid())\n+\n+        def verify(result, task_context_target, barrier_context_target):"
+  }, {
+    "author": {
+      "login": "ConeyLiu"
+    },
+    "body": "OK. will update it.",
+    "commit": "a3d14c83de89775e5bba7f5a94cc2101dacbe9bb",
+    "createdAt": "2019-10-31T02:24:22Z",
+    "diffHunk": "@@ -181,6 +227,40 @@ def context_barrier(x):\n         for pid in pids:\n             self.assertTrue(pid in worker_pids)\n \n+    def test_task_context_correct_with_python_worker_reuse(self):\n+        \"\"\"Verify the task context correct when reused python worker\"\"\"\n+        # start a normal job first to start all workers and get all worker pids\n+        worker_pids = self.sc.parallelize(xrange(2), 2).map(lambda x: os.getpid()).collect()\n+        # the worker will reuse in this barrier job\n+        rdd = self.sc.parallelize(xrange(10), 2)\n+\n+        def context(iterator):\n+            tp = TaskContext.get().partitionId()\n+            try:\n+                bp = BarrierTaskContext.get().partitionId()\n+            except Exception:\n+                bp = -1\n+\n+            yield (tp, bp, os.getpid())\n+\n+        def verify(result, task_context_target, barrier_context_target):"
+  }],
+  "prId": 26239
+}]

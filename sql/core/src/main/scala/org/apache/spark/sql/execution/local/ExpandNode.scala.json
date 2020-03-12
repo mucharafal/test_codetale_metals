@@ -1,0 +1,23 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "hm, at this point `input` hasn't been initialized yet has it? Did you intend to pass `null` into the projection?\n",
+    "commit": "c6e80a2f0fa71dc788a754dd9d0f7e8e89bab56f",
+    "createdAt": "2015-09-11T02:03:20Z",
+    "diffHunk": "@@ -0,0 +1,62 @@\n+/*\n+* Licensed to the Apache Software Foundation (ASF) under one or more\n+* contributor license agreements.  See the NOTICE file distributed with\n+* this work for additional information regarding copyright ownership.\n+* The ASF licenses this file to You under the Apache License, Version 2.0\n+* (the \"License\"); you may not use this file except in compliance with\n+* the License.  You may obtain a copy of the License at\n+*\n+*    http://www.apache.org/licenses/LICENSE-2.0\n+*\n+* Unless required by applicable law or agreed to in writing, software\n+* distributed under the License is distributed on an \"AS IS\" BASIS,\n+* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+* See the License for the specific language governing permissions and\n+* limitations under the License.\n+*/\n+\n+package org.apache.spark.sql.execution.local\n+\n+import org.apache.spark.sql.SQLConf\n+import org.apache.spark.sql.catalyst.InternalRow\n+import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression, Projection}\n+\n+case class ExpandNode(\n+    conf: SQLConf,\n+    projections: Seq[Seq[Expression]],\n+    output: Seq[Attribute],\n+    child: LocalNode) extends UnaryLocalNode(conf) {\n+\n+  assert(projections.size > 0)\n+\n+  private[this] var result: InternalRow = _\n+  private[this] var idx: Int = _\n+  private[this] var input: InternalRow = _\n+\n+  private[this] var groups: Array[Projection] = _\n+\n+  override def open(): Unit = {\n+    child.open()\n+    idx = -1\n+    groups = projections.map(ee => newProjection(ee, child.output)).toArray\n+  }\n+\n+  override def next(): Boolean = {\n+    idx += 1\n+    if (idx < groups.length) {\n+      result = groups(idx)(input)"
+  }],
+  "prId": 8642
+}, {
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "how about:\n\n```\nif (idx < 0 || idx >= groups.length) {\n  if (child.next()) {\n    input = child.fetch()\n    idx = 0\n  } else {\n    return false\n  }\n}\nresult = groups(idx)(input)\nidx += 1\ntrue\n```\n\na little less duplication\n",
+    "commit": "c6e80a2f0fa71dc788a754dd9d0f7e8e89bab56f",
+    "createdAt": "2015-09-11T20:03:36Z",
+    "diffHunk": "@@ -0,0 +1,63 @@\n+/*\n+* Licensed to the Apache Software Foundation (ASF) under one or more\n+* contributor license agreements.  See the NOTICE file distributed with\n+* this work for additional information regarding copyright ownership.\n+* The ASF licenses this file to You under the Apache License, Version 2.0\n+* (the \"License\"); you may not use this file except in compliance with\n+* the License.  You may obtain a copy of the License at\n+*\n+*    http://www.apache.org/licenses/LICENSE-2.0\n+*\n+* Unless required by applicable law or agreed to in writing, software\n+* distributed under the License is distributed on an \"AS IS\" BASIS,\n+* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+* See the License for the specific language governing permissions and\n+* limitations under the License.\n+*/\n+\n+package org.apache.spark.sql.execution.local\n+\n+import org.apache.spark.sql.SQLConf\n+import org.apache.spark.sql.catalyst.InternalRow\n+import org.apache.spark.sql.catalyst.expressions.{Attribute, Expression, Projection}\n+\n+case class ExpandNode(\n+    conf: SQLConf,\n+    projections: Seq[Seq[Expression]],\n+    output: Seq[Attribute],\n+    child: LocalNode) extends UnaryLocalNode(conf) {\n+\n+  assert(projections.size > 0)\n+\n+  private[this] var result: InternalRow = _\n+  private[this] var idx: Int = _\n+  private[this] var input: InternalRow = _\n+  private[this] var groups: Array[Projection] = _\n+\n+  override def open(): Unit = {\n+    child.open()\n+    idx = -1\n+    groups = projections.map(ee => newProjection(ee, child.output)).toArray\n+  }\n+\n+  override def next(): Boolean = {\n+    if (idx < 0 || idx >= groups.length) {\n+      if (child.next()) {\n+        input = child.fetch()\n+        result = groups(0)(input)\n+        idx = 1\n+        true\n+      } else {\n+        false\n+      }\n+    } else {\n+      result = groups(idx)(input)\n+      idx += 1\n+      true\n+    }"
+  }],
+  "prId": 8642
+}]

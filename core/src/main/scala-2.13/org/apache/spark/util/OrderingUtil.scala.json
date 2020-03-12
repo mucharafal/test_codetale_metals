@@ -1,0 +1,31 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "viirya"
+    },
+    "body": "hmm, doesn't Scala 2.12's Ordering.Double.compare delegates to java.lang.Double.compare?\r\n\r\nwhy this matches java.lang.Double, but not Scala 2.12's Ordering.Double?\r\n\r\n",
+    "commit": "57fc3f93f97110ac95bcffa47f1a8e0eca8fc5cd",
+    "createdAt": "2019-11-27T22:03:46Z",
+    "diffHunk": "@@ -0,0 +1,34 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.util\n+\n+/**\n+ * This class only exists to bridge the difference between Scala 2.12 and Scala 2.13's\n+ * support for floating-point ordering. It is implemented separately for both as there\n+ * is no method that exists in both for comparison.\n+ * \n+ * It functions like Ordering.Double.TotalOrdering in Scala 2.13, which matches java.lang.Double\n+ * rather than Scala 2.12's Ordering.Double in handling of NaN.",
+    "line": 26
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "It does, for `compare`. The superclass `Ordering` then defines operations like `lt`, `lteq`, etc in terms of `compare`. But 2.12 `Ordering.Double` overrides them to use operations like `<`, `<=`. As far as I can tell it presents a consistent total ordering via `compare` already (as it appears `java.lang.Double.compare` does), but its comparisons aren't consistent with how NaNs behave in `lt`, etc. Then again... perhaps neither is Java. Its `Comparators.natural()` would work consistently, but the comparisons don't match the Java operators.",
+    "commit": "57fc3f93f97110ac95bcffa47f1a8e0eca8fc5cd",
+    "createdAt": "2019-11-27T22:08:13Z",
+    "diffHunk": "@@ -0,0 +1,34 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.util\n+\n+/**\n+ * This class only exists to bridge the difference between Scala 2.12 and Scala 2.13's\n+ * support for floating-point ordering. It is implemented separately for both as there\n+ * is no method that exists in both for comparison.\n+ * \n+ * It functions like Ordering.Double.TotalOrdering in Scala 2.13, which matches java.lang.Double\n+ * rather than Scala 2.12's Ordering.Double in handling of NaN.",
+    "line": 26
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "So I guess the question is, when to the `Ordering`s get used by Spark? it's not immediately clear if they are, even. If they're used for sorting, all is well... I think, as sorting would use `compare` and all of the impls in question behave the same way. \r\n\r\nIf it's used to evaluate how doubles compare somewhere, then, should those answers be consistent with the sort ordering? or Java/Scala operators? I'd presume the former, but, that's not how it works right now. And the choice to use `TotalOrdering` changes that in 2.13.\r\n\r\n- If we think the current behavior is correct, and matters, then 2.12 is OK and then we use `IeeeOrdering` in 2.13 to be conservative\r\n- If the current behavior doesn't matter, it doesn't matter what we choose. `TotalOrdering` feels more logical.\r\n- If the current behavior is wrong, we can patch 2.12 to work like 2.13's `TotalOrdering`. Then the 2.13 choice is already correct, `TotalOrdering`.\r\n\r\nI actually suspect it doesn't matter, doesn't get used.",
+    "commit": "57fc3f93f97110ac95bcffa47f1a8e0eca8fc5cd",
+    "createdAt": "2019-11-27T22:12:08Z",
+    "diffHunk": "@@ -0,0 +1,34 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.util\n+\n+/**\n+ * This class only exists to bridge the difference between Scala 2.12 and Scala 2.13's\n+ * support for floating-point ordering. It is implemented separately for both as there\n+ * is no method that exists in both for comparison.\n+ * \n+ * It functions like Ordering.Double.TotalOrdering in Scala 2.13, which matches java.lang.Double\n+ * rather than Scala 2.12's Ordering.Double in handling of NaN.",
+    "line": 26
+  }],
+  "prId": 26654
+}]

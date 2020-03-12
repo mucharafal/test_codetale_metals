@@ -1,0 +1,66 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "liancheng"
+    },
+    "body": "I'm a little bit confused here. `jobCommitter` was retrieved via `jobFormat.getOutputCommitter()`, which should return the default output committer bundled with the output format. Does this mean `saveAsNewAPIHadoopDataset()` never respects user-defined output committers (I mean the version before this change)? If that's true, we should just leave this method as is. Restricting output committer class to be `FileOutputCommitter` is too strong a limitation.\n\ncc @yhuai\n",
+    "commit": "69b7d6588dd2c33b2c8a643ba0efde7499266160",
+    "createdAt": "2015-09-10T11:56:45Z",
+    "diffHunk": "@@ -1051,6 +1049,15 @@ class PairRDDFunctions[K, V](self: RDD[(K, V)])\n     val jobAttemptId = newTaskAttemptID(jobtrackerID, stageId, isMap = true, 0, 0)\n     val jobTaskContext = newTaskAttemptContext(wrappedConf.value, jobAttemptId)\n     val jobCommitter = jobFormat.getOutputCommitter(jobTaskContext)\n+\n+    // If speculation is enabled, we only allow FileOutputCommitter.\n+    val speculationEnabled = self.conf.getBoolean(\"spark.speculation\", false)\n+    if (speculationEnabled && jobCommitter.getClass !=\n+      classOf[org.apache.hadoop.mapreduce.lib.output.FileOutputCommitter]) {\n+      throw new SparkException(s\"Cannot use ${jobCommitter.getClass} as output committer when\" +\n+        \"speculation is enabled.\")\n+    }\n+"
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "I agree this is a too strong limitation, but my concern is that: there is possibility that a user-defined output formatter provides a direct output committer which we should reject. However, these is no simple way to see if a output committer is direct or not, so I just restrict it to `FileOutputCommitter` only here.\n",
+    "commit": "69b7d6588dd2c33b2c8a643ba0efde7499266160",
+    "createdAt": "2015-09-10T12:52:35Z",
+    "diffHunk": "@@ -1051,6 +1049,15 @@ class PairRDDFunctions[K, V](self: RDD[(K, V)])\n     val jobAttemptId = newTaskAttemptID(jobtrackerID, stageId, isMap = true, 0, 0)\n     val jobTaskContext = newTaskAttemptContext(wrappedConf.value, jobAttemptId)\n     val jobCommitter = jobFormat.getOutputCommitter(jobTaskContext)\n+\n+    // If speculation is enabled, we only allow FileOutputCommitter.\n+    val speculationEnabled = self.conf.getBoolean(\"spark.speculation\", false)\n+    if (speculationEnabled && jobCommitter.getClass !=\n+      classOf[org.apache.hadoop.mapreduce.lib.output.FileOutputCommitter]) {\n+      throw new SparkException(s\"Cannot use ${jobCommitter.getClass} as output committer when\" +\n+        \"speculation is enabled.\")\n+    }\n+"
+  }, {
+    "author": {
+      "login": "yhuai"
+    },
+    "body": "`jobFormat.getOutputCommitter()` will return the output committer associated with the output format. Basically, in normal cases, you cannot specify output committer for `mapreduce` api (the new api). So, I think we should not make change at here. Also, `jobCommitter.getClass != classOf[org.apache.hadoop.mapreduce.lib.output.FileOutputCommitter]` is a strong condition, which is not always the case. Every output format implemented with `mapreduce` API can have its own output committer (e.g. `org.apache.parquet.hadoop.ParquetOutputCommitter`).\n\nLet's leave this part unchanged.\n",
+    "commit": "69b7d6588dd2c33b2c8a643ba0efde7499266160",
+    "createdAt": "2015-09-10T17:02:29Z",
+    "diffHunk": "@@ -1051,6 +1049,15 @@ class PairRDDFunctions[K, V](self: RDD[(K, V)])\n     val jobAttemptId = newTaskAttemptID(jobtrackerID, stageId, isMap = true, 0, 0)\n     val jobTaskContext = newTaskAttemptContext(wrappedConf.value, jobAttemptId)\n     val jobCommitter = jobFormat.getOutputCommitter(jobTaskContext)\n+\n+    // If speculation is enabled, we only allow FileOutputCommitter.\n+    val speculationEnabled = self.conf.getBoolean(\"spark.speculation\", false)\n+    if (speculationEnabled && jobCommitter.getClass !=\n+      classOf[org.apache.hadoop.mapreduce.lib.output.FileOutputCommitter]) {\n+      throw new SparkException(s\"Cannot use ${jobCommitter.getClass} as output committer when\" +\n+        \"speculation is enabled.\")\n+    }\n+"
+  }],
+  "prId": 8687
+}, {
+  "comments": [{
+    "author": {
+      "login": "liancheng"
+    },
+    "body": "This is also somewhat tricky. Although rare, some output formats may set their own output committers. And if they do, they use the same configuration key (i.e. `mapred.output.committer.class`). One of the example is [Parquet](https://github.com/apache/parquet-mr/blob/apache-parquet-1.7.0/parquet-hadoop/src/main/java/org/apache/parquet/hadoop/mapred/DeprecatedParquetOutputFormat.java#L60), which uses a specialized committer to write summary files. So unlike the case in Spark SQL, here we cannot distinguish a real user-defined committer (which is probably a direct committer), or a default committer bundled with the output format. I'm not quite sure forcing all output formats to use `FileOutputCommitter` when speculation is enabled is a good idea. On the other hand, I don't know any other output formats other than Parquet that use customized output committers, and it should be safe to assert that Spark users don't use `saveAsHadoopFile()` to write Parquet files.\n",
+    "commit": "69b7d6588dd2c33b2c8a643ba0efde7499266160",
+    "createdAt": "2015-09-10T12:53:36Z",
+    "diffHunk": "@@ -979,8 +976,9 @@ class PairRDDFunctions[K, V](self: RDD[(K, V)])\n       hadoopConf.set(\"mapred.output.compression.type\", CompressionType.BLOCK.toString)\n     }\n \n-    // Use configured output committer if already set\n-    if (conf.getOutputCommitter == null) {\n+    // Use configured output committer if already set and speculation is not enabled.\n+    val speculationEnabled = self.conf.getBoolean(\"spark.speculation\", false)\n+    if (speculationEnabled || conf.getOutputCommitter == null) {"
+  }, {
+    "author": {
+      "login": "yhuai"
+    },
+    "body": "ok. I see. Now, I think it will be hard to always change the output committer when speculation is enabled. I feel this problem is hard to have a mechanism to automatically make any conf change on output committer setting.\n\nHow about this. If `mapred.output.format.class` is set and speculation is enabled, we we check if the class name contains `DirectOutputCommitter`. If so, we log a warning message to say that `DirectOutputCommitter` may cause data loss (a case can be found in https://issues.apache.org/jira/browse/SPARK-10063) when speculation is enabled and ask users to set it to other output committer. I think having a warning message is better to silently change the setting, which may break some use case.\n",
+    "commit": "69b7d6588dd2c33b2c8a643ba0efde7499266160",
+    "createdAt": "2015-09-10T17:51:42Z",
+    "diffHunk": "@@ -979,8 +976,9 @@ class PairRDDFunctions[K, V](self: RDD[(K, V)])\n       hadoopConf.set(\"mapred.output.compression.type\", CompressionType.BLOCK.toString)\n     }\n \n-    // Use configured output committer if already set\n-    if (conf.getOutputCommitter == null) {\n+    // Use configured output committer if already set and speculation is not enabled.\n+    val speculationEnabled = self.conf.getBoolean(\"spark.speculation\", false)\n+    if (speculationEnabled || conf.getOutputCommitter == null) {"
+  }, {
+    "author": {
+      "login": "liancheng"
+    },
+    "body": "Maybe just check for `Direct` (e.g. `DirectParquetOutputCommitter`).\n",
+    "commit": "69b7d6588dd2c33b2c8a643ba0efde7499266160",
+    "createdAt": "2015-09-10T18:08:05Z",
+    "diffHunk": "@@ -979,8 +976,9 @@ class PairRDDFunctions[K, V](self: RDD[(K, V)])\n       hadoopConf.set(\"mapred.output.compression.type\", CompressionType.BLOCK.toString)\n     }\n \n-    // Use configured output committer if already set\n-    if (conf.getOutputCommitter == null) {\n+    // Use configured output committer if already set and speculation is not enabled.\n+    val speculationEnabled = self.conf.getBoolean(\"spark.speculation\", false)\n+    if (speculationEnabled || conf.getOutputCommitter == null) {"
+  }],
+  "prId": 8687
+}, {
+  "comments": [{
+    "author": {
+      "login": "yhuai"
+    },
+    "body": "How about\n\n```\nval outputCommitterClass = hadoopConf.get(\"mapred.output.committer.class\", \"\")\nif (speculationEnabled && outputCommitterClass.contains(\"Direct\")) {\n  val warningMessage =\n    s\"$outputCommitterClass may be a output committer that writes data directly to the final location. \" + \n    \"Because speculation is enabled, this output committer may cause data loss (see the case in SPARK-10063). \" +\n    \"If possible, please use a output committer that does not have this behavior (e.g. FileOutputCommitter).\"\n  logWarning(warningMessage)\n}\n```\n",
+    "commit": "69b7d6588dd2c33b2c8a643ba0efde7499266160",
+    "createdAt": "2015-09-13T04:59:41Z",
+    "diffHunk": "@@ -984,6 +986,15 @@ class PairRDDFunctions[K, V](self: RDD[(K, V)])\n       hadoopConf.setOutputCommitter(classOf[FileOutputCommitter])\n     }\n \n+    // When speculation is on and output committer class name contains \"Direct\", we should warn\n+    // users that they may loss data if they are using a direct output committer.\n+    val speculationEnabled = self.conf.getBoolean(\"spark.speculation\", false)\n+    if (speculationEnabled &&\n+      hadoopConf.get(\"mapred.output.committer.class\", \"\").contains(\"Direct\")) {\n+      logWarning(\"We may loss data when use direct output committer with speculation enabled, \" +\n+        \"please make sure your output committer doesn't write data directly.\")\n+    }"
+  }],
+  "prId": 8687
+}]

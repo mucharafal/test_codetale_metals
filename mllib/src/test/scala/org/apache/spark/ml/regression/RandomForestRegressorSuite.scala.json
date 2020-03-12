@@ -1,0 +1,130 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "sethah"
+    },
+    "body": "you should be able to use:\n\n`assert(rfVariances(i).getDouble(0) ~== dtVariances(i).getDouble(0) absTol 1e-6)`\n",
+    "commit": "505e3c289f19f5d04f9fd51d8f5050822f155738",
+    "createdAt": "2016-06-20T18:44:49Z",
+    "diffHunk": "@@ -105,6 +108,55 @@ class RandomForestRegressorSuite extends SparkFunSuite with MLlibTestSparkContex\n       }\n   }\n \n+  test(\"Random Forest variance\") {\n+    val categoricalFeatures = Map.empty[Int, Int]\n+    val df: DataFrame = TreeTests.setMetadata(\n+      orderedLabeledPoints50_1000, categoricalFeatures, 0)\n+\n+    // RF with one tree should have the same variance as that of the tree.\n+    val rf = new RandomForestRegressor()\n+      .setImpurity(\"variance\")\n+      .setMaxDepth(30)\n+      .setNumTrees(1)\n+      .setMaxBins(10)\n+      .setFeatureSubsetStrategy(\"all\")\n+      .setSubsamplingRate(1.0)\n+      .setSeed(123)\n+\n+    val rfModel = rf.fit(df)\n+    val rfVariances = rfModel.transform(df).select(\"variance\").collect()\n+\n+    val dt = new DecisionTreeRegressor()\n+      .setImpurity(\"variance\")\n+      .setMaxDepth(30)\n+      .setMaxBins(10)\n+      .setSeed(123)\n+    val dtModel = dt.fit(df)\n+    val dtVariances = dtModel.transform(df).select(\"variance\").collect()\n+    val nSamples = dtVariances.size\n+    (0 to nSamples - 1).foreach { i =>\n+      val diff = math.abs(rfVariances(i).getDouble(0) - dtVariances(i).getDouble(0))"
+  }],
+  "prId": 13650
+}, {
+  "comments": [{
+    "author": {
+      "login": "sethah"
+    },
+    "body": "I believe you are using the wrong variance here, since you re-use that variable name.\n",
+    "commit": "505e3c289f19f5d04f9fd51d8f5050822f155738",
+    "createdAt": "2016-06-20T19:01:51Z",
+    "diffHunk": "@@ -105,6 +108,55 @@ class RandomForestRegressorSuite extends SparkFunSuite with MLlibTestSparkContex\n       }\n   }\n \n+  test(\"Random Forest variance\") {\n+    val categoricalFeatures = Map.empty[Int, Int]\n+    val df: DataFrame = TreeTests.setMetadata(\n+      orderedLabeledPoints50_1000, categoricalFeatures, 0)\n+\n+    // RF with one tree should have the same variance as that of the tree.\n+    val rf = new RandomForestRegressor()\n+      .setImpurity(\"variance\")\n+      .setMaxDepth(30)\n+      .setNumTrees(1)\n+      .setMaxBins(10)\n+      .setFeatureSubsetStrategy(\"all\")\n+      .setSubsamplingRate(1.0)\n+      .setSeed(123)\n+\n+    val rfModel = rf.fit(df)\n+    val rfVariances = rfModel.transform(df).select(\"variance\").collect()\n+\n+    val dt = new DecisionTreeRegressor()\n+      .setImpurity(\"variance\")\n+      .setMaxDepth(30)\n+      .setMaxBins(10)\n+      .setSeed(123)\n+    val dtModel = dt.fit(df)\n+    val dtVariances = dtModel.transform(df).select(\"variance\").collect()\n+    val nSamples = dtVariances.size\n+    (0 to nSamples - 1).foreach { i =>\n+      val diff = math.abs(rfVariances(i).getDouble(0) - dtVariances(i).getDouble(0))\n+      assert(diff < 1e-6)\n+    }\n+\n+    rf.setMaxDepth(2)\n+    rf.setNumTrees(20)\n+    val rfNewModel = rf.fit(df)\n+    val results = rfNewModel.transform(df).select(\"features\", \"variance\").collect()\n+    val features = col(\"features\")\n+    val trees = rfNewModel.trees\n+    val numTrees = rfNewModel.getNumTrees\n+    results.map { case Row(features: Vector, variance: Double) =>\n+      val rootNodes = trees.map(_.rootNode.predictImpl(features))\n+      val predsquared = rootNodes.map(x => math.pow(x.prediction, 2)).sum / numTrees\n+      val variance = rootNodes.map(_.impurityStats.calculate()).sum / numTrees\n+      val predictions = rootNodes.map(_.prediction).sum / numTrees\n+      val expectedVariance = -math.pow(predictions, 2) + variance + predsquared\n+      assert(variance === expectedVariance,\n+        s\"Expected variance $expectedVariance but got $variance.\")"
+  }],
+  "prId": 13650
+}, {
+  "comments": [{
+    "author": {
+      "login": "sethah"
+    },
+    "body": "These tests will still pass if we ever implement a new impurity type, but the computed variance won't be correct. In fact, the tests in `DecisionTreeRegressorSuite` also fail to capture this. If `impurityStats.calculate()` doesn't always return the variance of the labels then the current implementation won't work. We should add a test here and in DT to ensure that the variance is computed correctly. The best way is probably to construct a fake tree, use some small fake data and ensure that the resulting variance is equal to the formula in the linked paper.\n",
+    "commit": "505e3c289f19f5d04f9fd51d8f5050822f155738",
+    "createdAt": "2016-06-20T19:04:42Z",
+    "diffHunk": "@@ -105,6 +108,55 @@ class RandomForestRegressorSuite extends SparkFunSuite with MLlibTestSparkContex\n       }\n   }\n \n+  test(\"Random Forest variance\") {",
+    "line": 23
+  }, {
+    "author": {
+      "login": "MechCoder"
+    },
+    "body": "The first test is meant to pass for all impurities, since it compares the variance of a forest with one tree (with bootstrapping set off). You are right, that we have to be deterministic about checking the predicted variances. I have done it for the DecisionTrees here (https://github.com/apache/spark/pull/13981) but not sure it is straightforward for a RandomForest....\n",
+    "commit": "505e3c289f19f5d04f9fd51d8f5050822f155738",
+    "createdAt": "2016-06-29T22:23:44Z",
+    "diffHunk": "@@ -105,6 +108,55 @@ class RandomForestRegressorSuite extends SparkFunSuite with MLlibTestSparkContex\n       }\n   }\n \n+  test(\"Random Forest variance\") {",
+    "line": 23
+  }, {
+    "author": {
+      "login": "yanboliang"
+    },
+    "body": "Should `test(\"Random Forest Regression predict variance\")` be better?\n",
+    "commit": "505e3c289f19f5d04f9fd51d8f5050822f155738",
+    "createdAt": "2016-07-13T15:01:25Z",
+    "diffHunk": "@@ -105,6 +108,55 @@ class RandomForestRegressorSuite extends SparkFunSuite with MLlibTestSparkContex\n       }\n   }\n \n+  test(\"Random Forest variance\") {",
+    "line": 23
+  }],
+  "prId": 13650
+}, {
+  "comments": [{
+    "author": {
+      "login": "yanboliang"
+    },
+    "body": "Nit: `(0 until nSamples)`\n",
+    "commit": "505e3c289f19f5d04f9fd51d8f5050822f155738",
+    "createdAt": "2016-07-13T14:35:52Z",
+    "diffHunk": "@@ -105,6 +109,54 @@ class RandomForestRegressorSuite extends SparkFunSuite with MLlibTestSparkContex\n       }\n   }\n \n+  test(\"Random Forest variance\") {\n+    val categoricalFeatures = Map.empty[Int, Int]\n+    val df: DataFrame = TreeTests.setMetadata(\n+      orderedLabeledPoints50_1000, categoricalFeatures, 0)\n+\n+    // RF with one tree should have the same variance as that of the tree.\n+    val rf = new RandomForestRegressor()\n+      .setImpurity(\"variance\")\n+      .setMaxDepth(30)\n+      .setNumTrees(1)\n+      .setMaxBins(10)\n+      .setFeatureSubsetStrategy(\"all\")\n+      .setSubsamplingRate(1.0)\n+      .setSeed(123)\n+\n+    val rfModel = rf.fit(df)\n+    val rfVariances = rfModel.transform(df).select(\"variance\").collect()\n+\n+    val dt = new DecisionTreeRegressor()\n+      .setImpurity(\"variance\")\n+      .setMaxDepth(30)\n+      .setMaxBins(10)\n+      .setSeed(123)\n+    val dtModel = dt.fit(df)\n+    val dtVariances = dtModel.transform(df).select(\"variance\").collect()\n+    val nSamples = dtVariances.size\n+    (0 to nSamples - 1).foreach { i =>"
+  }],
+  "prId": 13650
+}, {
+  "comments": [{
+    "author": {
+      "login": "yanboliang"
+    },
+    "body": "`results.foreach { ... }`\n",
+    "commit": "505e3c289f19f5d04f9fd51d8f5050822f155738",
+    "createdAt": "2016-07-13T14:36:47Z",
+    "diffHunk": "@@ -105,6 +109,54 @@ class RandomForestRegressorSuite extends SparkFunSuite with MLlibTestSparkContex\n       }\n   }\n \n+  test(\"Random Forest variance\") {\n+    val categoricalFeatures = Map.empty[Int, Int]\n+    val df: DataFrame = TreeTests.setMetadata(\n+      orderedLabeledPoints50_1000, categoricalFeatures, 0)\n+\n+    // RF with one tree should have the same variance as that of the tree.\n+    val rf = new RandomForestRegressor()\n+      .setImpurity(\"variance\")\n+      .setMaxDepth(30)\n+      .setNumTrees(1)\n+      .setMaxBins(10)\n+      .setFeatureSubsetStrategy(\"all\")\n+      .setSubsamplingRate(1.0)\n+      .setSeed(123)\n+\n+    val rfModel = rf.fit(df)\n+    val rfVariances = rfModel.transform(df).select(\"variance\").collect()\n+\n+    val dt = new DecisionTreeRegressor()\n+      .setImpurity(\"variance\")\n+      .setMaxDepth(30)\n+      .setMaxBins(10)\n+      .setSeed(123)\n+    val dtModel = dt.fit(df)\n+    val dtVariances = dtModel.transform(df).select(\"variance\").collect()\n+    val nSamples = dtVariances.size\n+    (0 to nSamples - 1).foreach { i =>\n+      assert(rfVariances(i).getDouble(0) ~== dtVariances(i).getDouble(0) absTol 1e-6)\n+    }\n+\n+    rf.setMaxDepth(2)\n+    rf.setNumTrees(20)\n+    val rfNewModel = rf.fit(df)\n+    val results = rfNewModel.transform(df).select(\"features\", \"variance\").collect()\n+    val features = col(\"features\")\n+    val trees = rfNewModel.trees\n+    val numTrees = rfNewModel.getNumTrees\n+    results.map { case Row(features: Vector, variance: Double) =>"
+  }],
+  "prId": 13650
+}, {
+  "comments": [{
+    "author": {
+      "login": "yanboliang"
+    },
+    "body": "This is not root nodes for each trees, may be it can be named `predictionNodes`.\n",
+    "commit": "505e3c289f19f5d04f9fd51d8f5050822f155738",
+    "createdAt": "2016-07-13T14:38:53Z",
+    "diffHunk": "@@ -105,6 +109,54 @@ class RandomForestRegressorSuite extends SparkFunSuite with MLlibTestSparkContex\n       }\n   }\n \n+  test(\"Random Forest variance\") {\n+    val categoricalFeatures = Map.empty[Int, Int]\n+    val df: DataFrame = TreeTests.setMetadata(\n+      orderedLabeledPoints50_1000, categoricalFeatures, 0)\n+\n+    // RF with one tree should have the same variance as that of the tree.\n+    val rf = new RandomForestRegressor()\n+      .setImpurity(\"variance\")\n+      .setMaxDepth(30)\n+      .setNumTrees(1)\n+      .setMaxBins(10)\n+      .setFeatureSubsetStrategy(\"all\")\n+      .setSubsamplingRate(1.0)\n+      .setSeed(123)\n+\n+    val rfModel = rf.fit(df)\n+    val rfVariances = rfModel.transform(df).select(\"variance\").collect()\n+\n+    val dt = new DecisionTreeRegressor()\n+      .setImpurity(\"variance\")\n+      .setMaxDepth(30)\n+      .setMaxBins(10)\n+      .setSeed(123)\n+    val dtModel = dt.fit(df)\n+    val dtVariances = dtModel.transform(df).select(\"variance\").collect()\n+    val nSamples = dtVariances.size\n+    (0 to nSamples - 1).foreach { i =>\n+      assert(rfVariances(i).getDouble(0) ~== dtVariances(i).getDouble(0) absTol 1e-6)\n+    }\n+\n+    rf.setMaxDepth(2)\n+    rf.setNumTrees(20)\n+    val rfNewModel = rf.fit(df)\n+    val results = rfNewModel.transform(df).select(\"features\", \"variance\").collect()\n+    val features = col(\"features\")\n+    val trees = rfNewModel.trees\n+    val numTrees = rfNewModel.getNumTrees\n+    results.map { case Row(features: Vector, variance: Double) =>\n+      val rootNodes = trees.map(_.rootNode.predictImpl(features))"
+  }],
+  "prId": 13650
+}, {
+  "comments": [{
+    "author": {
+      "login": "yanboliang"
+    },
+    "body": "`predsquared` -> `avgPredSquared`\n",
+    "commit": "505e3c289f19f5d04f9fd51d8f5050822f155738",
+    "createdAt": "2016-07-13T14:41:36Z",
+    "diffHunk": "@@ -105,6 +109,54 @@ class RandomForestRegressorSuite extends SparkFunSuite with MLlibTestSparkContex\n       }\n   }\n \n+  test(\"Random Forest variance\") {\n+    val categoricalFeatures = Map.empty[Int, Int]\n+    val df: DataFrame = TreeTests.setMetadata(\n+      orderedLabeledPoints50_1000, categoricalFeatures, 0)\n+\n+    // RF with one tree should have the same variance as that of the tree.\n+    val rf = new RandomForestRegressor()\n+      .setImpurity(\"variance\")\n+      .setMaxDepth(30)\n+      .setNumTrees(1)\n+      .setMaxBins(10)\n+      .setFeatureSubsetStrategy(\"all\")\n+      .setSubsamplingRate(1.0)\n+      .setSeed(123)\n+\n+    val rfModel = rf.fit(df)\n+    val rfVariances = rfModel.transform(df).select(\"variance\").collect()\n+\n+    val dt = new DecisionTreeRegressor()\n+      .setImpurity(\"variance\")\n+      .setMaxDepth(30)\n+      .setMaxBins(10)\n+      .setSeed(123)\n+    val dtModel = dt.fit(df)\n+    val dtVariances = dtModel.transform(df).select(\"variance\").collect()\n+    val nSamples = dtVariances.size\n+    (0 to nSamples - 1).foreach { i =>\n+      assert(rfVariances(i).getDouble(0) ~== dtVariances(i).getDouble(0) absTol 1e-6)\n+    }\n+\n+    rf.setMaxDepth(2)\n+    rf.setNumTrees(20)\n+    val rfNewModel = rf.fit(df)\n+    val results = rfNewModel.transform(df).select(\"features\", \"variance\").collect()\n+    val features = col(\"features\")\n+    val trees = rfNewModel.trees\n+    val numTrees = rfNewModel.getNumTrees\n+    results.map { case Row(features: Vector, variance: Double) =>\n+      val rootNodes = trees.map(_.rootNode.predictImpl(features))\n+      val predsquared = rootNodes.map(x => math.pow(x.prediction, 2)).sum / numTrees"
+  }],
+  "prId": 13650
+}, {
+  "comments": [{
+    "author": {
+      "login": "yanboliang"
+    },
+    "body": "`treeVariance` -> `avgTreeVariance`\n",
+    "commit": "505e3c289f19f5d04f9fd51d8f5050822f155738",
+    "createdAt": "2016-07-13T14:43:18Z",
+    "diffHunk": "@@ -105,6 +109,54 @@ class RandomForestRegressorSuite extends SparkFunSuite with MLlibTestSparkContex\n       }\n   }\n \n+  test(\"Random Forest variance\") {\n+    val categoricalFeatures = Map.empty[Int, Int]\n+    val df: DataFrame = TreeTests.setMetadata(\n+      orderedLabeledPoints50_1000, categoricalFeatures, 0)\n+\n+    // RF with one tree should have the same variance as that of the tree.\n+    val rf = new RandomForestRegressor()\n+      .setImpurity(\"variance\")\n+      .setMaxDepth(30)\n+      .setNumTrees(1)\n+      .setMaxBins(10)\n+      .setFeatureSubsetStrategy(\"all\")\n+      .setSubsamplingRate(1.0)\n+      .setSeed(123)\n+\n+    val rfModel = rf.fit(df)\n+    val rfVariances = rfModel.transform(df).select(\"variance\").collect()\n+\n+    val dt = new DecisionTreeRegressor()\n+      .setImpurity(\"variance\")\n+      .setMaxDepth(30)\n+      .setMaxBins(10)\n+      .setSeed(123)\n+    val dtModel = dt.fit(df)\n+    val dtVariances = dtModel.transform(df).select(\"variance\").collect()\n+    val nSamples = dtVariances.size\n+    (0 to nSamples - 1).foreach { i =>\n+      assert(rfVariances(i).getDouble(0) ~== dtVariances(i).getDouble(0) absTol 1e-6)\n+    }\n+\n+    rf.setMaxDepth(2)\n+    rf.setNumTrees(20)\n+    val rfNewModel = rf.fit(df)\n+    val results = rfNewModel.transform(df).select(\"features\", \"variance\").collect()\n+    val features = col(\"features\")\n+    val trees = rfNewModel.trees\n+    val numTrees = rfNewModel.getNumTrees\n+    results.map { case Row(features: Vector, variance: Double) =>\n+      val rootNodes = trees.map(_.rootNode.predictImpl(features))\n+      val predsquared = rootNodes.map(x => math.pow(x.prediction, 2)).sum / numTrees\n+      val treeVariance = rootNodes.map(_.impurityStats.calculate()).sum / numTrees"
+  }],
+  "prId": 13650
+}, {
+  "comments": [{
+    "author": {
+      "login": "yanboliang"
+    },
+    "body": "`predictions` -> `avgPrediction`\n",
+    "commit": "505e3c289f19f5d04f9fd51d8f5050822f155738",
+    "createdAt": "2016-07-13T14:43:52Z",
+    "diffHunk": "@@ -105,6 +109,54 @@ class RandomForestRegressorSuite extends SparkFunSuite with MLlibTestSparkContex\n       }\n   }\n \n+  test(\"Random Forest variance\") {\n+    val categoricalFeatures = Map.empty[Int, Int]\n+    val df: DataFrame = TreeTests.setMetadata(\n+      orderedLabeledPoints50_1000, categoricalFeatures, 0)\n+\n+    // RF with one tree should have the same variance as that of the tree.\n+    val rf = new RandomForestRegressor()\n+      .setImpurity(\"variance\")\n+      .setMaxDepth(30)\n+      .setNumTrees(1)\n+      .setMaxBins(10)\n+      .setFeatureSubsetStrategy(\"all\")\n+      .setSubsamplingRate(1.0)\n+      .setSeed(123)\n+\n+    val rfModel = rf.fit(df)\n+    val rfVariances = rfModel.transform(df).select(\"variance\").collect()\n+\n+    val dt = new DecisionTreeRegressor()\n+      .setImpurity(\"variance\")\n+      .setMaxDepth(30)\n+      .setMaxBins(10)\n+      .setSeed(123)\n+    val dtModel = dt.fit(df)\n+    val dtVariances = dtModel.transform(df).select(\"variance\").collect()\n+    val nSamples = dtVariances.size\n+    (0 to nSamples - 1).foreach { i =>\n+      assert(rfVariances(i).getDouble(0) ~== dtVariances(i).getDouble(0) absTol 1e-6)\n+    }\n+\n+    rf.setMaxDepth(2)\n+    rf.setNumTrees(20)\n+    val rfNewModel = rf.fit(df)\n+    val results = rfNewModel.transform(df).select(\"features\", \"variance\").collect()\n+    val features = col(\"features\")\n+    val trees = rfNewModel.trees\n+    val numTrees = rfNewModel.getNumTrees\n+    results.map { case Row(features: Vector, variance: Double) =>\n+      val rootNodes = trees.map(_.rootNode.predictImpl(features))\n+      val predsquared = rootNodes.map(x => math.pow(x.prediction, 2)).sum / numTrees\n+      val treeVariance = rootNodes.map(_.impurityStats.calculate()).sum / numTrees\n+      val predictions = rootNodes.map(_.prediction).sum / numTrees"
+  }],
+  "prId": 13650
+}, {
+  "comments": [{
+    "author": {
+      "login": "yanboliang"
+    },
+    "body": "This line is never used, remove it.\n",
+    "commit": "505e3c289f19f5d04f9fd51d8f5050822f155738",
+    "createdAt": "2016-07-13T14:46:34Z",
+    "diffHunk": "@@ -105,6 +109,54 @@ class RandomForestRegressorSuite extends SparkFunSuite with MLlibTestSparkContex\n       }\n   }\n \n+  test(\"Random Forest variance\") {\n+    val categoricalFeatures = Map.empty[Int, Int]\n+    val df: DataFrame = TreeTests.setMetadata(\n+      orderedLabeledPoints50_1000, categoricalFeatures, 0)\n+\n+    // RF with one tree should have the same variance as that of the tree.\n+    val rf = new RandomForestRegressor()\n+      .setImpurity(\"variance\")\n+      .setMaxDepth(30)\n+      .setNumTrees(1)\n+      .setMaxBins(10)\n+      .setFeatureSubsetStrategy(\"all\")\n+      .setSubsamplingRate(1.0)\n+      .setSeed(123)\n+\n+    val rfModel = rf.fit(df)\n+    val rfVariances = rfModel.transform(df).select(\"variance\").collect()\n+\n+    val dt = new DecisionTreeRegressor()\n+      .setImpurity(\"variance\")\n+      .setMaxDepth(30)\n+      .setMaxBins(10)\n+      .setSeed(123)\n+    val dtModel = dt.fit(df)\n+    val dtVariances = dtModel.transform(df).select(\"variance\").collect()\n+    val nSamples = dtVariances.size\n+    (0 to nSamples - 1).foreach { i =>\n+      assert(rfVariances(i).getDouble(0) ~== dtVariances(i).getDouble(0) absTol 1e-6)\n+    }\n+\n+    rf.setMaxDepth(2)\n+    rf.setNumTrees(20)\n+    val rfNewModel = rf.fit(df)\n+    val results = rfNewModel.transform(df).select(\"features\", \"variance\").collect()\n+    val features = col(\"features\")"
+  }],
+  "prId": 13650
+}]

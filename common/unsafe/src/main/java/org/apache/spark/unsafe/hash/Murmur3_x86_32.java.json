@@ -1,0 +1,31 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "viirya"
+    },
+    "body": "So seems the performance regression is due to the cost of virtual function calls on `MemoryBlock`?",
+    "commit": "6cb94ed5ed76e23e4fb775a2fd6f0e66e9c15abd",
+    "createdAt": "2018-09-05T09:14:14Z",
+    "diffHunk": "@@ -69,22 +70,27 @@ public static int hashUnsafeWords(Object base, long offset, int lengthInBytes, i\n   }\n \n   public static int hashUnsafeBytesBlock(MemoryBlock base, int seed) {\n+    return hashUnsafeBytesBlock(base, Ints.checkedCast(base.size()), seed);\n+  }\n+\n+  private static int hashUnsafeBytesBlock(MemoryBlock base, int lengthInBytes, int seed) {\n     // This is not compatible with original and another implementations.\n     // But remain it for backward compatibility for the components existing before 2.3.\n-    int lengthInBytes = Ints.checkedCast(base.size());\n     assert (lengthInBytes >= 0): \"lengthInBytes cannot be negative\";\n     int lengthAligned = lengthInBytes - lengthInBytes % 4;\n-    int h1 = hashBytesByIntBlock(base.subBlock(0, lengthAligned), seed);\n+    int h1 = hashBytesByIntBlock(base, lengthAligned, seed);\n+    long offset = base.getBaseOffset();\n+    Object o = base.getBaseObject();\n     for (int i = lengthAligned; i < lengthInBytes; i++) {\n-      int halfWord = base.getByte(i);\n+      int halfWord = Platform.getByte(o, offset + i);",
+    "line": 36
+  }, {
+    "author": {
+      "login": "mgaido91"
+    },
+    "body": "that was my guess too at the beginning, but if you just do this change, performance won't change. Seems reasonable what said by @kiszk about the clue being the size of the javabyte code generated, but needs more investigation.",
+    "commit": "6cb94ed5ed76e23e4fb775a2fd6f0e66e9c15abd",
+    "createdAt": "2018-09-05T09:45:31Z",
+    "diffHunk": "@@ -69,22 +70,27 @@ public static int hashUnsafeWords(Object base, long offset, int lengthInBytes, i\n   }\n \n   public static int hashUnsafeBytesBlock(MemoryBlock base, int seed) {\n+    return hashUnsafeBytesBlock(base, Ints.checkedCast(base.size()), seed);\n+  }\n+\n+  private static int hashUnsafeBytesBlock(MemoryBlock base, int lengthInBytes, int seed) {\n     // This is not compatible with original and another implementations.\n     // But remain it for backward compatibility for the components existing before 2.3.\n-    int lengthInBytes = Ints.checkedCast(base.size());\n     assert (lengthInBytes >= 0): \"lengthInBytes cannot be negative\";\n     int lengthAligned = lengthInBytes - lengthInBytes % 4;\n-    int h1 = hashBytesByIntBlock(base.subBlock(0, lengthAligned), seed);\n+    int h1 = hashBytesByIntBlock(base, lengthAligned, seed);\n+    long offset = base.getBaseOffset();\n+    Object o = base.getBaseObject();\n     for (int i = lengthAligned; i < lengthInBytes; i++) {\n-      int halfWord = base.getByte(i);\n+      int halfWord = Platform.getByte(o, offset + i);",
+    "line": 36
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "Ok. Seems there are more than single cause for this performance regression.",
+    "commit": "6cb94ed5ed76e23e4fb775a2fd6f0e66e9c15abd",
+    "createdAt": "2018-09-05T11:10:54Z",
+    "diffHunk": "@@ -69,22 +70,27 @@ public static int hashUnsafeWords(Object base, long offset, int lengthInBytes, i\n   }\n \n   public static int hashUnsafeBytesBlock(MemoryBlock base, int seed) {\n+    return hashUnsafeBytesBlock(base, Ints.checkedCast(base.size()), seed);\n+  }\n+\n+  private static int hashUnsafeBytesBlock(MemoryBlock base, int lengthInBytes, int seed) {\n     // This is not compatible with original and another implementations.\n     // But remain it for backward compatibility for the components existing before 2.3.\n-    int lengthInBytes = Ints.checkedCast(base.size());\n     assert (lengthInBytes >= 0): \"lengthInBytes cannot be negative\";\n     int lengthAligned = lengthInBytes - lengthInBytes % 4;\n-    int h1 = hashBytesByIntBlock(base.subBlock(0, lengthAligned), seed);\n+    int h1 = hashBytesByIntBlock(base, lengthAligned, seed);\n+    long offset = base.getBaseOffset();\n+    Object o = base.getBaseObject();\n     for (int i = lengthAligned; i < lengthInBytes; i++) {\n-      int halfWord = base.getByte(i);\n+      int halfWord = Platform.getByte(o, offset + i);",
+    "line": 36
+  }],
+  "prId": 22338
+}]

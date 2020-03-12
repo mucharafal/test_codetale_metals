@@ -1,0 +1,34 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Trivial, but braces shouldn't have a space inside in all of these imports\n",
+    "commit": "2fe06672cc9827545fe34a22fc38f2e304243205",
+    "createdAt": "2016-02-17T12:08:00Z",
+    "diffHunk": "@@ -0,0 +1,109 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+// scalastyle:off println\n+package org.apache.spark.examples.ml\n+\n+import org.apache.spark.{ SparkConf, SparkContext }"
+  }],
+  "prId": 11053
+}, {
+  "comments": [{
+    "author": {
+      "login": "yinxusen"
+    },
+    "body": "add imports with `// $example on$` and `// $example off$`\n",
+    "commit": "2fe06672cc9827545fe34a22fc38f2e304243205",
+    "createdAt": "2016-02-17T19:36:22Z",
+    "diffHunk": "@@ -0,0 +1,109 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+// scalastyle:off println\n+package org.apache.spark.examples.ml\n+\n+import org.apache.spark.{SparkConf, SparkContext}\n+import org.apache.spark.ml.Pipeline"
+  }],
+  "prId": 11053
+}, {
+  "comments": [{
+    "author": {
+      "login": "yinxusen"
+    },
+    "body": "2-indent spaces for inline comments\n",
+    "commit": "2fe06672cc9827545fe34a22fc38f2e304243205",
+    "createdAt": "2016-02-17T19:36:52Z",
+    "diffHunk": "@@ -0,0 +1,109 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+// scalastyle:off println\n+package org.apache.spark.examples.ml\n+\n+import org.apache.spark.{SparkConf, SparkContext}\n+import org.apache.spark.ml.Pipeline\n+import org.apache.spark.ml.classification.LogisticRegression\n+import org.apache.spark.ml.evaluation.BinaryClassificationEvaluator\n+import org.apache.spark.ml.feature.{HashingTF, Tokenizer}\n+import org.apache.spark.ml.tuning.{CrossValidator, ParamGridBuilder}\n+import org.apache.spark.mllib.linalg.Vector\n+import org.apache.spark.sql.Row\n+import org.apache.spark.sql.SQLContext\n+\n+object ModelSelectionViaCrossValidationExample {\n+\n+  def main(args: Array[String]): Unit = {\n+    val conf = new SparkConf().setAppName(\"ModelSelectionViaCrossValidationExample\")\n+    val sc = new SparkContext(conf)\n+    val sqlContext = new SQLContext(sc)\n+\n+    // $example on$\n+    // Prepare training data from a list of (id, text, label) tuples.\n+    val training = sqlContext.createDataFrame(Seq(\n+      (0L, \"a b c d e spark\", 1.0),\n+      (1L, \"b d\", 0.0),\n+      (2L, \"spark f g h\", 1.0),\n+      (3L, \"hadoop mapreduce\", 0.0),\n+      (4L, \"b spark who\", 1.0),\n+      (5L, \"g d a y\", 0.0),\n+      (6L, \"spark fly\", 1.0),\n+      (7L, \"was mapreduce\", 0.0),\n+      (8L, \"e spark program\", 1.0),\n+      (9L, \"a e c l\", 0.0),\n+      (10L, \"spark compile\", 1.0),\n+      (11L, \"hadoop software\", 0.0)\n+    )).toDF(\"id\", \"text\", \"label\")\n+\n+    // Configure an ML pipeline, which consists of three stages: tokenizer, hashingTF, and lr.\n+    val tokenizer = new Tokenizer()\n+      .setInputCol(\"text\")\n+      .setOutputCol(\"words\")\n+    val hashingTF = new HashingTF()\n+      .setInputCol(tokenizer.getOutputCol)\n+      .setOutputCol(\"features\")\n+    val lr = new LogisticRegression()\n+      .setMaxIter(10)\n+    val pipeline = new Pipeline()\n+      .setStages(Array(tokenizer, hashingTF, lr))\n+\n+    // We use a ParamGridBuilder to construct a grid of parameters to search over.\n+    // With 3 values for hashingTF.numFeatures and 2 values for lr.regParam,\n+    // this grid will have 3 x 2 = 6 parameter settings for CrossValidator to choose from.\n+    val paramGrid = new ParamGridBuilder()\n+      .addGrid(hashingTF.numFeatures, Array(10, 100, 1000))\n+      .addGrid(lr.regParam, Array(0.1, 0.01))\n+      .build()\n+\n+    // We now treat the Pipeline as an Estimator, wrapping it in a CrossValidator instance.\n+    // This will allow us to jointly choose parameters for all Pipeline stages.\n+    // A CrossValidator requires an Estimator, a set of Estimator ParamMaps, and an Evaluator.\n+    // Note that the evaluator here is a BinaryClassificationEvaluator and its default metric\n+    // is areaUnderROC.\n+    val cv = new CrossValidator()\n+      .setEstimator(pipeline)\n+      .setEvaluator(new BinaryClassificationEvaluator)\n+      .setEstimatorParamMaps(paramGrid)\n+      .setNumFolds(2) // Use 3+ in practice"
+  }],
+  "prId": 11053
+}]

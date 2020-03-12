@@ -1,0 +1,52 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "This seems to fail on Jenkins. Could you check this once more? Or, do you need a change on test environment?\r\n```\r\norg.apache.spark.deploy.k8s.features.LocalDirsFeatureStepSuite.local dir on mounted volume\r\n```",
+    "commit": "c29dd7ae46ce4624898864100cfa6069e1d4115a",
+    "createdAt": "2019-06-15T17:54:16Z",
+    "diffHunk": "@@ -116,4 +115,28 @@ class LocalDirsFeatureStepSuite extends SparkFunSuite {\n         .withValue(defaultLocalDir)\n         .build())\n   }\n+\n+  test(\"local dir on mounted volume\") {",
+    "line": 16
+  }, {
+    "author": {
+      "login": "chenjunjiedada"
+    },
+    "body": "Updated code and unit test, thanks.",
+    "commit": "c29dd7ae46ce4624898864100cfa6069e1d4115a",
+    "createdAt": "2019-06-16T01:38:01Z",
+    "diffHunk": "@@ -116,4 +115,28 @@ class LocalDirsFeatureStepSuite extends SparkFunSuite {\n         .withValue(defaultLocalDir)\n         .build())\n   }\n+\n+  test(\"local dir on mounted volume\") {",
+    "line": 16
+  }],
+  "prId": 24879
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "You can use the same `KubernetesConf` for all steps right? That's how it works when spark-submit is run.",
+    "commit": "c29dd7ae46ce4624898864100cfa6069e1d4115a",
+    "createdAt": "2019-07-25T16:54:57Z",
+    "diffHunk": "@@ -116,4 +115,33 @@ class LocalDirsFeatureStepSuite extends SparkFunSuite {\n         .withValue(defaultLocalDir)\n         .build())\n   }\n+\n+  test(\"local dir on mounted volume\") {\n+    val volumeConf = KubernetesVolumeSpec(\n+      \"spark-local-dir-test\",\n+      \"/tmp\",\n+      \"\",\n+      false,\n+      KubernetesHostPathVolumeConf(\"/hostPath/tmp\")\n+    )\n+    val mountVolumeConf = KubernetesTestConf.createDriverConf(volumes = Seq(volumeConf))\n+    val mountVolumeStep = new MountVolumesFeatureStep(mountVolumeConf)\n+    val configuredPod = mountVolumeStep.configurePod(SparkPod.initialPod())\n+\n+    val sparkConf = new SparkConfWithEnv(Map())\n+    val localDirConf = KubernetesTestConf.createDriverConf(sparkConf)"
+  }, {
+    "author": {
+      "login": "erikerlandson"
+    },
+    "body": "That is the idea, to keep building out one conf.  (There were some early proposals around making these stages \"more functional\" but those were considered less broadly familiar and less spark idiomatic)",
+    "commit": "c29dd7ae46ce4624898864100cfa6069e1d4115a",
+    "createdAt": "2019-07-25T18:33:24Z",
+    "diffHunk": "@@ -116,4 +115,33 @@ class LocalDirsFeatureStepSuite extends SparkFunSuite {\n         .withValue(defaultLocalDir)\n         .build())\n   }\n+\n+  test(\"local dir on mounted volume\") {\n+    val volumeConf = KubernetesVolumeSpec(\n+      \"spark-local-dir-test\",\n+      \"/tmp\",\n+      \"\",\n+      false,\n+      KubernetesHostPathVolumeConf(\"/hostPath/tmp\")\n+    )\n+    val mountVolumeConf = KubernetesTestConf.createDriverConf(volumes = Seq(volumeConf))\n+    val mountVolumeStep = new MountVolumesFeatureStep(mountVolumeConf)\n+    val configuredPod = mountVolumeStep.configurePod(SparkPod.initialPod())\n+\n+    val sparkConf = new SparkConfWithEnv(Map())\n+    val localDirConf = KubernetesTestConf.createDriverConf(sparkConf)"
+  }],
+  "prId": 24879
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Use the wildcard when the import line gets too long.",
+    "commit": "c29dd7ae46ce4624898864100cfa6069e1d4115a",
+    "createdAt": "2019-07-25T16:56:26Z",
+    "diffHunk": "@@ -19,9 +19,8 @@ package org.apache.spark.deploy.k8s.features\n import io.fabric8.kubernetes.api.model.{EnvVarBuilder, VolumeBuilder, VolumeMountBuilder}\n \n import org.apache.spark.{SparkConf, SparkFunSuite}\n-import org.apache.spark.deploy.k8s.{KubernetesTestConf, SparkPod}\n+import org.apache.spark.deploy.k8s.{KubernetesHostPathVolumeConf, KubernetesTestConf, KubernetesVolumeSpec, SparkPod}"
+  }],
+  "prId": 24879
+}]

@@ -1,0 +1,12 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "brkyvz"
+    },
+    "body": "can you verify that it was false before the `abort`?",
+    "commit": "c5b0c98257e39d6af2dd8f702b8cbc9f9e6fabe9",
+    "createdAt": "2018-04-12T00:53:32Z",
+    "diffHunk": "@@ -471,6 +470,41 @@ class StateStoreSuite extends StateStoreSuiteBase[HDFSBackedStateStoreProvider]\n     }\n   }\n \n+  test(\"error writing [version].delta cancels the output stream\") {\n+\n+    val hadoopConf = new Configuration()\n+    hadoopConf.set(\n+      SQLConf.STREAMING_CHECKPOINT_FILE_MANAGER_CLASS.parent.key,\n+      classOf[TestCheckpointFileManager].getName)\n+    val remoteDir = Utils.createTempDir().getAbsolutePath\n+\n+    val provider = newStoreProvider(\n+      opId = Random.nextInt, partition = 0, dir = remoteDir, hadoopConf = hadoopConf)\n+\n+    // Disable failure of output stream and generate versions\n+    TestCheckpointFileManager.shouldFailInCreateAtomic = false\n+    for (version <- 1 to 10) {\n+      val store = provider.getStore(version - 1)\n+      put(store, version.toString, version) // update \"1\" -> 1, \"2\" -> 2, ...\n+      store.commit()\n+    }\n+    val version10Data = (1L to 10).map(_.toString).map(x => x -> x).toSet\n+\n+    val store = provider.getStore(10)\n+    // Fail commit for next version and verify that reloading resets the files\n+    TestCheckpointFileManager.shouldFailInCreateAtomic = true\n+    put(store, \"11\", 11)\n+    val e = intercept[IllegalStateException] { quietly { store.commit() } }\n+    assert(e.getCause.isInstanceOf[IOException], \"Was waiting the IOException to be thrown\")\n+    TestCheckpointFileManager.shouldFailInCreateAtomic = false\n+\n+    // Abort commit for next version and verify that reloading resets the files\n+    val store2 = provider.getStore(10)\n+    put(store2, \"11\", 11)\n+    store2.abort()\n+    assert(TestCheckpointFileManager.cancelCalledInCreateAtomic)"
+  }],
+  "prId": 21048
+}]

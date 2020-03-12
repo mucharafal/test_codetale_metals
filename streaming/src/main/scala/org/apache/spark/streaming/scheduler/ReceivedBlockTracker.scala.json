@@ -1,0 +1,103 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "This just basically copies the content right? would it be more robust to just construct a new mutable.Seq from the queue to be sure about what the type is? I know it won't be a Queue here but sounds like the representation does kind of matter.\r\n\r\nWas https://issues.apache.org/jira/browse/SPARK-23358 / https://issues.apache.org/jira/browse/SPARK-23391 really the cause or did it mostly uncover this?",
+    "commit": "9cd6fb57b631316cd098dcba3337490d9582070c",
+    "createdAt": "2019-02-01T00:24:31Z",
+    "diffHunk": "@@ -112,7 +112,7 @@ private[streaming] class ReceivedBlockTracker(\n   def allocateBlocksToBatch(batchTime: Time): Unit = synchronized {\n     if (lastAllocatedBatchTime == null || batchTime > lastAllocatedBatchTime) {\n       val streamIdToBlocks = streamIds.map { streamId =>\n-        (streamId, getReceivedBlockQueue(streamId).clone())\n+        (streamId, getReceivedBlockQueue(streamId).clone().dequeueAll(x => true))"
+  }, {
+    "author": {
+      "login": "rlodge"
+    },
+    "body": "Sure, I could do:\r\n\r\n`mutable.ArrayBuffer.empty[ReceivedBlockInfo] ++= getReceivedBlockQueue(streamId).clone()`\r\n\r\nwhich ensures that we know exactly the sequence type being serialized; would you prefer I did that?\r\n\r\nhttps://issues.apache.org/jira/browse/SPARK-23991 caused it in the sense that it moved from using dequeueAll to just serializing a clone of the queue, and the queue just doesn't serialize correctly after some number of entries (a scala bug, IMO).  You could say it \"uncovered\" a scala bug that was sitting there, but prior to that checking the code wouldn't error with large numbers of entries because dequeueAll constructs an ArrayBuffer and that's what was being serialized.",
+    "commit": "9cd6fb57b631316cd098dcba3337490d9582070c",
+    "createdAt": "2019-02-01T00:36:26Z",
+    "diffHunk": "@@ -112,7 +112,7 @@ private[streaming] class ReceivedBlockTracker(\n   def allocateBlocksToBatch(batchTime: Time): Unit = synchronized {\n     if (lastAllocatedBatchTime == null || batchTime > lastAllocatedBatchTime) {\n       val streamIdToBlocks = streamIds.map { streamId =>\n-        (streamId, getReceivedBlockQueue(streamId).clone())\n+        (streamId, getReceivedBlockQueue(streamId).clone().dequeueAll(x => true))"
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Oh I was looking at the wrong JIRA, number typo. Yeah I see it. @gaborgsomogyi that makes sense?\r\n\r\nHow about `ArrayBuffer(...:_*)`? might be better as it could exactly allocate the size.",
+    "commit": "9cd6fb57b631316cd098dcba3337490d9582070c",
+    "createdAt": "2019-02-01T01:11:22Z",
+    "diffHunk": "@@ -112,7 +112,7 @@ private[streaming] class ReceivedBlockTracker(\n   def allocateBlocksToBatch(batchTime: Time): Unit = synchronized {\n     if (lastAllocatedBatchTime == null || batchTime > lastAllocatedBatchTime) {\n       val streamIdToBlocks = streamIds.map { streamId =>\n-        (streamId, getReceivedBlockQueue(streamId).clone())\n+        (streamId, getReceivedBlockQueue(streamId).clone().dequeueAll(x => true))"
+  }, {
+    "author": {
+      "login": "gaborgsomogyi"
+    },
+    "body": "That's not a scala but java limitation. Serialization is vulnerable to stack overflow for certain kind of structures; for example, a long linked list with no special writeObject() methods will be serialized by recursively writing each link. If you've got a 100k links, you're going to try to use 100k stack frames, and quite likely fail with a StackOverflowError. The main thing here is to use something which is not linked.",
+    "commit": "9cd6fb57b631316cd098dcba3337490d9582070c",
+    "createdAt": "2019-02-01T11:00:56Z",
+    "diffHunk": "@@ -112,7 +112,7 @@ private[streaming] class ReceivedBlockTracker(\n   def allocateBlocksToBatch(batchTime: Time): Unit = synchronized {\n     if (lastAllocatedBatchTime == null || batchTime > lastAllocatedBatchTime) {\n       val streamIdToBlocks = streamIds.map { streamId =>\n-        (streamId, getReceivedBlockQueue(streamId).clone())\n+        (streamId, getReceivedBlockQueue(streamId).clone().dequeueAll(x => true))"
+  }, {
+    "author": {
+      "login": "gaborgsomogyi"
+    },
+    "body": "I would also choose a solution which allocates the buffer in one step and we could avoid `amortized O(1)` issue.\r\n\r\nAdditionally it will be a weird construct which can be tried to simplified by later developers. I would add a comment here which describes the issue not to enforce people to analyze this again.\r\n",
+    "commit": "9cd6fb57b631316cd098dcba3337490d9582070c",
+    "createdAt": "2019-02-01T11:18:58Z",
+    "diffHunk": "@@ -112,7 +112,7 @@ private[streaming] class ReceivedBlockTracker(\n   def allocateBlocksToBatch(batchTime: Time): Unit = synchronized {\n     if (lastAllocatedBatchTime == null || batchTime > lastAllocatedBatchTime) {\n       val streamIdToBlocks = streamIds.map { streamId =>\n-        (streamId, getReceivedBlockQueue(streamId).clone())\n+        (streamId, getReceivedBlockQueue(streamId).clone().dequeueAll(x => true))"
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Yes I think that's the point here indeed, but a Queue apparently has a linked-list-like representation. ArrayBuffer won't. Are you saying that's the right change or no? my point was we're not actually guaranteed what dequeueAll returns. \r\n\r\nA comment would be good, sure.",
+    "commit": "9cd6fb57b631316cd098dcba3337490d9582070c",
+    "createdAt": "2019-02-01T23:26:26Z",
+    "diffHunk": "@@ -112,7 +112,7 @@ private[streaming] class ReceivedBlockTracker(\n   def allocateBlocksToBatch(batchTime: Time): Unit = synchronized {\n     if (lastAllocatedBatchTime == null || batchTime > lastAllocatedBatchTime) {\n       val streamIdToBlocks = streamIds.map { streamId =>\n-        (streamId, getReceivedBlockQueue(streamId).clone())\n+        (streamId, getReceivedBlockQueue(streamId).clone().dequeueAll(x => true))"
+  }, {
+    "author": {
+      "login": "gaborgsomogyi"
+    },
+    "body": "I think `.dequeueAll(x => true)` works but not the right change and I would propose similar things what you've mentioned, for example `ArrayBuffer...`. The main point is to allocate the buffer in one step which is not the case with `dequeueAll`.",
+    "commit": "9cd6fb57b631316cd098dcba3337490d9582070c",
+    "createdAt": "2019-02-04T08:57:49Z",
+    "diffHunk": "@@ -112,7 +112,7 @@ private[streaming] class ReceivedBlockTracker(\n   def allocateBlocksToBatch(batchTime: Time): Unit = synchronized {\n     if (lastAllocatedBatchTime == null || batchTime > lastAllocatedBatchTime) {\n       val streamIdToBlocks = streamIds.map { streamId =>\n-        (streamId, getReceivedBlockQueue(streamId).clone())\n+        (streamId, getReceivedBlockQueue(streamId).clone().dequeueAll(x => true))"
+  }, {
+    "author": {
+      "login": "rlodge"
+    },
+    "body": "Sure, I can add a comment.  Is\r\n\r\n`ArrayBuffer(queue.clone(): _*)`\r\n\r\nsufficient, or do we need\r\n\r\n```scala\r\nval clonedQueue = getReceivedBlockQueue(streamId).clone()\r\nval bufferToWrite = new mutable.ArrayBuffer[ReceivedBlockInfo](clonedQueue.size)\r\nbufferToWrite ++= clonedQueue\r\n(streamId,\r\n   bufferToWrite)\r\n```\r\n",
+    "commit": "9cd6fb57b631316cd098dcba3337490d9582070c",
+    "createdAt": "2019-02-04T18:03:05Z",
+    "diffHunk": "@@ -112,7 +112,7 @@ private[streaming] class ReceivedBlockTracker(\n   def allocateBlocksToBatch(batchTime: Time): Unit = synchronized {\n     if (lastAllocatedBatchTime == null || batchTime > lastAllocatedBatchTime) {\n       val streamIdToBlocks = streamIds.map { streamId =>\n-        (streamId, getReceivedBlockQueue(streamId).clone())\n+        (streamId, getReceivedBlockQueue(streamId).clone().dequeueAll(x => true))"
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "The first one looks good to me. It definitely makes an ArrayBuffer! and I can only imagine the ordering that is produced is the order of dequeueing the elements. It was so when I tried it locally.",
+    "commit": "9cd6fb57b631316cd098dcba3337490d9582070c",
+    "createdAt": "2019-02-04T18:07:44Z",
+    "diffHunk": "@@ -112,7 +112,7 @@ private[streaming] class ReceivedBlockTracker(\n   def allocateBlocksToBatch(batchTime: Time): Unit = synchronized {\n     if (lastAllocatedBatchTime == null || batchTime > lastAllocatedBatchTime) {\n       val streamIdToBlocks = streamIds.map { streamId =>\n-        (streamId, getReceivedBlockQueue(streamId).clone())\n+        (streamId, getReceivedBlockQueue(streamId).clone().dequeueAll(x => true))"
+  }, {
+    "author": {
+      "login": "rlodge"
+    },
+    "body": "Ok, I pushed those changes.",
+    "commit": "9cd6fb57b631316cd098dcba3337490d9582070c",
+    "createdAt": "2019-02-04T18:24:05Z",
+    "diffHunk": "@@ -112,7 +112,7 @@ private[streaming] class ReceivedBlockTracker(\n   def allocateBlocksToBatch(batchTime: Time): Unit = synchronized {\n     if (lastAllocatedBatchTime == null || batchTime > lastAllocatedBatchTime) {\n       val streamIdToBlocks = streamIds.map { streamId =>\n-        (streamId, getReceivedBlockQueue(streamId).clone())\n+        (streamId, getReceivedBlockQueue(streamId).clone().dequeueAll(x => true))"
+  }],
+  "prId": 23716
+}, {
+  "comments": [{
+    "author": {
+      "login": "gaborgsomogyi"
+    },
+    "body": "Nit: no line break required.",
+    "commit": "9cd6fb57b631316cd098dcba3337490d9582070c",
+    "createdAt": "2019-02-05T08:23:05Z",
+    "diffHunk": "@@ -111,8 +111,13 @@ private[streaming] class ReceivedBlockTracker(\n    */\n   def allocateBlocksToBatch(batchTime: Time): Unit = synchronized {\n     if (lastAllocatedBatchTime == null || batchTime > lastAllocatedBatchTime) {\n+      // We explicitly create an ArrayBuffer here because at least as of Scala 2.11 and 2.12\n+      // a mutable.Queue fails serialization with a StackOverflow error if it has more than\n+      // a few thousand elements.  So we explicitly allocate a collection for serialization which\n+      // we know doesn't have this issue.  (See SPARK-26734).\n       val streamIdToBlocks = streamIds.map { streamId =>\n-        (streamId, getReceivedBlockQueue(streamId).clone())\n+        (streamId,\n+          mutable.ArrayBuffer(getReceivedBlockQueue(streamId).clone(): _*))"
+  }, {
+    "author": {
+      "login": "rlodge"
+    },
+    "body": "Ok, Sure.",
+    "commit": "9cd6fb57b631316cd098dcba3337490d9582070c",
+    "createdAt": "2019-02-05T19:46:28Z",
+    "diffHunk": "@@ -111,8 +111,13 @@ private[streaming] class ReceivedBlockTracker(\n    */\n   def allocateBlocksToBatch(batchTime: Time): Unit = synchronized {\n     if (lastAllocatedBatchTime == null || batchTime > lastAllocatedBatchTime) {\n+      // We explicitly create an ArrayBuffer here because at least as of Scala 2.11 and 2.12\n+      // a mutable.Queue fails serialization with a StackOverflow error if it has more than\n+      // a few thousand elements.  So we explicitly allocate a collection for serialization which\n+      // we know doesn't have this issue.  (See SPARK-26734).\n       val streamIdToBlocks = streamIds.map { streamId =>\n-        (streamId, getReceivedBlockQueue(streamId).clone())\n+        (streamId,\n+          mutable.ArrayBuffer(getReceivedBlockQueue(streamId).clone(): _*))"
+  }],
+  "prId": 23716
+}]

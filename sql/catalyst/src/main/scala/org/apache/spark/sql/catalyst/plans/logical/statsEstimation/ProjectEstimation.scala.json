@@ -1,0 +1,22 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "rxin"
+    },
+    "body": "my question from before was really whether we need to match on other things as well (that are not just Alias - e.g. can an attribute be other NamedExpression?)\r\n\r\ncc @cloud-fan ",
+    "commit": "a5ca31c06522d453ecde83470360fe4d826bc424",
+    "createdAt": "2017-01-06T23:47:15Z",
+    "diffHunk": "@@ -0,0 +1,44 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst.plans.logical.statsEstimation\n+\n+import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeMap}\n+import org.apache.spark.sql.catalyst.plans.logical.{Project, Statistics}\n+\n+object ProjectEstimation {\n+  import EstimationUtils._\n+\n+  def estimate(project: Project): Option[Statistics] = {\n+    if (rowCountsExist(project.child)) {\n+      val childStats = project.child.statistics\n+      val inputAttrStats = childStats.attributeStats\n+      // Match alias with its child's column stat\n+      val aliasStats = project.expressions.collect {\n+        case alias @ Alias(attr: Attribute, _) if inputAttrStats.contains(attr) =>",
+    "line": 32
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "In the long run, we should define a `statistics` interface in `Expression`, so that we can propagate the column stats more naturally, for more cases(not only `Alias`, but also `Add`, `Mod`, etc.). But currently catalyst doesn't propagate attributes correctly, e.g. https://issues.apache.org/jira/browse/SPARK-17995 (`Union`, `Except`, etc. has the same problem), we may need to hack a lot of places to propagate column stats correctly.\r\n\r\nAccording to @wzhfy 's benchmark, it turns out we can speed up most of the cases if we take care of `Alias`, so I'm ok with the current approach.",
+    "commit": "a5ca31c06522d453ecde83470360fe4d826bc424",
+    "createdAt": "2017-01-09T03:05:20Z",
+    "diffHunk": "@@ -0,0 +1,44 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst.plans.logical.statsEstimation\n+\n+import org.apache.spark.sql.catalyst.expressions.{Alias, Attribute, AttributeMap}\n+import org.apache.spark.sql.catalyst.plans.logical.{Project, Statistics}\n+\n+object ProjectEstimation {\n+  import EstimationUtils._\n+\n+  def estimate(project: Project): Option[Statistics] = {\n+    if (rowCountsExist(project.child)) {\n+      val childStats = project.child.statistics\n+      val inputAttrStats = childStats.attributeStats\n+      // Match alias with its child's column stat\n+      val aliasStats = project.expressions.collect {\n+        case alias @ Alias(attr: Attribute, _) if inputAttrStats.contains(attr) =>",
+    "line": 32
+  }],
+  "prId": 16430
+}]

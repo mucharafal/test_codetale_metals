@@ -1,0 +1,84 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "do we really need to test with whole-stage-codegen on and off? The benchmark is just a SELECT query and I don't think whole-stage-codegen can help here. We can also see from the benchmark result that there is no difference.",
+    "commit": "766110ad07bc1a9911b80a179033df6ad9c924fb",
+    "createdAt": "2019-09-12T09:14:54Z",
+    "diffHunk": "@@ -48,35 +48,41 @@ object ExtractBenchmark extends SqlBasedBenchmark {\n     }\n   }\n \n-  private def run(cardinality: Long, field: String): Unit = {\n-    codegenBenchmark(s\"$field of timestamp\", cardinality) {\n-      doBenchmark(cardinality, s\"EXTRACT($field FROM (cast(id as timestamp)))\")\n+  private def castExpr(from: String): String = from match {\n+    case \"timestamp\" => s\"cast(id as timestamp)\"\n+    case \"date\" => s\"cast(cast(id as timestamp) as date)\"\n+    case other => throw new IllegalArgumentException(\n+      s\"Unsupported column type $other. Valid column types are 'timestamp' and 'date'\")\n+  }\n+\n+  private def run(func: String, cardinality: Long, field: String, from: String): Unit = {\n+    val expr = func match {\n+      case \"extract\" => s\"EXTRACT($field FROM ${castExpr(from)})\"\n+      case \"date_part\" => s\"DATE_PART('$field', ${castExpr(from)})\"\n+      case other => throw new IllegalArgumentException(\n+        s\"Unsupported function '$other'. Valid functions are 'extract' and 'date_part'.\")\n+    }\n+    codegenBenchmark(s\"$field of $from\", cardinality) {"
+  }, {
+    "author": {
+      "login": "MaxGekk"
+    },
+    "body": "The code is the same, so, we could benchmark it with default settings only - `spark.sql.codegen.wholeStage` = `true`.",
+    "commit": "766110ad07bc1a9911b80a179033df6ad9c924fb",
+    "createdAt": "2019-09-12T09:23:49Z",
+    "diffHunk": "@@ -48,35 +48,41 @@ object ExtractBenchmark extends SqlBasedBenchmark {\n     }\n   }\n \n-  private def run(cardinality: Long, field: String): Unit = {\n-    codegenBenchmark(s\"$field of timestamp\", cardinality) {\n-      doBenchmark(cardinality, s\"EXTRACT($field FROM (cast(id as timestamp)))\")\n+  private def castExpr(from: String): String = from match {\n+    case \"timestamp\" => s\"cast(id as timestamp)\"\n+    case \"date\" => s\"cast(cast(id as timestamp) as date)\"\n+    case other => throw new IllegalArgumentException(\n+      s\"Unsupported column type $other. Valid column types are 'timestamp' and 'date'\")\n+  }\n+\n+  private def run(func: String, cardinality: Long, field: String, from: String): Unit = {\n+    val expr = func match {\n+      case \"extract\" => s\"EXTRACT($field FROM ${castExpr(from)})\"\n+      case \"date_part\" => s\"DATE_PART('$field', ${castExpr(from)})\"\n+      case other => throw new IllegalArgumentException(\n+        s\"Unsupported function '$other'. Valid functions are 'extract' and 'date_part'.\")\n+    }\n+    codegenBenchmark(s\"$field of $from\", cardinality) {"
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "Yea I know the code is same, but since we are refining this benchmark, we can fix this issue as well.",
+    "commit": "766110ad07bc1a9911b80a179033df6ad9c924fb",
+    "createdAt": "2019-09-12T09:33:41Z",
+    "diffHunk": "@@ -48,35 +48,41 @@ object ExtractBenchmark extends SqlBasedBenchmark {\n     }\n   }\n \n-  private def run(cardinality: Long, field: String): Unit = {\n-    codegenBenchmark(s\"$field of timestamp\", cardinality) {\n-      doBenchmark(cardinality, s\"EXTRACT($field FROM (cast(id as timestamp)))\")\n+  private def castExpr(from: String): String = from match {\n+    case \"timestamp\" => s\"cast(id as timestamp)\"\n+    case \"date\" => s\"cast(cast(id as timestamp) as date)\"\n+    case other => throw new IllegalArgumentException(\n+      s\"Unsupported column type $other. Valid column types are 'timestamp' and 'date'\")\n+  }\n+\n+  private def run(func: String, cardinality: Long, field: String, from: String): Unit = {\n+    val expr = func match {\n+      case \"extract\" => s\"EXTRACT($field FROM ${castExpr(from)})\"\n+      case \"date_part\" => s\"DATE_PART('$field', ${castExpr(from)})\"\n+      case other => throw new IllegalArgumentException(\n+        s\"Unsupported function '$other'. Valid functions are 'extract' and 'date_part'.\")\n+    }\n+    codegenBenchmark(s\"$field of $from\", cardinality) {"
+  }, {
+    "author": {
+      "login": "MaxGekk"
+    },
+    "body": "I leaved only codegen benchmarks. From my point of view, it became better when all cases in one table.",
+    "commit": "766110ad07bc1a9911b80a179033df6ad9c924fb",
+    "createdAt": "2019-09-12T10:12:17Z",
+    "diffHunk": "@@ -48,35 +48,41 @@ object ExtractBenchmark extends SqlBasedBenchmark {\n     }\n   }\n \n-  private def run(cardinality: Long, field: String): Unit = {\n-    codegenBenchmark(s\"$field of timestamp\", cardinality) {\n-      doBenchmark(cardinality, s\"EXTRACT($field FROM (cast(id as timestamp)))\")\n+  private def castExpr(from: String): String = from match {\n+    case \"timestamp\" => s\"cast(id as timestamp)\"\n+    case \"date\" => s\"cast(cast(id as timestamp) as date)\"\n+    case other => throw new IllegalArgumentException(\n+      s\"Unsupported column type $other. Valid column types are 'timestamp' and 'date'\")\n+  }\n+\n+  private def run(func: String, cardinality: Long, field: String, from: String): Unit = {\n+    val expr = func match {\n+      case \"extract\" => s\"EXTRACT($field FROM ${castExpr(from)})\"\n+      case \"date_part\" => s\"DATE_PART('$field', ${castExpr(from)})\"\n+      case other => throw new IllegalArgumentException(\n+        s\"Unsupported function '$other'. Valid functions are 'extract' and 'date_part'.\")\n+    }\n+    codegenBenchmark(s\"$field of $from\", cardinality) {"
+  }],
+  "prId": 25772
+}, {
+  "comments": [{
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "Ur, is there other reason not to use `SqlBasedBenchmark`? You can do `override def getSparkSession`  from `SqlBasedBenchmark` like `DatasetBenchmark` does.",
+    "commit": "766110ad07bc1a9911b80a179033df6ad9c924fb",
+    "createdAt": "2019-09-12T18:38:54Z",
+    "diffHunk": "@@ -31,52 +36,76 @@ import java.time.Instant\n  *      Results will be written to \"benchmarks/ExtractBenchmark-results.txt\".\n  * }}}\n  */\n-object ExtractBenchmark extends SqlBasedBenchmark {\n+object ExtractBenchmark extends BenchmarkBase with SQLHelper {\n+  private val spark: SparkSession = SparkSession.builder()\n+    .master(\"local[1]\")\n+    .appName(this.getClass.getCanonicalName)\n+    .getOrCreate()",
+    "line": 21
+  }, {
+    "author": {
+      "login": "MaxGekk"
+    },
+    "body": "Having unused dependency is better, from my point of view. If you think it makes sense, I could change that in a separate PR, and override `getSparkSession` in other benchmarks like `FilterPushdownBenchmark`, `OrcReadBenchmark`, `PrimitiveArrayBenchmark`.",
+    "commit": "766110ad07bc1a9911b80a179033df6ad9c924fb",
+    "createdAt": "2019-09-13T11:46:49Z",
+    "diffHunk": "@@ -31,52 +36,76 @@ import java.time.Instant\n  *      Results will be written to \"benchmarks/ExtractBenchmark-results.txt\".\n  * }}}\n  */\n-object ExtractBenchmark extends SqlBasedBenchmark {\n+object ExtractBenchmark extends BenchmarkBase with SQLHelper {\n+  private val spark: SparkSession = SparkSession.builder()\n+    .master(\"local[1]\")\n+    .appName(this.getClass.getCanonicalName)\n+    .getOrCreate()",
+    "line": 21
+  }, {
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "Maybe later. For now, never mind. We have more important things to do~ 3.0.0-preview is coming! 😄 ",
+    "commit": "766110ad07bc1a9911b80a179033df6ad9c924fb",
+    "createdAt": "2019-09-13T15:10:08Z",
+    "diffHunk": "@@ -31,52 +36,76 @@ import java.time.Instant\n  *      Results will be written to \"benchmarks/ExtractBenchmark-results.txt\".\n  * }}}\n  */\n-object ExtractBenchmark extends SqlBasedBenchmark {\n+object ExtractBenchmark extends BenchmarkBase with SQLHelper {\n+  private val spark: SparkSession = SparkSession.builder()\n+    .master(\"local[1]\")\n+    .appName(this.getClass.getCanonicalName)\n+    .getOrCreate()",
+    "line": 21
+  }, {
+    "author": {
+      "login": "MaxGekk"
+    },
+    "body": "> We have more important things to do~ 3.0.0-preview is coming!\r\n\r\nPlease, ping me if you think I could help.",
+    "commit": "766110ad07bc1a9911b80a179033df6ad9c924fb",
+    "createdAt": "2019-09-13T16:31:02Z",
+    "diffHunk": "@@ -31,52 +36,76 @@ import java.time.Instant\n  *      Results will be written to \"benchmarks/ExtractBenchmark-results.txt\".\n  * }}}\n  */\n-object ExtractBenchmark extends SqlBasedBenchmark {\n+object ExtractBenchmark extends BenchmarkBase with SQLHelper {\n+  private val spark: SparkSession = SparkSession.builder()\n+    .master(\"local[1]\")\n+    .appName(this.getClass.getCanonicalName)\n+    .getOrCreate()",
+    "line": 21
+  }, {
+    "author": {
+      "login": "MaxGekk"
+    },
+    "body": "Here is the PR https://github.com/apache/spark/pull/25828 , just in case.",
+    "commit": "766110ad07bc1a9911b80a179033df6ad9c924fb",
+    "createdAt": "2019-09-18T08:03:37Z",
+    "diffHunk": "@@ -31,52 +36,76 @@ import java.time.Instant\n  *      Results will be written to \"benchmarks/ExtractBenchmark-results.txt\".\n  * }}}\n  */\n-object ExtractBenchmark extends SqlBasedBenchmark {\n+object ExtractBenchmark extends BenchmarkBase with SQLHelper {\n+  private val spark: SparkSession = SparkSession.builder()\n+    .master(\"local[1]\")\n+    .appName(this.getClass.getCanonicalName)\n+    .getOrCreate()",
+    "line": 21
+  }],
+  "prId": 25772
+}]

@@ -1,0 +1,34 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "aarondav"
+    },
+    "body": "this may fit within 100ch on one line\n",
+    "commit": "f7e1fafaabce45f59ae0b742c233d70f2aacde3d",
+    "createdAt": "2014-11-01T07:19:25Z",
+    "diffHunk": "@@ -30,13 +31,15 @@ private[spark] class FetchFailedException(\n     bmAddress: BlockManagerId,\n     shuffleId: Int,\n     mapId: Int,\n-    reduceId: Int)\n+    reduceId: Int,\n+    message: String)\n   extends Exception {\n \n   override def getMessage: String =\n     \"Fetch failed: %s %d %d %d\".format(bmAddress, shuffleId, mapId, reduceId)\n \n-  def toTaskEndReason: TaskEndReason = FetchFailed(bmAddress, shuffleId, mapId, reduceId)\n+  def toTaskEndReason: TaskEndReason ="
+  }],
+  "prId": 3032
+}, {
+  "comments": [{
+    "author": {
+      "login": "aarondav"
+    },
+    "body": "Having this override the getMessage means that the message parameter does not propagate correctly. We should probably get rid of this method here. Doing so means that the stages page does not show these stats, just the cause message, but the console and the job page show the \"TaskEndReason\", which includes the address as well as the exception itself. This looks pretty good from a usability perspective.\n",
+    "commit": "f7e1fafaabce45f59ae0b742c233d70f2aacde3d",
+    "createdAt": "2014-11-02T21:47:56Z",
+    "diffHunk": "@@ -30,13 +31,20 @@ private[spark] class FetchFailedException(\n     bmAddress: BlockManagerId,\n     shuffleId: Int,\n     mapId: Int,\n-    reduceId: Int)\n-  extends Exception {\n+    reduceId: Int,\n+    message: String)\n+  extends Exception(message) {\n+\n+  def this(bmAddress: BlockManagerId, shuffleId: Int, mapId: Int, reduceId: Int, e: Throwable) {\n+    this(bmAddress, shuffleId, mapId, reduceId, e.getMessage)\n+    initCause(e)\n+  }\n \n   override def getMessage: String ="
+  }],
+  "prId": 3032
+}, {
+  "comments": [{
+    "author": {
+      "login": "aarondav"
+    },
+    "body": "we can now delete this method because this is the actual behavior inherently with your change\n",
+    "commit": "f7e1fafaabce45f59ae0b742c233d70f2aacde3d",
+    "createdAt": "2014-11-02T21:49:58Z",
+    "diffHunk": "@@ -46,7 +54,7 @@ private[spark] class MetadataFetchFailedException(\n     shuffleId: Int,\n     reduceId: Int,\n     message: String)\n-  extends FetchFailedException(null, shuffleId, -1, reduceId) {\n+  extends FetchFailedException(null, shuffleId, -1, reduceId, message) {\n \n   override def getMessage: String = message"
+  }],
+  "prId": 3032
+}]

@@ -1,0 +1,59 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "tdas"
+    },
+    "body": "Why was this change necessary?\n",
+    "commit": "803aa2ccb31c909b046727c28eca2c08ce279e6f",
+    "createdAt": "2015-04-29T09:07:02Z",
+    "diffHunk": "@@ -53,14 +53,16 @@ class KafkaRDDSuite extends FunSuite with BeforeAndAfterAll {\n   }\n \n   test(\"basic usage\") {\n-    val topic = \"topicbasic\"\n+    val topic = s\"topicbasic-${Random.nextInt}\"",
+    "line": 5
+  }],
+  "prId": 4537
+}, {
+  "comments": [{
+    "author": {
+      "login": "tdas"
+    },
+    "body": "What was this, and why was this necessary? \n",
+    "commit": "803aa2ccb31c909b046727c28eca2c08ce279e6f",
+    "createdAt": "2015-04-29T09:07:36Z",
+    "diffHunk": "@@ -53,14 +53,16 @@ class KafkaRDDSuite extends FunSuite with BeforeAndAfterAll {\n   }\n \n   test(\"basic usage\") {\n-    val topic = \"topicbasic\"\n+    val topic = s\"topicbasic-${Random.nextInt}\"\n     kafkaTestUtils.createTopic(topic)\n     val messages = Set(\"the\", \"quick\", \"brown\", \"fox\")\n     kafkaTestUtils.sendMessages(topic, messages.toArray)\n \n-\n     val kafkaParams = Map(\"metadata.broker.list\" -> kafkaTestUtils.brokerAddress,\n-      \"group.id\" -> s\"test-consumer-${Random.nextInt(10000)}\")\n+      \"group.id\" -> s\"test-consumer-${Random.nextInt}\")\n+\n+    val kc = new KafkaCluster(kafkaParams)\n+    kafkaTestUtils.waitUntilLeaderOffset(kc, topic, 0, messages.size)"
+  }, {
+    "author": {
+      "login": "koeninger"
+    },
+    "body": "Those were just ruling out the possibility of jenkins failures being related to stale duplicate topic or consumer state.  There's nothing magical about the number 10000 as a random range for the name, so I removed it.\n",
+    "commit": "803aa2ccb31c909b046727c28eca2c08ce279e6f",
+    "createdAt": "2015-04-29T14:42:15Z",
+    "diffHunk": "@@ -53,14 +53,16 @@ class KafkaRDDSuite extends FunSuite with BeforeAndAfterAll {\n   }\n \n   test(\"basic usage\") {\n-    val topic = \"topicbasic\"\n+    val topic = s\"topicbasic-${Random.nextInt}\"\n     kafkaTestUtils.createTopic(topic)\n     val messages = Set(\"the\", \"quick\", \"brown\", \"fox\")\n     kafkaTestUtils.sendMessages(topic, messages.toArray)\n \n-\n     val kafkaParams = Map(\"metadata.broker.list\" -> kafkaTestUtils.brokerAddress,\n-      \"group.id\" -> s\"test-consumer-${Random.nextInt(10000)}\")\n+      \"group.id\" -> s\"test-consumer-${Random.nextInt}\")\n+\n+    val kc = new KafkaCluster(kafkaParams)\n+    kafkaTestUtils.waitUntilLeaderOffset(kc, topic, 0, messages.size)"
+  }, {
+    "author": {
+      "login": "tdas"
+    },
+    "body": "That makes sense for the topic name change. This question was about the `waitUntilLeaderOffset`. Is it also to make sure that the leader shows the right expected offset before testing starts? For more reliable testing?\n",
+    "commit": "803aa2ccb31c909b046727c28eca2c08ce279e6f",
+    "createdAt": "2015-05-01T18:39:46Z",
+    "diffHunk": "@@ -53,14 +53,16 @@ class KafkaRDDSuite extends FunSuite with BeforeAndAfterAll {\n   }\n \n   test(\"basic usage\") {\n-    val topic = \"topicbasic\"\n+    val topic = s\"topicbasic-${Random.nextInt}\"\n     kafkaTestUtils.createTopic(topic)\n     val messages = Set(\"the\", \"quick\", \"brown\", \"fox\")\n     kafkaTestUtils.sendMessages(topic, messages.toArray)\n \n-\n     val kafkaParams = Map(\"metadata.broker.list\" -> kafkaTestUtils.brokerAddress,\n-      \"group.id\" -> s\"test-consumer-${Random.nextInt(10000)}\")\n+      \"group.id\" -> s\"test-consumer-${Random.nextInt}\")\n+\n+    val kc = new KafkaCluster(kafkaParams)\n+    kafkaTestUtils.waitUntilLeaderOffset(kc, topic, 0, messages.size)"
+  }, {
+    "author": {
+      "login": "koeninger"
+    },
+    "body": "Yeah, thats' what got the tests passing on Jenkins\n",
+    "commit": "803aa2ccb31c909b046727c28eca2c08ce279e6f",
+    "createdAt": "2015-05-01T18:41:35Z",
+    "diffHunk": "@@ -53,14 +53,16 @@ class KafkaRDDSuite extends FunSuite with BeforeAndAfterAll {\n   }\n \n   test(\"basic usage\") {\n-    val topic = \"topicbasic\"\n+    val topic = s\"topicbasic-${Random.nextInt}\"\n     kafkaTestUtils.createTopic(topic)\n     val messages = Set(\"the\", \"quick\", \"brown\", \"fox\")\n     kafkaTestUtils.sendMessages(topic, messages.toArray)\n \n-\n     val kafkaParams = Map(\"metadata.broker.list\" -> kafkaTestUtils.brokerAddress,\n-      \"group.id\" -> s\"test-consumer-${Random.nextInt(10000)}\")\n+      \"group.id\" -> s\"test-consumer-${Random.nextInt}\")\n+\n+    val kc = new KafkaCluster(kafkaParams)\n+    kafkaTestUtils.waitUntilLeaderOffset(kc, topic, 0, messages.size)"
+  }],
+  "prId": 4537
+}, {
+  "comments": [{
+    "author": {
+      "login": "tdas"
+    },
+    "body": "What is this for? Its not obvious, could you add a comment?\n",
+    "commit": "803aa2ccb31c909b046727c28eca2c08ce279e6f",
+    "createdAt": "2015-05-01T21:04:45Z",
+    "diffHunk": "@@ -73,27 +74,37 @@ class KafkaRDDSuite extends FunSuite with BeforeAndAfterAll {\n \n   test(\"iterator boundary conditions\") {\n     // the idea is to find e.g. off-by-one errors between what kafka has available and the rdd\n-    val topic = \"topic1\"\n+    val topic = s\"topicboundary-${Random.nextInt}\"\n     val sent = Map(\"a\" -> 5, \"b\" -> 3, \"c\" -> 10)\n     kafkaTestUtils.createTopic(topic)\n \n     val kafkaParams = Map(\"metadata.broker.list\" -> kafkaTestUtils.brokerAddress,\n-      \"group.id\" -> s\"test-consumer-${Random.nextInt(10000)}\")\n+      \"group.id\" -> s\"test-consumer-${Random.nextInt}\")\n \n     val kc = new KafkaCluster(kafkaParams)\n \n     // this is the \"lots of messages\" case\n     kafkaTestUtils.sendMessages(topic, sent)\n+    val sentCount = sent.values.sum\n+    kafkaTestUtils.waitUntilLeaderOffset(topic, 0, sentCount)\n+\n     // rdd defined from leaders after sending messages, should get the number sent\n     val rdd = getRdd(kc, Set(topic))\n \n     assert(rdd.isDefined)\n-    assert(rdd.get.count === sent.values.sum, \"didn't get all sent messages\")\n \n-    val ranges = rdd.get.asInstanceOf[HasOffsetRanges]\n-      .offsetRanges.map(o => TopicAndPartition(o.topic, o.partition) -> o.untilOffset).toMap\n+    val ranges = rdd.get.asInstanceOf[HasOffsetRanges].offsetRanges\n+    val rangeCount = ranges.map(o => o.untilOffset - o.fromOffset).sum\n \n-    kc.setConsumerOffsets(kafkaParams(\"group.id\"), ranges)\n+    assert(rangeCount === sentCount, \"offset range didn't include all sent messages\")\n+    assert(rdd.get.count === sentCount, \"didn't get all sent messages\")\n+\n+    val rangesMap = ranges.map(o => TopicAndPartition(o.topic, o.partition) -> o.untilOffset).toMap\n+\n+    kc.setConsumerOffsets(kafkaParams(\"group.id\"), rangesMap).fold("
+  }],
+  "prId": 4537
+}]

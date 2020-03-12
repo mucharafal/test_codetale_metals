@@ -1,0 +1,53 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "tdas"
+    },
+    "body": "Why do you need `rateEstimator` as a field in `DStream`? All you need expose to modules outside DStream is the RateController. And the RateEstimator can be within the `RateController`\n",
+    "commit": "f168c9476fc7104d3d3f92702793e0d9116117d0",
+    "createdAt": "2015-07-23T04:16:39Z",
+    "diffHunk": "@@ -47,6 +49,27 @@ abstract class InputDStream[T: ClassTag] (@transient ssc_ : StreamingContext)\n   /** This is an unique identifier for the input stream. */\n   val id = ssc.getNewInputStreamId()\n \n+  /**\n+   * A rate estimator configured by the user to compute a dynamic ingestion bound for this stream.\n+   * @see `RateEstimator`\n+   */\n+  protected [streaming] val rateEstimator = newEstimator()"
+  }],
+  "prId": 7600
+}, {
+  "comments": [{
+    "author": {
+      "login": "tdas"
+    },
+    "body": "Again, this can be all within the RateController, does not need to be a top level field in DStream. In fact it can be something on a `RateEstimator` objects.\n",
+    "commit": "f168c9476fc7104d3d3f92702793e0d9116117d0",
+    "createdAt": "2015-07-23T04:17:25Z",
+    "diffHunk": "@@ -47,6 +49,27 @@ abstract class InputDStream[T: ClassTag] (@transient ssc_ : StreamingContext)\n   /** This is an unique identifier for the input stream. */\n   val id = ssc.getNewInputStreamId()\n \n+  /**\n+   * A rate estimator configured by the user to compute a dynamic ingestion bound for this stream.\n+   * @see `RateEstimator`\n+   */\n+  protected [streaming] val rateEstimator = newEstimator()\n+\n+  /**\n+   * Return the configured estimator, or `noop` if none was specified.\n+   */\n+  private def newEstimator() ="
+  }],
+  "prId": 7600
+}, {
+  "comments": [{
+    "author": {
+      "login": "tdas"
+    },
+    "body": "I think the rateController should be a option. By default, it will None. Only when backpressure is enabled do we populate it. That solves this awkward problem of defining a NoopRateController\n",
+    "commit": "f168c9476fc7104d3d3f92702793e0d9116117d0",
+    "createdAt": "2015-07-23T04:19:03Z",
+    "diffHunk": "@@ -47,6 +49,27 @@ abstract class InputDStream[T: ClassTag] (@transient ssc_ : StreamingContext)\n   /** This is an unique identifier for the input stream. */\n   val id = ssc.getNewInputStreamId()\n \n+  /**\n+   * A rate estimator configured by the user to compute a dynamic ingestion bound for this stream.\n+   * @see `RateEstimator`\n+   */\n+  protected [streaming] val rateEstimator = newEstimator()\n+\n+  /**\n+   * Return the configured estimator, or `noop` if none was specified.\n+   */\n+  private def newEstimator() =\n+    ssc.conf.get(\"spark.streaming.RateEstimator\", \"noop\") match {\n+      case \"noop\" => new NoopRateEstimator()\n+      case estimator => throw new IllegalArgumentException(s\"Unknown rate estimator: $estimator\")\n+    }\n+\n+\n+  // Keep track of the freshest rate for this stream using the rateEstimator\n+  protected[streaming] val rateController: RateController = new RateController(id, rateEstimator) {"
+  }],
+  "prId": 7600
+}, {
+  "comments": [{
+    "author": {
+      "login": "tdas"
+    },
+    "body": "This should change a little. See comment on what the config params should be in another comment below (near `RateEstimator.makeEstimator`)\n",
+    "commit": "f168c9476fc7104d3d3f92702793e0d9116117d0",
+    "createdAt": "2015-07-24T06:46:50Z",
+    "diffHunk": "@@ -47,6 +49,14 @@ abstract class InputDStream[T: ClassTag] (@transient ssc_ : StreamingContext)\n   /** This is an unique identifier for the input stream. */\n   val id = ssc.getNewInputStreamId()\n \n+  // Keep track of the freshest rate for this stream using the rateEstimator\n+  protected[streaming] val rateController: Option[RateController] =\n+    RateEstimator.makeEstimator(ssc.conf).map { estimator =>"
+  }, {
+    "author": {
+      "login": "tdas"
+    },
+    "body": "And InputDStream should not have a RateController by default. So this should be None. Its will be upto implementation of InputDStream to override and define.\n",
+    "commit": "f168c9476fc7104d3d3f92702793e0d9116117d0",
+    "createdAt": "2015-07-24T06:48:07Z",
+    "diffHunk": "@@ -47,6 +49,14 @@ abstract class InputDStream[T: ClassTag] (@transient ssc_ : StreamingContext)\n   /** This is an unique identifier for the input stream. */\n   val id = ssc.getNewInputStreamId()\n \n+  // Keep track of the freshest rate for this stream using the rateEstimator\n+  protected[streaming] val rateController: Option[RateController] =\n+    RateEstimator.makeEstimator(ssc.conf).map { estimator =>"
+  }],
+  "prId": 7600
+}]

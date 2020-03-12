@@ -1,0 +1,100 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "WeichenXu123"
+    },
+    "body": "Why not import this ? `java.nio.file.Files`",
+    "commit": "265dd48ce16fd62058f4515a9e91c67942b45ed7",
+    "createdAt": "2017-12-04T09:27:43Z",
+    "diffHunk": "@@ -184,4 +184,54 @@ class LibSVMRelationSuite extends SparkFunSuite with MLlibTestSparkContext {\n       spark.sql(\"DROP TABLE IF EXISTS libsvmTable\")\n     }\n   }\n+\n+  def testLineSeparator(lineSep: String): Unit = {\n+    test(s\"SPARK-21289: Support line separator - lineSep: '$lineSep'\") {\n+      val data = Seq(\n+        \"1.0 1:1.0 3:2.0 5:3.0\", \"0.0\", \"0.0\", \"0.0 2:4.0 4:5.0 6:6.0\").mkString(lineSep)\n+      val dataWithTrailingLineSep = s\"$data$lineSep\"\n+\n+      Seq(data, dataWithTrailingLineSep).foreach { lines =>\n+        val path0 = new File(tempDir.getCanonicalPath, \"write0\")\n+        val path1 = new File(tempDir.getCanonicalPath, \"write1\")\n+        try {\n+          // Read\n+          java.nio.file.Files.write(path0.toPath, lines.getBytes(StandardCharsets.UTF_8))",
+    "line": 16
+  }, {
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "To differentiate it from google's `Files` explicitly above. Not a big deal.",
+    "commit": "265dd48ce16fd62058f4515a9e91c67942b45ed7",
+    "createdAt": "2017-12-04T10:14:20Z",
+    "diffHunk": "@@ -184,4 +184,54 @@ class LibSVMRelationSuite extends SparkFunSuite with MLlibTestSparkContext {\n       spark.sql(\"DROP TABLE IF EXISTS libsvmTable\")\n     }\n   }\n+\n+  def testLineSeparator(lineSep: String): Unit = {\n+    test(s\"SPARK-21289: Support line separator - lineSep: '$lineSep'\") {\n+      val data = Seq(\n+        \"1.0 1:1.0 3:2.0 5:3.0\", \"0.0\", \"0.0\", \"0.0 2:4.0 4:5.0 6:6.0\").mkString(lineSep)\n+      val dataWithTrailingLineSep = s\"$data$lineSep\"\n+\n+      Seq(data, dataWithTrailingLineSep).foreach { lines =>\n+        val path0 = new File(tempDir.getCanonicalPath, \"write0\")\n+        val path1 = new File(tempDir.getCanonicalPath, \"write1\")\n+        try {\n+          // Read\n+          java.nio.file.Files.write(path0.toPath, lines.getBytes(StandardCharsets.UTF_8))",
+    "line": 16
+  }],
+  "prId": 18581
+}, {
+  "comments": [{
+    "author": {
+      "login": "WeichenXu123"
+    },
+    "body": "Use `===` instead of `==`",
+    "commit": "265dd48ce16fd62058f4515a9e91c67942b45ed7",
+    "createdAt": "2017-12-04T09:29:12Z",
+    "diffHunk": "@@ -184,4 +184,54 @@ class LibSVMRelationSuite extends SparkFunSuite with MLlibTestSparkContext {\n       spark.sql(\"DROP TABLE IF EXISTS libsvmTable\")\n     }\n   }\n+\n+  def testLineSeparator(lineSep: String): Unit = {\n+    test(s\"SPARK-21289: Support line separator - lineSep: '$lineSep'\") {\n+      val data = Seq(\n+        \"1.0 1:1.0 3:2.0 5:3.0\", \"0.0\", \"0.0\", \"0.0 2:4.0 4:5.0 6:6.0\").mkString(lineSep)\n+      val dataWithTrailingLineSep = s\"$data$lineSep\"\n+\n+      Seq(data, dataWithTrailingLineSep).foreach { lines =>\n+        val path0 = new File(tempDir.getCanonicalPath, \"write0\")\n+        val path1 = new File(tempDir.getCanonicalPath, \"write1\")\n+        try {\n+          // Read\n+          java.nio.file.Files.write(path0.toPath, lines.getBytes(StandardCharsets.UTF_8))\n+          val df = spark.read\n+            .option(\"lineSep\", lineSep)\n+            .format(\"libsvm\")\n+            .load(path0.getAbsolutePath)\n+\n+          assert(df.columns(0) == \"label\")\n+          assert(df.columns(1) == \"features\")\n+          val row1 = df.first()\n+          assert(row1.getDouble(0) == 1.0)\n+          val v = row1.getAs[SparseVector](1)\n+          assert(v == Vectors.sparse(6, Seq((0, 1.0), (2, 2.0), (4, 3.0))))"
+  }, {
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "I'd like to ask why actually. I had some discussion about this and ended up without conclusion. The doc says `===` is preferred but the actual error messages are even clear with `==` sometimes.",
+    "commit": "265dd48ce16fd62058f4515a9e91c67942b45ed7",
+    "createdAt": "2017-12-04T10:12:53Z",
+    "diffHunk": "@@ -184,4 +184,54 @@ class LibSVMRelationSuite extends SparkFunSuite with MLlibTestSparkContext {\n       spark.sql(\"DROP TABLE IF EXISTS libsvmTable\")\n     }\n   }\n+\n+  def testLineSeparator(lineSep: String): Unit = {\n+    test(s\"SPARK-21289: Support line separator - lineSep: '$lineSep'\") {\n+      val data = Seq(\n+        \"1.0 1:1.0 3:2.0 5:3.0\", \"0.0\", \"0.0\", \"0.0 2:4.0 4:5.0 6:6.0\").mkString(lineSep)\n+      val dataWithTrailingLineSep = s\"$data$lineSep\"\n+\n+      Seq(data, dataWithTrailingLineSep).foreach { lines =>\n+        val path0 = new File(tempDir.getCanonicalPath, \"write0\")\n+        val path1 = new File(tempDir.getCanonicalPath, \"write1\")\n+        try {\n+          // Read\n+          java.nio.file.Files.write(path0.toPath, lines.getBytes(StandardCharsets.UTF_8))\n+          val df = spark.read\n+            .option(\"lineSep\", lineSep)\n+            .format(\"libsvm\")\n+            .load(path0.getAbsolutePath)\n+\n+          assert(df.columns(0) == \"label\")\n+          assert(df.columns(1) == \"features\")\n+          val row1 = df.first()\n+          assert(row1.getDouble(0) == 1.0)\n+          val v = row1.getAs[SparseVector](1)\n+          assert(v == Vectors.sparse(6, Seq((0, 1.0), (2, 2.0), (4, 3.0))))"
+  }, {
+    "author": {
+      "login": "WeichenXu123"
+    },
+    "body": "so I prefer to keep consistent with others.",
+    "commit": "265dd48ce16fd62058f4515a9e91c67942b45ed7",
+    "createdAt": "2017-12-06T03:56:26Z",
+    "diffHunk": "@@ -184,4 +184,54 @@ class LibSVMRelationSuite extends SparkFunSuite with MLlibTestSparkContext {\n       spark.sql(\"DROP TABLE IF EXISTS libsvmTable\")\n     }\n   }\n+\n+  def testLineSeparator(lineSep: String): Unit = {\n+    test(s\"SPARK-21289: Support line separator - lineSep: '$lineSep'\") {\n+      val data = Seq(\n+        \"1.0 1:1.0 3:2.0 5:3.0\", \"0.0\", \"0.0\", \"0.0 2:4.0 4:5.0 6:6.0\").mkString(lineSep)\n+      val dataWithTrailingLineSep = s\"$data$lineSep\"\n+\n+      Seq(data, dataWithTrailingLineSep).foreach { lines =>\n+        val path0 = new File(tempDir.getCanonicalPath, \"write0\")\n+        val path1 = new File(tempDir.getCanonicalPath, \"write1\")\n+        try {\n+          // Read\n+          java.nio.file.Files.write(path0.toPath, lines.getBytes(StandardCharsets.UTF_8))\n+          val df = spark.read\n+            .option(\"lineSep\", lineSep)\n+            .format(\"libsvm\")\n+            .load(path0.getAbsolutePath)\n+\n+          assert(df.columns(0) == \"label\")\n+          assert(df.columns(1) == \"features\")\n+          val row1 = df.first()\n+          assert(row1.getDouble(0) == 1.0)\n+          val v = row1.getAs[SparseVector](1)\n+          assert(v == Vectors.sparse(6, Seq((0, 1.0), (2, 2.0), (4, 3.0))))"
+  }, {
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "OK but let me use `==`. Seems it's used in the test cases of this file. ",
+    "commit": "265dd48ce16fd62058f4515a9e91c67942b45ed7",
+    "createdAt": "2017-12-06T04:50:07Z",
+    "diffHunk": "@@ -184,4 +184,54 @@ class LibSVMRelationSuite extends SparkFunSuite with MLlibTestSparkContext {\n       spark.sql(\"DROP TABLE IF EXISTS libsvmTable\")\n     }\n   }\n+\n+  def testLineSeparator(lineSep: String): Unit = {\n+    test(s\"SPARK-21289: Support line separator - lineSep: '$lineSep'\") {\n+      val data = Seq(\n+        \"1.0 1:1.0 3:2.0 5:3.0\", \"0.0\", \"0.0\", \"0.0 2:4.0 4:5.0 6:6.0\").mkString(lineSep)\n+      val dataWithTrailingLineSep = s\"$data$lineSep\"\n+\n+      Seq(data, dataWithTrailingLineSep).foreach { lines =>\n+        val path0 = new File(tempDir.getCanonicalPath, \"write0\")\n+        val path1 = new File(tempDir.getCanonicalPath, \"write1\")\n+        try {\n+          // Read\n+          java.nio.file.Files.write(path0.toPath, lines.getBytes(StandardCharsets.UTF_8))\n+          val df = spark.read\n+            .option(\"lineSep\", lineSep)\n+            .format(\"libsvm\")\n+            .load(path0.getAbsolutePath)\n+\n+          assert(df.columns(0) == \"label\")\n+          assert(df.columns(1) == \"features\")\n+          val row1 = df.first()\n+          assert(row1.getDouble(0) == 1.0)\n+          val v = row1.getAs[SparseVector](1)\n+          assert(v == Vectors.sparse(6, Seq((0, 1.0), (2, 2.0), (4, 3.0))))"
+  }],
+  "prId": 18581
+}, {
+  "comments": [{
+    "author": {
+      "login": "WeichenXu123"
+    },
+    "body": "So here you only test the first line ? \r\nWhy not use df.collect() to test every line ?",
+    "commit": "265dd48ce16fd62058f4515a9e91c67942b45ed7",
+    "createdAt": "2017-12-04T09:45:09Z",
+    "diffHunk": "@@ -184,4 +184,54 @@ class LibSVMRelationSuite extends SparkFunSuite with MLlibTestSparkContext {\n       spark.sql(\"DROP TABLE IF EXISTS libsvmTable\")\n     }\n   }\n+\n+  def testLineSeparator(lineSep: String): Unit = {\n+    test(s\"SPARK-21289: Support line separator - lineSep: '$lineSep'\") {\n+      val data = Seq(\n+        \"1.0 1:1.0 3:2.0 5:3.0\", \"0.0\", \"0.0\", \"0.0 2:4.0 4:5.0 6:6.0\").mkString(lineSep)\n+      val dataWithTrailingLineSep = s\"$data$lineSep\"\n+\n+      Seq(data, dataWithTrailingLineSep).foreach { lines =>\n+        val path0 = new File(tempDir.getCanonicalPath, \"write0\")\n+        val path1 = new File(tempDir.getCanonicalPath, \"write1\")\n+        try {\n+          // Read\n+          java.nio.file.Files.write(path0.toPath, lines.getBytes(StandardCharsets.UTF_8))\n+          val df = spark.read\n+            .option(\"lineSep\", lineSep)\n+            .format(\"libsvm\")\n+            .load(path0.getAbsolutePath)\n+\n+          assert(df.columns(0) == \"label\")\n+          assert(df.columns(1) == \"features\")\n+          val row1 = df.first()\n+          assert(row1.getDouble(0) == 1.0)\n+          val v = row1.getAs[SparseVector](1)\n+          assert(v == Vectors.sparse(6, Seq((0, 1.0), (2, 2.0), (4, 3.0))))\n+"
+  }, {
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "Why not just test the first line?",
+    "commit": "265dd48ce16fd62058f4515a9e91c67942b45ed7",
+    "createdAt": "2017-12-04T10:15:11Z",
+    "diffHunk": "@@ -184,4 +184,54 @@ class LibSVMRelationSuite extends SparkFunSuite with MLlibTestSparkContext {\n       spark.sql(\"DROP TABLE IF EXISTS libsvmTable\")\n     }\n   }\n+\n+  def testLineSeparator(lineSep: String): Unit = {\n+    test(s\"SPARK-21289: Support line separator - lineSep: '$lineSep'\") {\n+      val data = Seq(\n+        \"1.0 1:1.0 3:2.0 5:3.0\", \"0.0\", \"0.0\", \"0.0 2:4.0 4:5.0 6:6.0\").mkString(lineSep)\n+      val dataWithTrailingLineSep = s\"$data$lineSep\"\n+\n+      Seq(data, dataWithTrailingLineSep).foreach { lines =>\n+        val path0 = new File(tempDir.getCanonicalPath, \"write0\")\n+        val path1 = new File(tempDir.getCanonicalPath, \"write1\")\n+        try {\n+          // Read\n+          java.nio.file.Files.write(path0.toPath, lines.getBytes(StandardCharsets.UTF_8))\n+          val df = spark.read\n+            .option(\"lineSep\", lineSep)\n+            .format(\"libsvm\")\n+            .load(path0.getAbsolutePath)\n+\n+          assert(df.columns(0) == \"label\")\n+          assert(df.columns(1) == \"features\")\n+          val row1 = df.first()\n+          assert(row1.getDouble(0) == 1.0)\n+          val v = row1.getAs[SparseVector](1)\n+          assert(v == Vectors.sparse(6, Seq((0, 1.0), (2, 2.0), (4, 3.0))))\n+"
+  }, {
+    "author": {
+      "login": "WeichenXu123"
+    },
+    "body": "The following test only include checking `df` and `readbackDF` equality. But, it seems we also need test the whole loaded `df` and raw file content equality.",
+    "commit": "265dd48ce16fd62058f4515a9e91c67942b45ed7",
+    "createdAt": "2017-12-06T03:55:49Z",
+    "diffHunk": "@@ -184,4 +184,54 @@ class LibSVMRelationSuite extends SparkFunSuite with MLlibTestSparkContext {\n       spark.sql(\"DROP TABLE IF EXISTS libsvmTable\")\n     }\n   }\n+\n+  def testLineSeparator(lineSep: String): Unit = {\n+    test(s\"SPARK-21289: Support line separator - lineSep: '$lineSep'\") {\n+      val data = Seq(\n+        \"1.0 1:1.0 3:2.0 5:3.0\", \"0.0\", \"0.0\", \"0.0 2:4.0 4:5.0 6:6.0\").mkString(lineSep)\n+      val dataWithTrailingLineSep = s\"$data$lineSep\"\n+\n+      Seq(data, dataWithTrailingLineSep).foreach { lines =>\n+        val path0 = new File(tempDir.getCanonicalPath, \"write0\")\n+        val path1 = new File(tempDir.getCanonicalPath, \"write1\")\n+        try {\n+          // Read\n+          java.nio.file.Files.write(path0.toPath, lines.getBytes(StandardCharsets.UTF_8))\n+          val df = spark.read\n+            .option(\"lineSep\", lineSep)\n+            .format(\"libsvm\")\n+            .load(path0.getAbsolutePath)\n+\n+          assert(df.columns(0) == \"label\")\n+          assert(df.columns(1) == \"features\")\n+          val row1 = df.first()\n+          assert(row1.getDouble(0) == 1.0)\n+          val v = row1.getAs[SparseVector](1)\n+          assert(v == Vectors.sparse(6, Seq((0, 1.0), (2, 2.0), (4, 3.0))))\n+"
+  }, {
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "Here we change how to deal with each line in iteration. I think both comparing single line or repeated multiple lines are fine. I think many tests here already test only first line?",
+    "commit": "265dd48ce16fd62058f4515a9e91c67942b45ed7",
+    "createdAt": "2017-12-06T04:53:33Z",
+    "diffHunk": "@@ -184,4 +184,54 @@ class LibSVMRelationSuite extends SparkFunSuite with MLlibTestSparkContext {\n       spark.sql(\"DROP TABLE IF EXISTS libsvmTable\")\n     }\n   }\n+\n+  def testLineSeparator(lineSep: String): Unit = {\n+    test(s\"SPARK-21289: Support line separator - lineSep: '$lineSep'\") {\n+      val data = Seq(\n+        \"1.0 1:1.0 3:2.0 5:3.0\", \"0.0\", \"0.0\", \"0.0 2:4.0 4:5.0 6:6.0\").mkString(lineSep)\n+      val dataWithTrailingLineSep = s\"$data$lineSep\"\n+\n+      Seq(data, dataWithTrailingLineSep).foreach { lines =>\n+        val path0 = new File(tempDir.getCanonicalPath, \"write0\")\n+        val path1 = new File(tempDir.getCanonicalPath, \"write1\")\n+        try {\n+          // Read\n+          java.nio.file.Files.write(path0.toPath, lines.getBytes(StandardCharsets.UTF_8))\n+          val df = spark.read\n+            .option(\"lineSep\", lineSep)\n+            .format(\"libsvm\")\n+            .load(path0.getAbsolutePath)\n+\n+          assert(df.columns(0) == \"label\")\n+          assert(df.columns(1) == \"features\")\n+          val row1 = df.first()\n+          assert(row1.getDouble(0) == 1.0)\n+          val v = row1.getAs[SparseVector](1)\n+          assert(v == Vectors.sparse(6, Seq((0, 1.0), (2, 2.0), (4, 3.0))))\n+"
+  }, {
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "OK, let me update it. It's easy to change anyway.",
+    "commit": "265dd48ce16fd62058f4515a9e91c67942b45ed7",
+    "createdAt": "2017-12-06T05:51:00Z",
+    "diffHunk": "@@ -184,4 +184,54 @@ class LibSVMRelationSuite extends SparkFunSuite with MLlibTestSparkContext {\n       spark.sql(\"DROP TABLE IF EXISTS libsvmTable\")\n     }\n   }\n+\n+  def testLineSeparator(lineSep: String): Unit = {\n+    test(s\"SPARK-21289: Support line separator - lineSep: '$lineSep'\") {\n+      val data = Seq(\n+        \"1.0 1:1.0 3:2.0 5:3.0\", \"0.0\", \"0.0\", \"0.0 2:4.0 4:5.0 6:6.0\").mkString(lineSep)\n+      val dataWithTrailingLineSep = s\"$data$lineSep\"\n+\n+      Seq(data, dataWithTrailingLineSep).foreach { lines =>\n+        val path0 = new File(tempDir.getCanonicalPath, \"write0\")\n+        val path1 = new File(tempDir.getCanonicalPath, \"write1\")\n+        try {\n+          // Read\n+          java.nio.file.Files.write(path0.toPath, lines.getBytes(StandardCharsets.UTF_8))\n+          val df = spark.read\n+            .option(\"lineSep\", lineSep)\n+            .format(\"libsvm\")\n+            .load(path0.getAbsolutePath)\n+\n+          assert(df.columns(0) == \"label\")\n+          assert(df.columns(1) == \"features\")\n+          val row1 = df.first()\n+          assert(row1.getDouble(0) == 1.0)\n+          val v = row1.getAs[SparseVector](1)\n+          assert(v == Vectors.sparse(6, Seq((0, 1.0), (2, 2.0), (4, 3.0))))\n+"
+  }],
+  "prId": 18581
+}]

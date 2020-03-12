@@ -1,0 +1,39 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "steveloughran"
+    },
+    "body": "Somewhere in the spark code there's that translation of localhost -> anywhere, so that things like object stores who return \"localhost\" end up with independent-of-location placement. Is this required to have happened by the time `preferredLocations` is called, or can an impl return \"localhost\" and expect spark to deal with it. Purest would be to say \"stores which use 'localhost' as a hint to mean 'unplaced' are required to have filtered it out by this point'",
+    "commit": "1e7dca3a57582dee4431878f21a95e5c8a28e56b",
+    "createdAt": "2017-11-01T10:24:58Z",
+    "diffHunk": "@@ -37,13 +37,19 @@\n    * The preferred locations where this read task can run faster, but Spark does not guarantee that\n    * this task will always run on these locations. The implementations should make sure that it can\n    * be run on any location. The location is a string representing the host name of an executor.\n+   *\n+   * If an exception was thrown, the action would fail and we guarantee that no Spark job was\n+   * submitted.\n    */\n   default String[] preferredLocations() {\n     return new String[0];"
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "for `independent-of-location placement`, users can just return `new String[0]`.\r\n\r\nI don't know where Spark treats \"localhost\" as \"anywhere\", but I'd expect it to be an unrecognized host and then it's \"anywhere\".",
+    "commit": "1e7dca3a57582dee4431878f21a95e5c8a28e56b",
+    "createdAt": "2017-11-01T11:41:59Z",
+    "diffHunk": "@@ -37,13 +37,19 @@\n    * The preferred locations where this read task can run faster, but Spark does not guarantee that\n    * this task will always run on these locations. The implementations should make sure that it can\n    * be run on any location. The location is a string representing the host name of an executor.\n+   *\n+   * If an exception was thrown, the action would fail and we guarantee that no Spark job was\n+   * submitted.\n    */\n   default String[] preferredLocations() {\n     return new String[0];"
+  }, {
+    "author": {
+      "login": "steveloughran"
+    },
+    "body": "I'm sure there was some specific filter for it, though a quick grep only shows that happening in {{ReliableCheckpointRDD}}. The reason the filter is needed is that getHostByName(localhost) does return a host, but scheduling gets confused, without the filtering work can get get held back until the driver concludes that localhost isn't free & so assign it elsewhere in the cluster (Hive can do this unintentionally, which is why I did trace through spark's use of getBlockLocations once)",
+    "commit": "1e7dca3a57582dee4431878f21a95e5c8a28e56b",
+    "createdAt": "2017-11-01T17:21:10Z",
+    "diffHunk": "@@ -37,13 +37,19 @@\n    * The preferred locations where this read task can run faster, but Spark does not guarantee that\n    * this task will always run on these locations. The implementations should make sure that it can\n    * be run on any location. The location is a string representing the host name of an executor.\n+   *\n+   * If an exception was thrown, the action would fail and we guarantee that no Spark job was\n+   * submitted.\n    */\n   default String[] preferredLocations() {\n     return new String[0];"
+  }],
+  "prId": 19623
+}, {
+  "comments": [{
+    "author": {
+      "login": "rdblue"
+    },
+    "body": "This isn't the empty string, it is a 0-length array.",
+    "commit": "1e7dca3a57582dee4431878f21a95e5c8a28e56b",
+    "createdAt": "2017-11-03T17:39:13Z",
+    "diffHunk": "@@ -36,14 +36,24 @@\n   /**\n    * The preferred locations where this read task can run faster, but Spark does not guarantee that\n    * this task will always run on these locations. The implementations should make sure that it can\n-   * be run on any location. The location is a string representing the host name of an executor.\n+   * be run on any location. The location is a string representing the host name.\n+   *\n+   * Note that if a host name cannot be recognized by Spark, it will be ignored as it was not in\n+   * the returned locations. By default this method returns empty string, which means this task"
+  }],
+  "prId": 19623
+}]

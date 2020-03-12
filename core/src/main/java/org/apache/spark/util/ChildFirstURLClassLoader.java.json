@@ -1,0 +1,212 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "attilapiros"
+    },
+    "body": "This is an initializer blocks for instance variables:\r\nhttps://docs.oracle.com/javase/tutorial/java/javaOO/initial.html\r\n\r\nIt is called for each instance.\r\n\r\nBased on the PR description: `required to register themselves at their class initialization time by invoking the ClassLoader.registerAsParallelCapable method` I guess you meant to use a static block.\r\n\r\n(If still an instance block is needed, I think for one constructor it is better just to move the logic right after calling the `super`.)",
+    "commit": "39a2d1e28a2d30b38cd87e4430c27eb57b2474f2",
+    "createdAt": "2019-03-18T17:52:44Z",
+    "diffHunk": "@@ -0,0 +1,76 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+\n+package org.apache.spark.util;\n+\n+import sun.misc.CompoundEnumeration;\n+\n+import java.io.IOException;\n+import java.net.URL;\n+import java.util.Enumeration;\n+\n+/**\n+ * A mutable class loader that gives preference to its own URLs over the parent class loader\n+ * when loading classes and resources.\n+ */\n+public class ChildFirstURLClassLoader extends MutableURLClassLoader {\n+\n+  {"
+  }, {
+    "author": {
+      "login": "ajithme"
+    },
+    "body": "My bad, my intention was to keep it in static block.. i have corrected it. ",
+    "commit": "39a2d1e28a2d30b38cd87e4430c27eb57b2474f2",
+    "createdAt": "2019-03-18T18:03:19Z",
+    "diffHunk": "@@ -0,0 +1,76 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+\n+package org.apache.spark.util;\n+\n+import sun.misc.CompoundEnumeration;\n+\n+import java.io.IOException;\n+import java.net.URL;\n+import java.util.Enumeration;\n+\n+/**\n+ * A mutable class loader that gives preference to its own URLs over the parent class loader\n+ * when loading classes and resources.\n+ */\n+public class ChildFirstURLClassLoader extends MutableURLClassLoader {\n+\n+  {"
+  }],
+  "prId": 24126
+}, {
+  "comments": [{
+    "author": {
+      "login": "attilapiros"
+    },
+    "body": "This method is not needed as `MutableURLClassLoader` already made this `public`.",
+    "commit": "39a2d1e28a2d30b38cd87e4430c27eb57b2474f2",
+    "createdAt": "2019-03-18T19:24:14Z",
+    "diffHunk": "@@ -0,0 +1,76 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+\n+package org.apache.spark.util;\n+\n+import sun.misc.CompoundEnumeration;\n+\n+import java.io.IOException;\n+import java.net.URL;\n+import java.util.Enumeration;\n+\n+/**\n+ * A mutable class loader that gives preference to its own URLs over the parent class loader\n+ * when loading classes and resources.\n+ */\n+public class ChildFirstURLClassLoader extends MutableURLClassLoader {\n+\n+  static {\n+    ClassLoader.registerAsParallelCapable();\n+  }\n+\n+  ParentClassLoader parentClassLoader;\n+\n+  public ChildFirstURLClassLoader(URL[] urls, ClassLoader parent) {\n+    super(urls, null);\n+    parentClassLoader = new ParentClassLoader(parent);\n+  }\n+\n+  @Override\n+  public Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {\n+    try {\n+      return super.loadClass(name, resolve);\n+    } catch (ClassNotFoundException cnf) {\n+      return parentClassLoader.loadClass(name, resolve);\n+    }\n+  }\n+\n+  @Override\n+  public Enumeration<URL> getResources(String name) throws IOException {\n+    Enumeration<URL> childUrls = super.getResources(name);\n+    Enumeration<URL> parentUrls = parentClassLoader.getResources(name);\n+    Enumeration<URL>[] enumerations =\n+            (Enumeration<URL>[]) new Enumeration<?>[]{childUrls, parentUrls};\n+    return new CompoundEnumeration<>(enumerations);\n+  }\n+\n+  @Override\n+  public URL getResource(String name) {\n+    URL url = super.getResource(name);\n+    if (url != null) {\n+      return url;\n+    } else {\n+      return parentClassLoader.getResource(name);\n+    }\n+  }\n+\n+  @Override\n+  public void addURL(URL url) {"
+  }, {
+    "author": {
+      "login": "ajithme"
+    },
+    "body": "removed",
+    "commit": "39a2d1e28a2d30b38cd87e4430c27eb57b2474f2",
+    "createdAt": "2019-03-19T02:23:16Z",
+    "diffHunk": "@@ -0,0 +1,76 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+\n+package org.apache.spark.util;\n+\n+import sun.misc.CompoundEnumeration;\n+\n+import java.io.IOException;\n+import java.net.URL;\n+import java.util.Enumeration;\n+\n+/**\n+ * A mutable class loader that gives preference to its own URLs over the parent class loader\n+ * when loading classes and resources.\n+ */\n+public class ChildFirstURLClassLoader extends MutableURLClassLoader {\n+\n+  static {\n+    ClassLoader.registerAsParallelCapable();\n+  }\n+\n+  ParentClassLoader parentClassLoader;\n+\n+  public ChildFirstURLClassLoader(URL[] urls, ClassLoader parent) {\n+    super(urls, null);\n+    parentClassLoader = new ParentClassLoader(parent);\n+  }\n+\n+  @Override\n+  public Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {\n+    try {\n+      return super.loadClass(name, resolve);\n+    } catch (ClassNotFoundException cnf) {\n+      return parentClassLoader.loadClass(name, resolve);\n+    }\n+  }\n+\n+  @Override\n+  public Enumeration<URL> getResources(String name) throws IOException {\n+    Enumeration<URL> childUrls = super.getResources(name);\n+    Enumeration<URL> parentUrls = parentClassLoader.getResources(name);\n+    Enumeration<URL>[] enumerations =\n+            (Enumeration<URL>[]) new Enumeration<?>[]{childUrls, parentUrls};\n+    return new CompoundEnumeration<>(enumerations);\n+  }\n+\n+  @Override\n+  public URL getResource(String name) {\n+    URL url = super.getResource(name);\n+    if (url != null) {\n+      return url;\n+    } else {\n+      return parentClassLoader.getResource(name);\n+    }\n+  }\n+\n+  @Override\n+  public void addURL(URL url) {"
+  }],
+  "prId": 24126
+}, {
+  "comments": [{
+    "author": {
+      "login": "attilapiros"
+    },
+    "body": "This can be a private member not only package private.",
+    "commit": "39a2d1e28a2d30b38cd87e4430c27eb57b2474f2",
+    "createdAt": "2019-03-19T13:09:09Z",
+    "diffHunk": "@@ -0,0 +1,71 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+\n+package org.apache.spark.util;\n+\n+import sun.misc.CompoundEnumeration;\n+\n+import java.io.IOException;\n+import java.net.URL;\n+import java.util.Enumeration;\n+\n+/**\n+ * A mutable class loader that gives preference to its own URLs over the parent class loader\n+ * when loading classes and resources.\n+ */\n+public class ChildFirstURLClassLoader extends MutableURLClassLoader {\n+\n+  static {\n+    ClassLoader.registerAsParallelCapable();\n+  }\n+\n+  ParentClassLoader parentClassLoader;"
+  }, {
+    "author": {
+      "login": "ajithme"
+    },
+    "body": "Done",
+    "commit": "39a2d1e28a2d30b38cd87e4430c27eb57b2474f2",
+    "createdAt": "2019-03-19T16:26:24Z",
+    "diffHunk": "@@ -0,0 +1,71 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+\n+package org.apache.spark.util;\n+\n+import sun.misc.CompoundEnumeration;\n+\n+import java.io.IOException;\n+import java.net.URL;\n+import java.util.Enumeration;\n+\n+/**\n+ * A mutable class loader that gives preference to its own URLs over the parent class loader\n+ * when loading classes and resources.\n+ */\n+public class ChildFirstURLClassLoader extends MutableURLClassLoader {\n+\n+  static {\n+    ClassLoader.registerAsParallelCapable();\n+  }\n+\n+  ParentClassLoader parentClassLoader;"
+  }],
+  "prId": 24126
+}, {
+  "comments": [{
+    "author": {
+      "login": "attilapiros"
+    },
+    "body": "Super Nit (sorry): too much indentation.\r\n\r\nIt would be so great to find a solution which as efficient as this one and did not raise a warning because of the unchecked cast. But I have not found a better one so I suggest to add `@SuppressWarnings(\"unchecked\")`.",
+    "commit": "39a2d1e28a2d30b38cd87e4430c27eb57b2474f2",
+    "createdAt": "2019-03-19T14:29:52Z",
+    "diffHunk": "@@ -0,0 +1,71 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+\n+package org.apache.spark.util;\n+\n+import sun.misc.CompoundEnumeration;\n+\n+import java.io.IOException;\n+import java.net.URL;\n+import java.util.Enumeration;\n+\n+/**\n+ * A mutable class loader that gives preference to its own URLs over the parent class loader\n+ * when loading classes and resources.\n+ */\n+public class ChildFirstURLClassLoader extends MutableURLClassLoader {\n+\n+  static {\n+    ClassLoader.registerAsParallelCapable();\n+  }\n+\n+  ParentClassLoader parentClassLoader;\n+\n+  public ChildFirstURLClassLoader(URL[] urls, ClassLoader parent) {\n+    super(urls, null);\n+    parentClassLoader = new ParentClassLoader(parent);\n+  }\n+\n+  @Override\n+  public Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {\n+    try {\n+      return super.loadClass(name, resolve);\n+    } catch (ClassNotFoundException cnf) {\n+      return parentClassLoader.loadClass(name, resolve);\n+    }\n+  }\n+\n+  @Override\n+  public Enumeration<URL> getResources(String name) throws IOException {\n+    Enumeration<URL> childUrls = super.getResources(name);\n+    Enumeration<URL> parentUrls = parentClassLoader.getResources(name);\n+    Enumeration<URL>[] enumerations =\n+            (Enumeration<URL>[]) new Enumeration<?>[]{childUrls, parentUrls};"
+  }, {
+    "author": {
+      "login": "ajithme"
+    },
+    "body": "@attilapiros I have added ``SuppressWarnings`` But do the indentation seem ok now.?",
+    "commit": "39a2d1e28a2d30b38cd87e4430c27eb57b2474f2",
+    "createdAt": "2019-03-19T16:27:35Z",
+    "diffHunk": "@@ -0,0 +1,71 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+\n+package org.apache.spark.util;\n+\n+import sun.misc.CompoundEnumeration;\n+\n+import java.io.IOException;\n+import java.net.URL;\n+import java.util.Enumeration;\n+\n+/**\n+ * A mutable class loader that gives preference to its own URLs over the parent class loader\n+ * when loading classes and resources.\n+ */\n+public class ChildFirstURLClassLoader extends MutableURLClassLoader {\n+\n+  static {\n+    ClassLoader.registerAsParallelCapable();\n+  }\n+\n+  ParentClassLoader parentClassLoader;\n+\n+  public ChildFirstURLClassLoader(URL[] urls, ClassLoader parent) {\n+    super(urls, null);\n+    parentClassLoader = new ParentClassLoader(parent);\n+  }\n+\n+  @Override\n+  public Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {\n+    try {\n+      return super.loadClass(name, resolve);\n+    } catch (ClassNotFoundException cnf) {\n+      return parentClassLoader.loadClass(name, resolve);\n+    }\n+  }\n+\n+  @Override\n+  public Enumeration<URL> getResources(String name) throws IOException {\n+    Enumeration<URL> childUrls = super.getResources(name);\n+    Enumeration<URL> parentUrls = parentClassLoader.getResources(name);\n+    Enumeration<URL>[] enumerations =\n+            (Enumeration<URL>[]) new Enumeration<?>[]{childUrls, parentUrls};"
+  }, {
+    "author": {
+      "login": "attilapiros"
+    },
+    "body": "As I know the indentation is 2 spaces (as you used correctly above). Here I would use double indentation so 4 spaces.  ",
+    "commit": "39a2d1e28a2d30b38cd87e4430c27eb57b2474f2",
+    "createdAt": "2019-03-19T16:46:46Z",
+    "diffHunk": "@@ -0,0 +1,71 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+\n+package org.apache.spark.util;\n+\n+import sun.misc.CompoundEnumeration;\n+\n+import java.io.IOException;\n+import java.net.URL;\n+import java.util.Enumeration;\n+\n+/**\n+ * A mutable class loader that gives preference to its own URLs over the parent class loader\n+ * when loading classes and resources.\n+ */\n+public class ChildFirstURLClassLoader extends MutableURLClassLoader {\n+\n+  static {\n+    ClassLoader.registerAsParallelCapable();\n+  }\n+\n+  ParentClassLoader parentClassLoader;\n+\n+  public ChildFirstURLClassLoader(URL[] urls, ClassLoader parent) {\n+    super(urls, null);\n+    parentClassLoader = new ParentClassLoader(parent);\n+  }\n+\n+  @Override\n+  public Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {\n+    try {\n+      return super.loadClass(name, resolve);\n+    } catch (ClassNotFoundException cnf) {\n+      return parentClassLoader.loadClass(name, resolve);\n+    }\n+  }\n+\n+  @Override\n+  public Enumeration<URL> getResources(String name) throws IOException {\n+    Enumeration<URL> childUrls = super.getResources(name);\n+    Enumeration<URL> parentUrls = parentClassLoader.getResources(name);\n+    Enumeration<URL>[] enumerations =\n+            (Enumeration<URL>[]) new Enumeration<?>[]{childUrls, parentUrls};"
+  }, {
+    "author": {
+      "login": "ajithme"
+    },
+    "body": "Done",
+    "commit": "39a2d1e28a2d30b38cd87e4430c27eb57b2474f2",
+    "createdAt": "2019-03-19T17:22:00Z",
+    "diffHunk": "@@ -0,0 +1,71 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+\n+package org.apache.spark.util;\n+\n+import sun.misc.CompoundEnumeration;\n+\n+import java.io.IOException;\n+import java.net.URL;\n+import java.util.Enumeration;\n+\n+/**\n+ * A mutable class loader that gives preference to its own URLs over the parent class loader\n+ * when loading classes and resources.\n+ */\n+public class ChildFirstURLClassLoader extends MutableURLClassLoader {\n+\n+  static {\n+    ClassLoader.registerAsParallelCapable();\n+  }\n+\n+  ParentClassLoader parentClassLoader;\n+\n+  public ChildFirstURLClassLoader(URL[] urls, ClassLoader parent) {\n+    super(urls, null);\n+    parentClassLoader = new ParentClassLoader(parent);\n+  }\n+\n+  @Override\n+  public Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {\n+    try {\n+      return super.loadClass(name, resolve);\n+    } catch (ClassNotFoundException cnf) {\n+      return parentClassLoader.loadClass(name, resolve);\n+    }\n+  }\n+\n+  @Override\n+  public Enumeration<URL> getResources(String name) throws IOException {\n+    Enumeration<URL> childUrls = super.getResources(name);\n+    Enumeration<URL> parentUrls = parentClassLoader.getResources(name);\n+    Enumeration<URL>[] enumerations =\n+            (Enumeration<URL>[]) new Enumeration<?>[]{childUrls, parentUrls};"
+  }],
+  "prId": 24126
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "I don't think we want to use this sun.misc class. Is there another way to stitch them together?",
+    "commit": "39a2d1e28a2d30b38cd87e4430c27eb57b2474f2",
+    "createdAt": "2019-03-19T19:18:30Z",
+    "diffHunk": "@@ -0,0 +1,72 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+\n+package org.apache.spark.util;\n+\n+import sun.misc.CompoundEnumeration;"
+  }, {
+    "author": {
+      "login": "attilapiros"
+    },
+    "body": "There is `jodd.util.collection.CompositeEnumeration` but for that `jodd-core` must be added as a new dependency for spark-core. It is already in `dependencyManagement` so we are already using it Spark (to be precise in spark-hive). \r\n\r\nWith that one even the `SuppressWarnings ` can be avoided too.",
+    "commit": "39a2d1e28a2d30b38cd87e4430c27eb57b2474f2",
+    "createdAt": "2019-03-19T19:53:57Z",
+    "diffHunk": "@@ -0,0 +1,72 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+\n+package org.apache.spark.util;\n+\n+import sun.misc.CompoundEnumeration;"
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Just build up an old `java.util.Vector` from the elements of the enumeration and get an enumeration from it? no need for a library.",
+    "commit": "39a2d1e28a2d30b38cd87e4430c27eb57b2474f2",
+    "createdAt": "2019-03-19T20:22:59Z",
+    "diffHunk": "@@ -0,0 +1,72 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+\n+package org.apache.spark.util;\n+\n+import sun.misc.CompoundEnumeration;"
+  }, {
+    "author": {
+      "login": "ajithme"
+    },
+    "body": "My primary reason of using ``CompoundEnumeration`` was to keep it consistent with ``java.lang.ClassLoader#getResources`` so that returned object is still an instance of ``sun.misc.CompoundEnumeration``\r\n\r\nI do not oppose changing it but just for curiosity, any specific reason that we need to avoid ``CompoundEnumeration``.?? (one i can think of is ``sun.misc.CompoundEnumeration`` being dropped from java 9 and moved as nested class in ``java.lang.ClassLoader``)\r\n",
+    "commit": "39a2d1e28a2d30b38cd87e4430c27eb57b2474f2",
+    "createdAt": "2019-03-19T20:27:26Z",
+    "diffHunk": "@@ -0,0 +1,72 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+\n+package org.apache.spark.util;\n+\n+import sun.misc.CompoundEnumeration;"
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Yeah, that's it. I just don't want to depend on sun.misc, especially if you've found it doesn't exist in Java 9+. It's a good point but unless we know it won't work otherwise, I think we don't need the internal impl.",
+    "commit": "39a2d1e28a2d30b38cd87e4430c27eb57b2474f2",
+    "createdAt": "2019-03-19T20:42:16Z",
+    "diffHunk": "@@ -0,0 +1,72 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+\n+package org.apache.spark.util;\n+\n+import sun.misc.CompoundEnumeration;"
+  }, {
+    "author": {
+      "login": "ajithme"
+    },
+    "body": "Found a cleaner way using ``com.google.common.collect.Iterators`` i.e guava. Please review",
+    "commit": "39a2d1e28a2d30b38cd87e4430c27eb57b2474f2",
+    "createdAt": "2019-03-19T20:57:33Z",
+    "diffHunk": "@@ -0,0 +1,72 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+\n+package org.apache.spark.util;\n+\n+import sun.misc.CompoundEnumeration;"
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "That's .. probably OK, though I remain twitchy about using Guava, given that it's something we have to shade and it becomes a dependency the classloader itself needs. I don't know if that has weird interactions. My instinct is to keep this as simple and free of possible conflicts as possible",
+    "commit": "39a2d1e28a2d30b38cd87e4430c27eb57b2474f2",
+    "createdAt": "2019-03-19T21:03:30Z",
+    "diffHunk": "@@ -0,0 +1,72 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+\n+package org.apache.spark.util;\n+\n+import sun.misc.CompoundEnumeration;"
+  }, {
+    "author": {
+      "login": "ajithme"
+    },
+    "body": "Agree with your opinion. So i now moved to using ``java.util.Collections`` only. Does it seem ok now.?",
+    "commit": "39a2d1e28a2d30b38cd87e4430c27eb57b2474f2",
+    "createdAt": "2019-03-19T21:21:05Z",
+    "diffHunk": "@@ -0,0 +1,72 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+\n+package org.apache.spark.util;\n+\n+import sun.misc.CompoundEnumeration;"
+  }],
+  "prId": 24126
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "PS I think this is fine, because I note that previously this returned some Scala implementation of Enumeration. This shouldn't be an issue.",
+    "commit": "39a2d1e28a2d30b38cd87e4430c27eb57b2474f2",
+    "createdAt": "2019-03-20T14:57:32Z",
+    "diffHunk": "@@ -0,0 +1,69 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+\n+package org.apache.spark.util;\n+\n+import java.io.IOException;\n+import java.net.URL;\n+import java.util.ArrayList;\n+import java.util.Collections;\n+import java.util.Enumeration;\n+\n+/**\n+ * A mutable class loader that gives preference to its own URLs over the parent class loader\n+ * when loading classes and resources.\n+ */\n+public class ChildFirstURLClassLoader extends MutableURLClassLoader {\n+\n+  static {\n+    ClassLoader.registerAsParallelCapable();\n+  }\n+\n+  private ParentClassLoader parentClassLoader;\n+\n+  public ChildFirstURLClassLoader(URL[] urls, ClassLoader parent) {\n+    super(urls, null);\n+    parentClassLoader = new ParentClassLoader(parent);\n+  }\n+\n+  @Override\n+  public Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {\n+    try {\n+      return super.loadClass(name, resolve);\n+    } catch (ClassNotFoundException cnf) {\n+      return parentClassLoader.loadClass(name, resolve);\n+    }\n+  }\n+\n+  @Override\n+  public Enumeration<URL> getResources(String name) throws IOException {\n+    ArrayList<URL> urls = Collections.list(super.getResources(name));\n+    urls.addAll(Collections.list(parentClassLoader.getResources(name)));\n+    return Collections.enumeration(urls);",
+    "line": 56
+  }],
+  "prId": 24126
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Too many blank lines.",
+    "commit": "39a2d1e28a2d30b38cd87e4430c27eb57b2474f2",
+    "createdAt": "2019-03-22T22:53:53Z",
+    "diffHunk": "@@ -0,0 +1,69 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+",
+    "line": 17
+  }, {
+    "author": {
+      "login": "ajithme"
+    },
+    "body": "removed",
+    "commit": "39a2d1e28a2d30b38cd87e4430c27eb57b2474f2",
+    "createdAt": "2019-03-24T02:38:28Z",
+    "diffHunk": "@@ -0,0 +1,69 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+",
+    "line": 17
+  }],
+  "prId": 24126
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Just `parent`.",
+    "commit": "39a2d1e28a2d30b38cd87e4430c27eb57b2474f2",
+    "createdAt": "2019-03-22T22:54:44Z",
+    "diffHunk": "@@ -0,0 +1,69 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+\n+package org.apache.spark.util;\n+\n+import java.io.IOException;\n+import java.net.URL;\n+import java.util.ArrayList;\n+import java.util.Collections;\n+import java.util.Enumeration;\n+\n+/**\n+ * A mutable class loader that gives preference to its own URLs over the parent class loader\n+ * when loading classes and resources.\n+ */\n+public class ChildFirstURLClassLoader extends MutableURLClassLoader {\n+\n+  static {\n+    ClassLoader.registerAsParallelCapable();\n+  }\n+\n+  private ParentClassLoader parentClassLoader;"
+  }, {
+    "author": {
+      "login": "ajithme"
+    },
+    "body": "renamed",
+    "commit": "39a2d1e28a2d30b38cd87e4430c27eb57b2474f2",
+    "createdAt": "2019-03-24T02:38:38Z",
+    "diffHunk": "@@ -0,0 +1,69 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+\n+package org.apache.spark.util;\n+\n+import java.io.IOException;\n+import java.net.URL;\n+import java.util.ArrayList;\n+import java.util.Collections;\n+import java.util.Enumeration;\n+\n+/**\n+ * A mutable class loader that gives preference to its own URLs over the parent class loader\n+ * when loading classes and resources.\n+ */\n+public class ChildFirstURLClassLoader extends MutableURLClassLoader {\n+\n+  static {\n+    ClassLoader.registerAsParallelCapable();\n+  }\n+\n+  private ParentClassLoader parentClassLoader;"
+  }],
+  "prId": 24126
+}]

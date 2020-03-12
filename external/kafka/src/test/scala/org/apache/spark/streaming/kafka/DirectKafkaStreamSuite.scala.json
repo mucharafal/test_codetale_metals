@@ -1,0 +1,71 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "tdas"
+    },
+    "body": "There is probably race condition here. The collector may not have received the batch completed signal when the `allReceived.size == totalSent` is satisfied and the context is stopped. Better to put all of these asserts under the eventually.\n",
+    "commit": "b0b506c363968b1f0ef27d71986618bb514f0f3c",
+    "createdAt": "2015-05-05T02:42:51Z",
+    "diffHunk": "@@ -301,6 +301,49 @@ class DirectKafkaStreamSuite\n     ssc.stop()\n   }\n \n+  test(\"Direct Kafka stream report input information\") {\n+    val topic = \"report-test\"\n+    val data = Map(\"a\" -> 7, \"b\" -> 9)\n+    kafkaTestUtils.createTopic(topic)\n+    kafkaTestUtils.sendMessages(topic, data)\n+\n+    val totalSent = data.values.sum\n+    val kafkaParams = Map(\n+      \"metadata.broker.list\" -> kafkaTestUtils.brokerAddress,\n+      \"auto.offset.reset\" -> \"smallest\"\n+    )\n+\n+    import DirectKafkaStreamSuite._\n+    ssc = new StreamingContext(sparkConf, Milliseconds(200))\n+    val collector = new InputInfoCollector\n+    ssc.addStreamingListener(collector)\n+\n+    val stream = withClue(\"Error creating direct stream\") {\n+      KafkaUtils.createDirectStream[String, String, StringDecoder, StringDecoder](\n+        ssc, kafkaParams, Set(topic))\n+    }\n+\n+    val allReceived = new ArrayBuffer[(String, String)]\n+\n+    stream.foreachRDD { rdd => allReceived ++= rdd.collect() }\n+    ssc.start()\n+    eventually(timeout(20000.milliseconds), interval(200.milliseconds)) {\n+      assert(allReceived.size === totalSent,\n+        \"didn't get expected number of messages, messages:\\n\" + allReceived.mkString(\"\\n\"))\n+    }\n+    ssc.stop()\n+\n+    // Calculate all the record number collected in the StreamingListener.\n+    val numRecordsSubmitted = collector.streamIdToNumRecordsSubmitted.map(_.values.sum).sum"
+  }, {
+    "author": {
+      "login": "tdas"
+    },
+    "body": "Also used AtomicLong or AtomicInt to handle multithread access. Otherwise there can be race conditions leading to flakiness.\n",
+    "commit": "b0b506c363968b1f0ef27d71986618bb514f0f3c",
+    "createdAt": "2015-05-05T02:46:14Z",
+    "diffHunk": "@@ -301,6 +301,49 @@ class DirectKafkaStreamSuite\n     ssc.stop()\n   }\n \n+  test(\"Direct Kafka stream report input information\") {\n+    val topic = \"report-test\"\n+    val data = Map(\"a\" -> 7, \"b\" -> 9)\n+    kafkaTestUtils.createTopic(topic)\n+    kafkaTestUtils.sendMessages(topic, data)\n+\n+    val totalSent = data.values.sum\n+    val kafkaParams = Map(\n+      \"metadata.broker.list\" -> kafkaTestUtils.brokerAddress,\n+      \"auto.offset.reset\" -> \"smallest\"\n+    )\n+\n+    import DirectKafkaStreamSuite._\n+    ssc = new StreamingContext(sparkConf, Milliseconds(200))\n+    val collector = new InputInfoCollector\n+    ssc.addStreamingListener(collector)\n+\n+    val stream = withClue(\"Error creating direct stream\") {\n+      KafkaUtils.createDirectStream[String, String, StringDecoder, StringDecoder](\n+        ssc, kafkaParams, Set(topic))\n+    }\n+\n+    val allReceived = new ArrayBuffer[(String, String)]\n+\n+    stream.foreachRDD { rdd => allReceived ++= rdd.collect() }\n+    ssc.start()\n+    eventually(timeout(20000.milliseconds), interval(200.milliseconds)) {\n+      assert(allReceived.size === totalSent,\n+        \"didn't get expected number of messages, messages:\\n\" + allReceived.mkString(\"\\n\"))\n+    }\n+    ssc.stop()\n+\n+    // Calculate all the record number collected in the StreamingListener.\n+    val numRecordsSubmitted = collector.streamIdToNumRecordsSubmitted.map(_.values.sum).sum"
+  }, {
+    "author": {
+      "login": "jerryshao"
+    },
+    "body": "I dont think there's a multi-thread issue, I tested the number of records until the StreamingContext is stopped, so I think at that point there's no other thread will access collector object.\n\nAnyway I just only test total number of records, so AtomicLong is enough, I will change to that way.\n",
+    "commit": "b0b506c363968b1f0ef27d71986618bb514f0f3c",
+    "createdAt": "2015-05-05T05:38:54Z",
+    "diffHunk": "@@ -301,6 +301,49 @@ class DirectKafkaStreamSuite\n     ssc.stop()\n   }\n \n+  test(\"Direct Kafka stream report input information\") {\n+    val topic = \"report-test\"\n+    val data = Map(\"a\" -> 7, \"b\" -> 9)\n+    kafkaTestUtils.createTopic(topic)\n+    kafkaTestUtils.sendMessages(topic, data)\n+\n+    val totalSent = data.values.sum\n+    val kafkaParams = Map(\n+      \"metadata.broker.list\" -> kafkaTestUtils.brokerAddress,\n+      \"auto.offset.reset\" -> \"smallest\"\n+    )\n+\n+    import DirectKafkaStreamSuite._\n+    ssc = new StreamingContext(sparkConf, Milliseconds(200))\n+    val collector = new InputInfoCollector\n+    ssc.addStreamingListener(collector)\n+\n+    val stream = withClue(\"Error creating direct stream\") {\n+      KafkaUtils.createDirectStream[String, String, StringDecoder, StringDecoder](\n+        ssc, kafkaParams, Set(topic))\n+    }\n+\n+    val allReceived = new ArrayBuffer[(String, String)]\n+\n+    stream.foreachRDD { rdd => allReceived ++= rdd.collect() }\n+    ssc.start()\n+    eventually(timeout(20000.milliseconds), interval(200.milliseconds)) {\n+      assert(allReceived.size === totalSent,\n+        \"didn't get expected number of messages, messages:\\n\" + allReceived.mkString(\"\\n\"))\n+    }\n+    ssc.stop()\n+\n+    // Calculate all the record number collected in the StreamingListener.\n+    val numRecordsSubmitted = collector.streamIdToNumRecordsSubmitted.map(_.values.sum).sum"
+  }, {
+    "author": {
+      "login": "jerryshao"
+    },
+    "body": "> There is probably race condition here. The collector may not have received the batch completed signal when the allReceived.size == totalSent is satisfied and the context is stopped. Better to put all of these asserts under the eventually.\n\nNot sure why all the assert should be in the `eventually`, from my understanding it is OK the last signal is missed, since we only test the total number of completed records.\n",
+    "commit": "b0b506c363968b1f0ef27d71986618bb514f0f3c",
+    "createdAt": "2015-05-05T05:51:11Z",
+    "diffHunk": "@@ -301,6 +301,49 @@ class DirectKafkaStreamSuite\n     ssc.stop()\n   }\n \n+  test(\"Direct Kafka stream report input information\") {\n+    val topic = \"report-test\"\n+    val data = Map(\"a\" -> 7, \"b\" -> 9)\n+    kafkaTestUtils.createTopic(topic)\n+    kafkaTestUtils.sendMessages(topic, data)\n+\n+    val totalSent = data.values.sum\n+    val kafkaParams = Map(\n+      \"metadata.broker.list\" -> kafkaTestUtils.brokerAddress,\n+      \"auto.offset.reset\" -> \"smallest\"\n+    )\n+\n+    import DirectKafkaStreamSuite._\n+    ssc = new StreamingContext(sparkConf, Milliseconds(200))\n+    val collector = new InputInfoCollector\n+    ssc.addStreamingListener(collector)\n+\n+    val stream = withClue(\"Error creating direct stream\") {\n+      KafkaUtils.createDirectStream[String, String, StringDecoder, StringDecoder](\n+        ssc, kafkaParams, Set(topic))\n+    }\n+\n+    val allReceived = new ArrayBuffer[(String, String)]\n+\n+    stream.foreachRDD { rdd => allReceived ++= rdd.collect() }\n+    ssc.start()\n+    eventually(timeout(20000.milliseconds), interval(200.milliseconds)) {\n+      assert(allReceived.size === totalSent,\n+        \"didn't get expected number of messages, messages:\\n\" + allReceived.mkString(\"\\n\"))\n+    }\n+    ssc.stop()\n+\n+    // Calculate all the record number collected in the StreamingListener.\n+    val numRecordsSubmitted = collector.streamIdToNumRecordsSubmitted.map(_.values.sum).sum"
+  }, {
+    "author": {
+      "login": "tdas"
+    },
+    "body": "1. JVM does not guarantee different threads will see the same values within any bounded period of time until some kind of synchronization is used. Has caused flakiness in the past. \n2. The `StreamingListener` events are sent on an async thread. So there is a time gap between when the last job finishes and the posting of the `StreamingListenerBatchCompleted` event. In the current code, the system may satisfy the eventually and stop the streamingContext before the event is dispatched and `InputInfoCollector. onBatchCompleted()` is called. In which case, things will fail. This will be fine probably 99.99% of the time. But on a place like Jenkins, that 0.01% chance causes annoying flakiness.\n",
+    "commit": "b0b506c363968b1f0ef27d71986618bb514f0f3c",
+    "createdAt": "2015-05-05T06:07:52Z",
+    "diffHunk": "@@ -301,6 +301,49 @@ class DirectKafkaStreamSuite\n     ssc.stop()\n   }\n \n+  test(\"Direct Kafka stream report input information\") {\n+    val topic = \"report-test\"\n+    val data = Map(\"a\" -> 7, \"b\" -> 9)\n+    kafkaTestUtils.createTopic(topic)\n+    kafkaTestUtils.sendMessages(topic, data)\n+\n+    val totalSent = data.values.sum\n+    val kafkaParams = Map(\n+      \"metadata.broker.list\" -> kafkaTestUtils.brokerAddress,\n+      \"auto.offset.reset\" -> \"smallest\"\n+    )\n+\n+    import DirectKafkaStreamSuite._\n+    ssc = new StreamingContext(sparkConf, Milliseconds(200))\n+    val collector = new InputInfoCollector\n+    ssc.addStreamingListener(collector)\n+\n+    val stream = withClue(\"Error creating direct stream\") {\n+      KafkaUtils.createDirectStream[String, String, StringDecoder, StringDecoder](\n+        ssc, kafkaParams, Set(topic))\n+    }\n+\n+    val allReceived = new ArrayBuffer[(String, String)]\n+\n+    stream.foreachRDD { rdd => allReceived ++= rdd.collect() }\n+    ssc.start()\n+    eventually(timeout(20000.milliseconds), interval(200.milliseconds)) {\n+      assert(allReceived.size === totalSent,\n+        \"didn't get expected number of messages, messages:\\n\" + allReceived.mkString(\"\\n\"))\n+    }\n+    ssc.stop()\n+\n+    // Calculate all the record number collected in the StreamingListener.\n+    val numRecordsSubmitted = collector.streamIdToNumRecordsSubmitted.map(_.values.sum).sum"
+  }, {
+    "author": {
+      "login": "jerryshao"
+    },
+    "body": "OK, I get it, thanks a lot for your explanation.\n",
+    "commit": "b0b506c363968b1f0ef27d71986618bb514f0f3c",
+    "createdAt": "2015-05-05T06:12:44Z",
+    "diffHunk": "@@ -301,6 +301,49 @@ class DirectKafkaStreamSuite\n     ssc.stop()\n   }\n \n+  test(\"Direct Kafka stream report input information\") {\n+    val topic = \"report-test\"\n+    val data = Map(\"a\" -> 7, \"b\" -> 9)\n+    kafkaTestUtils.createTopic(topic)\n+    kafkaTestUtils.sendMessages(topic, data)\n+\n+    val totalSent = data.values.sum\n+    val kafkaParams = Map(\n+      \"metadata.broker.list\" -> kafkaTestUtils.brokerAddress,\n+      \"auto.offset.reset\" -> \"smallest\"\n+    )\n+\n+    import DirectKafkaStreamSuite._\n+    ssc = new StreamingContext(sparkConf, Milliseconds(200))\n+    val collector = new InputInfoCollector\n+    ssc.addStreamingListener(collector)\n+\n+    val stream = withClue(\"Error creating direct stream\") {\n+      KafkaUtils.createDirectStream[String, String, StringDecoder, StringDecoder](\n+        ssc, kafkaParams, Set(topic))\n+    }\n+\n+    val allReceived = new ArrayBuffer[(String, String)]\n+\n+    stream.foreachRDD { rdd => allReceived ++= rdd.collect() }\n+    ssc.start()\n+    eventually(timeout(20000.milliseconds), interval(200.milliseconds)) {\n+      assert(allReceived.size === totalSent,\n+        \"didn't get expected number of messages, messages:\\n\" + allReceived.mkString(\"\\n\"))\n+    }\n+    ssc.stop()\n+\n+    // Calculate all the record number collected in the StreamingListener.\n+    val numRecordsSubmitted = collector.streamIdToNumRecordsSubmitted.map(_.values.sum).sum"
+  }],
+  "prId": 5879
+}, {
+  "comments": [{
+    "author": {
+      "login": "tdas"
+    },
+    "body": "If you are just going to test the total number of records received, why do you need arraybuffers?\n",
+    "commit": "b0b506c363968b1f0ef27d71986618bb514f0f3c",
+    "createdAt": "2015-05-05T02:44:41Z",
+    "diffHunk": "@@ -313,4 +356,24 @@ class DirectKafkaStreamSuite\n object DirectKafkaStreamSuite {\n   val collectedData = new mutable.ArrayBuffer[String]()\n   var total = -1L\n+\n+  class InputInfoCollector extends StreamingListener {\n+    val streamIdToNumRecordsSubmitted = new ArrayBuffer[Map[Int, Long]]()"
+  }, {
+    "author": {
+      "login": "jerryshao"
+    },
+    "body": "Yeah, that's not necessary, I will change it.\n",
+    "commit": "b0b506c363968b1f0ef27d71986618bb514f0f3c",
+    "createdAt": "2015-05-05T06:09:50Z",
+    "diffHunk": "@@ -313,4 +356,24 @@ class DirectKafkaStreamSuite\n object DirectKafkaStreamSuite {\n   val collectedData = new mutable.ArrayBuffer[String]()\n   var total = -1L\n+\n+  class InputInfoCollector extends StreamingListener {\n+    val streamIdToNumRecordsSubmitted = new ArrayBuffer[Map[Int, Long]]()"
+  }],
+  "prId": 5879
+}]

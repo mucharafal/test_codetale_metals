@@ -1,0 +1,42 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "brkyvz"
+    },
+    "body": "Can we unregister the listener at the end with a `try - finally` please?",
+    "commit": "b80f2ec736dc2f59d0190a587ae16f3853425939",
+    "createdAt": "2019-11-12T18:54:32Z",
+    "diffHunk": "@@ -125,4 +128,34 @@ class DataSourceV2DataFrameSuite\n       checkAnswer(spark.table(t1), Seq(Row(\"c\", \"d\")))\n     }\n   }\n+\n+  testQuietly(\"SPARK-29778: saveAsTable: append mode takes write options\") {\n+\n+    var plan: LogicalPlan = null\n+    val listener = new QueryExecutionListener {\n+      override def onSuccess(funcName: String, qe: QueryExecution, durationNs: Long): Unit = {\n+        plan = qe.analyzed\n+      }\n+      override def onFailure(funcName: String, qe: QueryExecution, error: Throwable): Unit = {}\n+    }\n+    spark.listenerManager.register(listener)"
+  }],
+  "prId": 26474
+}, {
+  "comments": [{
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "nit. `query,\"` -> `query, \"`.",
+    "commit": "b80f2ec736dc2f59d0190a587ae16f3853425939",
+    "createdAt": "2019-11-13T18:01:07Z",
+    "diffHunk": "@@ -125,4 +128,39 @@ class DataSourceV2DataFrameSuite\n       checkAnswer(spark.table(t1), Seq(Row(\"c\", \"d\")))\n     }\n   }\n+\n+  testQuietly(\"SPARK-29778: saveAsTable: append mode takes write options\") {\n+\n+    var plan: LogicalPlan = null\n+    val listener = new QueryExecutionListener {\n+      override def onSuccess(funcName: String, qe: QueryExecution, durationNs: Long): Unit = {\n+        plan = qe.analyzed\n+      }\n+      override def onFailure(funcName: String, qe: QueryExecution, error: Throwable): Unit = {}\n+    }\n+\n+    try {\n+      spark.listenerManager.register(listener)\n+\n+      val t1 = \"testcat.ns1.ns2.tbl\"\n+\n+      sql(s\"CREATE TABLE $t1 (id bigint, data string) USING foo\")\n+\n+      val df = Seq((1L, \"a\"), (2L, \"b\"), (3L, \"c\")).toDF(\"id\", \"data\")\n+      df.write.option(\"other\", \"20\").mode(\"append\").saveAsTable(t1)\n+\n+      sparkContext.listenerBus.waitUntilEmpty()\n+      plan match {\n+        case p: AppendData =>\n+          assert(p.writeOptions == Map(\"other\" -> \"20\"))\n+        case other =>\n+          fail(s\"Expected to parse ${classOf[AppendData].getName} from query,\" +",
+    "line": 40
+  }, {
+    "author": {
+      "login": "SpaceRangerWes"
+    },
+    "body": "@dongjoon-hyun I won't be able to get to this until Thursday evening. I'm willing to address it, but I didn't know how soon this needed to be merged.\r\n\r\ncc: @brkyvz ",
+    "commit": "b80f2ec736dc2f59d0190a587ae16f3853425939",
+    "createdAt": "2019-11-13T18:14:35Z",
+    "diffHunk": "@@ -125,4 +128,39 @@ class DataSourceV2DataFrameSuite\n       checkAnswer(spark.table(t1), Seq(Row(\"c\", \"d\")))\n     }\n   }\n+\n+  testQuietly(\"SPARK-29778: saveAsTable: append mode takes write options\") {\n+\n+    var plan: LogicalPlan = null\n+    val listener = new QueryExecutionListener {\n+      override def onSuccess(funcName: String, qe: QueryExecution, durationNs: Long): Unit = {\n+        plan = qe.analyzed\n+      }\n+      override def onFailure(funcName: String, qe: QueryExecution, error: Throwable): Unit = {}\n+    }\n+\n+    try {\n+      spark.listenerManager.register(listener)\n+\n+      val t1 = \"testcat.ns1.ns2.tbl\"\n+\n+      sql(s\"CREATE TABLE $t1 (id bigint, data string) USING foo\")\n+\n+      val df = Seq((1L, \"a\"), (2L, \"b\"), (3L, \"c\")).toDF(\"id\", \"data\")\n+      df.write.option(\"other\", \"20\").mode(\"append\").saveAsTable(t1)\n+\n+      sparkContext.listenerBus.waitUntilEmpty()\n+      plan match {\n+        case p: AppendData =>\n+          assert(p.writeOptions == Map(\"other\" -> \"20\"))\n+        case other =>\n+          fail(s\"Expected to parse ${classOf[AppendData].getName} from query,\" +",
+    "line": 40
+  }, {
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "I see, @SpaceRangerWes .",
+    "commit": "b80f2ec736dc2f59d0190a587ae16f3853425939",
+    "createdAt": "2019-11-13T18:21:47Z",
+    "diffHunk": "@@ -125,4 +128,39 @@ class DataSourceV2DataFrameSuite\n       checkAnswer(spark.table(t1), Seq(Row(\"c\", \"d\")))\n     }\n   }\n+\n+  testQuietly(\"SPARK-29778: saveAsTable: append mode takes write options\") {\n+\n+    var plan: LogicalPlan = null\n+    val listener = new QueryExecutionListener {\n+      override def onSuccess(funcName: String, qe: QueryExecution, durationNs: Long): Unit = {\n+        plan = qe.analyzed\n+      }\n+      override def onFailure(funcName: String, qe: QueryExecution, error: Throwable): Unit = {}\n+    }\n+\n+    try {\n+      spark.listenerManager.register(listener)\n+\n+      val t1 = \"testcat.ns1.ns2.tbl\"\n+\n+      sql(s\"CREATE TABLE $t1 (id bigint, data string) USING foo\")\n+\n+      val df = Seq((1L, \"a\"), (2L, \"b\"), (3L, \"c\")).toDF(\"id\", \"data\")\n+      df.write.option(\"other\", \"20\").mode(\"append\").saveAsTable(t1)\n+\n+      sparkContext.listenerBus.waitUntilEmpty()\n+      plan match {\n+        case p: AppendData =>\n+          assert(p.writeOptions == Map(\"other\" -> \"20\"))\n+        case other =>\n+          fail(s\"Expected to parse ${classOf[AppendData].getName} from query,\" +",
+    "line": 40
+  }],
+  "prId": 26474
+}]

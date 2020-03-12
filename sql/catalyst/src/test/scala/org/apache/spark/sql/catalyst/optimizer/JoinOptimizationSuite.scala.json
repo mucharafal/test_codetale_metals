@@ -1,0 +1,20 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "marmbrus"
+    },
+    "body": "This is a bit of a nit, but I think what you really want to test here is something like:\n\n``` scala\nval broadcastChildren = optimized.collect {\n  case Join(_, CanBroadcast(r), _, _) => r\n}\n\nassert(broadcastChildren == 1)\n```\n\nWith the current test something could break in `Project` (for example) that would prevent the broadcast from actually happening.\n",
+    "commit": "88535ee2e314781ad5e1f478fa53f109d3fc4e3e",
+    "createdAt": "2016-02-23T18:28:51Z",
+    "diffHunk": "@@ -92,4 +92,30 @@ class JoinOrderSuite extends PlanTest {\n \n     comparePlans(optimized, analysis.EliminateSubqueryAliases(correctAnswer))\n   }\n+\n+  test(\"broadcasthint sets relation statistics to smallest value\") {\n+    val input = LocalRelation('key.int, 'value.string)\n+\n+    val query =\n+      Project(Seq($\"x.key\", $\"y.key\"),\n+        Join(\n+          SubqueryAlias(\"x\", input),\n+          BroadcastHint(SubqueryAlias(\"y\", input)), Inner, None)).analyze\n+\n+    val optimized = Optimize.execute(query)\n+\n+    val expected =\n+      Project(Seq($\"x.key\", $\"y.key\"),\n+        Join(\n+          Project(Seq($\"x.key\"), SubqueryAlias(\"x\", input)),\n+          Project(Seq($\"y.key\"),\n+            BroadcastHint(SubqueryAlias(\"y\", input))),\n+          Inner, None)).analyze\n+\n+    comparePlans(optimized, expected)\n+\n+    assert(optimized.collect {\n+      case b @ BroadcastHint(_) if b.statistics.sizeInBytes == 1 => 1"
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "Because it seems we can't import CanBroadcast into this test, I do update according to your comment with a little change (just check its statistics.sizeInBytes). Please see if it is appropriate now. Thanks.\n",
+    "commit": "88535ee2e314781ad5e1f478fa53f109d3fc4e3e",
+    "createdAt": "2016-02-24T03:03:30Z",
+    "diffHunk": "@@ -92,4 +92,30 @@ class JoinOrderSuite extends PlanTest {\n \n     comparePlans(optimized, analysis.EliminateSubqueryAliases(correctAnswer))\n   }\n+\n+  test(\"broadcasthint sets relation statistics to smallest value\") {\n+    val input = LocalRelation('key.int, 'value.string)\n+\n+    val query =\n+      Project(Seq($\"x.key\", $\"y.key\"),\n+        Join(\n+          SubqueryAlias(\"x\", input),\n+          BroadcastHint(SubqueryAlias(\"y\", input)), Inner, None)).analyze\n+\n+    val optimized = Optimize.execute(query)\n+\n+    val expected =\n+      Project(Seq($\"x.key\", $\"y.key\"),\n+        Join(\n+          Project(Seq($\"x.key\"), SubqueryAlias(\"x\", input)),\n+          Project(Seq($\"y.key\"),\n+            BroadcastHint(SubqueryAlias(\"y\", input))),\n+          Inner, None)).analyze\n+\n+    comparePlans(optimized, expected)\n+\n+    assert(optimized.collect {\n+      case b @ BroadcastHint(_) if b.statistics.sizeInBytes == 1 => 1"
+  }],
+  "prId": 11260
+}]

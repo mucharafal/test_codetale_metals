@@ -1,0 +1,96 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "I'd like to discuss how the API should look like. The current use cases include\r\n1. users only specify options, implementation needs to infer schema/partitioning\r\n2. users specify options and schema, implementation needs to infer partitioning\r\n3. users specify all the things.\r\n\r\nShall we create 3 methods or just create one single method like this?",
+    "commit": "cfbe0a75f80e88d4a5831785d05fb9b708c5ada3",
+    "createdAt": "2019-09-18T15:04:55Z",
+    "diffHunk": "@@ -36,26 +40,21 @@\n public interface TableProvider {\n \n   /**\n-   * Return a {@link Table} instance to do read/write with user-specified options.\n+   * Return a {@link Table} instance to do read/write with the given table metadata. The returned\n+   * table must report the same schema and partitioning with the given table metadata.\n    *\n-   * @param options the user-specified options that can identify a table, e.g. file path, Kafka\n-   *                topic name, etc. It's an immutable case-insensitive string-to-string map.\n-   */\n-  Table getTable(CaseInsensitiveStringMap options);\n-\n-  /**\n-   * Return a {@link Table} instance to do read/write with user-specified schema and options.\n-   * <p>\n-   * By default this method throws {@link UnsupportedOperationException}, implementations should\n-   * override this method to handle user-specified schema.\n-   * </p>\n-   * @param options the user-specified options that can identify a table, e.g. file path, Kafka\n-   *                topic name, etc. It's an immutable case-insensitive string-to-string map.\n-   * @param schema the user-specified schema.\n-   * @throws UnsupportedOperationException\n+   * @param schema The schema of the table to load. If it's empty, implementations should infer it.\n+   * @param partitions The data partitioning of the table to load. If it's empty, implementations\n+   *                   should infer it.\n+   * @param properties The properties of the table to load. It should be sufficient to define and\n+   *                   access a table. The properties map may be {@link CaseInsensitiveStringMap}.\n+   *\n+   * @throws IllegalArgumentException if the implementation can't infer schema/partitioning, or\n+   *                                  the given schema/partitioning doesn't match the actual data\n+   *                                  schema/partitioning.\n    */\n-  default Table getTable(CaseInsensitiveStringMap options, StructType schema) {\n-    throw new UnsupportedOperationException(\n-      this.getClass().getSimpleName() + \" source does not support user-specified schema\");\n-  }\n+  Table getTable(\n+      Optional<StructType> schema,\n+      Optional<Transform[]> partitions,\n+      Map<String, String> properties);",
+    "line": 71
+  }],
+  "prId": 25651
+}, {
+  "comments": [{
+    "author": {
+      "login": "rdblue"
+    },
+    "body": "If this method is left, then all of the changes to file sources can be avoided in this commit. That would make it considerably smaller.",
+    "commit": "cfbe0a75f80e88d4a5831785d05fb9b708c5ada3",
+    "createdAt": "2019-09-25T21:01:41Z",
+    "diffHunk": "@@ -36,26 +35,12 @@\n public interface TableProvider {\n \n   /**\n-   * Return a {@link Table} instance to do read/write with user-specified options.\n+   * Return a {@link Table} instance with the given table options to do read/write.\n+   * Implementations should infer the table schema and partitioning.\n    *\n    * @param options the user-specified options that can identify a table, e.g. file path, Kafka\n    *                topic name, etc. It's an immutable case-insensitive string-to-string map.\n    */\n+  // TODO: this should take a Map<String, String> as table properties."
+  }, {
+    "author": {
+      "login": "rdblue"
+    },
+    "body": "Another option for avoiding this is to separate the schema and partition inference from the `getTable` method. In that case, `TableProvider` would expose `inferSchema(CaseInsensitiveStringMap)` and `inferPartitioning(CaseInsensitiveStringMap)`. Then a single `getTable` call could be used.\r\n\r\n```java\r\ninterface TableProvider {\r\n  StructType inferSchema(CaseInsensitiveStringMap options);\r\n  Transform[] inferPartitioning(CaseInsensitiveStringMap options);\r\n  Table buildTable(StructType schema, Transform[] partitioning, Map<String, String> properties);\r\n}\r\n```\r\n\r\nWhat do you think?",
+    "commit": "cfbe0a75f80e88d4a5831785d05fb9b708c5ada3",
+    "createdAt": "2019-09-25T21:06:02Z",
+    "diffHunk": "@@ -36,26 +35,12 @@\n public interface TableProvider {\n \n   /**\n-   * Return a {@link Table} instance to do read/write with user-specified options.\n+   * Return a {@link Table} instance with the given table options to do read/write.\n+   * Implementations should infer the table schema and partitioning.\n    *\n    * @param options the user-specified options that can identify a table, e.g. file path, Kafka\n    *                topic name, etc. It's an immutable case-insensitive string-to-string map.\n    */\n+  // TODO: this should take a Map<String, String> as table properties."
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "SGTM. Shall we do it in this PR? We need to update all the `TableProvider` implementations, i.e. file source v2, streaming source v2, testing v2 sources.",
+    "commit": "cfbe0a75f80e88d4a5831785d05fb9b708c5ada3",
+    "createdAt": "2019-09-26T05:36:04Z",
+    "diffHunk": "@@ -36,26 +35,12 @@\n public interface TableProvider {\n \n   /**\n-   * Return a {@link Table} instance to do read/write with user-specified options.\n+   * Return a {@link Table} instance with the given table options to do read/write.\n+   * Implementations should infer the table schema and partitioning.\n    *\n    * @param options the user-specified options that can identify a table, e.g. file path, Kafka\n    *                topic name, etc. It's an immutable case-insensitive string-to-string map.\n    */\n+  // TODO: this should take a Map<String, String> as table properties."
+  }, {
+    "author": {
+      "login": "rdblue"
+    },
+    "body": "No, I think we should revert the changes to all the sources in this commit and continue to use the original method. In this PR, let's add the method to build a table and add support to the v2 session catalog. We can change to infer before calling that method in a follow-up.",
+    "commit": "cfbe0a75f80e88d4a5831785d05fb9b708c5ada3",
+    "createdAt": "2019-09-27T17:08:31Z",
+    "diffHunk": "@@ -36,26 +35,12 @@\n public interface TableProvider {\n \n   /**\n-   * Return a {@link Table} instance to do read/write with user-specified options.\n+   * Return a {@link Table} instance with the given table options to do read/write.\n+   * Implementations should infer the table schema and partitioning.\n    *\n    * @param options the user-specified options that can identify a table, e.g. file path, Kafka\n    *                topic name, etc. It's an immutable case-insensitive string-to-string map.\n    */\n+  // TODO: this should take a Map<String, String> as table properties."
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "I did a quick try, and found one problem: it's very likely that a data source needs to infer schema and partition together, e.g. file source. If we have 2 separated method `inferSchema` and `inferPartitioning`, it may force the data source to do expensive inference twice.",
+    "commit": "cfbe0a75f80e88d4a5831785d05fb9b708c5ada3",
+    "createdAt": "2019-10-03T12:36:49Z",
+    "diffHunk": "@@ -36,26 +35,12 @@\n public interface TableProvider {\n \n   /**\n-   * Return a {@link Table} instance to do read/write with user-specified options.\n+   * Return a {@link Table} instance with the given table options to do read/write.\n+   * Implementations should infer the table schema and partitioning.\n    *\n    * @param options the user-specified options that can identify a table, e.g. file path, Kafka\n    *                topic name, etc. It's an immutable case-insensitive string-to-string map.\n    */\n+  // TODO: this should take a Map<String, String> as table properties."
+  }, {
+    "author": {
+      "login": "rdblue"
+    },
+    "body": "Can't we do `inferPartitioning` first and then pass that into `inferSchema`?",
+    "commit": "cfbe0a75f80e88d4a5831785d05fb9b708c5ada3",
+    "createdAt": "2019-10-03T18:48:40Z",
+    "diffHunk": "@@ -36,26 +35,12 @@\n public interface TableProvider {\n \n   /**\n-   * Return a {@link Table} instance to do read/write with user-specified options.\n+   * Return a {@link Table} instance with the given table options to do read/write.\n+   * Implementations should infer the table schema and partitioning.\n    *\n    * @param options the user-specified options that can identify a table, e.g. file path, Kafka\n    *                topic name, etc. It's an immutable case-insensitive string-to-string map.\n    */\n+  // TODO: this should take a Map<String, String> as table properties."
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "It turns out that this is more complicated than I thought.\r\n\r\nFor file source, we need to list the files to scan. If we need to infer the schema/partitioning, we will list the files a little earlier, and reuse the listed files when scan.\r\n\r\nThat said, we need to either make `TableProvider` stateful, so that file source can keep the listed files after schema inference. Or we need to re-design the API so that it can carry states after schema inference.\r\n\r\nMaybe we should move on with 2 `getTable` methods as it is in this PR.",
+    "commit": "cfbe0a75f80e88d4a5831785d05fb9b708c5ada3",
+    "createdAt": "2019-10-07T15:46:12Z",
+    "diffHunk": "@@ -36,26 +35,12 @@\n public interface TableProvider {\n \n   /**\n-   * Return a {@link Table} instance to do read/write with user-specified options.\n+   * Return a {@link Table} instance with the given table options to do read/write.\n+   * Implementations should infer the table schema and partitioning.\n    *\n    * @param options the user-specified options that can identify a table, e.g. file path, Kafka\n    *                topic name, etc. It's an immutable case-insensitive string-to-string map.\n    */\n+  // TODO: this should take a Map<String, String> as table properties."
+  }, {
+    "author": {
+      "login": "rdblue"
+    },
+    "body": "A TableProvider could use a static cache. We do this for our Hive client pool in Iceberg.\r\n\r\nI don't think that partition inference needs to scan the entire file system tree. That seems needlessly expensive to me, when mixed depth partitions are not allowed. Inference should find the first live data file and use its path to determine the partitioning.\r\n\r\nIn any case, I think that the plan to add `inferSchema` and `inferPartitioning` is fine, it is just fixing the implementation that needs to be done. Schema and partitioning inference is known to be expensive, so I'm not sure how much sense it makes to try to over-optimize here.",
+    "commit": "cfbe0a75f80e88d4a5831785d05fb9b708c5ada3",
+    "createdAt": "2019-10-15T23:45:01Z",
+    "diffHunk": "@@ -36,26 +35,12 @@\n public interface TableProvider {\n \n   /**\n-   * Return a {@link Table} instance to do read/write with user-specified options.\n+   * Return a {@link Table} instance with the given table options to do read/write.\n+   * Implementations should infer the table schema and partitioning.\n    *\n    * @param options the user-specified options that can identify a table, e.g. file path, Kafka\n    *                topic name, etc. It's an immutable case-insensitive string-to-string map.\n    */\n+  // TODO: this should take a Map<String, String> as table properties."
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "> I don't think that partition inference needs to scan the entire file system tree.\r\n\r\nSpark needs to do it to get all the partition values and infer the schema. This is an existing feature that Spark can infer a common type for partition values with different types. The same applies to schema inference as well. Spark can read parquet files of different but compatible schema, so Spark must read all the files to infer the schema.\r\n\r\nCan you share more about the static cache? Do you mean a global cache that maps a directory to its listed files?\r\n\r\n",
+    "commit": "cfbe0a75f80e88d4a5831785d05fb9b708c5ada3",
+    "createdAt": "2019-10-16T03:18:36Z",
+    "diffHunk": "@@ -36,26 +35,12 @@\n public interface TableProvider {\n \n   /**\n-   * Return a {@link Table} instance to do read/write with user-specified options.\n+   * Return a {@link Table} instance with the given table options to do read/write.\n+   * Implementations should infer the table schema and partitioning.\n    *\n    * @param options the user-specified options that can identify a table, e.g. file path, Kafka\n    *                topic name, etc. It's an immutable case-insensitive string-to-string map.\n    */\n+  // TODO: this should take a Map<String, String> as table properties."
+  }, {
+    "author": {
+      "login": "rdblue"
+    },
+    "body": "My point was that Spark needs to infer the partitioning of the table, not exhaustively list directories. This can be done more quickly than in the current implementation, by listing all files later and just getting the directory structure for `inferPartititoning`.\r\n\r\nThe static cache I'm talking about is a cache of metastore connections, not files. In this case, you could build your file list for a location and cache that for some period of time, using it for partition and schema inference, as well as for the `FileIndex` in the table you created. Caching would also help consistency because the same files would be in all versions of the table loaded within some period of time (and could be refreshed, of course). But, these concerns shouldn't affect the API.",
+    "commit": "cfbe0a75f80e88d4a5831785d05fb9b708c5ada3",
+    "createdAt": "2019-10-19T00:30:59Z",
+    "diffHunk": "@@ -36,26 +35,12 @@\n public interface TableProvider {\n \n   /**\n-   * Return a {@link Table} instance to do read/write with user-specified options.\n+   * Return a {@link Table} instance with the given table options to do read/write.\n+   * Implementations should infer the table schema and partitioning.\n    *\n    * @param options the user-specified options that can identify a table, e.g. file path, Kafka\n    *                topic name, etc. It's an immutable case-insensitive string-to-string map.\n    */\n+  // TODO: this should take a Map<String, String> as table properties."
+  }],
+  "prId": 25651
+}]

@@ -1,0 +1,77 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "do we need to clean up these 2 tables?",
+    "commit": "27338c9451f78d89cade769759cf6c597f959b1a",
+    "createdAt": "2017-02-12T02:22:56Z",
+    "diffHunk": "@@ -62,6 +62,12 @@ class OracleIntegrationSuite extends DockerJDBCIntegrationSuite with SharedSQLCo\n   }\n \n   override def dataPreparation(conn: Connection): Unit = {\n+    conn.prepareStatement(\"CREATE TABLE datetime (id NUMBER(10), d DATE, t TIMESTAMP)\")\n+      .executeUpdate()\n+    conn.prepareStatement(\"INSERT INTO datetime VALUES (\"\n+      + \"1, {d '1991-11-09'}, {ts '1996-01-01 01:23:45'})\").executeUpdate()\n+    conn.prepareStatement(\"CREATE TABLE datetime1 (id NUMBER(10), d DATE, t TIMESTAMP)\")"
+  }, {
+    "author": {
+      "login": "sureshthalamati"
+    },
+    "body": "Thank you for reviewing the patch. I think cleanup is not required, these tables are not persistent across the test runs. They are  cleaned up when docker container is removed at the end of the test.  Currently I did notice any setup in the afterAll() to do it after the test.\r\n\r\nI moved up creation of temporary views also  to the same place, to keep them together. And possibly any future  tests can also use these tables. \r\n",
+    "commit": "27338c9451f78d89cade769759cf6c597f959b1a",
+    "createdAt": "2017-02-13T07:40:09Z",
+    "diffHunk": "@@ -62,6 +62,12 @@ class OracleIntegrationSuite extends DockerJDBCIntegrationSuite with SharedSQLCo\n   }\n \n   override def dataPreparation(conn: Connection): Unit = {\n+    conn.prepareStatement(\"CREATE TABLE datetime (id NUMBER(10), d DATE, t TIMESTAMP)\")\n+      .executeUpdate()\n+    conn.prepareStatement(\"INSERT INTO datetime VALUES (\"\n+      + \"1, {d '1991-11-09'}, {ts '1996-01-01 01:23:45'})\").executeUpdate()\n+    conn.prepareStatement(\"CREATE TABLE datetime1 (id NUMBER(10), d DATE, t TIMESTAMP)\")"
+  }],
+  "prId": 16891
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "use `CREATE TEMPORARY VIEW` please, `CREATE TEMPORARY TABLE` is deprecated",
+    "commit": "27338c9451f78d89cade769759cf6c597f959b1a",
+    "createdAt": "2017-02-12T02:23:39Z",
+    "diffHunk": "@@ -149,4 +155,29 @@ class OracleIntegrationSuite extends DockerJDBCIntegrationSuite with SharedSQLCo\n     assert(values.getDate(9).equals(dateVal))\n     assert(values.getTimestamp(10).equals(timestampVal))\n   }\n+\n+  test(\"SPARK-19318: connection property keys should be case-sensitive\") {\n+    sql(\n+      s\"\"\"\n+         |CREATE TEMPORARY TABLE datetime"
+  }, {
+    "author": {
+      "login": "sureshthalamati"
+    },
+    "body": "done.",
+    "commit": "27338c9451f78d89cade769759cf6c597f959b1a",
+    "createdAt": "2017-02-13T07:40:23Z",
+    "diffHunk": "@@ -149,4 +155,29 @@ class OracleIntegrationSuite extends DockerJDBCIntegrationSuite with SharedSQLCo\n     assert(values.getDate(9).equals(dateVal))\n     assert(values.getTimestamp(10).equals(timestampVal))\n   }\n+\n+  test(\"SPARK-19318: connection property keys should be case-sensitive\") {\n+    sql(\n+      s\"\"\"\n+         |CREATE TEMPORARY TABLE datetime"
+  }],
+  "prId": 16891
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "nit: use `.head` instead of `(0)`",
+    "commit": "27338c9451f78d89cade769759cf6c597f959b1a",
+    "createdAt": "2017-02-12T02:24:28Z",
+    "diffHunk": "@@ -149,4 +155,29 @@ class OracleIntegrationSuite extends DockerJDBCIntegrationSuite with SharedSQLCo\n     assert(values.getDate(9).equals(dateVal))\n     assert(values.getTimestamp(10).equals(timestampVal))\n   }\n+\n+  test(\"SPARK-19318: connection property keys should be case-sensitive\") {\n+    sql(\n+      s\"\"\"\n+         |CREATE TEMPORARY TABLE datetime\n+         |USING org.apache.spark.sql.jdbc\n+         |OPTIONS (url '$jdbcUrl', dbTable 'datetime', oracle.jdbc.mapDateToTimestamp 'false')\n+      \"\"\".stripMargin.replaceAll(\"\\n\", \" \"))\n+    val row = sql(\"SELECT * FROM datetime where id = 1\").collect()(0)"
+  }, {
+    "author": {
+      "login": "sureshthalamati"
+    },
+    "body": "done.",
+    "commit": "27338c9451f78d89cade769759cf6c597f959b1a",
+    "createdAt": "2017-02-13T07:40:29Z",
+    "diffHunk": "@@ -149,4 +155,29 @@ class OracleIntegrationSuite extends DockerJDBCIntegrationSuite with SharedSQLCo\n     assert(values.getDate(9).equals(dateVal))\n     assert(values.getTimestamp(10).equals(timestampVal))\n   }\n+\n+  test(\"SPARK-19318: connection property keys should be case-sensitive\") {\n+    sql(\n+      s\"\"\"\n+         |CREATE TEMPORARY TABLE datetime\n+         |USING org.apache.spark.sql.jdbc\n+         |OPTIONS (url '$jdbcUrl', dbTable 'datetime', oracle.jdbc.mapDateToTimestamp 'false')\n+      \"\"\".stripMargin.replaceAll(\"\\n\", \" \"))\n+    val row = sql(\"SELECT * FROM datetime where id = 1\").collect()(0)"
+  }],
+  "prId": 16891
+}, {
+  "comments": [{
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "After addressing all the comments, I will run the docker tests in my local environment. Thanks!",
+    "commit": "27338c9451f78d89cade769759cf6c597f959b1a",
+    "createdAt": "2017-02-13T22:07:01Z",
+    "diffHunk": "@@ -149,4 +172,16 @@ class OracleIntegrationSuite extends DockerJDBCIntegrationSuite with SharedSQLCo\n     assert(values.getDate(9).equals(dateVal))\n     assert(values.getTimestamp(10).equals(timestampVal))\n   }\n+\n+  test(\"SPARK-19318: connection property keys should be case-sensitive\") {\n+    val row = sql(\"SELECT * FROM datetime where id = 1\").head()\n+    assert(row.getDate(1).equals(Date.valueOf(\"1991-11-09\")))\n+    assert(row.getTimestamp(2).equals(Timestamp.valueOf(\"1996-01-01 01:23:45\")))\n+\n+    sql(\"INSERT INTO TABLE datetime1 SELECT * FROM datetime where id = 1\")\n+    val row1 = sql(\"SELECT * FROM datetime1 where id = 1\").head()\n+    assert(row1.getInt(0) == 1)\n+    assert(row1.getDate(1).equals(Date.valueOf(\"1991-11-09\")))\n+    assert(row1.getTimestamp(2).equals(Timestamp.valueOf(\"1996-01-01 01:23:45\")))\n+  }"
+  }, {
+    "author": {
+      "login": "sureshthalamati"
+    },
+    "body": "Thank you.",
+    "commit": "27338c9451f78d89cade769759cf6c597f959b1a",
+    "createdAt": "2017-02-14T08:00:51Z",
+    "diffHunk": "@@ -149,4 +172,16 @@ class OracleIntegrationSuite extends DockerJDBCIntegrationSuite with SharedSQLCo\n     assert(values.getDate(9).equals(dateVal))\n     assert(values.getTimestamp(10).equals(timestampVal))\n   }\n+\n+  test(\"SPARK-19318: connection property keys should be case-sensitive\") {\n+    val row = sql(\"SELECT * FROM datetime where id = 1\").head()\n+    assert(row.getDate(1).equals(Date.valueOf(\"1991-11-09\")))\n+    assert(row.getTimestamp(2).equals(Timestamp.valueOf(\"1996-01-01 01:23:45\")))\n+\n+    sql(\"INSERT INTO TABLE datetime1 SELECT * FROM datetime where id = 1\")\n+    val row1 = sql(\"SELECT * FROM datetime1 where id = 1\").head()\n+    assert(row1.getInt(0) == 1)\n+    assert(row1.getDate(1).equals(Date.valueOf(\"1991-11-09\")))\n+    assert(row1.getTimestamp(2).equals(Timestamp.valueOf(\"1996-01-01 01:23:45\")))\n+  }"
+  }],
+  "prId": 16891
+}]

@@ -1,0 +1,128 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "I suppose this needs documentation.\n",
+    "commit": "5e9c258dfb592e47800df9c5205a7b0c6c07ed4a",
+    "createdAt": "2016-06-04T01:41:04Z",
+    "diffHunk": "@@ -86,11 +86,31 @@ package object expressions  {\n   /**\n    * Helper functions for working with `Seq[Attribute]`.\n    */\n-  implicit class AttributeSeq(attrs: Seq[Attribute]) {\n+  implicit class AttributeSeq(val attrs: Seq[Attribute]) {\n     /** Creates a StructType with a schema matching this `Seq[Attribute]`. */\n     def toStructType: StructType = {\n       StructType(attrs.map(a => StructField(a.name, a.dataType, a.nullable)))\n     }\n+\n+    private lazy val inputArr = attrs.toArray\n+\n+    private lazy val inputToOrdinal = {\n+      val map = new java.util.HashMap[ExprId, Int](inputArr.length * 2)\n+      var index = 0\n+      attrs.foreach { attr =>\n+        if (!map.containsKey(attr.exprId)) {\n+          map.put(attr.exprId, index)\n+        }\n+        index += 1\n+      }\n+      map\n+    }\n+\n+    def apply(ordinal: Int): Attribute = inputArr(ordinal)\n+\n+    def getOrdinal(exprId: ExprId): Int = {"
+  }, {
+    "author": {
+      "login": "rxin"
+    },
+    "body": "yup ...\n",
+    "commit": "5e9c258dfb592e47800df9c5205a7b0c6c07ed4a",
+    "createdAt": "2016-06-04T05:20:17Z",
+    "diffHunk": "@@ -86,11 +86,31 @@ package object expressions  {\n   /**\n    * Helper functions for working with `Seq[Attribute]`.\n    */\n-  implicit class AttributeSeq(attrs: Seq[Attribute]) {\n+  implicit class AttributeSeq(val attrs: Seq[Attribute]) {\n     /** Creates a StructType with a schema matching this `Seq[Attribute]`. */\n     def toStructType: StructType = {\n       StructType(attrs.map(a => StructField(a.name, a.dataType, a.nullable)))\n     }\n+\n+    private lazy val inputArr = attrs.toArray\n+\n+    private lazy val inputToOrdinal = {\n+      val map = new java.util.HashMap[ExprId, Int](inputArr.length * 2)\n+      var index = 0\n+      attrs.foreach { attr =>\n+        if (!map.containsKey(attr.exprId)) {\n+          map.put(attr.exprId, index)\n+        }\n+        index += 1\n+      }\n+      map\n+    }\n+\n+    def apply(ordinal: Int): Attribute = inputArr(ordinal)\n+\n+    def getOrdinal(exprId: ExprId): Int = {"
+  }],
+  "prId": 13505
+}, {
+  "comments": [{
+    "author": {
+      "login": "kiszk"
+    },
+    "body": "Why `*2` is necessary?\nI think that the size of map's entry is up to `attrs.size` since the max number of calling `map.put()` is equal to `attrs.size``. Is``attrs.size``equal to``inputArr.legnth``?\n",
+    "commit": "5e9c258dfb592e47800df9c5205a7b0c6c07ed4a",
+    "createdAt": "2016-06-04T16:08:53Z",
+    "diffHunk": "@@ -86,11 +86,31 @@ package object expressions  {\n   /**\n    * Helper functions for working with `Seq[Attribute]`.\n    */\n-  implicit class AttributeSeq(attrs: Seq[Attribute]) {\n+  implicit class AttributeSeq(val attrs: Seq[Attribute]) {\n     /** Creates a StructType with a schema matching this `Seq[Attribute]`. */\n     def toStructType: StructType = {\n       StructType(attrs.map(a => StructField(a.name, a.dataType, a.nullable)))\n     }\n+\n+    private lazy val inputArr = attrs.toArray\n+\n+    private lazy val inputToOrdinal = {\n+      val map = new java.util.HashMap[ExprId, Int](inputArr.length * 2)"
+  }, {
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "The goal was to avoid having to rehash the elements of the hash map once the number of inserted keys exceeded the default 0.75 load factor.\n",
+    "commit": "5e9c258dfb592e47800df9c5205a7b0c6c07ed4a",
+    "createdAt": "2016-06-04T22:56:32Z",
+    "diffHunk": "@@ -86,11 +86,31 @@ package object expressions  {\n   /**\n    * Helper functions for working with `Seq[Attribute]`.\n    */\n-  implicit class AttributeSeq(attrs: Seq[Attribute]) {\n+  implicit class AttributeSeq(val attrs: Seq[Attribute]) {\n     /** Creates a StructType with a schema matching this `Seq[Attribute]`. */\n     def toStructType: StructType = {\n       StructType(attrs.map(a => StructField(a.name, a.dataType, a.nullable)))\n     }\n+\n+    private lazy val inputArr = attrs.toArray\n+\n+    private lazy val inputToOrdinal = {\n+      val map = new java.util.HashMap[ExprId, Int](inputArr.length * 2)"
+  }, {
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "It's probably clearer to use Guava's `newHashMapWithExpectedSize` instead: https://google.github.io/guava/releases/snapshot/api/docs/com/google/common/collect/Maps.html#newHashMapWithExpectedSize(int)\n",
+    "commit": "5e9c258dfb592e47800df9c5205a7b0c6c07ed4a",
+    "createdAt": "2016-06-04T22:59:16Z",
+    "diffHunk": "@@ -86,11 +86,31 @@ package object expressions  {\n   /**\n    * Helper functions for working with `Seq[Attribute]`.\n    */\n-  implicit class AttributeSeq(attrs: Seq[Attribute]) {\n+  implicit class AttributeSeq(val attrs: Seq[Attribute]) {\n     /** Creates a StructType with a schema matching this `Seq[Attribute]`. */\n     def toStructType: StructType = {\n       StructType(attrs.map(a => StructField(a.name, a.dataType, a.nullable)))\n     }\n+\n+    private lazy val inputArr = attrs.toArray\n+\n+    private lazy val inputToOrdinal = {\n+      val map = new java.util.HashMap[ExprId, Int](inputArr.length * 2)"
+  }, {
+    "author": {
+      "login": "ericl"
+    },
+    "body": "+1 on withExpectedSize\n",
+    "commit": "5e9c258dfb592e47800df9c5205a7b0c6c07ed4a",
+    "createdAt": "2016-06-05T17:46:12Z",
+    "diffHunk": "@@ -86,11 +86,31 @@ package object expressions  {\n   /**\n    * Helper functions for working with `Seq[Attribute]`.\n    */\n-  implicit class AttributeSeq(attrs: Seq[Attribute]) {\n+  implicit class AttributeSeq(val attrs: Seq[Attribute]) {\n     /** Creates a StructType with a schema matching this `Seq[Attribute]`. */\n     def toStructType: StructType = {\n       StructType(attrs.map(a => StructField(a.name, a.dataType, a.nullable)))\n     }\n+\n+    private lazy val inputArr = attrs.toArray\n+\n+    private lazy val inputToOrdinal = {\n+      val map = new java.util.HashMap[ExprId, Int](inputArr.length * 2)"
+  }],
+  "prId": 13505
+}, {
+  "comments": [{
+    "author": {
+      "login": "kiszk"
+    },
+    "body": "Which style is better,  this style or a style to use `zipWithIndex`?\n",
+    "commit": "5e9c258dfb592e47800df9c5205a7b0c6c07ed4a",
+    "createdAt": "2016-06-04T16:14:47Z",
+    "diffHunk": "@@ -86,11 +86,31 @@ package object expressions  {\n   /**\n    * Helper functions for working with `Seq[Attribute]`.\n    */\n-  implicit class AttributeSeq(attrs: Seq[Attribute]) {\n+  implicit class AttributeSeq(val attrs: Seq[Attribute]) {\n     /** Creates a StructType with a schema matching this `Seq[Attribute]`. */\n     def toStructType: StructType = {\n       StructType(attrs.map(a => StructField(a.name, a.dataType, a.nullable)))\n     }\n+\n+    private lazy val inputArr = attrs.toArray\n+\n+    private lazy val inputToOrdinal = {\n+      val map = new java.util.HashMap[ExprId, Int](inputArr.length * 2)\n+      var index = 0\n+      attrs.foreach { attr =>\n+        if (!map.containsKey(attr.exprId)) {\n+          map.put(attr.exprId, index)\n+        }\n+        index += 1"
+  }, {
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "This was just a minor perf. optimization since this method was in a hot path.\n",
+    "commit": "5e9c258dfb592e47800df9c5205a7b0c6c07ed4a",
+    "createdAt": "2016-06-04T22:59:58Z",
+    "diffHunk": "@@ -86,11 +86,31 @@ package object expressions  {\n   /**\n    * Helper functions for working with `Seq[Attribute]`.\n    */\n-  implicit class AttributeSeq(attrs: Seq[Attribute]) {\n+  implicit class AttributeSeq(val attrs: Seq[Attribute]) {\n     /** Creates a StructType with a schema matching this `Seq[Attribute]`. */\n     def toStructType: StructType = {\n       StructType(attrs.map(a => StructField(a.name, a.dataType, a.nullable)))\n     }\n+\n+    private lazy val inputArr = attrs.toArray\n+\n+    private lazy val inputToOrdinal = {\n+      val map = new java.util.HashMap[ExprId, Int](inputArr.length * 2)\n+      var index = 0\n+      attrs.foreach { attr =>\n+        if (!map.containsKey(attr.exprId)) {\n+          map.put(attr.exprId, index)\n+        }\n+        index += 1"
+  }, {
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "On the other hand, accessing a variable that's outside of the inner closure is likely to be expensive, too. It's probably fastest to just iterate over the elements of `inputArr`.\n",
+    "commit": "5e9c258dfb592e47800df9c5205a7b0c6c07ed4a",
+    "createdAt": "2016-06-04T23:05:06Z",
+    "diffHunk": "@@ -86,11 +86,31 @@ package object expressions  {\n   /**\n    * Helper functions for working with `Seq[Attribute]`.\n    */\n-  implicit class AttributeSeq(attrs: Seq[Attribute]) {\n+  implicit class AttributeSeq(val attrs: Seq[Attribute]) {\n     /** Creates a StructType with a schema matching this `Seq[Attribute]`. */\n     def toStructType: StructType = {\n       StructType(attrs.map(a => StructField(a.name, a.dataType, a.nullable)))\n     }\n+\n+    private lazy val inputArr = attrs.toArray\n+\n+    private lazy val inputToOrdinal = {\n+      val map = new java.util.HashMap[ExprId, Int](inputArr.length * 2)\n+      var index = 0\n+      attrs.foreach { attr =>\n+        if (!map.containsKey(attr.exprId)) {\n+          map.put(attr.exprId, index)\n+        }\n+        index += 1"
+  }, {
+    "author": {
+      "login": "kiszk"
+    },
+    "body": "Got it. I did not have no preference. Good to hear a reason for this decision.\n",
+    "commit": "5e9c258dfb592e47800df9c5205a7b0c6c07ed4a",
+    "createdAt": "2016-06-05T05:21:01Z",
+    "diffHunk": "@@ -86,11 +86,31 @@ package object expressions  {\n   /**\n    * Helper functions for working with `Seq[Attribute]`.\n    */\n-  implicit class AttributeSeq(attrs: Seq[Attribute]) {\n+  implicit class AttributeSeq(val attrs: Seq[Attribute]) {\n     /** Creates a StructType with a schema matching this `Seq[Attribute]`. */\n     def toStructType: StructType = {\n       StructType(attrs.map(a => StructField(a.name, a.dataType, a.nullable)))\n     }\n+\n+    private lazy val inputArr = attrs.toArray\n+\n+    private lazy val inputToOrdinal = {\n+      val map = new java.util.HashMap[ExprId, Int](inputArr.length * 2)\n+      var index = 0\n+      attrs.foreach { attr =>\n+        if (!map.containsKey(attr.exprId)) {\n+          map.put(attr.exprId, index)\n+        }\n+        index += 1"
+  }],
+  "prId": 13505
+}, {
+  "comments": [{
+    "author": {
+      "login": "ericl"
+    },
+    "body": "Would `indexOf` be more clear?\n",
+    "commit": "5e9c258dfb592e47800df9c5205a7b0c6c07ed4a",
+    "createdAt": "2016-06-05T17:46:54Z",
+    "diffHunk": "@@ -86,11 +88,42 @@ package object expressions  {\n   /**\n    * Helper functions for working with `Seq[Attribute]`.\n    */\n-  implicit class AttributeSeq(attrs: Seq[Attribute]) {\n+  implicit class AttributeSeq(val attrs: Seq[Attribute]) {\n     /** Creates a StructType with a schema matching this `Seq[Attribute]`. */\n     def toStructType: StructType = {\n       StructType(attrs.map(a => StructField(a.name, a.dataType, a.nullable)))\n     }\n+\n+    // It's possible that `attrs` is a linked list, which can lead to bad O(n^2) loops when\n+    // accessing attributes by their ordinals. To avoid this performance penalty, convert the input\n+    // to an array.\n+    private lazy val attrsArray = attrs.toArray\n+\n+    private lazy val exprIdToOrdinal = {\n+      val arr = attrsArray\n+      val map = Maps.newHashMapWithExpectedSize[ExprId, Int](arr.length)\n+      var index = 0\n+      while (index < arr.length) {\n+        val exprId = arr(index).exprId\n+        if (!map.containsKey(exprId)) {\n+          map.put(exprId, index)\n+        }\n+        index += 1\n+      }\n+      map\n+    }\n+\n+    /**\n+     * Returns the attribute at the given index.\n+     */\n+    def apply(ordinal: Int): Attribute = attrsArray(ordinal)\n+\n+    /**\n+     * Returns the index of first attribute with a matching expression id, or -1 if no match exists.\n+     */\n+    def getOrdinalWithExprId(exprId: ExprId): Int = {"
+  }, {
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "I had this originally and then moved to this name in anticipation of a future change which would add more \"get index with property\" methods, but a lot of those methods aren't cachable (e.g. semanticEquals), so I'll revert this back to my first name choice.\n",
+    "commit": "5e9c258dfb592e47800df9c5205a7b0c6c07ed4a",
+    "createdAt": "2016-06-05T18:07:50Z",
+    "diffHunk": "@@ -86,11 +88,42 @@ package object expressions  {\n   /**\n    * Helper functions for working with `Seq[Attribute]`.\n    */\n-  implicit class AttributeSeq(attrs: Seq[Attribute]) {\n+  implicit class AttributeSeq(val attrs: Seq[Attribute]) {\n     /** Creates a StructType with a schema matching this `Seq[Attribute]`. */\n     def toStructType: StructType = {\n       StructType(attrs.map(a => StructField(a.name, a.dataType, a.nullable)))\n     }\n+\n+    // It's possible that `attrs` is a linked list, which can lead to bad O(n^2) loops when\n+    // accessing attributes by their ordinals. To avoid this performance penalty, convert the input\n+    // to an array.\n+    private lazy val attrsArray = attrs.toArray\n+\n+    private lazy val exprIdToOrdinal = {\n+      val arr = attrsArray\n+      val map = Maps.newHashMapWithExpectedSize[ExprId, Int](arr.length)\n+      var index = 0\n+      while (index < arr.length) {\n+        val exprId = arr(index).exprId\n+        if (!map.containsKey(exprId)) {\n+          map.put(exprId, index)\n+        }\n+        index += 1\n+      }\n+      map\n+    }\n+\n+    /**\n+     * Returns the attribute at the given index.\n+     */\n+    def apply(ordinal: Int): Attribute = attrsArray(ordinal)\n+\n+    /**\n+     * Returns the index of first attribute with a matching expression id, or -1 if no match exists.\n+     */\n+    def getOrdinalWithExprId(exprId: ExprId): Int = {"
+  }],
+  "prId": 13505
+}, {
+  "comments": [{
+    "author": {
+      "login": "ericl"
+    },
+    "body": "Is it necessary to check containsKey before the put?\n",
+    "commit": "5e9c258dfb592e47800df9c5205a7b0c6c07ed4a",
+    "createdAt": "2016-06-05T17:47:55Z",
+    "diffHunk": "@@ -86,11 +88,42 @@ package object expressions  {\n   /**\n    * Helper functions for working with `Seq[Attribute]`.\n    */\n-  implicit class AttributeSeq(attrs: Seq[Attribute]) {\n+  implicit class AttributeSeq(val attrs: Seq[Attribute]) {\n     /** Creates a StructType with a schema matching this `Seq[Attribute]`. */\n     def toStructType: StructType = {\n       StructType(attrs.map(a => StructField(a.name, a.dataType, a.nullable)))\n     }\n+\n+    // It's possible that `attrs` is a linked list, which can lead to bad O(n^2) loops when\n+    // accessing attributes by their ordinals. To avoid this performance penalty, convert the input\n+    // to an array.\n+    private lazy val attrsArray = attrs.toArray\n+\n+    private lazy val exprIdToOrdinal = {\n+      val arr = attrsArray\n+      val map = Maps.newHashMapWithExpectedSize[ExprId, Int](arr.length)\n+      var index = 0\n+      while (index < arr.length) {\n+        val exprId = arr(index).exprId\n+        if (!map.containsKey(exprId)) {\n+          map.put(exprId, index)"
+  }, {
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "I was being conservative here in order to match the behavior of the old linear scan, which stopped upon finding the first entry with a matching expression id. However, we can remove the need for this check if we iterate over `arr` in reverse-order.\n",
+    "commit": "5e9c258dfb592e47800df9c5205a7b0c6c07ed4a",
+    "createdAt": "2016-06-05T18:09:02Z",
+    "diffHunk": "@@ -86,11 +88,42 @@ package object expressions  {\n   /**\n    * Helper functions for working with `Seq[Attribute]`.\n    */\n-  implicit class AttributeSeq(attrs: Seq[Attribute]) {\n+  implicit class AttributeSeq(val attrs: Seq[Attribute]) {\n     /** Creates a StructType with a schema matching this `Seq[Attribute]`. */\n     def toStructType: StructType = {\n       StructType(attrs.map(a => StructField(a.name, a.dataType, a.nullable)))\n     }\n+\n+    // It's possible that `attrs` is a linked list, which can lead to bad O(n^2) loops when\n+    // accessing attributes by their ordinals. To avoid this performance penalty, convert the input\n+    // to an array.\n+    private lazy val attrsArray = attrs.toArray\n+\n+    private lazy val exprIdToOrdinal = {\n+      val arr = attrsArray\n+      val map = Maps.newHashMapWithExpectedSize[ExprId, Int](arr.length)\n+      var index = 0\n+      while (index < arr.length) {\n+        val exprId = arr(index).exprId\n+        if (!map.containsKey(exprId)) {\n+          map.put(exprId, index)"
+  }],
+  "prId": 13505
+}]

@@ -1,0 +1,61 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "mccheah"
+    },
+    "body": "Probably should just be `private[spark]`",
+    "commit": "7807c9c9367396fb0b2e7277d05aa526613b0ae6",
+    "createdAt": "2018-03-26T23:26:55Z",
+    "diffHunk": "@@ -14,25 +14,18 @@\n  * See the License for the specific language governing permissions and\n  * limitations under the License.\n  */\n-package org.apache.spark.deploy.k8s.submit.steps\n+package org.apache.spark.deploy.k8s\n \n-import org.apache.spark.deploy.k8s.MountSecretsBootstrap\n-import org.apache.spark.deploy.k8s.submit.KubernetesDriverSpec\n+import io.fabric8.kubernetes.api.model.HasMetadata\n \n-/**\n- * A driver configuration step for mounting user-specified secrets onto user-specified paths.\n- *\n- * @param bootstrap a utility actually handling mounting of the secrets.\n- */\n-private[spark] class DriverMountSecretsStep(\n-    bootstrap: MountSecretsBootstrap) extends DriverConfigurationStep {\n+private[k8s] case class KubernetesSpec(\n+  pod: SparkPod,\n+  additionalDriverKubernetesResources: Seq[HasMetadata],\n+  podJavaSystemProperties: Map[String, String])\n \n-  override def configureDriver(driverSpec: KubernetesDriverSpec): KubernetesDriverSpec = {\n-    val pod = bootstrap.addSecretVolumes(driverSpec.driverPod)\n-    val container = bootstrap.mountSecrets(driverSpec.driverContainer)\n-    driverSpec.copy(\n-      driverPod = pod,\n-      driverContainer = container\n-    )\n-  }\n+private[k8s] object KubernetesSpec {"
+  }],
+  "prId": 20910
+}, {
+  "comments": [{
+    "author": {
+      "login": "liyinan926"
+    },
+    "body": "Can we shorten the name to just `systemProperties`? One of the most frequent types of comments I got while working on the upstreaming was to use short names.",
+    "commit": "7807c9c9367396fb0b2e7277d05aa526613b0ae6",
+    "createdAt": "2018-03-26T23:40:04Z",
+    "diffHunk": "@@ -14,25 +14,18 @@\n  * See the License for the specific language governing permissions and\n  * limitations under the License.\n  */\n-package org.apache.spark.deploy.k8s.submit.steps\n+package org.apache.spark.deploy.k8s\n \n-import org.apache.spark.deploy.k8s.MountSecretsBootstrap\n-import org.apache.spark.deploy.k8s.submit.KubernetesDriverSpec\n+import io.fabric8.kubernetes.api.model.HasMetadata\n \n-/**\n- * A driver configuration step for mounting user-specified secrets onto user-specified paths.\n- *\n- * @param bootstrap a utility actually handling mounting of the secrets.\n- */\n-private[spark] class DriverMountSecretsStep(\n-    bootstrap: MountSecretsBootstrap) extends DriverConfigurationStep {\n+private[k8s] case class KubernetesSpec(\n+  pod: SparkPod,\n+  additionalDriverKubernetesResources: Seq[HasMetadata],\n+  podJavaSystemProperties: Map[String, String])"
+  }],
+  "prId": 20910
+}, {
+  "comments": [{
+    "author": {
+      "login": "liyinan926"
+    },
+    "body": "I think we can simplify the name here to `driverKubernetesResources`.",
+    "commit": "7807c9c9367396fb0b2e7277d05aa526613b0ae6",
+    "createdAt": "2018-04-04T18:28:21Z",
+    "diffHunk": "@@ -14,25 +14,18 @@\n  * See the License for the specific language governing permissions and\n  * limitations under the License.\n  */\n-package org.apache.spark.deploy.k8s.submit.steps\n+package org.apache.spark.deploy.k8s\n \n-import org.apache.spark.deploy.k8s.MountSecretsBootstrap\n-import org.apache.spark.deploy.k8s.submit.KubernetesDriverSpec\n+import io.fabric8.kubernetes.api.model.HasMetadata\n \n-/**\n- * A driver configuration step for mounting user-specified secrets onto user-specified paths.\n- *\n- * @param bootstrap a utility actually handling mounting of the secrets.\n- */\n-private[spark] class DriverMountSecretsStep(\n-    bootstrap: MountSecretsBootstrap) extends DriverConfigurationStep {\n+private[spark] case class KubernetesSpec(\n+    pod: SparkPod,\n+    additionalDriverKubernetesResources: Seq[HasMetadata],"
+  }],
+  "prId": 20910
+}, {
+  "comments": [{
+    "author": {
+      "login": "foxish"
+    },
+    "body": "This class is named as though it applies to driver and executor construction. Maybe `KubernetesDriverSpec`? It's also a bit unclear to me what purpose this abstraction serves as opposed to the way `KubernetesExecutorBuilder` goes about building the pod.",
+    "commit": "7807c9c9367396fb0b2e7277d05aa526613b0ae6",
+    "createdAt": "2018-04-10T19:07:54Z",
+    "diffHunk": "@@ -14,17 +14,18 @@\n  * See the License for the specific language governing permissions and\n  * limitations under the License.\n  */\n-package org.apache.spark.deploy.k8s.submit.steps\n+package org.apache.spark.deploy.k8s\n \n-import org.apache.spark.deploy.k8s.submit.KubernetesDriverSpec\n+import io.fabric8.kubernetes.api.model.HasMetadata\n \n-/**\n- * Represents a step in configuring the Spark driver pod.\n- */\n-private[spark] trait DriverConfigurationStep {\n+private[spark] case class KubernetesSpec("
+  }, {
+    "author": {
+      "login": "mccheah"
+    },
+    "body": "If you check `KubernetesClientApplication`, it needs the extra fields here (the additional driver resources and the driver system properties) to construct the pod. In other words, the driver builder has to return a structure with more than just the pod.",
+    "commit": "7807c9c9367396fb0b2e7277d05aa526613b0ae6",
+    "createdAt": "2018-04-11T14:49:35Z",
+    "diffHunk": "@@ -14,17 +14,18 @@\n  * See the License for the specific language governing permissions and\n  * limitations under the License.\n  */\n-package org.apache.spark.deploy.k8s.submit.steps\n+package org.apache.spark.deploy.k8s\n \n-import org.apache.spark.deploy.k8s.submit.KubernetesDriverSpec\n+import io.fabric8.kubernetes.api.model.HasMetadata\n \n-/**\n- * Represents a step in configuring the Spark driver pod.\n- */\n-private[spark] trait DriverConfigurationStep {\n+private[spark] case class KubernetesSpec("
+  }, {
+    "author": {
+      "login": "mccheah"
+    },
+    "body": "Think we could move some of the logic from `KubernetesClientApplication` into `KubernetesDriverBuilder`. Do you have any suggestions if we should move around the abstraction boundaries a bit?",
+    "commit": "7807c9c9367396fb0b2e7277d05aa526613b0ae6",
+    "createdAt": "2018-04-11T14:54:58Z",
+    "diffHunk": "@@ -14,17 +14,18 @@\n  * See the License for the specific language governing permissions and\n  * limitations under the License.\n  */\n-package org.apache.spark.deploy.k8s.submit.steps\n+package org.apache.spark.deploy.k8s\n \n-import org.apache.spark.deploy.k8s.submit.KubernetesDriverSpec\n+import io.fabric8.kubernetes.api.model.HasMetadata\n \n-/**\n- * Represents a step in configuring the Spark driver pod.\n- */\n-private[spark] trait DriverConfigurationStep {\n+private[spark] case class KubernetesSpec("
+  }],
+  "prId": 20910
+}]

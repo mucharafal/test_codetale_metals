@@ -1,0 +1,13 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Similarly here, could you replace `askAmExecutor` with `ThreadUtils.sameThreadExecutionContext` and get rid of another thread pool?\n",
+    "commit": "0772e8195443566d37c9837798ef075eaa79c66b",
+    "createdAt": "2016-08-26T00:31:31Z",
+    "diffHunk": "@@ -269,20 +258,22 @@ private[spark] abstract class YarnSchedulerBackend(\n       case AddWebUIFilter(filterName, filterParams, proxyBase) =>\n         addWebUIFilter(filterName, filterParams, proxyBase)\n \n-      case RemoveExecutor(executorId, reason) =>\n+      case r @ RemoveExecutor(executorId, reason) =>\n         logWarning(reason.toString)\n-        removeExecutor(executorId, reason)\n+        driverEndpoint.ask[Boolean](r).onFailure {\n+          case e =>\n+            logError(s\"Error requesting driver to remove executor $executorId for reason $reason\")\n+        }\n     }\n \n \n     override def receiveAndReply(context: RpcCallContext): PartialFunction[Any, Unit] = {\n       case r: RequestExecutors =>\n         amEndpoint match {\n           case Some(am) =>\n-            Future {\n-              context.reply(am.askWithRetry[Boolean](r))\n-            } onFailure {\n-              case NonFatal(e) =>\n+            am.ask[Boolean](r).andThen {",
+    "line": 125
+  }],
+  "prId": 14710
+}]

@@ -1,0 +1,40 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Out of curiosity, what's the failure mode if this block is used after free? SIGSEGV or exception?",
+    "commit": "a7f8c07fb5158f39bbb6cc1f23cfb13a0d473536",
+    "createdAt": "2018-01-09T00:49:02Z",
+    "diffHunk": "@@ -38,9 +38,20 @@ public MemoryBlock allocate(long size) throws OutOfMemoryError {\n   public void free(MemoryBlock memory) {\n     assert (memory.obj == null) :\n       \"baseObject not null; are you trying to use the off-heap allocator to free on-heap memory?\";\n+    assert (memory.pageNumber != MemoryBlock.FREED_IN_ALLOCATOR_PAGE_NUMBER) :\n+      \"page has already been freed\";\n+    assert ((memory.pageNumber == MemoryBlock.NO_PAGE_NUMBER)\n+            || (memory.pageNumber == MemoryBlock.FREED_IN_TMM_PAGE_NUMBER)) :\n+      \"TMM-allocated pages must be freed via TMM.freePage(), not directly in allocator free()\";\n+\n     if (MemoryAllocator.MEMORY_DEBUG_FILL_ENABLED) {\n       memory.fill(MemoryAllocator.MEMORY_DEBUG_FILL_FREED_VALUE);\n     }\n     Platform.freeMemory(memory.offset);\n+    // As an additional layer of defense against use-after-free bugs, we mutate the\n+    // MemoryBlock to reset its pointer.\n+    memory.offset = 0;",
+    "line": 16
+  }, {
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "I think that it depends on whether the direct memory address stored in `memory.offset` corresponds to the address of memory allocated to the JVM.\r\n\r\nIf we've freed the underlying Unsafe / Direct memory then I would expect a SIGSEGV, but if the address has been re-used by a subsequent allocation (or if we've done some buffer pooling and have recycled the underlying direct memory without freeing it) then this address could point to valid memory allocated by the JVM but which is currently in use by another Spark task, so reads or writes would trigger data corruption.",
+    "commit": "a7f8c07fb5158f39bbb6cc1f23cfb13a0d473536",
+    "createdAt": "2018-01-09T00:59:05Z",
+    "diffHunk": "@@ -38,9 +38,20 @@ public MemoryBlock allocate(long size) throws OutOfMemoryError {\n   public void free(MemoryBlock memory) {\n     assert (memory.obj == null) :\n       \"baseObject not null; are you trying to use the off-heap allocator to free on-heap memory?\";\n+    assert (memory.pageNumber != MemoryBlock.FREED_IN_ALLOCATOR_PAGE_NUMBER) :\n+      \"page has already been freed\";\n+    assert ((memory.pageNumber == MemoryBlock.NO_PAGE_NUMBER)\n+            || (memory.pageNumber == MemoryBlock.FREED_IN_TMM_PAGE_NUMBER)) :\n+      \"TMM-allocated pages must be freed via TMM.freePage(), not directly in allocator free()\";\n+\n     if (MemoryAllocator.MEMORY_DEBUG_FILL_ENABLED) {\n       memory.fill(MemoryAllocator.MEMORY_DEBUG_FILL_FREED_VALUE);\n     }\n     Platform.freeMemory(memory.offset);\n+    // As an additional layer of defense against use-after-free bugs, we mutate the\n+    // MemoryBlock to reset its pointer.\n+    memory.offset = 0;",
+    "line": 16
+  }, {
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Right, but I mean after your change, so I guess the answer in that case is SIGSEGV?",
+    "commit": "a7f8c07fb5158f39bbb6cc1f23cfb13a0d473536",
+    "createdAt": "2018-01-09T01:00:13Z",
+    "diffHunk": "@@ -38,9 +38,20 @@ public MemoryBlock allocate(long size) throws OutOfMemoryError {\n   public void free(MemoryBlock memory) {\n     assert (memory.obj == null) :\n       \"baseObject not null; are you trying to use the off-heap allocator to free on-heap memory?\";\n+    assert (memory.pageNumber != MemoryBlock.FREED_IN_ALLOCATOR_PAGE_NUMBER) :\n+      \"page has already been freed\";\n+    assert ((memory.pageNumber == MemoryBlock.NO_PAGE_NUMBER)\n+            || (memory.pageNumber == MemoryBlock.FREED_IN_TMM_PAGE_NUMBER)) :\n+      \"TMM-allocated pages must be freed via TMM.freePage(), not directly in allocator free()\";\n+\n     if (MemoryAllocator.MEMORY_DEBUG_FILL_ENABLED) {\n       memory.fill(MemoryAllocator.MEMORY_DEBUG_FILL_FREED_VALUE);\n     }\n     Platform.freeMemory(memory.offset);\n+    // As an additional layer of defense against use-after-free bugs, we mutate the\n+    // MemoryBlock to reset its pointer.\n+    memory.offset = 0;",
+    "line": 16
+  }, {
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "Yep, this will guarantee SIGSEGV instead of corruption.",
+    "commit": "a7f8c07fb5158f39bbb6cc1f23cfb13a0d473536",
+    "createdAt": "2018-01-09T01:01:49Z",
+    "diffHunk": "@@ -38,9 +38,20 @@ public MemoryBlock allocate(long size) throws OutOfMemoryError {\n   public void free(MemoryBlock memory) {\n     assert (memory.obj == null) :\n       \"baseObject not null; are you trying to use the off-heap allocator to free on-heap memory?\";\n+    assert (memory.pageNumber != MemoryBlock.FREED_IN_ALLOCATOR_PAGE_NUMBER) :\n+      \"page has already been freed\";\n+    assert ((memory.pageNumber == MemoryBlock.NO_PAGE_NUMBER)\n+            || (memory.pageNumber == MemoryBlock.FREED_IN_TMM_PAGE_NUMBER)) :\n+      \"TMM-allocated pages must be freed via TMM.freePage(), not directly in allocator free()\";\n+\n     if (MemoryAllocator.MEMORY_DEBUG_FILL_ENABLED) {\n       memory.fill(MemoryAllocator.MEMORY_DEBUG_FILL_FREED_VALUE);\n     }\n     Platform.freeMemory(memory.offset);\n+    // As an additional layer of defense against use-after-free bugs, we mutate the\n+    // MemoryBlock to reset its pointer.\n+    memory.offset = 0;",
+    "line": 16
+  }],
+  "prId": 20191
+}]

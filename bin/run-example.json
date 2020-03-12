@@ -1,0 +1,112 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "How do you know this will pick up the right jar?\n\nMore generally, I think the only situation someone will run into this is when switching between branches and rebuilding without cleaning. Not sure it's worth it to add workarounds in the code for that.\n\nYou'll get a similar error from `compute-classpath.sh` if multiple assembly jars exist. The same behavior should be just fine for the examples.\n",
+    "commit": "fa7f48170cf5e8c3e39d691b5c8f1bea8af2fb42",
+    "createdAt": "2014-11-21T00:38:16Z",
+    "diffHunk": "@@ -35,9 +35,9 @@ else\n fi\n \n if [ -f \"$FWDIR/RELEASE\" ]; then\n-  export SPARK_EXAMPLES_JAR=\"`ls \"$FWDIR\"/lib/spark-examples-*hadoop*.jar`\"\n-elif [ -e \"$EXAMPLES_DIR\"/target/scala-$SPARK_SCALA_VERSION/spark-examples-*hadoop*.jar ]; then\n-  export SPARK_EXAMPLES_JAR=\"`ls \"$EXAMPLES_DIR\"/target/scala-$SPARK_SCALA_VERSION/spark-examples-*hadoop*.jar`\"\n+  export SPARK_EXAMPLES_JAR=\"`ls -t \"$FWDIR\"/lib/spark-examples-*hadoop*.jar 2>>/dev/null | head -1`\""
+  }, {
+    "author": {
+      "login": "gvramana"
+    },
+    "body": "I understand that required jar will not always be latest. But failing with script error confuses user. We can at least correct to give a proper error message.\n",
+    "commit": "fa7f48170cf5e8c3e39d691b5c8f1bea8af2fb42",
+    "createdAt": "2014-11-23T04:28:08Z",
+    "diffHunk": "@@ -35,9 +35,9 @@ else\n fi\n \n if [ -f \"$FWDIR/RELEASE\" ]; then\n-  export SPARK_EXAMPLES_JAR=\"`ls \"$FWDIR\"/lib/spark-examples-*hadoop*.jar`\"\n-elif [ -e \"$EXAMPLES_DIR\"/target/scala-$SPARK_SCALA_VERSION/spark-examples-*hadoop*.jar ]; then\n-  export SPARK_EXAMPLES_JAR=\"`ls \"$EXAMPLES_DIR\"/target/scala-$SPARK_SCALA_VERSION/spark-examples-*hadoop*.jar`\"\n+  export SPARK_EXAMPLES_JAR=\"`ls -t \"$FWDIR\"/lib/spark-examples-*hadoop*.jar 2>>/dev/null | head -1`\""
+  }, {
+    "author": {
+      "login": "pwendell"
+    },
+    "body": "I'd prefer to fail fast in this case like we do for the assembly jar.\n",
+    "commit": "fa7f48170cf5e8c3e39d691b5c8f1bea8af2fb42",
+    "createdAt": "2014-11-25T05:53:03Z",
+    "diffHunk": "@@ -35,9 +35,9 @@ else\n fi\n \n if [ -f \"$FWDIR/RELEASE\" ]; then\n-  export SPARK_EXAMPLES_JAR=\"`ls \"$FWDIR\"/lib/spark-examples-*hadoop*.jar`\"\n-elif [ -e \"$EXAMPLES_DIR\"/target/scala-$SPARK_SCALA_VERSION/spark-examples-*hadoop*.jar ]; then\n-  export SPARK_EXAMPLES_JAR=\"`ls \"$EXAMPLES_DIR\"/target/scala-$SPARK_SCALA_VERSION/spark-examples-*hadoop*.jar`\"\n+  export SPARK_EXAMPLES_JAR=\"`ls -t \"$FWDIR\"/lib/spark-examples-*hadoop*.jar 2>>/dev/null | head -1`\""
+  }],
+  "prId": 3377
+}, {
+  "comments": [{
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "For instance, `compute-classpath` uses\n\n``` bash\n  jars_list=$(ls \"$assembly_folder\" | grep \"spark-assembly.*hadoop.*.jar$\")\n```\n\nfor this; we should match this style rather than introducing a new one using backticks, `ls - t`, etc.\n",
+    "commit": "fa7f48170cf5e8c3e39d691b5c8f1bea8af2fb42",
+    "createdAt": "2014-12-24T22:43:32Z",
+    "diffHunk": "@@ -35,17 +35,29 @@ else\n fi\n \n if [ -f \"$FWDIR/RELEASE\" ]; then\n-  export SPARK_EXAMPLES_JAR=\"`ls \"$FWDIR\"/lib/spark-examples-*hadoop*.jar`\"\n-elif [ -e \"$EXAMPLES_DIR\"/target/scala-$SPARK_SCALA_VERSION/spark-examples-*hadoop*.jar ]; then\n-  export SPARK_EXAMPLES_JAR=\"`ls \"$EXAMPLES_DIR\"/target/scala-$SPARK_SCALA_VERSION/spark-examples-*hadoop*.jar`\"\n+  JAR_PATH=\"${FWDIR}/lib\"\n+else\n+  JAR_PATH=\"${EXAMPLES_DIR}/target/scala-${SPARK_SCALA_VERSION}\"\n fi\n \n-if [[ -z \"$SPARK_EXAMPLES_JAR\" ]]; then\n+JAR_COUNT=\"`ls ${JAR_PATH}/spark-examples-*hadoop*.jar 2>>/dev/null | wc -l`\"\n+\n+if [ \"$JAR_COUNT\" -eq \"0\" ]; then\n   echo \"Failed to find Spark examples assembly in $FWDIR/lib or $FWDIR/examples/target\" 1>&2\n   echo \"You need to build Spark before running this program\" 1>&2\n   exit 1\n fi\n \n+if [ \"$JAR_COUNT\" -gt \"1\" ]; then\n+  JARS_LIST=\"`ls -t ${JAR_PATH}/spark-examples-*hadoop*.jar`\""
+  }],
+  "prId": 3377
+}, {
+  "comments": [{
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "Similarly, `compute-classpath` logs the messages to stdout instead of stderr.\n",
+    "commit": "fa7f48170cf5e8c3e39d691b5c8f1bea8af2fb42",
+    "createdAt": "2014-12-24T22:44:12Z",
+    "diffHunk": "@@ -35,17 +35,29 @@ else\n fi\n \n if [ -f \"$FWDIR/RELEASE\" ]; then\n-  export SPARK_EXAMPLES_JAR=\"`ls \"$FWDIR\"/lib/spark-examples-*hadoop*.jar`\"\n-elif [ -e \"$EXAMPLES_DIR\"/target/scala-$SPARK_SCALA_VERSION/spark-examples-*hadoop*.jar ]; then\n-  export SPARK_EXAMPLES_JAR=\"`ls \"$EXAMPLES_DIR\"/target/scala-$SPARK_SCALA_VERSION/spark-examples-*hadoop*.jar`\"\n+  JAR_PATH=\"${FWDIR}/lib\"\n+else\n+  JAR_PATH=\"${EXAMPLES_DIR}/target/scala-${SPARK_SCALA_VERSION}\"\n fi\n \n-if [[ -z \"$SPARK_EXAMPLES_JAR\" ]]; then\n+JAR_COUNT=\"`ls ${JAR_PATH}/spark-examples-*hadoop*.jar 2>>/dev/null | wc -l`\"\n+\n+if [ \"$JAR_COUNT\" -eq \"0\" ]; then\n   echo \"Failed to find Spark examples assembly in $FWDIR/lib or $FWDIR/examples/target\" 1>&2\n   echo \"You need to build Spark before running this program\" 1>&2\n   exit 1\n fi\n \n+if [ \"$JAR_COUNT\" -gt \"1\" ]; then\n+  JARS_LIST=\"`ls -t ${JAR_PATH}/spark-examples-*hadoop*.jar`\"\n+  echo \"Found multiple Spark examples assembly jars in ${JAR_PATH}\" 1>&2\n+  echo \"$JARS_LIST\" 1>&2"
+  }, {
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "Well, I guess the inconsistency was there before, too, since the \"you need to build Spark before running this program\" has it.\n",
+    "commit": "fa7f48170cf5e8c3e39d691b5c8f1bea8af2fb42",
+    "createdAt": "2014-12-24T22:44:52Z",
+    "diffHunk": "@@ -35,17 +35,29 @@ else\n fi\n \n if [ -f \"$FWDIR/RELEASE\" ]; then\n-  export SPARK_EXAMPLES_JAR=\"`ls \"$FWDIR\"/lib/spark-examples-*hadoop*.jar`\"\n-elif [ -e \"$EXAMPLES_DIR\"/target/scala-$SPARK_SCALA_VERSION/spark-examples-*hadoop*.jar ]; then\n-  export SPARK_EXAMPLES_JAR=\"`ls \"$EXAMPLES_DIR\"/target/scala-$SPARK_SCALA_VERSION/spark-examples-*hadoop*.jar`\"\n+  JAR_PATH=\"${FWDIR}/lib\"\n+else\n+  JAR_PATH=\"${EXAMPLES_DIR}/target/scala-${SPARK_SCALA_VERSION}\"\n fi\n \n-if [[ -z \"$SPARK_EXAMPLES_JAR\" ]]; then\n+JAR_COUNT=\"`ls ${JAR_PATH}/spark-examples-*hadoop*.jar 2>>/dev/null | wc -l`\"\n+\n+if [ \"$JAR_COUNT\" -eq \"0\" ]; then\n   echo \"Failed to find Spark examples assembly in $FWDIR/lib or $FWDIR/examples/target\" 1>&2\n   echo \"You need to build Spark before running this program\" 1>&2\n   exit 1\n fi\n \n+if [ \"$JAR_COUNT\" -gt \"1\" ]; then\n+  JARS_LIST=\"`ls -t ${JAR_PATH}/spark-examples-*hadoop*.jar`\"\n+  echo \"Found multiple Spark examples assembly jars in ${JAR_PATH}\" 1>&2\n+  echo \"$JARS_LIST\" 1>&2"
+  }, {
+    "author": {
+      "login": "nchammas"
+    },
+    "body": "If we just want to show the user a list of the found jars, why not just call `ls` directly instead of capturing and replaying its output? That would be safer and simpler, no?\n",
+    "commit": "fa7f48170cf5e8c3e39d691b5c8f1bea8af2fb42",
+    "createdAt": "2014-12-24T23:02:39Z",
+    "diffHunk": "@@ -35,17 +35,29 @@ else\n fi\n \n if [ -f \"$FWDIR/RELEASE\" ]; then\n-  export SPARK_EXAMPLES_JAR=\"`ls \"$FWDIR\"/lib/spark-examples-*hadoop*.jar`\"\n-elif [ -e \"$EXAMPLES_DIR\"/target/scala-$SPARK_SCALA_VERSION/spark-examples-*hadoop*.jar ]; then\n-  export SPARK_EXAMPLES_JAR=\"`ls \"$EXAMPLES_DIR\"/target/scala-$SPARK_SCALA_VERSION/spark-examples-*hadoop*.jar`\"\n+  JAR_PATH=\"${FWDIR}/lib\"\n+else\n+  JAR_PATH=\"${EXAMPLES_DIR}/target/scala-${SPARK_SCALA_VERSION}\"\n fi\n \n-if [[ -z \"$SPARK_EXAMPLES_JAR\" ]]; then\n+JAR_COUNT=\"`ls ${JAR_PATH}/spark-examples-*hadoop*.jar 2>>/dev/null | wc -l`\"\n+\n+if [ \"$JAR_COUNT\" -eq \"0\" ]; then\n   echo \"Failed to find Spark examples assembly in $FWDIR/lib or $FWDIR/examples/target\" 1>&2\n   echo \"You need to build Spark before running this program\" 1>&2\n   exit 1\n fi\n \n+if [ \"$JAR_COUNT\" -gt \"1\" ]; then\n+  JARS_LIST=\"`ls -t ${JAR_PATH}/spark-examples-*hadoop*.jar`\"\n+  echo \"Found multiple Spark examples assembly jars in ${JAR_PATH}\" 1>&2\n+  echo \"$JARS_LIST\" 1>&2"
+  }],
+  "prId": 3377
+}, {
+  "comments": [{
+    "author": {
+      "login": "nchammas"
+    },
+    "body": "I know that the old code used this style, but it would be great if we could replace all occurrences where we capture the output of `ls` with one of the recommended patterns in either of [these](http://mywiki.wooledge.org/ParsingLs) [two](http://www.dwheeler.com/essays/filenames-in-shell.html) pages (e.g. using `for f in glob_expression` or using `find`).\n\nEven better would be to find a way to avoid having to capture this output at all\n",
+    "commit": "fa7f48170cf5e8c3e39d691b5c8f1bea8af2fb42",
+    "createdAt": "2014-12-24T23:10:55Z",
+    "diffHunk": "@@ -35,17 +35,29 @@ else\n fi\n \n if [ -f \"$FWDIR/RELEASE\" ]; then\n-  export SPARK_EXAMPLES_JAR=\"`ls \"$FWDIR\"/lib/spark-examples-*hadoop*.jar`\"\n-elif [ -e \"$EXAMPLES_DIR\"/target/scala-$SPARK_SCALA_VERSION/spark-examples-*hadoop*.jar ]; then\n-  export SPARK_EXAMPLES_JAR=\"`ls \"$EXAMPLES_DIR\"/target/scala-$SPARK_SCALA_VERSION/spark-examples-*hadoop*.jar`\"\n+  JAR_PATH=\"${FWDIR}/lib\"\n+else\n+  JAR_PATH=\"${EXAMPLES_DIR}/target/scala-${SPARK_SCALA_VERSION}\"\n fi\n \n-if [[ -z \"$SPARK_EXAMPLES_JAR\" ]]; then\n+JAR_COUNT=\"`ls ${JAR_PATH}/spark-examples-*hadoop*.jar 2>>/dev/null | wc -l`\""
+  }],
+  "prId": 3377
+}, {
+  "comments": [{
+    "author": {
+      "login": "nchammas"
+    },
+    "body": "Same here. It would be great if we could avoid this pattern of capturing the output of `ls`, though it's not a big deal honestly since the old code did this as well.\n",
+    "commit": "fa7f48170cf5e8c3e39d691b5c8f1bea8af2fb42",
+    "createdAt": "2014-12-24T23:15:30Z",
+    "diffHunk": "@@ -35,17 +35,29 @@ else\n fi\n \n if [ -f \"$FWDIR/RELEASE\" ]; then\n-  export SPARK_EXAMPLES_JAR=\"`ls \"$FWDIR\"/lib/spark-examples-*hadoop*.jar`\"\n-elif [ -e \"$EXAMPLES_DIR\"/target/scala-$SPARK_SCALA_VERSION/spark-examples-*hadoop*.jar ]; then\n-  export SPARK_EXAMPLES_JAR=\"`ls \"$EXAMPLES_DIR\"/target/scala-$SPARK_SCALA_VERSION/spark-examples-*hadoop*.jar`\"\n+  JAR_PATH=\"${FWDIR}/lib\"\n+else\n+  JAR_PATH=\"${EXAMPLES_DIR}/target/scala-${SPARK_SCALA_VERSION}\"\n fi\n \n-if [[ -z \"$SPARK_EXAMPLES_JAR\" ]]; then\n+JAR_COUNT=\"`ls ${JAR_PATH}/spark-examples-*hadoop*.jar 2>>/dev/null | wc -l`\"\n+\n+if [ \"$JAR_COUNT\" -eq \"0\" ]; then\n   echo \"Failed to find Spark examples assembly in $FWDIR/lib or $FWDIR/examples/target\" 1>&2\n   echo \"You need to build Spark before running this program\" 1>&2\n   exit 1\n fi\n \n+if [ \"$JAR_COUNT\" -gt \"1\" ]; then\n+  JARS_LIST=\"`ls -t ${JAR_PATH}/spark-examples-*hadoop*.jar`\"\n+  echo \"Found multiple Spark examples assembly jars in ${JAR_PATH}\" 1>&2\n+  echo \"$JARS_LIST\" 1>&2\n+  echo \"Please remove all but one jar.\" 1>&2\n+  exit 1\n+fi\n+\n+export SPARK_EXAMPLES_JAR=\"`ls ${JAR_PATH}/spark-examples-*hadoop*.jar 2>>/dev/null`\""
+  }],
+  "prId": 3377
+}, {
+  "comments": [{
+    "author": {
+      "login": "nchammas"
+    },
+    "body": "Same: Word splitting\n",
+    "commit": "fa7f48170cf5e8c3e39d691b5c8f1bea8af2fb42",
+    "createdAt": "2015-02-11T22:44:49Z",
+    "diffHunk": "@@ -35,17 +35,32 @@ else\n fi\n \n if [ -f \"$FWDIR/RELEASE\" ]; then\n-  export SPARK_EXAMPLES_JAR=\"`ls \"$FWDIR\"/lib/spark-examples-*hadoop*.jar`\"\n-elif [ -e \"$EXAMPLES_DIR\"/target/scala-$SPARK_SCALA_VERSION/spark-examples-*hadoop*.jar ]; then\n-  export SPARK_EXAMPLES_JAR=\"`ls \"$EXAMPLES_DIR\"/target/scala-$SPARK_SCALA_VERSION/spark-examples-*hadoop*.jar`\"\n+  JAR_PATH=\"${FWDIR}/lib\"\n+else\n+  JAR_PATH=\"${EXAMPLES_DIR}/target/scala-${SPARK_SCALA_VERSION}\"\n fi\n \n-if [[ -z \"$SPARK_EXAMPLES_JAR\" ]]; then\n-  echo \"Failed to find Spark examples assembly in $FWDIR/lib or $FWDIR/examples/target\" 1>&2\n-  echo \"You need to build Spark before running this program\" 1>&2\n+JAR_COUNT=0\n+\n+for f in ${JAR_PATH}/spark-examples-*hadoop*.jar; do",
+    "line": 17
+  }],
+  "prId": 3377
+}, {
+  "comments": [{
+    "author": {
+      "login": "nchammas"
+    },
+    "body": "Same: Word splitting\n",
+    "commit": "fa7f48170cf5e8c3e39d691b5c8f1bea8af2fb42",
+    "createdAt": "2015-02-11T22:45:16Z",
+    "diffHunk": "@@ -35,17 +35,32 @@ else\n fi\n \n if [ -f \"$FWDIR/RELEASE\" ]; then\n-  export SPARK_EXAMPLES_JAR=\"`ls \"$FWDIR\"/lib/spark-examples-*hadoop*.jar`\"\n-elif [ -e \"$EXAMPLES_DIR\"/target/scala-$SPARK_SCALA_VERSION/spark-examples-*hadoop*.jar ]; then\n-  export SPARK_EXAMPLES_JAR=\"`ls \"$EXAMPLES_DIR\"/target/scala-$SPARK_SCALA_VERSION/spark-examples-*hadoop*.jar`\"\n+  JAR_PATH=\"${FWDIR}/lib\"\n+else\n+  JAR_PATH=\"${EXAMPLES_DIR}/target/scala-${SPARK_SCALA_VERSION}\"\n fi\n \n-if [[ -z \"$SPARK_EXAMPLES_JAR\" ]]; then\n-  echo \"Failed to find Spark examples assembly in $FWDIR/lib or $FWDIR/examples/target\" 1>&2\n-  echo \"You need to build Spark before running this program\" 1>&2\n+JAR_COUNT=0\n+\n+for f in ${JAR_PATH}/spark-examples-*hadoop*.jar; do\n+  if [[ ! -e \"$f\" ]]; then\n+    echo \"Failed to find Spark examples assembly in $FWDIR/lib or $FWDIR/examples/target\" 1>&2\n+    echo \"You need to build Spark before running this program\" 1>&2\n+    exit 1\n+  fi \n+  SPARK_EXAMPLES_JAR=\"$f\"\n+  JAR_COUNT=$((JAR_COUNT+1))   \n+done\n+\n+if [ \"$JAR_COUNT\" -gt \"1\" ]; then\n+  echo \"Found multiple Spark examples assembly jars in ${JAR_PATH}\" 1>&2\n+  ls ${JAR_PATH}/spark-examples-*hadoop*.jar 1>&2",
+    "line": 29
+  }],
+  "prId": 3377
+}]

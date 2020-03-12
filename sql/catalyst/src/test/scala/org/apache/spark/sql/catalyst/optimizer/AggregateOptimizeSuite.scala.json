@@ -1,0 +1,44 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "a shortcut: `val correctAnswer = query2.analyze`\n",
+    "commit": "0cb11361ff70d88ae09a4fd31154999fc9c3efae",
+    "createdAt": "2016-05-11T07:05:38Z",
+    "diffHunk": "@@ -34,18 +34,27 @@ class AggregateOptimizeSuite extends PlanTest {\n \n   object Optimize extends RuleExecutor[LogicalPlan] {\n     val batches = Batch(\"Aggregate\", FixedPoint(100),\n+      FoldablePropagation,\n       RemoveLiteralFromGroupExpressions,\n       RemoveRepetitionFromGroupExpressions) :: Nil\n   }\n \n+  val testRelation = LocalRelation('a.int, 'b.int, 'c.int)\n+\n   test(\"remove literals in grouping expression\") {\n-    val input = LocalRelation('a.int, 'b.int)\n+    val query1 = testRelation.groupBy('a, Literal(\"1\"), Literal(1) + Literal(2))(sum('b))\n+    val query2 = testRelation.groupBy('a)(sum('b))\n+    val optimized = Optimize.execute(analyzer.execute(query1))\n+    val correctAnswer = analyzer.execute(query2)"
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "please follow the code style for this file:\n\n```\nval query = ...\nval optimized = ...\nval correctAnswer = ...\n```\n\n`query1` and `query2` looks weird here.\n",
+    "commit": "0cb11361ff70d88ae09a4fd31154999fc9c3efae",
+    "createdAt": "2016-05-11T07:07:12Z",
+    "diffHunk": "@@ -34,18 +34,27 @@ class AggregateOptimizeSuite extends PlanTest {\n \n   object Optimize extends RuleExecutor[LogicalPlan] {\n     val batches = Batch(\"Aggregate\", FixedPoint(100),\n+      FoldablePropagation,\n       RemoveLiteralFromGroupExpressions,\n       RemoveRepetitionFromGroupExpressions) :: Nil\n   }\n \n+  val testRelation = LocalRelation('a.int, 'b.int, 'c.int)\n+\n   test(\"remove literals in grouping expression\") {\n-    val input = LocalRelation('a.int, 'b.int)\n+    val query1 = testRelation.groupBy('a, Literal(\"1\"), Literal(1) + Literal(2))(sum('b))\n+    val query2 = testRelation.groupBy('a)(sum('b))\n+    val optimized = Optimize.execute(analyzer.execute(query1))\n+    val correctAnswer = analyzer.execute(query2)"
+  }],
+  "prId": 12719
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "nit: `Optimize.execute(query.analyze)`\n",
+    "commit": "0cb11361ff70d88ae09a4fd31154999fc9c3efae",
+    "createdAt": "2016-05-12T02:13:56Z",
+    "diffHunk": "@@ -34,29 +34,34 @@ class AggregateOptimizeSuite extends PlanTest {\n \n   object Optimize extends RuleExecutor[LogicalPlan] {\n     val batches = Batch(\"Aggregate\", FixedPoint(100),\n+      FoldablePropagation,\n       RemoveLiteralFromGroupExpressions,\n       RemoveRepetitionFromGroupExpressions) :: Nil\n   }\n \n+  val testRelation = LocalRelation('a.int, 'b.int, 'c.int)\n+\n   test(\"remove literals in grouping expression\") {\n-    val input = LocalRelation('a.int, 'b.int)\n+    val query = testRelation.groupBy('a, Literal(\"1\"), Literal(1) + Literal(2))(sum('b))\n+    val optimized = Optimize.execute(analyzer.execute(query))",
+    "line": 14
+  }],
+  "prId": 12719
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "here too\n",
+    "commit": "0cb11361ff70d88ae09a4fd31154999fc9c3efae",
+    "createdAt": "2016-05-12T02:14:27Z",
+    "diffHunk": "@@ -34,29 +34,34 @@ class AggregateOptimizeSuite extends PlanTest {\n \n   object Optimize extends RuleExecutor[LogicalPlan] {\n     val batches = Batch(\"Aggregate\", FixedPoint(100),\n+      FoldablePropagation,\n       RemoveLiteralFromGroupExpressions,\n       RemoveRepetitionFromGroupExpressions) :: Nil\n   }\n \n+  val testRelation = LocalRelation('a.int, 'b.int, 'c.int)\n+\n   test(\"remove literals in grouping expression\") {\n-    val input = LocalRelation('a.int, 'b.int)\n+    val query = testRelation.groupBy('a, Literal(\"1\"), Literal(1) + Literal(2))(sum('b))\n+    val optimized = Optimize.execute(analyzer.execute(query))\n+    val correctAnswer = testRelation.groupBy('a)(sum('b)).analyze\n \n-    val query =\n-      input.groupBy('a, Literal(1), Literal(1) + Literal(2))(sum('b))\n-    val optimized = Optimize.execute(query)\n+    comparePlans(optimized, correctAnswer)\n+  }\n \n-    val correctAnswer = input.groupBy('a)(sum('b))\n+  test(\"Remove aliased literals\") {\n+    val query = testRelation.select('a, Literal(1).as('y)).groupBy('a, 'y)(sum('b))\n+    val optimized = Optimize.execute(analyzer.execute(query))",
+    "line": 26
+  }],
+  "prId": 12719
+}]

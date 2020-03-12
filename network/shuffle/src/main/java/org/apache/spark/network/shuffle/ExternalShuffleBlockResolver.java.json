@@ -1,0 +1,250 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "tgravescs"
+    },
+    "body": "._ or leave them explicit\n",
+    "commit": "0d285d3fac15afc77313255799a3392dcf74518f",
+    "createdAt": "2015-08-05T14:22:42Z",
+    "diffHunk": "@@ -17,10 +17,7 @@\n \n package org.apache.spark.network.shuffle;\n \n-import java.io.DataInputStream;\n-import java.io.File;\n-import java.io.FileInputStream;\n-import java.io.IOException;\n+import java.io.*;"
+  }, {
+    "author": {
+      "login": "tgravescs"
+    },
+    "body": "nevermind java file not scala\n",
+    "commit": "0d285d3fac15afc77313255799a3392dcf74518f",
+    "createdAt": "2015-08-05T14:27:33Z",
+    "diffHunk": "@@ -17,10 +17,7 @@\n \n package org.apache.spark.network.shuffle;\n \n-import java.io.DataInputStream;\n-import java.io.File;\n-import java.io.FileInputStream;\n-import java.io.IOException;\n+import java.io.*;"
+  }],
+  "prId": 7943
+}, {
+  "comments": [{
+    "author": {
+      "login": "tgravescs"
+    },
+    "body": "I wonder how expensive this is.  Any reason to not just open it once in constructor and have global db variable?\n",
+    "commit": "0d285d3fac15afc77313255799a3392dcf74518f",
+    "createdAt": "2015-08-05T14:50:02Z",
+    "diffHunk": "@@ -252,4 +269,30 @@ public String toString() {\n         .toString();\n     }\n   }\n+\n+  /**\n+   * write out the set of registered executors to a file so we can reload them on restart.\n+   * You must have a lock on executors when calling this\n+   */\n+  private void saveRegisteredExecutors() throws IOException {\n+    if (registeredExecutorFile != null) {\n+      Options options = new Options();\n+      options.createIfMissing(true);\n+      JniDBFactory factory = new JniDBFactory();\n+      DB db = null;\n+      try {\n+        db = factory.open(registeredExecutorFile, options);"
+  }, {
+    "author": {
+      "login": "squito"
+    },
+    "body": "I guess just paranoia about something going wrong w/ the file in between writes, but probably I should leave that to leveldb to worry about.  I just fixed this.\n",
+    "commit": "0d285d3fac15afc77313255799a3392dcf74518f",
+    "createdAt": "2015-08-05T15:37:13Z",
+    "diffHunk": "@@ -252,4 +269,30 @@ public String toString() {\n         .toString();\n     }\n   }\n+\n+  /**\n+   * write out the set of registered executors to a file so we can reload them on restart.\n+   * You must have a lock on executors when calling this\n+   */\n+  private void saveRegisteredExecutors() throws IOException {\n+    if (registeredExecutorFile != null) {\n+      Options options = new Options();\n+      options.createIfMissing(true);\n+      JniDBFactory factory = new JniDBFactory();\n+      DB db = null;\n+      try {\n+        db = factory.open(registeredExecutorFile, options);"
+  }],
+  "prId": 7943
+}, {
+  "comments": [{
+    "author": {
+      "login": "tgravescs"
+    },
+    "body": "might be nice to make a constant (private static final String) for \"registeredExecutors\".\nAlthough it seems a bit odd we are throwing it all under one and not per application entry.  Wouldn't it be easier to add/remove if we do it per application?\n",
+    "commit": "0d285d3fac15afc77313255799a3392dcf74518f",
+    "createdAt": "2015-08-05T15:00:51Z",
+    "diffHunk": "@@ -252,4 +269,30 @@ public String toString() {\n         .toString();\n     }\n   }\n+\n+  /**\n+   * write out the set of registered executors to a file so we can reload them on restart.\n+   * You must have a lock on executors when calling this\n+   */\n+  private void saveRegisteredExecutors() throws IOException {\n+    if (registeredExecutorFile != null) {\n+      Options options = new Options();\n+      options.createIfMissing(true);\n+      JniDBFactory factory = new JniDBFactory();\n+      DB db = null;\n+      try {\n+        db = factory.open(registeredExecutorFile, options);\n+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();\n+        ObjectOutputStream out = new ObjectOutputStream(bytes);\n+        out.writeObject(executors);\n+        out.close();\n+        db.put(\"registeredExecutors\".getBytes(Charsets.UTF_8), bytes.toByteArray());"
+  }, {
+    "author": {
+      "login": "tgravescs"
+    },
+    "body": "where are we removing applications?\n\nI would have thought from applicationRemoved we would remove it and save again?\n",
+    "commit": "0d285d3fac15afc77313255799a3392dcf74518f",
+    "createdAt": "2015-08-05T15:47:03Z",
+    "diffHunk": "@@ -252,4 +269,30 @@ public String toString() {\n         .toString();\n     }\n   }\n+\n+  /**\n+   * write out the set of registered executors to a file so we can reload them on restart.\n+   * You must have a lock on executors when calling this\n+   */\n+  private void saveRegisteredExecutors() throws IOException {\n+    if (registeredExecutorFile != null) {\n+      Options options = new Options();\n+      options.createIfMissing(true);\n+      JniDBFactory factory = new JniDBFactory();\n+      DB db = null;\n+      try {\n+        db = factory.open(registeredExecutorFile, options);\n+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();\n+        ObjectOutputStream out = new ObjectOutputStream(bytes);\n+        out.writeObject(executors);\n+        out.close();\n+        db.put(\"registeredExecutors\".getBytes(Charsets.UTF_8), bytes.toByteArray());"
+  }],
+  "prId": 7943
+}, {
+  "comments": [{
+    "author": {
+      "login": "tgravescs"
+    },
+    "body": "my previous comments got closed based on the change to move opening up out, so just repasting it here so we don't lose it:\n\nI expected to see one entry per application rather then putting them all in.\nwhere are we removing applications?\nI would have thought from applicationRemoved we would remove it and save again?\n",
+    "commit": "0d285d3fac15afc77313255799a3392dcf74518f",
+    "createdAt": "2015-08-05T19:55:25Z",
+    "diffHunk": "@@ -252,4 +294,18 @@ public String toString() {\n         .toString();\n     }\n   }\n+\n+  /**\n+   * write out the set of registered executors to a file so we can reload them on restart.\n+   * You must have a lock on executors when calling this\n+   */\n+  private void saveRegisteredExecutors() throws IOException {\n+    if (db != null) {\n+      ByteArrayOutputStream bytes = new ByteArrayOutputStream();\n+      ObjectOutputStream out = new ObjectOutputStream(bytes);\n+      out.writeObject(executors);\n+      out.close();\n+      db.put(\"registeredExecutors\".getBytes(Charsets.UTF_8), bytes.toByteArray());"
+  }, {
+    "author": {
+      "login": "squito"
+    },
+    "body": "yeah, I will write one entry per key, sorry I was being a little sloppy to just poc using leveldb.  Marcelo pointed out the issue w/ application removed on the other pr -- I'm porting that change here with a test\n",
+    "commit": "0d285d3fac15afc77313255799a3392dcf74518f",
+    "createdAt": "2015-08-06T17:04:51Z",
+    "diffHunk": "@@ -252,4 +294,18 @@ public String toString() {\n         .toString();\n     }\n   }\n+\n+  /**\n+   * write out the set of registered executors to a file so we can reload them on restart.\n+   * You must have a lock on executors when calling this\n+   */\n+  private void saveRegisteredExecutors() throws IOException {\n+    if (db != null) {\n+      ByteArrayOutputStream bytes = new ByteArrayOutputStream();\n+      ObjectOutputStream out = new ObjectOutputStream(bytes);\n+      out.writeObject(executors);\n+      out.close();\n+      db.put(\"registeredExecutors\".getBytes(Charsets.UTF_8), bytes.toByteArray());"
+  }],
+  "prId": 7943
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "nit: long line\n",
+    "commit": "0d285d3fac15afc77313255799a3392dcf74518f",
+    "createdAt": "2015-08-06T22:42:47Z",
+    "diffHunk": "@@ -53,24 +55,73 @@\n   private static final Logger logger = LoggerFactory.getLogger(ExternalShuffleBlockResolver.class);\n \n   // Map containing all registered executors' metadata.\n-  private final ConcurrentMap<AppExecId, ExecutorShuffleInfo> executors;\n+  @VisibleForTesting\n+  final ConcurrentMap<AppExecId, ExecutorShuffleInfo> executors;\n \n   // Single-threaded Java executor used to perform expensive recursive directory deletion.\n   private final Executor directoryCleaner;\n \n   private final TransportConf conf;\n \n-  public ExternalShuffleBlockResolver(TransportConf conf) {\n-    this(conf, Executors.newSingleThreadExecutor(\n+  @VisibleForTesting\n+  final File registeredExecutorFile;\n+  @VisibleForTesting\n+  final DB db;\n+\n+  public ExternalShuffleBlockResolver(TransportConf conf, File registeredExecutorFile) throws IOException {"
+  }],
+  "prId": 7943
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "nit: declare this at the top of the class. Can this be final?\n",
+    "commit": "0d285d3fac15afc77313255799a3392dcf74518f",
+    "createdAt": "2015-08-11T17:29:22Z",
+    "diffHunk": "@@ -252,4 +338,118 @@ public String toString() {\n         .toString();\n     }\n   }\n+\n+  static ObjectMapper mapper = new ObjectMapper();"
+  }],
+  "prId": 7943
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "nit: declare at top of class.\n",
+    "commit": "0d285d3fac15afc77313255799a3392dcf74518f",
+    "createdAt": "2015-08-11T17:30:09Z",
+    "diffHunk": "@@ -252,4 +338,118 @@ public String toString() {\n         .toString();\n     }\n   }\n+\n+  static ObjectMapper mapper = new ObjectMapper();\n+\n+  private static byte[] dbAppExecKey(AppExecId appExecId) throws IOException {\n+    // we stick a common prefix on all the keys so we can find them in the DB\n+    String appExecJson = mapper.writeValueAsString(appExecId);\n+    String key = (APP_KEY_PREFIX + \";\" + appExecJson);\n+    return key.getBytes(Charsets.UTF_8);\n+  }\n+\n+  private static AppExecId parseDbAppExecKey(String s) throws IOException {\n+    int p = s.indexOf(';');\n+    String json = s.substring(p + 1);\n+    AppExecId parsed = mapper.readValue(json, AppExecId.class);\n+    return parsed;\n+  }\n+\n+  private static final String APP_KEY_PREFIX = \"AppExecShuffleInfo\";"
+  }],
+  "prId": 7943
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Is the prefix needed? It doesn't seem like you're using it for anything (since you just discard it in the parse method).\n",
+    "commit": "0d285d3fac15afc77313255799a3392dcf74518f",
+    "createdAt": "2015-08-11T17:31:11Z",
+    "diffHunk": "@@ -252,4 +338,118 @@ public String toString() {\n         .toString();\n     }\n   }\n+\n+  static ObjectMapper mapper = new ObjectMapper();\n+\n+  private static byte[] dbAppExecKey(AppExecId appExecId) throws IOException {\n+    // we stick a common prefix on all the keys so we can find them in the DB\n+    String appExecJson = mapper.writeValueAsString(appExecId);\n+    String key = (APP_KEY_PREFIX + \";\" + appExecJson);",
+    "line": 190
+  }, {
+    "author": {
+      "login": "squito"
+    },
+    "body": "yeah, its used for pulling data out of leveldb.  We seek to keys that start w/ this prefix, and scan as long as the key still has the prefix.\n",
+    "commit": "0d285d3fac15afc77313255799a3392dcf74518f",
+    "createdAt": "2015-08-12T15:30:57Z",
+    "diffHunk": "@@ -252,4 +338,118 @@ public String toString() {\n         .toString();\n     }\n   }\n+\n+  static ObjectMapper mapper = new ObjectMapper();\n+\n+  private static byte[] dbAppExecKey(AppExecId appExecId) throws IOException {\n+    // we stick a common prefix on all the keys so we can find them in the DB\n+    String appExecJson = mapper.writeValueAsString(appExecId);\n+    String key = (APP_KEY_PREFIX + \";\" + appExecJson);",
+    "line": 190
+  }],
+  "prId": 7943
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "nit: add braces\n",
+    "commit": "0d285d3fac15afc77313255799a3392dcf74518f",
+    "createdAt": "2015-08-11T17:33:35Z",
+    "diffHunk": "@@ -252,4 +338,118 @@ public String toString() {\n         .toString();\n     }\n   }\n+\n+  static ObjectMapper mapper = new ObjectMapper();\n+\n+  private static byte[] dbAppExecKey(AppExecId appExecId) throws IOException {\n+    // we stick a common prefix on all the keys so we can find them in the DB\n+    String appExecJson = mapper.writeValueAsString(appExecId);\n+    String key = (APP_KEY_PREFIX + \";\" + appExecJson);\n+    return key.getBytes(Charsets.UTF_8);\n+  }\n+\n+  private static AppExecId parseDbAppExecKey(String s) throws IOException {\n+    int p = s.indexOf(';');\n+    String json = s.substring(p + 1);\n+    AppExecId parsed = mapper.readValue(json, AppExecId.class);\n+    return parsed;\n+  }\n+\n+  private static final String APP_KEY_PREFIX = \"AppExecShuffleInfo\";\n+\n+  @VisibleForTesting\n+  static ConcurrentMap<AppExecId, ExecutorShuffleInfo> reloadRegisteredExecutors(DB db)\n+      throws IOException {\n+    ConcurrentMap<AppExecId, ExecutorShuffleInfo> registeredExecutors = Maps.newConcurrentMap();\n+    if (db != null) {\n+      DBIterator itr = db.iterator();\n+      itr.seek(APP_KEY_PREFIX.getBytes(Charsets.UTF_8));\n+      while (itr.hasNext()) {\n+        Map.Entry<byte[], byte[]> e = itr.next();\n+        String key = new String(e.getKey(), Charsets.UTF_8);\n+        if (!key.startsWith(APP_KEY_PREFIX))"
+  }],
+  "prId": 7943
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Jackson has `readValue()` methods that take a `byte[]`, so maybe you could save some of these conversions.\n",
+    "commit": "0d285d3fac15afc77313255799a3392dcf74518f",
+    "createdAt": "2015-08-11T17:34:59Z",
+    "diffHunk": "@@ -252,4 +338,118 @@ public String toString() {\n         .toString();\n     }\n   }\n+\n+  static ObjectMapper mapper = new ObjectMapper();\n+\n+  private static byte[] dbAppExecKey(AppExecId appExecId) throws IOException {\n+    // we stick a common prefix on all the keys so we can find them in the DB\n+    String appExecJson = mapper.writeValueAsString(appExecId);\n+    String key = (APP_KEY_PREFIX + \";\" + appExecJson);\n+    return key.getBytes(Charsets.UTF_8);\n+  }\n+\n+  private static AppExecId parseDbAppExecKey(String s) throws IOException {\n+    int p = s.indexOf(';');\n+    String json = s.substring(p + 1);\n+    AppExecId parsed = mapper.readValue(json, AppExecId.class);\n+    return parsed;\n+  }\n+\n+  private static final String APP_KEY_PREFIX = \"AppExecShuffleInfo\";\n+\n+  @VisibleForTesting\n+  static ConcurrentMap<AppExecId, ExecutorShuffleInfo> reloadRegisteredExecutors(DB db)\n+      throws IOException {\n+    ConcurrentMap<AppExecId, ExecutorShuffleInfo> registeredExecutors = Maps.newConcurrentMap();\n+    if (db != null) {\n+      DBIterator itr = db.iterator();\n+      itr.seek(APP_KEY_PREFIX.getBytes(Charsets.UTF_8));\n+      while (itr.hasNext()) {\n+        Map.Entry<byte[], byte[]> e = itr.next();\n+        String key = new String(e.getKey(), Charsets.UTF_8);",
+    "line": 212
+  }],
+  "prId": 7943
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "nit: `1, 0`\n",
+    "commit": "0d285d3fac15afc77313255799a3392dcf74518f",
+    "createdAt": "2015-08-11T17:36:49Z",
+    "diffHunk": "@@ -252,4 +338,118 @@ public String toString() {\n         .toString();\n     }\n   }\n+\n+  static ObjectMapper mapper = new ObjectMapper();\n+\n+  private static byte[] dbAppExecKey(AppExecId appExecId) throws IOException {\n+    // we stick a common prefix on all the keys so we can find them in the DB\n+    String appExecJson = mapper.writeValueAsString(appExecId);\n+    String key = (APP_KEY_PREFIX + \";\" + appExecJson);\n+    return key.getBytes(Charsets.UTF_8);\n+  }\n+\n+  private static AppExecId parseDbAppExecKey(String s) throws IOException {\n+    int p = s.indexOf(';');\n+    String json = s.substring(p + 1);\n+    AppExecId parsed = mapper.readValue(json, AppExecId.class);\n+    return parsed;\n+  }\n+\n+  private static final String APP_KEY_PREFIX = \"AppExecShuffleInfo\";\n+\n+  @VisibleForTesting\n+  static ConcurrentMap<AppExecId, ExecutorShuffleInfo> reloadRegisteredExecutors(DB db)\n+      throws IOException {\n+    ConcurrentMap<AppExecId, ExecutorShuffleInfo> registeredExecutors = Maps.newConcurrentMap();\n+    if (db != null) {\n+      DBIterator itr = db.iterator();\n+      itr.seek(APP_KEY_PREFIX.getBytes(Charsets.UTF_8));\n+      while (itr.hasNext()) {\n+        Map.Entry<byte[], byte[]> e = itr.next();\n+        String key = new String(e.getKey(), Charsets.UTF_8);\n+        if (!key.startsWith(APP_KEY_PREFIX))\n+          break;\n+        AppExecId id = parseDbAppExecKey(key);\n+        ExecutorShuffleInfo shuffleInfo =\n+          mapper.readValue(new String(e.getValue(), Charsets.UTF_8), ExecutorShuffleInfo.class);\n+        registeredExecutors.put(id, shuffleInfo);\n+      }\n+    }\n+    return registeredExecutors;\n+  }\n+\n+  private static class LevelDBLogger implements org.iq80.leveldb.Logger {\n+    private static final Logger LOG = LoggerFactory.getLogger(LevelDBLogger.class);\n+\n+    @Override\n+    public void log(String message) {\n+      LOG.info(message);\n+    }\n+  }\n+\n+  private static final StoreVersion CURRENT_VERSION = new StoreVersion(1,0);"
+  }, {
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "(also should be at the top of the file)\n",
+    "commit": "0d285d3fac15afc77313255799a3392dcf74518f",
+    "createdAt": "2015-08-11T17:37:57Z",
+    "diffHunk": "@@ -252,4 +338,118 @@ public String toString() {\n         .toString();\n     }\n   }\n+\n+  static ObjectMapper mapper = new ObjectMapper();\n+\n+  private static byte[] dbAppExecKey(AppExecId appExecId) throws IOException {\n+    // we stick a common prefix on all the keys so we can find them in the DB\n+    String appExecJson = mapper.writeValueAsString(appExecId);\n+    String key = (APP_KEY_PREFIX + \";\" + appExecJson);\n+    return key.getBytes(Charsets.UTF_8);\n+  }\n+\n+  private static AppExecId parseDbAppExecKey(String s) throws IOException {\n+    int p = s.indexOf(';');\n+    String json = s.substring(p + 1);\n+    AppExecId parsed = mapper.readValue(json, AppExecId.class);\n+    return parsed;\n+  }\n+\n+  private static final String APP_KEY_PREFIX = \"AppExecShuffleInfo\";\n+\n+  @VisibleForTesting\n+  static ConcurrentMap<AppExecId, ExecutorShuffleInfo> reloadRegisteredExecutors(DB db)\n+      throws IOException {\n+    ConcurrentMap<AppExecId, ExecutorShuffleInfo> registeredExecutors = Maps.newConcurrentMap();\n+    if (db != null) {\n+      DBIterator itr = db.iterator();\n+      itr.seek(APP_KEY_PREFIX.getBytes(Charsets.UTF_8));\n+      while (itr.hasNext()) {\n+        Map.Entry<byte[], byte[]> e = itr.next();\n+        String key = new String(e.getKey(), Charsets.UTF_8);\n+        if (!key.startsWith(APP_KEY_PREFIX))\n+          break;\n+        AppExecId id = parseDbAppExecKey(key);\n+        ExecutorShuffleInfo shuffleInfo =\n+          mapper.readValue(new String(e.getValue(), Charsets.UTF_8), ExecutorShuffleInfo.class);\n+        registeredExecutors.put(id, shuffleInfo);\n+      }\n+    }\n+    return registeredExecutors;\n+  }\n+\n+  private static class LevelDBLogger implements org.iq80.leveldb.Logger {\n+    private static final Logger LOG = LoggerFactory.getLogger(LevelDBLogger.class);\n+\n+    @Override\n+    public void log(String message) {\n+      LOG.info(message);\n+    }\n+  }\n+\n+  private static final StoreVersion CURRENT_VERSION = new StoreVersion(1,0);"
+  }],
+  "prId": 7943
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Any reason not to use JSON for this too?\n",
+    "commit": "0d285d3fac15afc77313255799a3392dcf74518f",
+    "createdAt": "2015-08-11T17:37:04Z",
+    "diffHunk": "@@ -252,4 +338,118 @@ public String toString() {\n         .toString();\n     }\n   }\n+\n+  static ObjectMapper mapper = new ObjectMapper();\n+\n+  private static byte[] dbAppExecKey(AppExecId appExecId) throws IOException {\n+    // we stick a common prefix on all the keys so we can find them in the DB\n+    String appExecJson = mapper.writeValueAsString(appExecId);\n+    String key = (APP_KEY_PREFIX + \";\" + appExecJson);\n+    return key.getBytes(Charsets.UTF_8);\n+  }\n+\n+  private static AppExecId parseDbAppExecKey(String s) throws IOException {\n+    int p = s.indexOf(';');\n+    String json = s.substring(p + 1);\n+    AppExecId parsed = mapper.readValue(json, AppExecId.class);\n+    return parsed;\n+  }\n+\n+  private static final String APP_KEY_PREFIX = \"AppExecShuffleInfo\";\n+\n+  @VisibleForTesting\n+  static ConcurrentMap<AppExecId, ExecutorShuffleInfo> reloadRegisteredExecutors(DB db)\n+      throws IOException {\n+    ConcurrentMap<AppExecId, ExecutorShuffleInfo> registeredExecutors = Maps.newConcurrentMap();\n+    if (db != null) {\n+      DBIterator itr = db.iterator();\n+      itr.seek(APP_KEY_PREFIX.getBytes(Charsets.UTF_8));\n+      while (itr.hasNext()) {\n+        Map.Entry<byte[], byte[]> e = itr.next();\n+        String key = new String(e.getKey(), Charsets.UTF_8);\n+        if (!key.startsWith(APP_KEY_PREFIX))\n+          break;\n+        AppExecId id = parseDbAppExecKey(key);\n+        ExecutorShuffleInfo shuffleInfo =\n+          mapper.readValue(new String(e.getValue(), Charsets.UTF_8), ExecutorShuffleInfo.class);\n+        registeredExecutors.put(id, shuffleInfo);\n+      }\n+    }\n+    return registeredExecutors;\n+  }\n+\n+  private static class LevelDBLogger implements org.iq80.leveldb.Logger {\n+    private static final Logger LOG = LoggerFactory.getLogger(LevelDBLogger.class);\n+\n+    @Override\n+    public void log(String message) {\n+      LOG.info(message);\n+    }\n+  }\n+\n+  private static final StoreVersion CURRENT_VERSION = new StoreVersion(1,0);\n+  private static void checkVersion(DB db) throws IOException {\n+    byte[] bytes = db.get(StoreVersion.KEY);\n+    if (bytes == null) {\n+      storeVersion(db);\n+    } else if (bytes.length != 8) {\n+      throw new IOException(\"unexpected version format\");\n+    } else {\n+      DataInputStream in = new DataInputStream(new ByteArrayInputStream(bytes));\n+      int major = in.readInt();"
+  }],
+  "prId": 7943
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "`return major == that.major && minor == that.minor;`\n",
+    "commit": "0d285d3fac15afc77313255799a3392dcf74518f",
+    "createdAt": "2015-08-11T17:39:28Z",
+    "diffHunk": "@@ -252,4 +338,118 @@ public String toString() {\n         .toString();\n     }\n   }\n+\n+  static ObjectMapper mapper = new ObjectMapper();\n+\n+  private static byte[] dbAppExecKey(AppExecId appExecId) throws IOException {\n+    // we stick a common prefix on all the keys so we can find them in the DB\n+    String appExecJson = mapper.writeValueAsString(appExecId);\n+    String key = (APP_KEY_PREFIX + \";\" + appExecJson);\n+    return key.getBytes(Charsets.UTF_8);\n+  }\n+\n+  private static AppExecId parseDbAppExecKey(String s) throws IOException {\n+    int p = s.indexOf(';');\n+    String json = s.substring(p + 1);\n+    AppExecId parsed = mapper.readValue(json, AppExecId.class);\n+    return parsed;\n+  }\n+\n+  private static final String APP_KEY_PREFIX = \"AppExecShuffleInfo\";\n+\n+  @VisibleForTesting\n+  static ConcurrentMap<AppExecId, ExecutorShuffleInfo> reloadRegisteredExecutors(DB db)\n+      throws IOException {\n+    ConcurrentMap<AppExecId, ExecutorShuffleInfo> registeredExecutors = Maps.newConcurrentMap();\n+    if (db != null) {\n+      DBIterator itr = db.iterator();\n+      itr.seek(APP_KEY_PREFIX.getBytes(Charsets.UTF_8));\n+      while (itr.hasNext()) {\n+        Map.Entry<byte[], byte[]> e = itr.next();\n+        String key = new String(e.getKey(), Charsets.UTF_8);\n+        if (!key.startsWith(APP_KEY_PREFIX))\n+          break;\n+        AppExecId id = parseDbAppExecKey(key);\n+        ExecutorShuffleInfo shuffleInfo =\n+          mapper.readValue(new String(e.getValue(), Charsets.UTF_8), ExecutorShuffleInfo.class);\n+        registeredExecutors.put(id, shuffleInfo);\n+      }\n+    }\n+    return registeredExecutors;\n+  }\n+\n+  private static class LevelDBLogger implements org.iq80.leveldb.Logger {\n+    private static final Logger LOG = LoggerFactory.getLogger(LevelDBLogger.class);\n+\n+    @Override\n+    public void log(String message) {\n+      LOG.info(message);\n+    }\n+  }\n+\n+  private static final StoreVersion CURRENT_VERSION = new StoreVersion(1,0);\n+  private static void checkVersion(DB db) throws IOException {\n+    byte[] bytes = db.get(StoreVersion.KEY);\n+    if (bytes == null) {\n+      storeVersion(db);\n+    } else if (bytes.length != 8) {\n+      throw new IOException(\"unexpected version format\");\n+    } else {\n+      DataInputStream in = new DataInputStream(new ByteArrayInputStream(bytes));\n+      int major = in.readInt();\n+      int minor = in.readInt();\n+      StoreVersion version = new StoreVersion(major, minor);\n+      if (version.major != CURRENT_VERSION.major) {\n+        throw new IOException(\"cannot read state DB with version \" + version + \", incompatible \" +\n+          \"with current version \" + CURRENT_VERSION);\n+      }\n+      storeVersion(db);\n+    }\n+  }\n+\n+  private static void storeVersion(DB db) throws IOException {\n+    ByteArrayOutputStream bytesOut = new ByteArrayOutputStream();\n+    DataOutputStream out = new DataOutputStream(bytesOut);\n+    out.writeInt(CURRENT_VERSION.major);\n+    out.writeInt(CURRENT_VERSION.minor);\n+    out.close();\n+    db.put(StoreVersion.KEY, bytesOut.toByteArray());\n+  }\n+\n+\n+  private static class StoreVersion {\n+\n+    final static byte[] KEY = \"StoreVersion\".getBytes(Charsets.UTF_8);\n+\n+    final int major;\n+    final int minor;\n+\n+    StoreVersion(int major, int minor) {\n+      this.major = major;\n+      this.minor = minor;\n+    }\n+\n+    @Override\n+    public boolean equals(Object o) {\n+      if (this == o) return true;\n+      if (o == null || getClass() != o.getClass()) return false;\n+\n+      StoreVersion that = (StoreVersion) o;\n+\n+      if (major != that.major) return false;"
+  }],
+  "prId": 7943
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Versioning is kinda tricky in that you don't really know how it's going to play out when you add a new version... but what's the contract here? What can you do in a minor version update? Can you add fields, remove fields, etc?\n",
+    "commit": "0d285d3fac15afc77313255799a3392dcf74518f",
+    "createdAt": "2015-08-11T17:54:01Z",
+    "diffHunk": "@@ -252,4 +338,118 @@ public String toString() {\n         .toString();\n     }\n   }\n+\n+  static ObjectMapper mapper = new ObjectMapper();\n+\n+  private static byte[] dbAppExecKey(AppExecId appExecId) throws IOException {\n+    // we stick a common prefix on all the keys so we can find them in the DB\n+    String appExecJson = mapper.writeValueAsString(appExecId);\n+    String key = (APP_KEY_PREFIX + \";\" + appExecJson);\n+    return key.getBytes(Charsets.UTF_8);\n+  }\n+\n+  private static AppExecId parseDbAppExecKey(String s) throws IOException {\n+    int p = s.indexOf(';');\n+    String json = s.substring(p + 1);\n+    AppExecId parsed = mapper.readValue(json, AppExecId.class);\n+    return parsed;\n+  }\n+\n+  private static final String APP_KEY_PREFIX = \"AppExecShuffleInfo\";\n+\n+  @VisibleForTesting\n+  static ConcurrentMap<AppExecId, ExecutorShuffleInfo> reloadRegisteredExecutors(DB db)\n+      throws IOException {\n+    ConcurrentMap<AppExecId, ExecutorShuffleInfo> registeredExecutors = Maps.newConcurrentMap();\n+    if (db != null) {\n+      DBIterator itr = db.iterator();\n+      itr.seek(APP_KEY_PREFIX.getBytes(Charsets.UTF_8));\n+      while (itr.hasNext()) {\n+        Map.Entry<byte[], byte[]> e = itr.next();\n+        String key = new String(e.getKey(), Charsets.UTF_8);\n+        if (!key.startsWith(APP_KEY_PREFIX))\n+          break;\n+        AppExecId id = parseDbAppExecKey(key);\n+        ExecutorShuffleInfo shuffleInfo =\n+          mapper.readValue(new String(e.getValue(), Charsets.UTF_8), ExecutorShuffleInfo.class);\n+        registeredExecutors.put(id, shuffleInfo);\n+      }\n+    }\n+    return registeredExecutors;\n+  }\n+\n+  private static class LevelDBLogger implements org.iq80.leveldb.Logger {\n+    private static final Logger LOG = LoggerFactory.getLogger(LevelDBLogger.class);\n+\n+    @Override\n+    public void log(String message) {\n+      LOG.info(message);\n+    }\n+  }\n+\n+  private static final StoreVersion CURRENT_VERSION = new StoreVersion(1,0);\n+  private static void checkVersion(DB db) throws IOException {\n+    byte[] bytes = db.get(StoreVersion.KEY);\n+    if (bytes == null) {\n+      storeVersion(db);\n+    } else if (bytes.length != 8) {\n+      throw new IOException(\"unexpected version format\");\n+    } else {\n+      DataInputStream in = new DataInputStream(new ByteArrayInputStream(bytes));\n+      int major = in.readInt();\n+      int minor = in.readInt();\n+      StoreVersion version = new StoreVersion(major, minor);\n+      if (version.major != CURRENT_VERSION.major) {"
+  }],
+  "prId": 7943
+}, {
+  "comments": [{
+    "author": {
+      "login": "tgravescs"
+    },
+    "body": "We already have an AppExecId above on line 143 (fullIId) we should be able to use that here\n",
+    "commit": "0d285d3fac15afc77313255799a3392dcf74518f",
+    "createdAt": "2015-08-14T13:29:45Z",
+    "diffHunk": "@@ -81,7 +142,18 @@ public void registerExecutor(\n       ExecutorShuffleInfo executorInfo) {\n     AppExecId fullId = new AppExecId(appId, execId);\n     logger.info(\"Registered executor {} with {}\", fullId, executorInfo);\n-    executors.put(fullId, executorInfo);\n+    synchronized (executors) {\n+      executors.put(fullId, executorInfo);\n+      try {\n+        if (db != null) {\n+          byte[] key = dbAppExecKey(new AppExecId(appId, execId));"
+  }],
+  "prId": 7943
+}, {
+  "comments": [{
+    "author": {
+      "login": "tgravescs"
+    },
+    "body": "I don't think we need to synchronize here anymore. I think this was here from when you were doing files.  leveldb write operations are atomic.\n\nalthough we should do executors.put after doing db.put so we know its saved.\n",
+    "commit": "0d285d3fac15afc77313255799a3392dcf74518f",
+    "createdAt": "2015-08-14T13:40:34Z",
+    "diffHunk": "@@ -81,7 +142,18 @@ public void registerExecutor(\n       ExecutorShuffleInfo executorInfo) {\n     AppExecId fullId = new AppExecId(appId, execId);\n     logger.info(\"Registered executor {} with {}\", fullId, executorInfo);\n-    executors.put(fullId, executorInfo);\n+    synchronized (executors) {"
+  }],
+  "prId": 7943
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "minor, but if somehow the underlying file is a file and not a directory, this will throw an NPE.\n",
+    "commit": "0d285d3fac15afc77313255799a3392dcf74518f",
+    "createdAt": "2015-08-17T19:50:05Z",
+    "diffHunk": "@@ -52,25 +57,85 @@\n public class ExternalShuffleBlockResolver {\n   private static final Logger logger = LoggerFactory.getLogger(ExternalShuffleBlockResolver.class);\n \n+  private static final ObjectMapper mapper = new ObjectMapper();\n+  /**\n+   * This a common prefix to the key for each app registration we stick in leveldb, so they\n+   * are easy to find, since leveldb lets you search based on prefix.\n+   */\n+  private static final String APP_KEY_PREFIX = \"AppExecShuffleInfo\";\n+  private static final StoreVersion CURRENT_VERSION = new StoreVersion(1, 0);\n+\n   // Map containing all registered executors' metadata.\n-  private final ConcurrentMap<AppExecId, ExecutorShuffleInfo> executors;\n+  @VisibleForTesting\n+  final ConcurrentMap<AppExecId, ExecutorShuffleInfo> executors;\n \n   // Single-threaded Java executor used to perform expensive recursive directory deletion.\n   private final Executor directoryCleaner;\n \n   private final TransportConf conf;\n \n-  public ExternalShuffleBlockResolver(TransportConf conf) {\n-    this(conf, Executors.newSingleThreadExecutor(\n+  @VisibleForTesting\n+  final File registeredExecutorFile;\n+  @VisibleForTesting\n+  final DB db;\n+\n+  public ExternalShuffleBlockResolver(TransportConf conf, File registeredExecutorFile)\n+      throws IOException {\n+    this(conf, registeredExecutorFile, Executors.newSingleThreadExecutor(\n         // Add `spark` prefix because it will run in NM in Yarn mode.\n         NettyUtils.createThreadFactory(\"spark-shuffle-directory-cleaner\")));\n   }\n \n   // Allows tests to have more control over when directories are cleaned up.\n   @VisibleForTesting\n-  ExternalShuffleBlockResolver(TransportConf conf, Executor directoryCleaner) {\n+  ExternalShuffleBlockResolver(\n+      TransportConf conf,\n+      File registeredExecutorFile,\n+      Executor directoryCleaner) throws IOException {\n     this.conf = conf;\n-    this.executors = Maps.newConcurrentMap();\n+    this.registeredExecutorFile = registeredExecutorFile;\n+    if (registeredExecutorFile != null) {\n+      Options options = new Options();\n+      options.createIfMissing(false);\n+      options.logger(new LevelDBLogger());\n+      DB tmpDb;\n+      try {\n+        tmpDb = JniDBFactory.factory.open(registeredExecutorFile, options);\n+      } catch (NativeDB.DBException e) {\n+        if (e.isNotFound() || e.getMessage().contains(\" does not exist \")) {\n+          logger.info(\"Creating state database at \" + registeredExecutorFile);\n+          options.createIfMissing(true);\n+          try {\n+            tmpDb = JniDBFactory.factory.open(registeredExecutorFile, options);\n+          } catch (NativeDB.DBException dbExc) {\n+            throw new IOException(\"Unable to create state store\", dbExc);\n+          }\n+        } else {\n+          // the leveldb file seems to be corrupt somehow.  Lets just blow it away and create a new\n+          // one, so we can keep processing new apps\n+          logger.error(\"error opening leveldb file {}.  Creating new file, will not be able to \" +\n+            \"recover state for existing applications\", registeredExecutorFile, e);\n+          for (File f: registeredExecutorFile.listFiles()) {"
+  }],
+  "prId": 7943
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Can this be `s.substring(APP_KEY_PREFIX.length() + 1)`?\n",
+    "commit": "0d285d3fac15afc77313255799a3392dcf74518f",
+    "createdAt": "2015-08-17T19:51:29Z",
+    "diffHunk": "@@ -252,4 +344,103 @@ public String toString() {\n         .toString();\n     }\n   }\n+\n+  private static byte[] dbAppExecKey(AppExecId appExecId) throws IOException {\n+    // we stick a common prefix on all the keys so we can find them in the DB\n+    String appExecJson = mapper.writeValueAsString(appExecId);\n+    String key = (APP_KEY_PREFIX + \";\" + appExecJson);\n+    return key.getBytes(Charsets.UTF_8);\n+  }\n+\n+  private static AppExecId parseDbAppExecKey(String s) throws IOException {\n+    int p = s.indexOf(';');"
+  }],
+  "prId": 7943
+}]

@@ -1,0 +1,28 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "So, aside from the two closure parameters making the calls super ugly, this is more expensive than the previous version.\r\n\r\nPreviously:\r\n- filter as you iterate over view\r\n- limit iteration\r\n- materialize \"max\" elements\r\n\r\nNow:\r\n- filter as you iterate over view\r\n- materialize all elements that pass the filter\r\n- sort and take \"max\" elements\r\n\r\nThis will, at least, make replaying large apps a lot slower, given the filter in the task cleanup method.\r\n\r\n```\r\n// Try to delete finished tasks only.\r\nval toDelete = KVUtils.viewToSeq(view, countToDelete) { t =>\r\n  !live || t.status != TaskState.RUNNING.toString()\r\n}\r\n```\r\n\r\nSo, when replaying, every time you need to do a cleanup of tasks, you'll deserialize *all* tasks for the stage. If you have a stage with 10s of thousands of tasks, that's super expensive.\r\n\r\nIf all you want to change here is the sorting of jobs, I'd recommend adding a new index to `JobDataWrapper` that sorts them by end time. Then you can do the sorting before you even call this method, by setting up the `view` appropriately.\r\n\r\nIf you also want to sort the others (stages, tasks, and sql executions), you could also create indices for those.\r\n\r\nOr you could find a way to do this that is not so expensive on the replay side...\r\n\r\nIf adding indices, though, I'd probably try to get this into 2.3.0 since it would change the data written to disk.\r\n",
+    "commit": "b83b396dcd10fabf9d28ef57d4206fba2980efa5",
+    "createdAt": "2018-02-01T22:43:05Z",
+    "diffHunk": "@@ -69,14 +69,17 @@ private[spark] object KVUtils extends Logging {\n     db\n   }\n \n-  /** Turns a KVStoreView into a Scala sequence, applying a filter. */\n-  def viewToSeq[T](\n-      view: KVStoreView[T],\n-      max: Int)\n-      (filter: T => Boolean): Seq[T] = {\n+  /**\n+   * Turns a KVStoreView into a Scala sequence, applying a filter, sorting the sequence and\n+   * selecting the first `max` values.\n+   */\n+  def viewToSeq[T, S: Ordering](\n+    view: KVStoreView[T],\n+    max: Int)\n+    (filter: T => Boolean)(sorter: T => S): Seq[T] = {\n     val iter = view.closeableIterator()\n     try {\n-      iter.asScala.filter(filter).take(max).toList\n+      iter.asScala.filter(filter).toList.sortBy(sorter).take(max)"
+  }, {
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "@vanzin Yeah, I understand the expensive sort. However, adding indices needs more work. Do you have time to try it since I'm not familiar with LevelDB?",
+    "commit": "b83b396dcd10fabf9d28ef57d4206fba2980efa5",
+    "createdAt": "2018-02-01T22:47:20Z",
+    "diffHunk": "@@ -69,14 +69,17 @@ private[spark] object KVUtils extends Logging {\n     db\n   }\n \n-  /** Turns a KVStoreView into a Scala sequence, applying a filter. */\n-  def viewToSeq[T](\n-      view: KVStoreView[T],\n-      max: Int)\n-      (filter: T => Boolean): Seq[T] = {\n+  /**\n+   * Turns a KVStoreView into a Scala sequence, applying a filter, sorting the sequence and\n+   * selecting the first `max` values.\n+   */\n+  def viewToSeq[T, S: Ordering](\n+    view: KVStoreView[T],\n+    max: Int)\n+    (filter: T => Boolean)(sorter: T => S): Seq[T] = {\n     val iter = view.closeableIterator()\n     try {\n-      iter.asScala.filter(filter).take(max).toList\n+      iter.asScala.filter(filter).toList.sortBy(sorter).take(max)"
+  }, {
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Adding indices is super easy. e.g.:\r\nhttps://github.com/apache/spark/blob/master/core/src/main/scala/org/apache/spark/status/storeTypes.scala#L90",
+    "commit": "b83b396dcd10fabf9d28ef57d4206fba2980efa5",
+    "createdAt": "2018-02-01T22:50:07Z",
+    "diffHunk": "@@ -69,14 +69,17 @@ private[spark] object KVUtils extends Logging {\n     db\n   }\n \n-  /** Turns a KVStoreView into a Scala sequence, applying a filter. */\n-  def viewToSeq[T](\n-      view: KVStoreView[T],\n-      max: Int)\n-      (filter: T => Boolean): Seq[T] = {\n+  /**\n+   * Turns a KVStoreView into a Scala sequence, applying a filter, sorting the sequence and\n+   * selecting the first `max` values.\n+   */\n+  def viewToSeq[T, S: Ordering](\n+    view: KVStoreView[T],\n+    max: Int)\n+    (filter: T => Boolean)(sorter: T => S): Seq[T] = {\n     val iter = view.closeableIterator()\n     try {\n-      iter.asScala.filter(filter).take(max).toList\n+      iter.asScala.filter(filter).toList.sortBy(sorter).take(max)"
+  }],
+  "prId": 20481
+}]

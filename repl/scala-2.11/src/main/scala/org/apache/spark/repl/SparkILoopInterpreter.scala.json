@@ -1,0 +1,160 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "dbtsai"
+    },
+    "body": "@som-snytt It's working, but I'm wondering if I'm doing it correctly. \r\n\r\nIn this case, I'll use `$intp` without checking\r\n```scala\r\nif (intp.reporter.hasErrors) {\r\n  echo(\"Interpreter encountered errors during initialization!\")\r\n  null\r\n} \r\n```\r\nin `iLoop.scala`. Of course, I can add the checking in our own code, but it doesn't look right to me.\r\n\r\nAnd `intp.quietBind(NamedParam[IMain](\"$intp\", intp)(tagOfIMain, classTag[IMain]))` will not be executed before our custom Spark initialization code.",
+    "commit": "82ca5f6fdabc3027f2706af4b6883d04ac352555",
+    "createdAt": "2018-06-05T06:41:02Z",
+    "diffHunk": "@@ -21,8 +21,22 @@ import scala.collection.mutable\n import scala.tools.nsc.Settings\n import scala.tools.nsc.interpreter._\n \n-class SparkILoopInterpreter(settings: Settings, out: JPrintWriter) extends IMain(settings, out) {\n-  self =>\n+class SparkILoopInterpreter(settings: Settings, out: JPrintWriter, initializeSpark: () => Unit)\n+    extends IMain(settings, out) { self =>\n+\n+  /**\n+   * We override `initializeSynchronous` to initialize Spark *after* `intp` is properly initialized\n+   * and *before* the REPL sees any files in the private `loadInitFiles` functions, so that\n+   * the Spark context is visible in those files.\n+   *\n+   * This is a bit of a hack, but there isn't another hook available to us at this point.\n+   *\n+   * See the discussion in Scala community https://github.com/scala/bug/issues/10913 for detail.\n+   */\n+  override def initializeSynchronous(): Unit = {\n+    super.initializeSynchronous()\n+    initializeSpark()",
+    "line": 20
+  }, {
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "For my environment (with `build/sbt`), I'm hitting `NoSuchMethodError` like the following. Did you see something like this?\r\n\r\n```scala\r\n~/PR-21495:PR-21495$ bin/spark-shell\r\n18/06/07 23:39:00 WARN NativeCodeLoader: Unable to load native-hadoop library for your platform... using builtin-java classes where applicable\r\nUsing Spark's default log4j profile: org/apache/spark/log4j-defaults.properties\r\nSetting default log level to \"WARN\".\r\nTo adjust logging level use sc.setLogLevel(newLevel). For SparkR, use setLogLevel(newLevel).\r\nWelcome to\r\n      ____              __\r\n     / __/__  ___ _____/ /__\r\n    _\\ \\/ _ \\/ _ `/ __/  '_/\r\n   /___/ .__/\\_,_/_/ /_/\\_\\   version 2.4.0-SNAPSHOT\r\n      /_/\r\n\r\nUsing Scala version 2.11.12 (OpenJDK 64-Bit Server VM, Java 1.8.0_171)\r\nType in expressions to have them evaluated.\r\nType :help for more information.\r\n\r\nscala> Spark context Web UI available at http://localhost:4040\r\nSpark context available as 'sc' (master = local[*], app id = local-1528414746558).\r\nSpark session available as 'spark'.\r\nException in thread \"main\" java.lang.NoSuchMethodError: jline.console.completer.CandidateListCompletionHandler.setPrintSpaceAfterFullCompletion(Z)V\r\n        at scala.tools.nsc.interpreter.jline.JLineConsoleReader.initCompletion(JLineReader.scala:139)\r\n        at scala.tools.nsc.interpreter.jline.InteractiveReader.postInit(JLineReader.scala:54)\r\n```",
+    "commit": "82ca5f6fdabc3027f2706af4b6883d04ac352555",
+    "createdAt": "2018-06-07T23:42:32Z",
+    "diffHunk": "@@ -21,8 +21,22 @@ import scala.collection.mutable\n import scala.tools.nsc.Settings\n import scala.tools.nsc.interpreter._\n \n-class SparkILoopInterpreter(settings: Settings, out: JPrintWriter) extends IMain(settings, out) {\n-  self =>\n+class SparkILoopInterpreter(settings: Settings, out: JPrintWriter, initializeSpark: () => Unit)\n+    extends IMain(settings, out) { self =>\n+\n+  /**\n+   * We override `initializeSynchronous` to initialize Spark *after* `intp` is properly initialized\n+   * and *before* the REPL sees any files in the private `loadInitFiles` functions, so that\n+   * the Spark context is visible in those files.\n+   *\n+   * This is a bit of a hack, but there isn't another hook available to us at this point.\n+   *\n+   * See the discussion in Scala community https://github.com/scala/bug/issues/10913 for detail.\n+   */\n+  override def initializeSynchronous(): Unit = {\n+    super.initializeSynchronous()\n+    initializeSpark()",
+    "line": 20
+  }, {
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "It looks like `jline` version mismatch.\r\n- Spark 2.4.0-SNAPSHOT uses [2.12.1](https://github.com/apache/spark/blob/master/pom.xml#L749)\r\n- Scala 2.11.12 uses [2.14.3](https://github.com/scala/scala/blob/2.11.x/versions.properties#L35)",
+    "commit": "82ca5f6fdabc3027f2706af4b6883d04ac352555",
+    "createdAt": "2018-06-07T23:51:57Z",
+    "diffHunk": "@@ -21,8 +21,22 @@ import scala.collection.mutable\n import scala.tools.nsc.Settings\n import scala.tools.nsc.interpreter._\n \n-class SparkILoopInterpreter(settings: Settings, out: JPrintWriter) extends IMain(settings, out) {\n-  self =>\n+class SparkILoopInterpreter(settings: Settings, out: JPrintWriter, initializeSpark: () => Unit)\n+    extends IMain(settings, out) { self =>\n+\n+  /**\n+   * We override `initializeSynchronous` to initialize Spark *after* `intp` is properly initialized\n+   * and *before* the REPL sees any files in the private `loadInitFiles` functions, so that\n+   * the Spark context is visible in those files.\n+   *\n+   * This is a bit of a hack, but there isn't another hook available to us at this point.\n+   *\n+   * See the discussion in Scala community https://github.com/scala/bug/issues/10913 for detail.\n+   */\n+  override def initializeSynchronous(): Unit = {\n+    super.initializeSynchronous()\n+    initializeSpark()",
+    "line": 20
+  }, {
+    "author": {
+      "login": "dbtsai"
+    },
+    "body": "It is working for me. I got `scala-compiler-2.11.12.jar` in my classpath. Can you do a clean build?",
+    "commit": "82ca5f6fdabc3027f2706af4b6883d04ac352555",
+    "createdAt": "2018-06-08T00:47:24Z",
+    "diffHunk": "@@ -21,8 +21,22 @@ import scala.collection.mutable\n import scala.tools.nsc.Settings\n import scala.tools.nsc.interpreter._\n \n-class SparkILoopInterpreter(settings: Settings, out: JPrintWriter) extends IMain(settings, out) {\n-  self =>\n+class SparkILoopInterpreter(settings: Settings, out: JPrintWriter, initializeSpark: () => Unit)\n+    extends IMain(settings, out) { self =>\n+\n+  /**\n+   * We override `initializeSynchronous` to initialize Spark *after* `intp` is properly initialized\n+   * and *before* the REPL sees any files in the private `loadInitFiles` functions, so that\n+   * the Spark context is visible in those files.\n+   *\n+   * This is a bit of a hack, but there isn't another hook available to us at this point.\n+   *\n+   * See the discussion in Scala community https://github.com/scala/bug/issues/10913 for detail.\n+   */\n+  override def initializeSynchronous(): Unit = {\n+    super.initializeSynchronous()\n+    initializeSpark()",
+    "line": 20
+  }, {
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "Yep. Of course, it's a clean clone and build of this PR. Accoring to the error message and  the followings, we need `jline-2.14.3.jar` because [`scala` uses the `setPrintSpaceAfterFullCompletion` API](https://github.com/scala/scala/blob/2.11.x/src/repl-jline/scala/tools/nsc/interpreter/jline/JLineReader.scala#L139) of higher version of `jline`. Could you confirm this, @som-snytt ?\r\n\r\n```\r\n$ java -version\r\nopenjdk version \"1.8.0_171\"\r\nOpenJDK Runtime Environment (build 1.8.0_171-8u171-b11-0ubuntu0.18.04.1-b11)\r\nOpenJDK 64-Bit Server VM (build 25.171-b11, mixed mode)\r\n\r\n$ javap -cp jline-2.12.1.jar jline.console.completer.CandidateListCompletionHandler\r\nCompiled from \"CandidateListCompletionHandler.java\"\r\npublic class jline.console.completer.CandidateListCompletionHandler implements jline.console.completer.CompletionHandler {\r\n  public jline.console.completer.CandidateListCompletionHandler();\r\n  public boolean complete(jline.console.ConsoleReader, java.util.List<java.lang.CharSequence>, int) throws java.io.IOException;\r\n  public static void setBuffer(jline.console.ConsoleReader, java.lang.CharSequence, int) throws java.io.IOException;\r\n  public static void printCandidates(jline.console.ConsoleReader, java.util.Collection<java.lang.CharSequence>) throws java.io.IOException;\r\n}\r\n\r\n$ javap -cp jline-2.14.3.jar  jline.console.completer.CandidateListCompletionHandler\r\nCompiled from \"CandidateListCompletionHandler.java\"\r\npublic class jline.console.completer.CandidateListCompletionHandler implements jline.console.completer.CompletionHandler {\r\n  public jline.console.completer.CandidateListCompletionHandler();\r\n  public boolean getPrintSpaceAfterFullCompletion();\r\n  public void setPrintSpaceAfterFullCompletion(boolean);\r\n  public boolean isStripAnsi();\r\n  public void setStripAnsi(boolean);\r\n  public boolean complete(jline.console.ConsoleReader, java.util.List<java.lang.CharSequence>, int) throws java.io.IOException;\r\n  public static void setBuffer(jline.console.ConsoleReader, java.lang.CharSequence, int) throws java.io.IOException;\r\n  public static void printCandidates(jline.console.ConsoleReader, java.util.Collection<java.lang.CharSequence>) throws java.io.IOException;\r\n}\r\n```",
+    "commit": "82ca5f6fdabc3027f2706af4b6883d04ac352555",
+    "createdAt": "2018-06-08T01:58:52Z",
+    "diffHunk": "@@ -21,8 +21,22 @@ import scala.collection.mutable\n import scala.tools.nsc.Settings\n import scala.tools.nsc.interpreter._\n \n-class SparkILoopInterpreter(settings: Settings, out: JPrintWriter) extends IMain(settings, out) {\n-  self =>\n+class SparkILoopInterpreter(settings: Settings, out: JPrintWriter, initializeSpark: () => Unit)\n+    extends IMain(settings, out) { self =>\n+\n+  /**\n+   * We override `initializeSynchronous` to initialize Spark *after* `intp` is properly initialized\n+   * and *before* the REPL sees any files in the private `loadInitFiles` functions, so that\n+   * the Spark context is visible in those files.\n+   *\n+   * This is a bit of a hack, but there isn't another hook available to us at this point.\n+   *\n+   * See the discussion in Scala community https://github.com/scala/bug/issues/10913 for detail.\n+   */\n+  override def initializeSynchronous(): Unit = {\n+    super.initializeSynchronous()\n+    initializeSpark()",
+    "line": 20
+  }, {
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "Can we upgrade to the corresponding `jline` version together in this PR, @dbtsai ?",
+    "commit": "82ca5f6fdabc3027f2706af4b6883d04ac352555",
+    "createdAt": "2018-06-08T02:07:53Z",
+    "diffHunk": "@@ -21,8 +21,22 @@ import scala.collection.mutable\n import scala.tools.nsc.Settings\n import scala.tools.nsc.interpreter._\n \n-class SparkILoopInterpreter(settings: Settings, out: JPrintWriter) extends IMain(settings, out) {\n-  self =>\n+class SparkILoopInterpreter(settings: Settings, out: JPrintWriter, initializeSpark: () => Unit)\n+    extends IMain(settings, out) { self =>\n+\n+  /**\n+   * We override `initializeSynchronous` to initialize Spark *after* `intp` is properly initialized\n+   * and *before* the REPL sees any files in the private `loadInitFiles` functions, so that\n+   * the Spark context is visible in those files.\n+   *\n+   * This is a bit of a hack, but there isn't another hook available to us at this point.\n+   *\n+   * See the discussion in Scala community https://github.com/scala/bug/issues/10913 for detail.\n+   */\n+  override def initializeSynchronous(): Unit = {\n+    super.initializeSynchronous()\n+    initializeSpark()",
+    "line": 20
+  }, {
+    "author": {
+      "login": "som-snytt"
+    },
+    "body": "Completion was upgraded since the old days; also, other bugs required updating jline. There is interest in upgrading to jline 3.",
+    "commit": "82ca5f6fdabc3027f2706af4b6883d04ac352555",
+    "createdAt": "2018-06-08T02:31:02Z",
+    "diffHunk": "@@ -21,8 +21,22 @@ import scala.collection.mutable\n import scala.tools.nsc.Settings\n import scala.tools.nsc.interpreter._\n \n-class SparkILoopInterpreter(settings: Settings, out: JPrintWriter) extends IMain(settings, out) {\n-  self =>\n+class SparkILoopInterpreter(settings: Settings, out: JPrintWriter, initializeSpark: () => Unit)\n+    extends IMain(settings, out) { self =>\n+\n+  /**\n+   * We override `initializeSynchronous` to initialize Spark *after* `intp` is properly initialized\n+   * and *before* the REPL sees any files in the private `loadInitFiles` functions, so that\n+   * the Spark context is visible in those files.\n+   *\n+   * This is a bit of a hack, but there isn't another hook available to us at this point.\n+   *\n+   * See the discussion in Scala community https://github.com/scala/bug/issues/10913 for detail.\n+   */\n+  override def initializeSynchronous(): Unit = {\n+    super.initializeSynchronous()\n+    initializeSpark()",
+    "line": 20
+  }, {
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "Thank you for confirming, @som-snytt .",
+    "commit": "82ca5f6fdabc3027f2706af4b6883d04ac352555",
+    "createdAt": "2018-06-08T03:08:16Z",
+    "diffHunk": "@@ -21,8 +21,22 @@ import scala.collection.mutable\n import scala.tools.nsc.Settings\n import scala.tools.nsc.interpreter._\n \n-class SparkILoopInterpreter(settings: Settings, out: JPrintWriter) extends IMain(settings, out) {\n-  self =>\n+class SparkILoopInterpreter(settings: Settings, out: JPrintWriter, initializeSpark: () => Unit)\n+    extends IMain(settings, out) { self =>\n+\n+  /**\n+   * We override `initializeSynchronous` to initialize Spark *after* `intp` is properly initialized\n+   * and *before* the REPL sees any files in the private `loadInitFiles` functions, so that\n+   * the Spark context is visible in those files.\n+   *\n+   * This is a bit of a hack, but there isn't another hook available to us at this point.\n+   *\n+   * See the discussion in Scala community https://github.com/scala/bug/issues/10913 for detail.\n+   */\n+  override def initializeSynchronous(): Unit = {\n+    super.initializeSynchronous()\n+    initializeSpark()",
+    "line": 20
+  }, {
+    "author": {
+      "login": "dbtsai"
+    },
+    "body": "Oh, I know why it works for me. \r\n\r\nI just run the following without building a distribution. `jline` was automatically resolved to newer version. \r\n\r\n```scala\r\n./build/sbt clean package\r\n./bin/spark-shell\r\n```",
+    "commit": "82ca5f6fdabc3027f2706af4b6883d04ac352555",
+    "createdAt": "2018-06-08T08:06:20Z",
+    "diffHunk": "@@ -21,8 +21,22 @@ import scala.collection.mutable\n import scala.tools.nsc.Settings\n import scala.tools.nsc.interpreter._\n \n-class SparkILoopInterpreter(settings: Settings, out: JPrintWriter) extends IMain(settings, out) {\n-  self =>\n+class SparkILoopInterpreter(settings: Settings, out: JPrintWriter, initializeSpark: () => Unit)\n+    extends IMain(settings, out) { self =>\n+\n+  /**\n+   * We override `initializeSynchronous` to initialize Spark *after* `intp` is properly initialized\n+   * and *before* the REPL sees any files in the private `loadInitFiles` functions, so that\n+   * the Spark context is visible in those files.\n+   *\n+   * This is a bit of a hack, but there isn't another hook available to us at this point.\n+   *\n+   * See the discussion in Scala community https://github.com/scala/bug/issues/10913 for detail.\n+   */\n+  override def initializeSynchronous(): Unit = {\n+    super.initializeSynchronous()\n+    initializeSpark()",
+    "line": 20
+  }],
+  "prId": 21495
+}, {
+  "comments": [{
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "nit: two spaces",
+    "commit": "82ca5f6fdabc3027f2706af4b6883d04ac352555",
+    "createdAt": "2018-06-08T07:52:20Z",
+    "diffHunk": "@@ -21,8 +21,22 @@ import scala.collection.mutable\n import scala.tools.nsc.Settings\n import scala.tools.nsc.interpreter._\n \n-class SparkILoopInterpreter(settings: Settings, out: JPrintWriter) extends IMain(settings, out) {\n-  self =>\n+class SparkILoopInterpreter(settings: Settings, out: JPrintWriter, initializeSpark: () => Unit)\n+    extends IMain(settings, out) { self =>",
+    "line": 7
+  }, {
+    "author": {
+      "login": "dbtsai"
+    },
+    "body": "I thought for `extends`, it's four spaces?",
+    "commit": "82ca5f6fdabc3027f2706af4b6883d04ac352555",
+    "createdAt": "2018-06-08T20:45:33Z",
+    "diffHunk": "@@ -21,8 +21,22 @@ import scala.collection.mutable\n import scala.tools.nsc.Settings\n import scala.tools.nsc.interpreter._\n \n-class SparkILoopInterpreter(settings: Settings, out: JPrintWriter) extends IMain(settings, out) {\n-  self =>\n+class SparkILoopInterpreter(settings: Settings, out: JPrintWriter, initializeSpark: () => Unit)\n+    extends IMain(settings, out) { self =>",
+    "line": 7
+  }, {
+    "author": {
+      "login": "jerryshao"
+    },
+    "body": "IIRC, four spaces is OK.",
+    "commit": "82ca5f6fdabc3027f2706af4b6883d04ac352555",
+    "createdAt": "2018-06-11T03:45:51Z",
+    "diffHunk": "@@ -21,8 +21,22 @@ import scala.collection.mutable\n import scala.tools.nsc.Settings\n import scala.tools.nsc.interpreter._\n \n-class SparkILoopInterpreter(settings: Settings, out: JPrintWriter) extends IMain(settings, out) {\n-  self =>\n+class SparkILoopInterpreter(settings: Settings, out: JPrintWriter, initializeSpark: () => Unit)\n+    extends IMain(settings, out) { self =>",
+    "line": 7
+  }, {
+    "author": {
+      "login": "som-snytt"
+    },
+    "body": "It's definitely two spaces after a period. I've been wanting to make that joke, but held off.",
+    "commit": "82ca5f6fdabc3027f2706af4b6883d04ac352555",
+    "createdAt": "2018-06-11T05:22:36Z",
+    "diffHunk": "@@ -21,8 +21,22 @@ import scala.collection.mutable\n import scala.tools.nsc.Settings\n import scala.tools.nsc.interpreter._\n \n-class SparkILoopInterpreter(settings: Settings, out: JPrintWriter) extends IMain(settings, out) {\n-  self =>\n+class SparkILoopInterpreter(settings: Settings, out: JPrintWriter, initializeSpark: () => Unit)\n+    extends IMain(settings, out) { self =>",
+    "line": 7
+  }, {
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "Guys, parameters are listed in 4 spaces and other keywords after that are lined up with 2 spaces, which is written in https://github.com/databricks/scala-style-guide#spacing-and-indentation\r\n\r\nIn case of two lines, it's not explicitly written but wouldn't we better stick to the example as possible as we can? \"Use 2-space indentation in general.\".",
+    "commit": "82ca5f6fdabc3027f2706af4b6883d04ac352555",
+    "createdAt": "2018-06-20T17:30:41Z",
+    "diffHunk": "@@ -21,8 +21,22 @@ import scala.collection.mutable\n import scala.tools.nsc.Settings\n import scala.tools.nsc.interpreter._\n \n-class SparkILoopInterpreter(settings: Settings, out: JPrintWriter) extends IMain(settings, out) {\n-  self =>\n+class SparkILoopInterpreter(settings: Settings, out: JPrintWriter, initializeSpark: () => Unit)\n+    extends IMain(settings, out) { self =>",
+    "line": 7
+  }, {
+    "author": {
+      "login": "jerryshao"
+    },
+    "body": "Well, there's a bunch of code in Spark where both 4-space and 2-space indentation are existed.  From my thought it is not so worthy to stick to this tiny point.\r\n\r\nIf you want to fix it, then creating a separate PR to fix all of them.",
+    "commit": "82ca5f6fdabc3027f2706af4b6883d04ac352555",
+    "createdAt": "2018-06-21T02:09:08Z",
+    "diffHunk": "@@ -21,8 +21,22 @@ import scala.collection.mutable\n import scala.tools.nsc.Settings\n import scala.tools.nsc.interpreter._\n \n-class SparkILoopInterpreter(settings: Settings, out: JPrintWriter) extends IMain(settings, out) {\n-  self =>\n+class SparkILoopInterpreter(settings: Settings, out: JPrintWriter, initializeSpark: () => Unit)\n+    extends IMain(settings, out) { self =>",
+    "line": 7
+  }, {
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "We can fix them in place. There are many other style nits too. It's not worth swiping them making the backport harder.\r\n\r\nI am fine with ignoring such nits and they don't block this PR but it's not something we should say the opposite side is okay.",
+    "commit": "82ca5f6fdabc3027f2706af4b6883d04ac352555",
+    "createdAt": "2018-06-21T02:14:49Z",
+    "diffHunk": "@@ -21,8 +21,22 @@ import scala.collection.mutable\n import scala.tools.nsc.Settings\n import scala.tools.nsc.interpreter._\n \n-class SparkILoopInterpreter(settings: Settings, out: JPrintWriter) extends IMain(settings, out) {\n-  self =>\n+class SparkILoopInterpreter(settings: Settings, out: JPrintWriter, initializeSpark: () => Unit)\n+    extends IMain(settings, out) { self =>",
+    "line": 7
+  }, {
+    "author": {
+      "login": "jerryshao"
+    },
+    "body": "Really not worthy to block on this thing (if it is the only issue).",
+    "commit": "82ca5f6fdabc3027f2706af4b6883d04ac352555",
+    "createdAt": "2018-06-21T02:28:48Z",
+    "diffHunk": "@@ -21,8 +21,22 @@ import scala.collection.mutable\n import scala.tools.nsc.Settings\n import scala.tools.nsc.interpreter._\n \n-class SparkILoopInterpreter(settings: Settings, out: JPrintWriter) extends IMain(settings, out) {\n-  self =>\n+class SparkILoopInterpreter(settings: Settings, out: JPrintWriter, initializeSpark: () => Unit)\n+    extends IMain(settings, out) { self =>",
+    "line": 7
+  }],
+  "prId": 21495
+}]

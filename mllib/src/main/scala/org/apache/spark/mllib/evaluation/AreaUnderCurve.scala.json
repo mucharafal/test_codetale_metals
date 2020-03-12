@@ -1,0 +1,64 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "I think you can short-circuit these checks by testing if the iter is empty at the start? Would this fail on an empty partition otherwise?",
+    "commit": "1b914514a187894e6c50f6179955f03df2be59eb",
+    "createdAt": "2019-05-23T14:18:14Z",
+    "diffHunk": "@@ -42,10 +41,40 @@ private[evaluation] object AreaUnderCurve {\n    * @param curve an RDD of ordered 2D points stored in pairs representing a curve\n    */\n   def of(curve: RDD[(Double, Double)]): Double = {\n-    curve.sliding(2).aggregate(0.0)(\n-      seqOp = (auc: Double, points: Array[(Double, Double)]) => auc + trapezoid(points),\n-      combOp = _ + _\n-    )\n+    val localAreas = curve.mapPartitions { iter =>\n+      var localArea = 0.0\n+      var firstPoint = Option.empty[(Double, Double)]\n+      var lastPoint = Option.empty[(Double, Double)]\n+\n+      iter.sliding(2).foreach { points =>\n+        if (firstPoint.isEmpty) {\n+          firstPoint = Some(points.head)\n+        }\n+        lastPoint = Some(points.last)\n+\n+        if (points.length == 2) {\n+          localArea += trapezoid(points)\n+        }\n+      }\n+\n+      if (firstPoint.nonEmpty) {\n+        require(lastPoint.nonEmpty)"
+  }, {
+    "author": {
+      "login": "zhengruifeng"
+    },
+    "body": "This donot fail on empty partitions or partition containing only one point.\r\nHowever, I will short-circuit these checks since it is simple",
+    "commit": "1b914514a187894e6c50f6179955f03df2be59eb",
+    "createdAt": "2019-05-24T02:17:26Z",
+    "diffHunk": "@@ -42,10 +41,40 @@ private[evaluation] object AreaUnderCurve {\n    * @param curve an RDD of ordered 2D points stored in pairs representing a curve\n    */\n   def of(curve: RDD[(Double, Double)]): Double = {\n-    curve.sliding(2).aggregate(0.0)(\n-      seqOp = (auc: Double, points: Array[(Double, Double)]) => auc + trapezoid(points),\n-      combOp = _ + _\n-    )\n+    val localAreas = curve.mapPartitions { iter =>\n+      var localArea = 0.0\n+      var firstPoint = Option.empty[(Double, Double)]\n+      var lastPoint = Option.empty[(Double, Double)]\n+\n+      iter.sliding(2).foreach { points =>\n+        if (firstPoint.isEmpty) {\n+          firstPoint = Some(points.head)\n+        }\n+        lastPoint = Some(points.last)\n+\n+        if (points.length == 2) {\n+          localArea += trapezoid(points)\n+        }\n+      }\n+\n+      if (firstPoint.nonEmpty) {\n+        require(lastPoint.nonEmpty)"
+  }],
+  "prId": 24648
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "This is always true anyway. Is the expression a little simpler if you use `{ case ((_, last), (first, _)) =>` or does scala not allow that?",
+    "commit": "1b914514a187894e6c50f6179955f03df2be59eb",
+    "createdAt": "2019-05-23T14:19:07Z",
+    "diffHunk": "@@ -42,10 +41,40 @@ private[evaluation] object AreaUnderCurve {\n    * @param curve an RDD of ordered 2D points stored in pairs representing a curve\n    */\n   def of(curve: RDD[(Double, Double)]): Double = {\n-    curve.sliding(2).aggregate(0.0)(\n-      seqOp = (auc: Double, points: Array[(Double, Double)]) => auc + trapezoid(points),\n-      combOp = _ + _\n-    )\n+    val localAreas = curve.mapPartitions { iter =>\n+      var localArea = 0.0\n+      var firstPoint = Option.empty[(Double, Double)]\n+      var lastPoint = Option.empty[(Double, Double)]\n+\n+      iter.sliding(2).foreach { points =>\n+        if (firstPoint.isEmpty) {\n+          firstPoint = Some(points.head)\n+        }\n+        lastPoint = Some(points.last)\n+\n+        if (points.length == 2) {\n+          localArea += trapezoid(points)\n+        }\n+      }\n+\n+      if (firstPoint.nonEmpty) {\n+        require(lastPoint.nonEmpty)\n+        Iterator.single((localArea, (firstPoint.get, lastPoint.get)))\n+      } else {\n+        require(lastPoint.isEmpty)\n+        Iterator.empty\n+      }\n+    }.collect()\n+\n+    var area = localAreas.map(_._1).sum\n+    localAreas.iterator.map(_._2)\n+      .sliding(2).withPartial(false)\n+      .foreach { pointPairs =>\n+        require(pointPairs.length == 2)"
+  }],
+  "prId": 24648
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Can you just sum these and make area the sum of the two?",
+    "commit": "1b914514a187894e6c50f6179955f03df2be59eb",
+    "createdAt": "2019-05-23T14:19:33Z",
+    "diffHunk": "@@ -42,10 +41,40 @@ private[evaluation] object AreaUnderCurve {\n    * @param curve an RDD of ordered 2D points stored in pairs representing a curve\n    */\n   def of(curve: RDD[(Double, Double)]): Double = {\n-    curve.sliding(2).aggregate(0.0)(\n-      seqOp = (auc: Double, points: Array[(Double, Double)]) => auc + trapezoid(points),\n-      combOp = _ + _\n-    )\n+    val localAreas = curve.mapPartitions { iter =>\n+      var localArea = 0.0\n+      var firstPoint = Option.empty[(Double, Double)]\n+      var lastPoint = Option.empty[(Double, Double)]\n+\n+      iter.sliding(2).foreach { points =>\n+        if (firstPoint.isEmpty) {\n+          firstPoint = Some(points.head)\n+        }\n+        lastPoint = Some(points.last)\n+\n+        if (points.length == 2) {\n+          localArea += trapezoid(points)\n+        }\n+      }\n+\n+      if (firstPoint.nonEmpty) {\n+        require(lastPoint.nonEmpty)\n+        Iterator.single((localArea, (firstPoint.get, lastPoint.get)))\n+      } else {\n+        require(lastPoint.isEmpty)\n+        Iterator.empty\n+      }\n+    }.collect()\n+\n+    var area = localAreas.map(_._1).sum\n+    localAreas.iterator.map(_._2)\n+      .sliding(2).withPartial(false)\n+      .foreach { pointPairs =>\n+        require(pointPairs.length == 2)\n+        area += trapezoid(Seq(pointPairs.head._2, pointPairs.last._1))"
+  }],
+  "prId": 24648
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "This could be a boolean; no big deal.",
+    "commit": "1b914514a187894e6c50f6179955f03df2be59eb",
+    "createdAt": "2019-05-26T01:42:28Z",
+    "diffHunk": "@@ -42,10 +41,36 @@ private[evaluation] object AreaUnderCurve {\n    * @param curve an RDD of ordered 2D points stored in pairs representing a curve\n    */\n   def of(curve: RDD[(Double, Double)]): Double = {\n-    curve.sliding(2).aggregate(0.0)(\n-      seqOp = (auc: Double, points: Array[(Double, Double)]) => auc + trapezoid(points),\n-      combOp = _ + _\n-    )\n+    val localAreas = curve.mapPartitions { iter =>\n+      if (iter.nonEmpty) {\n+        var localArea = 0.0\n+        var cnt = 0L"
+  }],
+  "prId": 24648
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Unindent this 2 spaces.",
+    "commit": "1b914514a187894e6c50f6179955f03df2be59eb",
+    "createdAt": "2019-05-26T01:42:41Z",
+    "diffHunk": "@@ -42,10 +41,36 @@ private[evaluation] object AreaUnderCurve {\n    * @param curve an RDD of ordered 2D points stored in pairs representing a curve\n    */\n   def of(curve: RDD[(Double, Double)]): Double = {\n-    curve.sliding(2).aggregate(0.0)(\n-      seqOp = (auc: Double, points: Array[(Double, Double)]) => auc + trapezoid(points),\n-      combOp = _ + _\n-    )\n+    val localAreas = curve.mapPartitions { iter =>\n+      if (iter.nonEmpty) {\n+        var localArea = 0.0\n+        var cnt = 0L\n+        var firstPoint = (Double.NaN, Double.NaN)\n+        var lastPoint = (Double.NaN, Double.NaN)\n+\n+        iter.sliding(2).foreach { points =>\n+          if (cnt == 0) {\n+            firstPoint = points.head\n+          }\n+          lastPoint = points.last\n+\n+          if (points.length == 2) {\n+            localArea += trapezoid(points)\n+          }\n+          cnt += 1\n+        }\n+        Iterator.single((localArea, (firstPoint, lastPoint)))\n+      } else {\n+        Iterator.empty\n+      }\n+    }.collect()\n+\n+    localAreas.map(_._1).sum +\n+      localAreas.iterator.map(_._2)"
+  }],
+  "prId": 24648
+}]

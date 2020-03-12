@@ -1,0 +1,20 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Let me back up a second -- this minimum is really specific to the new memory manager. Actually, should it apply to the old memory manager? That is, what error were you referring to initially? I had assumed that you mean that, even in legacy mode, this limit is later applied but in some confusing way, but I'm not as sure that was the problem. If it really is a required minimum even when using legacy mode, we should fail faster; if it's not actually being required now in legacy mode, then we should fix whatever thinks it is.\n",
+    "commit": "e5784b66fca886e0d336b89c48e5292a9595efc1",
+    "createdAt": "2016-04-21T10:12:15Z",
+    "diffHunk": "@@ -187,7 +187,6 @@ object UnifiedMemoryManager {\n   // This serves a function similar to `spark.memory.fraction`, but guarantees that we reserve\n   // sufficient memory for the system even for small heaps. E.g. if we have a 1GB JVM, then\n   // the memory used for execution and storage will be (1024 - 300) * 0.75 = 543MB by default.\n-  private val RESERVED_SYSTEM_MEMORY_BYTES = 300 * 1024 * 1024"
+  }, {
+    "author": {
+      "login": "bjornjon"
+    },
+    "body": "The problem is that when users intentionally or accidentally (the default value for driver and executor memory is bytes) specify a very low memory value for the driver or executors, the application fails without providing any descriptive error message when using legacy mode (StaticMemoryManager). When legacy mode is set to false (UnifiedMemoryManager), this very descriptive IllegalArgumentException is thrown, indicating whether its driver or executor memory that you need to increase. The intention here is to unify the behavior between the memory managers to prevent users from needing assistance when running in legacy mode.\n\nThe suggestion is to use the same min as the UnifiedMemoryManager uses, for consistency, but a smaller min for the StaticMemoryManager could also be used. There is no minimum enforced for the StaticMemoryManager today.\n\nThe decision that needs to be made revolves around if a minimum should be enforced, like it is for the UnifiedMemoryManager and then what that minimum should be.\n",
+    "commit": "e5784b66fca886e0d336b89c48e5292a9595efc1",
+    "createdAt": "2016-04-21T10:38:24Z",
+    "diffHunk": "@@ -187,7 +187,6 @@ object UnifiedMemoryManager {\n   // This serves a function similar to `spark.memory.fraction`, but guarantees that we reserve\n   // sufficient memory for the system even for small heaps. E.g. if we have a 1GB JVM, then\n   // the memory used for execution and storage will be (1024 - 300) * 0.75 = 543MB by default.\n-  private val RESERVED_SYSTEM_MEMORY_BYTES = 300 * 1024 * 1024"
+  }],
+  "prId": 12395
+}]

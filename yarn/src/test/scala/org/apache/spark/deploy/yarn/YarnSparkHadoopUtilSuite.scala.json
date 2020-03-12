@@ -1,0 +1,68 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "`if (x) true else false` is redundant -- just `x`\n",
+    "commit": "5216150566dd8c70a7dbe9be912ada6710302718",
+    "createdAt": "2015-08-04T16:41:24Z",
+    "diffHunk": "@@ -44,14 +44,23 @@ class YarnSparkHadoopUtilSuite extends SparkFunSuite with Matchers with Logging\n         false\n     }\n \n-  if (!hasBash) {\n+  val isWindows = {\n+    val os = System.getProperty(\"os.name\")\n+    if (os.contains(\"Windows\")) true else false"
+  }, {
+    "author": {
+      "login": "cbvoxel"
+    },
+    "body": "Man.... did I write that? So sooorry....\n",
+    "commit": "5216150566dd8c70a7dbe9be912ada6710302718",
+    "createdAt": "2015-08-04T19:39:46Z",
+    "diffHunk": "@@ -44,14 +44,23 @@ class YarnSparkHadoopUtilSuite extends SparkFunSuite with Matchers with Logging\n         false\n     }\n \n-  if (!hasBash) {\n+  val isWindows = {\n+    val os = System.getProperty(\"os.name\")\n+    if (os.contains(\"Windows\")) true else false"
+  }],
+  "prId": 7872
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "There's already `Utils.isWindows`.\n",
+    "commit": "5216150566dd8c70a7dbe9be912ada6710302718",
+    "createdAt": "2015-08-04T21:35:17Z",
+    "diffHunk": "@@ -44,14 +44,23 @@ class YarnSparkHadoopUtilSuite extends SparkFunSuite with Matchers with Logging\n         false\n     }\n \n-  if (!hasBash) {\n+  val isWindows = {",
+    "line": 5
+  }],
+  "prId": 7872
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "So, basically:\n\n```\nif (Utils.isWindows) {\n\n} else if (!hasBash) {\n\n}\n```\n",
+    "commit": "5216150566dd8c70a7dbe9be912ada6710302718",
+    "createdAt": "2015-08-04T21:36:24Z",
+    "diffHunk": "@@ -44,14 +44,23 @@ class YarnSparkHadoopUtilSuite extends SparkFunSuite with Matchers with Logging\n         false\n     }\n \n-  if (!hasBash) {\n+  val isWindows = {\n+    val os = System.getProperty(\"os.name\")\n+    os.contains(\"Windows\")\n+  }\n+\n+  if (!hasBash && !isWindows) {",
+    "line": 10
+  }],
+  "prId": 7872
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Please don't print to stdout. If you really need to, extend `Logging` and use one of the log methods. But it really feels like you should just use `Utils.executeAndGetOutput`.\n",
+    "commit": "5216150566dd8c70a7dbe9be912ada6710302718",
+    "createdAt": "2015-08-04T21:38:28Z",
+    "diffHunk": "@@ -70,6 +79,31 @@ class YarnSparkHadoopUtilSuite extends SparkFunSuite with Matchers with Logging\n     }\n   }\n \n+  def cmdTest(name: String)(fn: => Unit): Unit =\n+    if (isWindows) test(name)(fn) else ignore(name)(fn)\n+\n+  cmdTest(\"cmd shell script escaping\") {\n+    val scriptFile = File.createTempFile(\"script.\", \".cmd\", Utils.createTempDir())\n+    val args = Array(\"arg1\", \"${arg.2}\", \"\\\"arg3\\\"\", \"'arg4'\", \"$arg5\", \"\\\\arg6\")\n+    System.out.println(s\"Test Arguments: ${args.mkString(\" \")}\")\n+    try {\n+      val argLine = args.map(a => YarnSparkHadoopUtil.escapeForShell(a)).mkString(\" \")\n+      Files.write((\"cmd /C \\\"@echo \" + argLine + \"\\\"\").getBytes(), scriptFile)\n+      scriptFile.setExecutable(true)\n+System.out.println(s\"Escaped Arguments: $argLine\")\n+      val proc = Runtime.getRuntime().exec(Array(scriptFile.getAbsolutePath()))\n+      val out = new String(ByteStreams.toByteArray(proc.getInputStream())).trim()\n+      val err = new String(ByteStreams.toByteArray(proc.getErrorStream()))\n+      val exitCode = proc.waitFor()\n+      exitCode should be (0)\n+      System.out.println(s\"Output: $out\")",
+    "line": 48
+  }],
+  "prId": 7872
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "`Utils.createTempDir()` is unnecessary here.\n",
+    "commit": "5216150566dd8c70a7dbe9be912ada6710302718",
+    "createdAt": "2015-08-04T21:38:59Z",
+    "diffHunk": "@@ -70,6 +79,31 @@ class YarnSparkHadoopUtilSuite extends SparkFunSuite with Matchers with Logging\n     }\n   }\n \n+  def cmdTest(name: String)(fn: => Unit): Unit =\n+    if (isWindows) test(name)(fn) else ignore(name)(fn)\n+\n+  cmdTest(\"cmd shell script escaping\") {\n+    val scriptFile = File.createTempFile(\"script.\", \".cmd\", Utils.createTempDir())",
+    "line": 35
+  }],
+  "prId": 7872
+}]

@@ -1,0 +1,61 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "yhuai"
+    },
+    "body": "Should we share the single thread pool instead of creating a thread pool for every `ParallelUnionRDD`?\n",
+    "commit": "fdac95bb06546b5d92b8c5dda5ee633f2221d347",
+    "createdAt": "2015-11-18T22:18:32Z",
+    "diffHunk": "@@ -0,0 +1,52 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.hive\n+\n+import java.util.concurrent.Callable\n+\n+import org.apache.spark.rdd.{RDD, UnionPartition, UnionRDD}\n+import org.apache.spark.util.ThreadUtils\n+import org.apache.spark.{Partition, SparkContext}\n+\n+import scala.reflect.ClassTag\n+\n+class ParallelUnionRDD[T: ClassTag](\n+  sc: SparkContext,\n+  rdds: Seq[RDD[T]]) extends UnionRDD[T](sc, rdds){\n+  // TODO: We might need to guess a more reasonable thread pool size here\n+  @transient val executorService = ThreadUtils.newDaemonFixedThreadPool(\n+    Math.min(rdds.size, Runtime.getRuntime.availableProcessors()), \"ParallelUnionRDD\")"
+  }, {
+    "author": {
+      "login": "zhichao-li"
+    },
+    "body": "I don't have strong opinion on this. How about creating a shared thread pool with the same size as cpu cores ?\n\n``` scala\nobject ParallelUnionRDD{\nval executorService = ThreadUtils.newDaemonFixedThreadPool(Runtime.getRuntime.availableProcessors(), \"ParallelUnionRDD\")\n}\n```\n",
+    "commit": "fdac95bb06546b5d92b8c5dda5ee633f2221d347",
+    "createdAt": "2015-11-19T00:50:34Z",
+    "diffHunk": "@@ -0,0 +1,52 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.hive\n+\n+import java.util.concurrent.Callable\n+\n+import org.apache.spark.rdd.{RDD, UnionPartition, UnionRDD}\n+import org.apache.spark.util.ThreadUtils\n+import org.apache.spark.{Partition, SparkContext}\n+\n+import scala.reflect.ClassTag\n+\n+class ParallelUnionRDD[T: ClassTag](\n+  sc: SparkContext,\n+  rdds: Seq[RDD[T]]) extends UnionRDD[T](sc, rdds){\n+  // TODO: We might need to guess a more reasonable thread pool size here\n+  @transient val executorService = ThreadUtils.newDaemonFixedThreadPool(\n+    Math.min(rdds.size, Runtime.getRuntime.availableProcessors()), \"ParallelUnionRDD\")"
+  }, {
+    "author": {
+      "login": "chenghao-intel"
+    },
+    "body": "I don't think we have to put the fixed number of `Runtime.getRuntime.availableProcessors()`, probably we can simply put a fixed number says `16` or even bigger, as the bottleneck is in network / IO, not the CPU scheduling.\n",
+    "commit": "fdac95bb06546b5d92b8c5dda5ee633f2221d347",
+    "createdAt": "2016-02-17T06:21:11Z",
+    "diffHunk": "@@ -0,0 +1,52 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.hive\n+\n+import java.util.concurrent.Callable\n+\n+import org.apache.spark.rdd.{RDD, UnionPartition, UnionRDD}\n+import org.apache.spark.util.ThreadUtils\n+import org.apache.spark.{Partition, SparkContext}\n+\n+import scala.reflect.ClassTag\n+\n+class ParallelUnionRDD[T: ClassTag](\n+  sc: SparkContext,\n+  rdds: Seq[RDD[T]]) extends UnionRDD[T](sc, rdds){\n+  // TODO: We might need to guess a more reasonable thread pool size here\n+  @transient val executorService = ThreadUtils.newDaemonFixedThreadPool(\n+    Math.min(rdds.size, Runtime.getRuntime.availableProcessors()), \"ParallelUnionRDD\")"
+  }],
+  "prId": 9483
+}, {
+  "comments": [{
+    "author": {
+      "login": "chenghao-intel"
+    },
+    "body": "seems here still be the main thread, probably we even don't need to place the `synchronized` in the `getPartitions`.\n",
+    "commit": "fdac95bb06546b5d92b8c5dda5ee633f2221d347",
+    "createdAt": "2016-02-17T06:15:07Z",
+    "diffHunk": "@@ -0,0 +1,52 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.hive\n+\n+import java.util.concurrent.Callable\n+\n+import org.apache.spark.rdd.{RDD, UnionPartition, UnionRDD}\n+import org.apache.spark.util.ThreadUtils\n+import org.apache.spark.{Partition, SparkContext}\n+\n+import scala.reflect.ClassTag\n+\n+class ParallelUnionRDD[T: ClassTag](\n+  sc: SparkContext,\n+  rdds: Seq[RDD[T]]) extends UnionRDD[T](sc, rdds){\n+  // TODO: We might need to guess a more reasonable thread pool size here\n+  @transient val executorService = ThreadUtils.newDaemonFixedThreadPool(\n+    Math.min(rdds.size, Runtime.getRuntime.availableProcessors()), \"ParallelUnionRDD\")\n+\n+  override def getPartitions: Array[Partition] = {\n+    // Calc partitions field for each RDD in parallel.\n+    val rddPartitions = rdds.map {rdd =>\n+      (rdd, executorService.submit(new Callable[Array[Partition]] {\n+        override def call(): Array[Partition] = rdd.partitions\n+      }))\n+    }.map {case(r, f) => (r, f.get())}\n+\n+    val array = new Array[Partition](rddPartitions.map(_._2.length).sum)"
+  }],
+  "prId": 9483
+}, {
+  "comments": [{
+    "author": {
+      "login": "chenghao-intel"
+    },
+    "body": "`private[hive]` or move it into the upper level package? The same for the class `ParallelUnionRDD`.\n",
+    "commit": "fdac95bb06546b5d92b8c5dda5ee633f2221d347",
+    "createdAt": "2016-02-26T20:20:02Z",
+    "diffHunk": "@@ -0,0 +1,53 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.hive\n+\n+import java.util.concurrent.Callable\n+\n+import scala.reflect.ClassTag\n+\n+import org.apache.spark.{Partition, SparkContext}\n+import org.apache.spark.rdd.{RDD, UnionPartition, UnionRDD}\n+import org.apache.spark.util.ThreadUtils\n+\n+object ParallelUnionRDD {"
+  }],
+  "prId": 9483
+}, {
+  "comments": [{
+    "author": {
+      "login": "chenghao-intel"
+    },
+    "body": "space before `}` and after `{`\n",
+    "commit": "fdac95bb06546b5d92b8c5dda5ee633f2221d347",
+    "createdAt": "2016-02-26T20:20:27Z",
+    "diffHunk": "@@ -0,0 +1,53 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.hive\n+\n+import java.util.concurrent.Callable\n+\n+import scala.reflect.ClassTag\n+\n+import org.apache.spark.{Partition, SparkContext}\n+import org.apache.spark.rdd.{RDD, UnionPartition, UnionRDD}\n+import org.apache.spark.util.ThreadUtils\n+\n+object ParallelUnionRDD {\n+  lazy val executorService = ThreadUtils.newDaemonFixedThreadPool(16, \"ParallelUnionRDD\")\n+}\n+\n+class ParallelUnionRDD[T: ClassTag](\n+  sc: SparkContext,\n+  rdds: Seq[RDD[T]]) extends UnionRDD[T](sc, rdds){\n+\n+  override def getPartitions: Array[Partition] = {\n+    // Calc partitions field for each RDD in parallel.\n+    val rddPartitions = rdds.map {rdd =>\n+      (rdd, ParallelUnionRDD.executorService.submit(new Callable[Array[Partition]] {\n+        override def call(): Array[Partition] = rdd.partitions\n+      }))\n+    }.map {case(r, f) => (r, f.get())}"
+  }],
+  "prId": 9483
+}]

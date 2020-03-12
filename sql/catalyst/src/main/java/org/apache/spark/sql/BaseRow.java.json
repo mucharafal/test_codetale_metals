@@ -1,0 +1,60 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "Is it same with `java.util.Arrays.hashCode`?\n",
+    "commit": "429c2c08768fc5a28be3ed0899c079e7b587ac1d",
+    "createdAt": "2015-06-18T09:58:49Z",
+    "diffHunk": "@@ -215,4 +227,15 @@ public String mkString(String sep) {\n   public String mkString(String start, String sep, String end) {\n     return toSeq().mkString(start, sep, end);\n   }\n+\n+  /*\n+   * Returns hash code based on bytes in `arr`\n+   * */\n+  protected int bytesHashCode(byte[] arr) {\n+    int hash = 0;\n+    for (int i = 0; i < arr.length; i++) {\n+      hash = hash * 37 + (int)arr[i];\n+    }\n+    return hash;"
+  }, {
+    "author": {
+      "login": "davies"
+    },
+    "body": "Good idea, we should use that.\n",
+    "commit": "429c2c08768fc5a28be3ed0899c079e7b587ac1d",
+    "createdAt": "2015-06-18T16:55:33Z",
+    "diffHunk": "@@ -215,4 +227,15 @@ public String mkString(String sep) {\n   public String mkString(String start, String sep, String end) {\n     return toSeq().mkString(start, sep, end);\n   }\n+\n+  /*\n+   * Returns hash code based on bytes in `arr`\n+   * */\n+  protected int bytesHashCode(byte[] arr) {\n+    int hash = 0;\n+    for (int i = 0; i < arr.length; i++) {\n+      hash = hash * 37 + (int)arr[i];\n+    }\n+    return hash;"
+  }],
+  "prId": 6876
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "We defined `equals` at `Row`, and override it at `BaseRow` and `GenericRow`. But these 3 `equals` are very similar, can we combine them into one?\n",
+    "commit": "429c2c08768fc5a28be3ed0899c079e7b587ac1d",
+    "createdAt": "2015-06-18T10:03:00Z",
+    "diffHunk": "@@ -167,9 +167,21 @@ public boolean equals(Object other) {\n         return false;\n       }\n       for (int i = 0; i < n; i ++) {\n-        if (isNullAt(i) != row.isNullAt(i) || (!isNullAt(i) && !get(i).equals(row.get(i)))) {\n+        if (isNullAt(i) != row.isNullAt(i)) {\n           return false;\n         }\n+        if (!isNullAt(i)) {\n+          Object o1 = get(i);\n+          Object o2 = row.get(i);\n+          if (o1 instanceof byte[]) {\n+            // handle equals() of byte[]\n+            if (!(o2 instanceof byte[]) || !java.util.Arrays.equals((byte[])o1, (byte[])o2)) {\n+              return false;\n+            }\n+          } else if (!o1.equals(o2)) {\n+            return false;\n+          }\n+        }\n       }\n       return true;"
+  }, {
+    "author": {
+      "login": "davies"
+    },
+    "body": "Because `Row` is a trait, so we can't use it in Java (for UnsafeRow and SpecificRow in codegen), so we at least need two version of it.\n",
+    "commit": "429c2c08768fc5a28be3ed0899c079e7b587ac1d",
+    "createdAt": "2015-06-18T17:01:03Z",
+    "diffHunk": "@@ -167,9 +167,21 @@ public boolean equals(Object other) {\n         return false;\n       }\n       for (int i = 0; i < n; i ++) {\n-        if (isNullAt(i) != row.isNullAt(i) || (!isNullAt(i) && !get(i).equals(row.get(i)))) {\n+        if (isNullAt(i) != row.isNullAt(i)) {\n           return false;\n         }\n+        if (!isNullAt(i)) {\n+          Object o1 = get(i);\n+          Object o2 = row.get(i);\n+          if (o1 instanceof byte[]) {\n+            // handle equals() of byte[]\n+            if (!(o2 instanceof byte[]) || !java.util.Arrays.equals((byte[])o1, (byte[])o2)) {\n+              return false;\n+            }\n+          } else if (!o1.equals(o2)) {\n+            return false;\n+          }\n+        }\n       }\n       return true;"
+  }],
+  "prId": 6876
+}, {
+  "comments": [{
+    "author": {
+      "login": "marmbrus"
+    },
+    "body": "Existing: can you add some javadoc to this class to explain what its used for and why its in Java?\n",
+    "commit": "429c2c08768fc5a28be3ed0899c079e7b587ac1d",
+    "createdAt": "2015-06-18T22:45:43Z",
+    "diffHunk": "@@ -155,27 +155,6 @@ public int fieldIndex(String name) {\n     throw new UnsupportedOperationException();\n   }\n \n-  /**\n-   * A generic version of Row.equals(Row), which is used for tests.\n-   */\n-  @Override",
+    "line": 7
+  }, {
+    "author": {
+      "login": "davies"
+    },
+    "body": "Because `Row` is a trait, UnsafeRow and SpecificRow are both in Java, they can not inherit some default implementations from `Row`, so created BaseRow in Java for them. Right now, we have `InternalRow`, will be clean these in another PR.\n",
+    "commit": "429c2c08768fc5a28be3ed0899c079e7b587ac1d",
+    "createdAt": "2015-06-18T23:37:48Z",
+    "diffHunk": "@@ -155,27 +155,6 @@ public int fieldIndex(String name) {\n     throw new UnsupportedOperationException();\n   }\n \n-  /**\n-   * A generic version of Row.equals(Row), which is used for tests.\n-   */\n-  @Override",
+    "line": 7
+  }],
+  "prId": 6876
+}]

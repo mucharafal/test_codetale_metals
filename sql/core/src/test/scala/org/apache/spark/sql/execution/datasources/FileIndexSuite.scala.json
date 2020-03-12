@@ -1,0 +1,41 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "(there;s indentation nit here)",
+    "commit": "d9c59037604763e7cd50a63c59b8f441f35331ee",
+    "createdAt": "2019-05-22T01:57:44Z",
+    "diffHunk": "@@ -178,6 +178,41 @@ class FileIndexSuite extends SharedSQLContext {\n     }\n   }\n \n+  test(\"SPARK-27676: InMemoryFileIndex respects ignoreMissingFiles config for non-root paths\") {\n+    def doTest(): Unit = {\n+      def makeCatalog(): InMemoryFileIndex = new InMemoryFileIndex(\n+        spark, Seq(DeletionRaceFileSystem.rootFolderPath), Map.empty, None)\n+\n+      withSQLConf(SQLConf.IGNORE_MISSING_FILES.key -> \"false\") {\n+        intercept[FileNotFoundException] {\n+          makeCatalog()\n+        }\n+      }\n+\n+      withSQLConf(SQLConf.IGNORE_MISSING_FILES.key -> \"true\") {\n+        val catalog = makeCatalog()\n+        // doesn't throw an exception\n+        assert(catalog.listLeafFiles(catalog.rootPaths).isEmpty)\n+      }\n+    }\n+\n+    withClue(\"test missing subdirectories\") {\n+      withSQLConf(\n+          \"fs.mockFs.impl\" -> classOf[SubdirectoryDeletionRaceFileSystem].getName,"
+  }, {
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "Ah, this was a little hard to see with IntelliJ showing parameter name hints. I'll fix.",
+    "commit": "d9c59037604763e7cd50a63c59b8f441f35331ee",
+    "createdAt": "2019-05-22T01:59:32Z",
+    "diffHunk": "@@ -178,6 +178,41 @@ class FileIndexSuite extends SharedSQLContext {\n     }\n   }\n \n+  test(\"SPARK-27676: InMemoryFileIndex respects ignoreMissingFiles config for non-root paths\") {\n+    def doTest(): Unit = {\n+      def makeCatalog(): InMemoryFileIndex = new InMemoryFileIndex(\n+        spark, Seq(DeletionRaceFileSystem.rootFolderPath), Map.empty, None)\n+\n+      withSQLConf(SQLConf.IGNORE_MISSING_FILES.key -> \"false\") {\n+        intercept[FileNotFoundException] {\n+          makeCatalog()\n+        }\n+      }\n+\n+      withSQLConf(SQLConf.IGNORE_MISSING_FILES.key -> \"true\") {\n+        val catalog = makeCatalog()\n+        // doesn't throw an exception\n+        assert(catalog.listLeafFiles(catalog.rootPaths).isEmpty)\n+      }\n+    }\n+\n+    withClue(\"test missing subdirectories\") {\n+      withSQLConf(\n+          \"fs.mockFs.impl\" -> classOf[SubdirectoryDeletionRaceFileSystem].getName,"
+  }],
+  "prId": 24668
+}, {
+  "comments": [{
+    "author": {
+      "login": "viirya"
+    },
+    "body": "There is one config `parallelPartitionDiscoveryThreshold` can control code path of partition discovery. With the default value, this only tests serial listing?",
+    "commit": "d9c59037604763e7cd50a63c59b8f441f35331ee",
+    "createdAt": "2019-05-22T02:26:02Z",
+    "diffHunk": "@@ -178,6 +178,41 @@ class FileIndexSuite extends SharedSQLContext {\n     }\n   }\n \n+  test(\"SPARK-27676: InMemoryFileIndex respects ignoreMissingFiles config for non-root paths\") {",
+    "line": 29
+  }, {
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "Good point. In the case of a parallel listing, this would cause the listing Spark job to fail with a `FileNotFoundException` (after maxTaskRetries attempts to list the missing file).\r\n\r\nIn the interests of complete test coverage, I'll update the test case to exercise the parallel listing path, too. \r\n\r\n(Combinatorial test coverage is hard!) ",
+    "commit": "d9c59037604763e7cd50a63c59b8f441f35331ee",
+    "createdAt": "2019-05-22T02:33:39Z",
+    "diffHunk": "@@ -178,6 +178,41 @@ class FileIndexSuite extends SharedSQLContext {\n     }\n   }\n \n+  test(\"SPARK-27676: InMemoryFileIndex respects ignoreMissingFiles config for non-root paths\") {",
+    "line": 29
+  }],
+  "prId": 24668
+}]

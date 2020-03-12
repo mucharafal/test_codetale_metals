@@ -1,0 +1,41 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "hvanhovell"
+    },
+    "body": "This happens quite a few times. It might be better to create a static util method that creates the vectors for you.",
+    "commit": "8330870ef18b12dfeb51e5003c68aaff9dabb7a3",
+    "createdAt": "2017-08-16T11:20:05Z",
+    "diffHunk": "@@ -89,14 +91,23 @@ class VectorizedHashMapGenerator(\n        |    $generatedAggBufferSchema\n        |\n        |  public $generatedClassName() {\n-       |    batch = org.apache.spark.sql.execution.vectorized.ColumnarBatch.allocate(schema,\n-       |      org.apache.spark.memory.MemoryMode.ON_HEAP, capacity);\n-       |    // TODO: Possibly generate this projection in HashAggregate directly\n-       |    aggregateBufferBatch = org.apache.spark.sql.execution.vectorized.ColumnarBatch.allocate(\n-       |      aggregateBufferSchema, org.apache.spark.memory.MemoryMode.ON_HEAP, capacity);\n-       |    for (int i = 0 ; i < aggregateBufferBatch.numCols(); i++) {\n-       |       aggregateBufferBatch.setColumn(i, batch.column(i+${groupingKeys.length}));\n+       |    batchVectors = new org.apache.spark.sql.execution.vectorized"
+  }, {
+    "author": {
+      "login": "ueshin"
+    },
+    "body": "Sure, I'll try it.",
+    "commit": "8330870ef18b12dfeb51e5003c68aaff9dabb7a3",
+    "createdAt": "2017-08-17T04:43:20Z",
+    "diffHunk": "@@ -89,14 +91,23 @@ class VectorizedHashMapGenerator(\n        |    $generatedAggBufferSchema\n        |\n        |  public $generatedClassName() {\n-       |    batch = org.apache.spark.sql.execution.vectorized.ColumnarBatch.allocate(schema,\n-       |      org.apache.spark.memory.MemoryMode.ON_HEAP, capacity);\n-       |    // TODO: Possibly generate this projection in HashAggregate directly\n-       |    aggregateBufferBatch = org.apache.spark.sql.execution.vectorized.ColumnarBatch.allocate(\n-       |      aggregateBufferSchema, org.apache.spark.memory.MemoryMode.ON_HEAP, capacity);\n-       |    for (int i = 0 ; i < aggregateBufferBatch.numCols(); i++) {\n-       |       aggregateBufferBatch.setColumn(i, batch.column(i+${groupingKeys.length}));\n+       |    batchVectors = new org.apache.spark.sql.execution.vectorized"
+  }],
+  "prId": 18958
+}, {
+  "comments": [{
+    "author": {
+      "login": "hvanhovell"
+    },
+    "body": "Can you elaborate?",
+    "commit": "8330870ef18b12dfeb51e5003c68aaff9dabb7a3",
+    "createdAt": "2017-08-16T11:20:33Z",
+    "diffHunk": "@@ -89,14 +91,23 @@ class VectorizedHashMapGenerator(\n        |    $generatedAggBufferSchema\n        |\n        |  public $generatedClassName() {\n-       |    batch = org.apache.spark.sql.execution.vectorized.ColumnarBatch.allocate(schema,\n-       |      org.apache.spark.memory.MemoryMode.ON_HEAP, capacity);\n-       |    // TODO: Possibly generate this projection in HashAggregate directly\n-       |    aggregateBufferBatch = org.apache.spark.sql.execution.vectorized.ColumnarBatch.allocate(\n-       |      aggregateBufferSchema, org.apache.spark.memory.MemoryMode.ON_HEAP, capacity);\n-       |    for (int i = 0 ; i < aggregateBufferBatch.numCols(); i++) {\n-       |       aggregateBufferBatch.setColumn(i, batch.column(i+${groupingKeys.length}));\n+       |    batchVectors = new org.apache.spark.sql.execution.vectorized\n+       |      .OnHeapColumnVector[schema.fields().length];\n+       |    for (int i = 0; i < schema.fields().length; i++) {\n+       |      batchVectors[i] = new org.apache.spark.sql.execution.vectorized.OnHeapColumnVector(\n+       |        capacity, schema.fields()[i].dataType());\n+       |    }\n+       |    batch = new org.apache.spark.sql.execution.vectorized.ColumnarBatch(\n+       |      schema, batchVectors, capacity);\n+       |\n+       |    bufferVectors = new org.apache.spark.sql.execution.vectorized\n+       |      .OnHeapColumnVector[aggregateBufferSchema.fields().length];\n+       |    for (int i = 0; i < aggregateBufferSchema.fields().length; i++) {\n+       |      bufferVectors[i] = batchVectors[i + ${groupingKeys.length}];\n        |    }\n+       |    // TODO: Possibly generate this projection in HashAggregate directly",
+    "line": 30
+  }, {
+    "author": {
+      "login": "ueshin"
+    },
+    "body": "I'm sorry but I'm not sure because this is from original code.",
+    "commit": "8330870ef18b12dfeb51e5003c68aaff9dabb7a3",
+    "createdAt": "2017-08-17T04:46:23Z",
+    "diffHunk": "@@ -89,14 +91,23 @@ class VectorizedHashMapGenerator(\n        |    $generatedAggBufferSchema\n        |\n        |  public $generatedClassName() {\n-       |    batch = org.apache.spark.sql.execution.vectorized.ColumnarBatch.allocate(schema,\n-       |      org.apache.spark.memory.MemoryMode.ON_HEAP, capacity);\n-       |    // TODO: Possibly generate this projection in HashAggregate directly\n-       |    aggregateBufferBatch = org.apache.spark.sql.execution.vectorized.ColumnarBatch.allocate(\n-       |      aggregateBufferSchema, org.apache.spark.memory.MemoryMode.ON_HEAP, capacity);\n-       |    for (int i = 0 ; i < aggregateBufferBatch.numCols(); i++) {\n-       |       aggregateBufferBatch.setColumn(i, batch.column(i+${groupingKeys.length}));\n+       |    batchVectors = new org.apache.spark.sql.execution.vectorized\n+       |      .OnHeapColumnVector[schema.fields().length];\n+       |    for (int i = 0; i < schema.fields().length; i++) {\n+       |      batchVectors[i] = new org.apache.spark.sql.execution.vectorized.OnHeapColumnVector(\n+       |        capacity, schema.fields()[i].dataType());\n+       |    }\n+       |    batch = new org.apache.spark.sql.execution.vectorized.ColumnarBatch(\n+       |      schema, batchVectors, capacity);\n+       |\n+       |    bufferVectors = new org.apache.spark.sql.execution.vectorized\n+       |      .OnHeapColumnVector[aggregateBufferSchema.fields().length];\n+       |    for (int i = 0; i < aggregateBufferSchema.fields().length; i++) {\n+       |      bufferVectors[i] = batchVectors[i + ${groupingKeys.length}];\n        |    }\n+       |    // TODO: Possibly generate this projection in HashAggregate directly",
+    "line": 30
+  }],
+  "prId": 18958
+}]

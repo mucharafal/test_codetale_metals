@@ -1,0 +1,36 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "after waiting for enough time, can we expect this to be 0?",
+    "commit": "7e57595d2750b65002cda6a5ee94dbcf3f5f2f64",
+    "createdAt": "2017-05-24T02:52:38Z",
+    "diffHunk": "@@ -26,6 +26,22 @@ import org.apache.spark.sql.test.SharedSQLContext\n \n class ParquetFileFormatSuite extends QueryTest with ParquetTest with SharedSQLContext {\n \n+  test(\"Number of threads doesn't grow extremely after parquet file reading\") {\n+    withTempDir { dir =>\n+      val file = dir.toString + \"/file\"\n+      spark.range(1).toDF(\"a\").coalesce(1).write.parquet(file)\n+      spark.read.parquet(file)\n+      val numThreadBefore = Thread.activeCount\n+      (1 to 100).map { _ =>\n+        spark.read.parquet(file)\n+      }\n+      val numThreadAfter = Thread.activeCount\n+      // Hard to test a correct thread number,\n+      // but it shouldn't increase more than a reasonable number.\n+      assert(numThreadAfter - numThreadBefore < 20)"
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "It reduces to a few (about 3) after waiting an enough time. The number returned by Thread.activeCount is only an estimate. So we may not expect this to be 0.\r\n",
+    "commit": "7e57595d2750b65002cda6a5ee94dbcf3f5f2f64",
+    "createdAt": "2017-05-24T04:03:26Z",
+    "diffHunk": "@@ -26,6 +26,22 @@ import org.apache.spark.sql.test.SharedSQLContext\n \n class ParquetFileFormatSuite extends QueryTest with ParquetTest with SharedSQLContext {\n \n+  test(\"Number of threads doesn't grow extremely after parquet file reading\") {\n+    withTempDir { dir =>\n+      val file = dir.toString + \"/file\"\n+      spark.range(1).toDF(\"a\").coalesce(1).write.parquet(file)\n+      spark.read.parquet(file)\n+      val numThreadBefore = Thread.activeCount\n+      (1 to 100).map { _ =>\n+        spark.read.parquet(file)\n+      }\n+      val numThreadAfter = Thread.activeCount\n+      // Hard to test a correct thread number,\n+      // but it shouldn't increase more than a reasonable number.\n+      assert(numThreadAfter - numThreadBefore < 20)"
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "this looks hacky, can we think of a better way to test it? If not, I suggest to remove this test, as the fix is straightforward and we can verify it manually by some profile tools.",
+    "commit": "7e57595d2750b65002cda6a5ee94dbcf3f5f2f64",
+    "createdAt": "2017-05-24T08:33:04Z",
+    "diffHunk": "@@ -26,6 +26,22 @@ import org.apache.spark.sql.test.SharedSQLContext\n \n class ParquetFileFormatSuite extends QueryTest with ParquetTest with SharedSQLContext {\n \n+  test(\"Number of threads doesn't grow extremely after parquet file reading\") {\n+    withTempDir { dir =>\n+      val file = dir.toString + \"/file\"\n+      spark.range(1).toDF(\"a\").coalesce(1).write.parquet(file)\n+      spark.read.parquet(file)\n+      val numThreadBefore = Thread.activeCount\n+      (1 to 100).map { _ =>\n+        spark.read.parquet(file)\n+      }\n+      val numThreadAfter = Thread.activeCount\n+      // Hard to test a correct thread number,\n+      // but it shouldn't increase more than a reasonable number.\n+      assert(numThreadAfter - numThreadBefore < 20)"
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "OK. Let's remove the test.",
+    "commit": "7e57595d2750b65002cda6a5ee94dbcf3f5f2f64",
+    "createdAt": "2017-05-24T08:49:04Z",
+    "diffHunk": "@@ -26,6 +26,22 @@ import org.apache.spark.sql.test.SharedSQLContext\n \n class ParquetFileFormatSuite extends QueryTest with ParquetTest with SharedSQLContext {\n \n+  test(\"Number of threads doesn't grow extremely after parquet file reading\") {\n+    withTempDir { dir =>\n+      val file = dir.toString + \"/file\"\n+      spark.range(1).toDF(\"a\").coalesce(1).write.parquet(file)\n+      spark.read.parquet(file)\n+      val numThreadBefore = Thread.activeCount\n+      (1 to 100).map { _ =>\n+        spark.read.parquet(file)\n+      }\n+      val numThreadAfter = Thread.activeCount\n+      // Hard to test a correct thread number,\n+      // but it shouldn't increase more than a reasonable number.\n+      assert(numThreadAfter - numThreadBefore < 20)"
+  }],
+  "prId": 18073
+}]

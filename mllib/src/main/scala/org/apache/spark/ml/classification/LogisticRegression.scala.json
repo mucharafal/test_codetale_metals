@@ -1,0 +1,348 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "No need to create LabeledPoints if they are just temporary.\n",
+    "commit": "f53436a64797efbd2a8e09059e3cd9e8447e00a5",
+    "createdAt": "2015-08-04T03:36:54Z",
+    "diffHunk": "@@ -114,20 +114,40 @@ class LogisticRegression(override val uid: String)\n   def setThreshold(value: Double): this.type = set(threshold, value)\n   setDefault(threshold -> 0.5)\n \n+  /** @group setParam */\n+  def setSampleWeightCol(value: String): this.type = set(sampleWeightCol, value)\n+\n+  /** @group setParam */\n+  def setWeightedSample(value: Boolean): this.type = set(weightedSample, value)\n+\n   override protected def train(dataset: DataFrame): LogisticRegressionModel = {\n     // Extract columns from data.  If dataset is persisted, do not persist oldDataset.\n-    val instances = extractLabeledPoints(dataset).map {\n-      case LabeledPoint(label: Double, features: Vector) => (label, features)\n-    }\n+    val instances: Either[RDD[(Double, Vector)], RDD[(Double, Double, Vector)]] =\n+      if ($(weightedSample)) {\n+        // TODO: Move `setWeightCol` and `extract weight column` code into Predictor class\n+        // when we have more algorithms support this feature.\n+        Right(dataset.select($(labelCol), $(sampleWeightCol), $(featuresCol)).map {\n+          case Row(label: Double, sampleWeight: Double, features: Vector) =>\n+            (label, sampleWeight, features)\n+        })\n+      } else {\n+        Left(extractLabeledPoints(dataset).map {"
+  }, {
+    "author": {
+      "login": "dbtsai"
+    },
+    "body": "Okay. This is copying the exiting code for abstract out getting the samples. I will remove it as you suggested. \n",
+    "commit": "f53436a64797efbd2a8e09059e3cd9e8447e00a5",
+    "createdAt": "2015-08-04T07:10:30Z",
+    "diffHunk": "@@ -114,20 +114,40 @@ class LogisticRegression(override val uid: String)\n   def setThreshold(value: Double): this.type = set(threshold, value)\n   setDefault(threshold -> 0.5)\n \n+  /** @group setParam */\n+  def setSampleWeightCol(value: String): this.type = set(sampleWeightCol, value)\n+\n+  /** @group setParam */\n+  def setWeightedSample(value: Boolean): this.type = set(weightedSample, value)\n+\n   override protected def train(dataset: DataFrame): LogisticRegressionModel = {\n     // Extract columns from data.  If dataset is persisted, do not persist oldDataset.\n-    val instances = extractLabeledPoints(dataset).map {\n-      case LabeledPoint(label: Double, features: Vector) => (label, features)\n-    }\n+    val instances: Either[RDD[(Double, Vector)], RDD[(Double, Double, Vector)]] =\n+      if ($(weightedSample)) {\n+        // TODO: Move `setWeightCol` and `extract weight column` code into Predictor class\n+        // when we have more algorithms support this feature.\n+        Right(dataset.select($(labelCol), $(sampleWeightCol), $(featuresCol)).map {\n+          case Row(label: Double, sampleWeight: Double, features: Vector) =>\n+            (label, sampleWeight, features)\n+        })\n+      } else {\n+        Left(extractLabeledPoints(dataset).map {"
+  }],
+  "prId": 7884
+}, {
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "These summarizers ignore the weights, but they should account for weights, right?  It will be important for handling normalization correctly.\n",
+    "commit": "f53436a64797efbd2a8e09059e3cd9e8447e00a5",
+    "createdAt": "2015-08-04T03:36:56Z",
+    "diffHunk": "@@ -114,20 +114,40 @@ class LogisticRegression(override val uid: String)\n   def setThreshold(value: Double): this.type = set(threshold, value)\n   setDefault(threshold -> 0.5)\n \n+  /** @group setParam */\n+  def setSampleWeightCol(value: String): this.type = set(sampleWeightCol, value)\n+\n+  /** @group setParam */\n+  def setWeightedSample(value: Boolean): this.type = set(weightedSample, value)\n+\n   override protected def train(dataset: DataFrame): LogisticRegressionModel = {\n     // Extract columns from data.  If dataset is persisted, do not persist oldDataset.\n-    val instances = extractLabeledPoints(dataset).map {\n-      case LabeledPoint(label: Double, features: Vector) => (label, features)\n-    }\n+    val instances: Either[RDD[(Double, Vector)], RDD[(Double, Double, Vector)]] =\n+      if ($(weightedSample)) {\n+        // TODO: Move `setWeightCol` and `extract weight column` code into Predictor class\n+        // when we have more algorithms support this feature.\n+        Right(dataset.select($(labelCol), $(sampleWeightCol), $(featuresCol)).map {\n+          case Row(label: Double, sampleWeight: Double, features: Vector) =>\n+            (label, sampleWeight, features)\n+        })\n+      } else {\n+        Left(extractLabeledPoints(dataset).map {\n+          case LabeledPoint(label: Double, features: Vector) => (label, features)\n+        })\n+      }\n+\n     val handlePersistence = dataset.rdd.getStorageLevel == StorageLevel.NONE\n-    if (handlePersistence) instances.persist(StorageLevel.MEMORY_AND_DISK)\n+    if (handlePersistence) instances.fold(identity, identity).persist(StorageLevel.MEMORY_AND_DISK)\n \n-    val (summarizer, labelSummarizer) = instances.treeAggregate(\n+    val (summarizer, labelSummarizer) = instances.fold(identity, identity).treeAggregate(\n       (new MultivariateOnlineSummarizer, new MultiClassSummarizer))(\n         seqOp = (c, v) => (c, v) match {\n           case ((summarizer: MultivariateOnlineSummarizer, labelSummarizer: MultiClassSummarizer),\n           (label: Double, features: Vector)) =>\n             (summarizer.add(features), labelSummarizer.add(label))\n+          case ((summarizer: MultivariateOnlineSummarizer, labelSummarizer: MultiClassSummarizer),"
+  }, {
+    "author": {
+      "login": "dbtsai"
+    },
+    "body": "You are right. I will fix it tomorrow. Otherwise, the regularization will work differently. \n",
+    "commit": "f53436a64797efbd2a8e09059e3cd9e8447e00a5",
+    "createdAt": "2015-08-04T07:11:08Z",
+    "diffHunk": "@@ -114,20 +114,40 @@ class LogisticRegression(override val uid: String)\n   def setThreshold(value: Double): this.type = set(threshold, value)\n   setDefault(threshold -> 0.5)\n \n+  /** @group setParam */\n+  def setSampleWeightCol(value: String): this.type = set(sampleWeightCol, value)\n+\n+  /** @group setParam */\n+  def setWeightedSample(value: Boolean): this.type = set(weightedSample, value)\n+\n   override protected def train(dataset: DataFrame): LogisticRegressionModel = {\n     // Extract columns from data.  If dataset is persisted, do not persist oldDataset.\n-    val instances = extractLabeledPoints(dataset).map {\n-      case LabeledPoint(label: Double, features: Vector) => (label, features)\n-    }\n+    val instances: Either[RDD[(Double, Vector)], RDD[(Double, Double, Vector)]] =\n+      if ($(weightedSample)) {\n+        // TODO: Move `setWeightCol` and `extract weight column` code into Predictor class\n+        // when we have more algorithms support this feature.\n+        Right(dataset.select($(labelCol), $(sampleWeightCol), $(featuresCol)).map {\n+          case Row(label: Double, sampleWeight: Double, features: Vector) =>\n+            (label, sampleWeight, features)\n+        })\n+      } else {\n+        Left(extractLabeledPoints(dataset).map {\n+          case LabeledPoint(label: Double, features: Vector) => (label, features)\n+        })\n+      }\n+\n     val handlePersistence = dataset.rdd.getStorageLevel == StorageLevel.NONE\n-    if (handlePersistence) instances.persist(StorageLevel.MEMORY_AND_DISK)\n+    if (handlePersistence) instances.fold(identity, identity).persist(StorageLevel.MEMORY_AND_DISK)\n \n-    val (summarizer, labelSummarizer) = instances.treeAggregate(\n+    val (summarizer, labelSummarizer) = instances.fold(identity, identity).treeAggregate(\n       (new MultivariateOnlineSummarizer, new MultiClassSummarizer))(\n         seqOp = (c, v) => (c, v) match {\n           case ((summarizer: MultivariateOnlineSummarizer, labelSummarizer: MultiClassSummarizer),\n           (label: Double, features: Vector)) =>\n             (summarizer.add(features), labelSummarizer.add(label))\n+          case ((summarizer: MultivariateOnlineSummarizer, labelSummarizer: MultiClassSummarizer),"
+  }, {
+    "author": {
+      "login": "dbtsai"
+    },
+    "body": "BTW, in order to properly compute the mean and variance of weighted sample, I need to modify `MultivariateOnlineSummarizer` such that `override def count: Long = totalCnt` will have type of `Double`. I don't like this. I will rather to change `private var totalCnt: Long = 0` to type of `Double`, but still Long for `def count`. We can add another api called `def sampleWeightSum`. What do you think? \n",
+    "commit": "f53436a64797efbd2a8e09059e3cd9e8447e00a5",
+    "createdAt": "2015-08-04T07:46:39Z",
+    "diffHunk": "@@ -114,20 +114,40 @@ class LogisticRegression(override val uid: String)\n   def setThreshold(value: Double): this.type = set(threshold, value)\n   setDefault(threshold -> 0.5)\n \n+  /** @group setParam */\n+  def setSampleWeightCol(value: String): this.type = set(sampleWeightCol, value)\n+\n+  /** @group setParam */\n+  def setWeightedSample(value: Boolean): this.type = set(weightedSample, value)\n+\n   override protected def train(dataset: DataFrame): LogisticRegressionModel = {\n     // Extract columns from data.  If dataset is persisted, do not persist oldDataset.\n-    val instances = extractLabeledPoints(dataset).map {\n-      case LabeledPoint(label: Double, features: Vector) => (label, features)\n-    }\n+    val instances: Either[RDD[(Double, Vector)], RDD[(Double, Double, Vector)]] =\n+      if ($(weightedSample)) {\n+        // TODO: Move `setWeightCol` and `extract weight column` code into Predictor class\n+        // when we have more algorithms support this feature.\n+        Right(dataset.select($(labelCol), $(sampleWeightCol), $(featuresCol)).map {\n+          case Row(label: Double, sampleWeight: Double, features: Vector) =>\n+            (label, sampleWeight, features)\n+        })\n+      } else {\n+        Left(extractLabeledPoints(dataset).map {\n+          case LabeledPoint(label: Double, features: Vector) => (label, features)\n+        })\n+      }\n+\n     val handlePersistence = dataset.rdd.getStorageLevel == StorageLevel.NONE\n-    if (handlePersistence) instances.persist(StorageLevel.MEMORY_AND_DISK)\n+    if (handlePersistence) instances.fold(identity, identity).persist(StorageLevel.MEMORY_AND_DISK)\n \n-    val (summarizer, labelSummarizer) = instances.treeAggregate(\n+    val (summarizer, labelSummarizer) = instances.fold(identity, identity).treeAggregate(\n       (new MultivariateOnlineSummarizer, new MultiClassSummarizer))(\n         seqOp = (c, v) => (c, v) match {\n           case ((summarizer: MultivariateOnlineSummarizer, labelSummarizer: MultiClassSummarizer),\n           (label: Double, features: Vector)) =>\n             (summarizer.add(features), labelSummarizer.add(label))\n+          case ((summarizer: MultivariateOnlineSummarizer, labelSummarizer: MultiClassSummarizer),"
+  }, {
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "Yes, I like that.\n",
+    "commit": "f53436a64797efbd2a8e09059e3cd9e8447e00a5",
+    "createdAt": "2015-08-04T17:17:23Z",
+    "diffHunk": "@@ -114,20 +114,40 @@ class LogisticRegression(override val uid: String)\n   def setThreshold(value: Double): this.type = set(threshold, value)\n   setDefault(threshold -> 0.5)\n \n+  /** @group setParam */\n+  def setSampleWeightCol(value: String): this.type = set(sampleWeightCol, value)\n+\n+  /** @group setParam */\n+  def setWeightedSample(value: Boolean): this.type = set(weightedSample, value)\n+\n   override protected def train(dataset: DataFrame): LogisticRegressionModel = {\n     // Extract columns from data.  If dataset is persisted, do not persist oldDataset.\n-    val instances = extractLabeledPoints(dataset).map {\n-      case LabeledPoint(label: Double, features: Vector) => (label, features)\n-    }\n+    val instances: Either[RDD[(Double, Vector)], RDD[(Double, Double, Vector)]] =\n+      if ($(weightedSample)) {\n+        // TODO: Move `setWeightCol` and `extract weight column` code into Predictor class\n+        // when we have more algorithms support this feature.\n+        Right(dataset.select($(labelCol), $(sampleWeightCol), $(featuresCol)).map {\n+          case Row(label: Double, sampleWeight: Double, features: Vector) =>\n+            (label, sampleWeight, features)\n+        })\n+      } else {\n+        Left(extractLabeledPoints(dataset).map {\n+          case LabeledPoint(label: Double, features: Vector) => (label, features)\n+        })\n+      }\n+\n     val handlePersistence = dataset.rdd.getStorageLevel == StorageLevel.NONE\n-    if (handlePersistence) instances.persist(StorageLevel.MEMORY_AND_DISK)\n+    if (handlePersistence) instances.fold(identity, identity).persist(StorageLevel.MEMORY_AND_DISK)\n \n-    val (summarizer, labelSummarizer) = instances.treeAggregate(\n+    val (summarizer, labelSummarizer) = instances.fold(identity, identity).treeAggregate(\n       (new MultivariateOnlineSummarizer, new MultiClassSummarizer))(\n         seqOp = (c, v) => (c, v) match {\n           case ((summarizer: MultivariateOnlineSummarizer, labelSummarizer: MultiClassSummarizer),\n           (label: Double, features: Vector)) =>\n             (summarizer.add(features), labelSummarizer.add(label))\n+          case ((summarizer: MultivariateOnlineSummarizer, labelSummarizer: MultiClassSummarizer),"
+  }, {
+    "author": {
+      "login": "dbtsai"
+    },
+    "body": "I probably will have `override def count: Long = totalCnt` as really count, and another `def weightedCount: Double` for weightedCount. The mean and variance will always be computed by `weightedCount`, but users can still know what's real total count by keeping the old behavior. \n",
+    "commit": "f53436a64797efbd2a8e09059e3cd9e8447e00a5",
+    "createdAt": "2015-08-04T18:49:46Z",
+    "diffHunk": "@@ -114,20 +114,40 @@ class LogisticRegression(override val uid: String)\n   def setThreshold(value: Double): this.type = set(threshold, value)\n   setDefault(threshold -> 0.5)\n \n+  /** @group setParam */\n+  def setSampleWeightCol(value: String): this.type = set(sampleWeightCol, value)\n+\n+  /** @group setParam */\n+  def setWeightedSample(value: Boolean): this.type = set(weightedSample, value)\n+\n   override protected def train(dataset: DataFrame): LogisticRegressionModel = {\n     // Extract columns from data.  If dataset is persisted, do not persist oldDataset.\n-    val instances = extractLabeledPoints(dataset).map {\n-      case LabeledPoint(label: Double, features: Vector) => (label, features)\n-    }\n+    val instances: Either[RDD[(Double, Vector)], RDD[(Double, Double, Vector)]] =\n+      if ($(weightedSample)) {\n+        // TODO: Move `setWeightCol` and `extract weight column` code into Predictor class\n+        // when we have more algorithms support this feature.\n+        Right(dataset.select($(labelCol), $(sampleWeightCol), $(featuresCol)).map {\n+          case Row(label: Double, sampleWeight: Double, features: Vector) =>\n+            (label, sampleWeight, features)\n+        })\n+      } else {\n+        Left(extractLabeledPoints(dataset).map {\n+          case LabeledPoint(label: Double, features: Vector) => (label, features)\n+        })\n+      }\n+\n     val handlePersistence = dataset.rdd.getStorageLevel == StorageLevel.NONE\n-    if (handlePersistence) instances.persist(StorageLevel.MEMORY_AND_DISK)\n+    if (handlePersistence) instances.fold(identity, identity).persist(StorageLevel.MEMORY_AND_DISK)\n \n-    val (summarizer, labelSummarizer) = instances.treeAggregate(\n+    val (summarizer, labelSummarizer) = instances.fold(identity, identity).treeAggregate(\n       (new MultivariateOnlineSummarizer, new MultiClassSummarizer))(\n         seqOp = (c, v) => (c, v) match {\n           case ((summarizer: MultivariateOnlineSummarizer, labelSummarizer: MultiClassSummarizer),\n           (label: Double, features: Vector)) =>\n             (summarizer.add(features), labelSummarizer.add(label))\n+          case ((summarizer: MultivariateOnlineSummarizer, labelSummarizer: MultiClassSummarizer),"
+  }],
+  "prId": 7884
+}, {
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "No need for a default value for sampleWeight.  Or if you want it for other purposes later on, it should probably be the last argument.\n",
+    "commit": "f53436a64797efbd2a8e09059e3cd9e8447e00a5",
+    "createdAt": "2015-08-04T03:36:58Z",
+    "diffHunk": "@@ -451,11 +471,14 @@ private class LogisticAggregator(\n    * @param label The label for this data point.\n    * @param data The features for one data point in dense/sparse vector format to be added\n    *             into this aggregator.\n+   * @param sampleWeight The weight for over-/undersamples each of training sample.\n    * @return This LogisticAggregator object.\n    */\n-  def add(label: Double, data: Vector): this.type = {\n+  def add(label: Double, sampleWeight: Double = 1.0, data: Vector): this.type = {"
+  }, {
+    "author": {
+      "login": "dbtsai"
+    },
+    "body": "My bad. I move it from later one with default variable, and decide to always specifically give the sampleWeight. I forgot to remove the default variable.  \n",
+    "commit": "f53436a64797efbd2a8e09059e3cd9e8447e00a5",
+    "createdAt": "2015-08-04T07:12:39Z",
+    "diffHunk": "@@ -451,11 +471,14 @@ private class LogisticAggregator(\n    * @param label The label for this data point.\n    * @param data The features for one data point in dense/sparse vector format to be added\n    *             into this aggregator.\n+   * @param sampleWeight The weight for over-/undersamples each of training sample.\n    * @return This LogisticAggregator object.\n    */\n-  def add(label: Double, data: Vector): this.type = {\n+  def add(label: Double, sampleWeight: Double = 1.0, data: Vector): this.type = {"
+  }],
+  "prId": 7884
+}, {
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "This check should probably happen in MultiClassSummarizer since it already checks for label validity.\n",
+    "commit": "f53436a64797efbd2a8e09059e3cd9e8447e00a5",
+    "createdAt": "2015-08-04T03:36:59Z",
+    "diffHunk": "@@ -451,11 +471,14 @@ private class LogisticAggregator(\n    * @param label The label for this data point.\n    * @param data The features for one data point in dense/sparse vector format to be added\n    *             into this aggregator.\n+   * @param sampleWeight The weight for over-/undersamples each of training sample.\n    * @return This LogisticAggregator object.\n    */\n-  def add(label: Double, data: Vector): this.type = {\n+  def add(label: Double, sampleWeight: Double = 1.0, data: Vector): this.type = {\n     require(dim == data.size, s\"Dimensions mismatch when adding new sample.\" +\n       s\" Expecting $dim but got ${data.size}.\")\n+    require(sampleWeight >= 0.0, s\"sampleWeight, ${sampleWeight} has to be >= 0.0\")"
+  }, {
+    "author": {
+      "login": "dbtsai"
+    },
+    "body": "Sounds fair. I will modify MultiClassSummarizer to do this to fail earlier. \n",
+    "commit": "f53436a64797efbd2a8e09059e3cd9e8447e00a5",
+    "createdAt": "2015-08-04T07:13:25Z",
+    "diffHunk": "@@ -451,11 +471,14 @@ private class LogisticAggregator(\n    * @param label The label for this data point.\n    * @param data The features for one data point in dense/sparse vector format to be added\n    *             into this aggregator.\n+   * @param sampleWeight The weight for over-/undersamples each of training sample.\n    * @return This LogisticAggregator object.\n    */\n-  def add(label: Double, data: Vector): this.type = {\n+  def add(label: Double, sampleWeight: Double = 1.0, data: Vector): this.type = {\n     require(dim == data.size, s\"Dimensions mismatch when adding new sample.\" +\n       s\" Expecting $dim but got ${data.size}.\")\n+    require(sampleWeight >= 0.0, s\"sampleWeight, ${sampleWeight} has to be >= 0.0\")"
+  }],
+  "prId": 7884
+}, {
+  "comments": [{
+    "author": {
+      "login": "feynmanliang"
+    },
+    "body": "nit: we could assign `seqOp` with pattern matching to avoid duplicating L260-261 and L269-2709; feel free to keep as is if you think that's less clear\n",
+    "commit": "f53436a64797efbd2a8e09059e3cd9e8447e00a5",
+    "createdAt": "2015-08-26T18:37:23Z",
+    "diffHunk": "@@ -218,31 +217,59 @@ class LogisticRegression(override val uid: String)\n \n   override def getThreshold: Double = super.getThreshold\n \n+  /**\n+   * Whether to over-/undersamples each of training sample according to the given\n+   * weight in `weightCol`. If empty, all samples are supposed to have weights as 1.0.\n+   * Default is empty, so all samples have weight one.\n+   * @group setParam\n+   */\n+  def setWeightCol(value: String): this.type = set(weightCol, value)\n+  setDefault(weightCol -> \"\")\n+\n   override def setThresholds(value: Array[Double]): this.type = super.setThresholds(value)\n \n   override def getThresholds: Array[Double] = super.getThresholds\n \n   override protected def train(dataset: DataFrame): LogisticRegressionModel = {\n     // Extract columns from data.  If dataset is persisted, do not persist oldDataset.\n-    val instances = extractLabeledPoints(dataset).map {\n-      case LabeledPoint(label: Double, features: Vector) => (label, features)\n-    }\n+    val instances: Either[RDD[(Double, Vector)], RDD[(Double, Double, Vector)]] =\n+      if ($(weightCol).isEmpty) {\n+        Left(dataset.select($(labelCol), $(featuresCol)).map {\n+          case Row(label: Double, features: Vector) => (label, features)\n+        })\n+      } else {\n+        Right(dataset.select($(labelCol), $(weightCol), $(featuresCol)).map {\n+          case Row(label: Double, weight: Double, features: Vector) =>\n+            (label, weight, features)\n+        })\n+      }\n+\n     val handlePersistence = dataset.rdd.getStorageLevel == StorageLevel.NONE\n-    if (handlePersistence) instances.persist(StorageLevel.MEMORY_AND_DISK)\n-\n-    val (summarizer, labelSummarizer) = instances.treeAggregate(\n-      (new MultivariateOnlineSummarizer, new MultiClassSummarizer))(\n-        seqOp = (c, v) => (c, v) match {\n-          case ((summarizer: MultivariateOnlineSummarizer, labelSummarizer: MultiClassSummarizer),\n-          (label: Double, features: Vector)) =>\n-            (summarizer.add(features), labelSummarizer.add(label))\n-        },\n-        combOp = (c1, c2) => (c1, c2) match {\n-          case ((summarizer1: MultivariateOnlineSummarizer,\n-          classSummarizer1: MultiClassSummarizer), (summarizer2: MultivariateOnlineSummarizer,\n-          classSummarizer2: MultiClassSummarizer)) =>\n-            (summarizer1.merge(summarizer2), classSummarizer1.merge(classSummarizer2))\n-      })\n+    if (handlePersistence) instances.fold(identity, identity).persist(StorageLevel.MEMORY_AND_DISK)\n+\n+    val (summarizer, labelSummarizer) = {\n+      val combOp = (c1: (MultivariateOnlineSummarizer, MultiClassSummarizer),\n+        c2: (MultivariateOnlineSummarizer, MultiClassSummarizer)) =>\n+          (c1._1.merge(c2._1), c1._2.merge(c2._2))\n+\n+      instances match {"
+  }, {
+    "author": {
+      "login": "dbtsai"
+    },
+    "body": "I was using pattern matching in `seqOp` before, but I have concern that using pattern matching in the tight loop will impact the performance. As a result, I decide to handle them explicitly. I didn't do the benchmark, just thought that matching the type per sample will make it slower. \n",
+    "commit": "f53436a64797efbd2a8e09059e3cd9e8447e00a5",
+    "createdAt": "2015-08-26T21:12:58Z",
+    "diffHunk": "@@ -218,31 +217,59 @@ class LogisticRegression(override val uid: String)\n \n   override def getThreshold: Double = super.getThreshold\n \n+  /**\n+   * Whether to over-/undersamples each of training sample according to the given\n+   * weight in `weightCol`. If empty, all samples are supposed to have weights as 1.0.\n+   * Default is empty, so all samples have weight one.\n+   * @group setParam\n+   */\n+  def setWeightCol(value: String): this.type = set(weightCol, value)\n+  setDefault(weightCol -> \"\")\n+\n   override def setThresholds(value: Array[Double]): this.type = super.setThresholds(value)\n \n   override def getThresholds: Array[Double] = super.getThresholds\n \n   override protected def train(dataset: DataFrame): LogisticRegressionModel = {\n     // Extract columns from data.  If dataset is persisted, do not persist oldDataset.\n-    val instances = extractLabeledPoints(dataset).map {\n-      case LabeledPoint(label: Double, features: Vector) => (label, features)\n-    }\n+    val instances: Either[RDD[(Double, Vector)], RDD[(Double, Double, Vector)]] =\n+      if ($(weightCol).isEmpty) {\n+        Left(dataset.select($(labelCol), $(featuresCol)).map {\n+          case Row(label: Double, features: Vector) => (label, features)\n+        })\n+      } else {\n+        Right(dataset.select($(labelCol), $(weightCol), $(featuresCol)).map {\n+          case Row(label: Double, weight: Double, features: Vector) =>\n+            (label, weight, features)\n+        })\n+      }\n+\n     val handlePersistence = dataset.rdd.getStorageLevel == StorageLevel.NONE\n-    if (handlePersistence) instances.persist(StorageLevel.MEMORY_AND_DISK)\n-\n-    val (summarizer, labelSummarizer) = instances.treeAggregate(\n-      (new MultivariateOnlineSummarizer, new MultiClassSummarizer))(\n-        seqOp = (c, v) => (c, v) match {\n-          case ((summarizer: MultivariateOnlineSummarizer, labelSummarizer: MultiClassSummarizer),\n-          (label: Double, features: Vector)) =>\n-            (summarizer.add(features), labelSummarizer.add(label))\n-        },\n-        combOp = (c1, c2) => (c1, c2) match {\n-          case ((summarizer1: MultivariateOnlineSummarizer,\n-          classSummarizer1: MultiClassSummarizer), (summarizer2: MultivariateOnlineSummarizer,\n-          classSummarizer2: MultiClassSummarizer)) =>\n-            (summarizer1.merge(summarizer2), classSummarizer1.merge(classSummarizer2))\n-      })\n+    if (handlePersistence) instances.fold(identity, identity).persist(StorageLevel.MEMORY_AND_DISK)\n+\n+    val (summarizer, labelSummarizer) = {\n+      val combOp = (c1: (MultivariateOnlineSummarizer, MultiClassSummarizer),\n+        c2: (MultivariateOnlineSummarizer, MultiClassSummarizer)) =>\n+          (c1._1.merge(c2._1), c1._2.merge(c2._2))\n+\n+      instances match {"
+  }, {
+    "author": {
+      "login": "feynmanliang"
+    },
+    "body": "Oh, I meant something like\n\n``` scala\n      val seqOP = instances match {\n        case Left(instances: RDD[(Double, Vector)]) =>\n          (c: (MultivariateOnlineSummarizer, MultiClassSummarizer),\n            v: (Double, Vector)) => (c._1.add(v._2), c._2.add(v._1))\n        case Right(instances: RDD[(Double, Double, Vector)]) =>\n          (c: (MultivariateOnlineSummarizer, MultiClassSummarizer),\n            v: (Double, Double, Vector)) => {\n              val weight = v._2\n              (c._1.add(v._3, weight), c._2.add(v._1, weight))\n            }\n      }\n      instances.treeAggregate(\n        new MultivariateOnlineSummarizer, new MultiClassSummarizer)(seqOp, combOp)\n```\n\nso the `treeAggregate` call is not repeated\n",
+    "commit": "f53436a64797efbd2a8e09059e3cd9e8447e00a5",
+    "createdAt": "2015-08-27T02:47:34Z",
+    "diffHunk": "@@ -218,31 +217,59 @@ class LogisticRegression(override val uid: String)\n \n   override def getThreshold: Double = super.getThreshold\n \n+  /**\n+   * Whether to over-/undersamples each of training sample according to the given\n+   * weight in `weightCol`. If empty, all samples are supposed to have weights as 1.0.\n+   * Default is empty, so all samples have weight one.\n+   * @group setParam\n+   */\n+  def setWeightCol(value: String): this.type = set(weightCol, value)\n+  setDefault(weightCol -> \"\")\n+\n   override def setThresholds(value: Array[Double]): this.type = super.setThresholds(value)\n \n   override def getThresholds: Array[Double] = super.getThresholds\n \n   override protected def train(dataset: DataFrame): LogisticRegressionModel = {\n     // Extract columns from data.  If dataset is persisted, do not persist oldDataset.\n-    val instances = extractLabeledPoints(dataset).map {\n-      case LabeledPoint(label: Double, features: Vector) => (label, features)\n-    }\n+    val instances: Either[RDD[(Double, Vector)], RDD[(Double, Double, Vector)]] =\n+      if ($(weightCol).isEmpty) {\n+        Left(dataset.select($(labelCol), $(featuresCol)).map {\n+          case Row(label: Double, features: Vector) => (label, features)\n+        })\n+      } else {\n+        Right(dataset.select($(labelCol), $(weightCol), $(featuresCol)).map {\n+          case Row(label: Double, weight: Double, features: Vector) =>\n+            (label, weight, features)\n+        })\n+      }\n+\n     val handlePersistence = dataset.rdd.getStorageLevel == StorageLevel.NONE\n-    if (handlePersistence) instances.persist(StorageLevel.MEMORY_AND_DISK)\n-\n-    val (summarizer, labelSummarizer) = instances.treeAggregate(\n-      (new MultivariateOnlineSummarizer, new MultiClassSummarizer))(\n-        seqOp = (c, v) => (c, v) match {\n-          case ((summarizer: MultivariateOnlineSummarizer, labelSummarizer: MultiClassSummarizer),\n-          (label: Double, features: Vector)) =>\n-            (summarizer.add(features), labelSummarizer.add(label))\n-        },\n-        combOp = (c1, c2) => (c1, c2) match {\n-          case ((summarizer1: MultivariateOnlineSummarizer,\n-          classSummarizer1: MultiClassSummarizer), (summarizer2: MultivariateOnlineSummarizer,\n-          classSummarizer2: MultiClassSummarizer)) =>\n-            (summarizer1.merge(summarizer2), classSummarizer1.merge(classSummarizer2))\n-      })\n+    if (handlePersistence) instances.fold(identity, identity).persist(StorageLevel.MEMORY_AND_DISK)\n+\n+    val (summarizer, labelSummarizer) = {\n+      val combOp = (c1: (MultivariateOnlineSummarizer, MultiClassSummarizer),\n+        c2: (MultivariateOnlineSummarizer, MultiClassSummarizer)) =>\n+          (c1._1.merge(c2._1), c1._2.merge(c2._2))\n+\n+      instances match {"
+  }, {
+    "author": {
+      "login": "dbtsai"
+    },
+    "body": "Good point! Gonna to change to this style. Thanks.\n",
+    "commit": "f53436a64797efbd2a8e09059e3cd9e8447e00a5",
+    "createdAt": "2015-08-27T03:07:45Z",
+    "diffHunk": "@@ -218,31 +217,59 @@ class LogisticRegression(override val uid: String)\n \n   override def getThreshold: Double = super.getThreshold\n \n+  /**\n+   * Whether to over-/undersamples each of training sample according to the given\n+   * weight in `weightCol`. If empty, all samples are supposed to have weights as 1.0.\n+   * Default is empty, so all samples have weight one.\n+   * @group setParam\n+   */\n+  def setWeightCol(value: String): this.type = set(weightCol, value)\n+  setDefault(weightCol -> \"\")\n+\n   override def setThresholds(value: Array[Double]): this.type = super.setThresholds(value)\n \n   override def getThresholds: Array[Double] = super.getThresholds\n \n   override protected def train(dataset: DataFrame): LogisticRegressionModel = {\n     // Extract columns from data.  If dataset is persisted, do not persist oldDataset.\n-    val instances = extractLabeledPoints(dataset).map {\n-      case LabeledPoint(label: Double, features: Vector) => (label, features)\n-    }\n+    val instances: Either[RDD[(Double, Vector)], RDD[(Double, Double, Vector)]] =\n+      if ($(weightCol).isEmpty) {\n+        Left(dataset.select($(labelCol), $(featuresCol)).map {\n+          case Row(label: Double, features: Vector) => (label, features)\n+        })\n+      } else {\n+        Right(dataset.select($(labelCol), $(weightCol), $(featuresCol)).map {\n+          case Row(label: Double, weight: Double, features: Vector) =>\n+            (label, weight, features)\n+        })\n+      }\n+\n     val handlePersistence = dataset.rdd.getStorageLevel == StorageLevel.NONE\n-    if (handlePersistence) instances.persist(StorageLevel.MEMORY_AND_DISK)\n-\n-    val (summarizer, labelSummarizer) = instances.treeAggregate(\n-      (new MultivariateOnlineSummarizer, new MultiClassSummarizer))(\n-        seqOp = (c, v) => (c, v) match {\n-          case ((summarizer: MultivariateOnlineSummarizer, labelSummarizer: MultiClassSummarizer),\n-          (label: Double, features: Vector)) =>\n-            (summarizer.add(features), labelSummarizer.add(label))\n-        },\n-        combOp = (c1, c2) => (c1, c2) match {\n-          case ((summarizer1: MultivariateOnlineSummarizer,\n-          classSummarizer1: MultiClassSummarizer), (summarizer2: MultivariateOnlineSummarizer,\n-          classSummarizer2: MultiClassSummarizer)) =>\n-            (summarizer1.merge(summarizer2), classSummarizer1.merge(classSummarizer2))\n-      })\n+    if (handlePersistence) instances.fold(identity, identity).persist(StorageLevel.MEMORY_AND_DISK)\n+\n+    val (summarizer, labelSummarizer) = {\n+      val combOp = (c1: (MultivariateOnlineSummarizer, MultiClassSummarizer),\n+        c2: (MultivariateOnlineSummarizer, MultiClassSummarizer)) =>\n+          (c1._1.merge(c2._1), c1._2.merge(c2._2))\n+\n+      instances match {"
+  }, {
+    "author": {
+      "login": "dbtsai"
+    },
+    "body": "This is not working due to some type issue.\n<img width=\"1864\" alt=\"screen shot 2015-08-26 at 8 13 14 pm\" src=\"https://cloud.githubusercontent.com/assets/1134574/9511773/f3b99dc6-4c2e-11e5-8d6e-e421907ebf41.png\">\n",
+    "commit": "f53436a64797efbd2a8e09059e3cd9e8447e00a5",
+    "createdAt": "2015-08-27T03:13:59Z",
+    "diffHunk": "@@ -218,31 +217,59 @@ class LogisticRegression(override val uid: String)\n \n   override def getThreshold: Double = super.getThreshold\n \n+  /**\n+   * Whether to over-/undersamples each of training sample according to the given\n+   * weight in `weightCol`. If empty, all samples are supposed to have weights as 1.0.\n+   * Default is empty, so all samples have weight one.\n+   * @group setParam\n+   */\n+  def setWeightCol(value: String): this.type = set(weightCol, value)\n+  setDefault(weightCol -> \"\")\n+\n   override def setThresholds(value: Array[Double]): this.type = super.setThresholds(value)\n \n   override def getThresholds: Array[Double] = super.getThresholds\n \n   override protected def train(dataset: DataFrame): LogisticRegressionModel = {\n     // Extract columns from data.  If dataset is persisted, do not persist oldDataset.\n-    val instances = extractLabeledPoints(dataset).map {\n-      case LabeledPoint(label: Double, features: Vector) => (label, features)\n-    }\n+    val instances: Either[RDD[(Double, Vector)], RDD[(Double, Double, Vector)]] =\n+      if ($(weightCol).isEmpty) {\n+        Left(dataset.select($(labelCol), $(featuresCol)).map {\n+          case Row(label: Double, features: Vector) => (label, features)\n+        })\n+      } else {\n+        Right(dataset.select($(labelCol), $(weightCol), $(featuresCol)).map {\n+          case Row(label: Double, weight: Double, features: Vector) =>\n+            (label, weight, features)\n+        })\n+      }\n+\n     val handlePersistence = dataset.rdd.getStorageLevel == StorageLevel.NONE\n-    if (handlePersistence) instances.persist(StorageLevel.MEMORY_AND_DISK)\n-\n-    val (summarizer, labelSummarizer) = instances.treeAggregate(\n-      (new MultivariateOnlineSummarizer, new MultiClassSummarizer))(\n-        seqOp = (c, v) => (c, v) match {\n-          case ((summarizer: MultivariateOnlineSummarizer, labelSummarizer: MultiClassSummarizer),\n-          (label: Double, features: Vector)) =>\n-            (summarizer.add(features), labelSummarizer.add(label))\n-        },\n-        combOp = (c1, c2) => (c1, c2) match {\n-          case ((summarizer1: MultivariateOnlineSummarizer,\n-          classSummarizer1: MultiClassSummarizer), (summarizer2: MultivariateOnlineSummarizer,\n-          classSummarizer2: MultiClassSummarizer)) =>\n-            (summarizer1.merge(summarizer2), classSummarizer1.merge(classSummarizer2))\n-      })\n+    if (handlePersistence) instances.fold(identity, identity).persist(StorageLevel.MEMORY_AND_DISK)\n+\n+    val (summarizer, labelSummarizer) = {\n+      val combOp = (c1: (MultivariateOnlineSummarizer, MultiClassSummarizer),\n+        c2: (MultivariateOnlineSummarizer, MultiClassSummarizer)) =>\n+          (c1._1.merge(c2._1), c1._2.merge(c2._2))\n+\n+      instances match {"
+  }, {
+    "author": {
+      "login": "feynmanliang"
+    },
+    "body": "OK I see what's going on; `fold` on the either expects two functions into the same type so type inference is inferring an upper bound of `RDD[(Double, Vector)]` and `RDD[(Double, Double, Vector)]` for the type of `instances.fold(identity, identity)` whereas in the earlier code `instances` was bound by the concrete types within the `Either`.\n\nWe can leave as is or remove the `Either`s and use `RDD[(Double, 1.0, Vector)]` for the unweighted instances; I am a fan of removing the `Either`s since that will reduce pattern matching code but both approaches are acceptable to me.\n",
+    "commit": "f53436a64797efbd2a8e09059e3cd9e8447e00a5",
+    "createdAt": "2015-08-27T17:30:44Z",
+    "diffHunk": "@@ -218,31 +217,59 @@ class LogisticRegression(override val uid: String)\n \n   override def getThreshold: Double = super.getThreshold\n \n+  /**\n+   * Whether to over-/undersamples each of training sample according to the given\n+   * weight in `weightCol`. If empty, all samples are supposed to have weights as 1.0.\n+   * Default is empty, so all samples have weight one.\n+   * @group setParam\n+   */\n+  def setWeightCol(value: String): this.type = set(weightCol, value)\n+  setDefault(weightCol -> \"\")\n+\n   override def setThresholds(value: Array[Double]): this.type = super.setThresholds(value)\n \n   override def getThresholds: Array[Double] = super.getThresholds\n \n   override protected def train(dataset: DataFrame): LogisticRegressionModel = {\n     // Extract columns from data.  If dataset is persisted, do not persist oldDataset.\n-    val instances = extractLabeledPoints(dataset).map {\n-      case LabeledPoint(label: Double, features: Vector) => (label, features)\n-    }\n+    val instances: Either[RDD[(Double, Vector)], RDD[(Double, Double, Vector)]] =\n+      if ($(weightCol).isEmpty) {\n+        Left(dataset.select($(labelCol), $(featuresCol)).map {\n+          case Row(label: Double, features: Vector) => (label, features)\n+        })\n+      } else {\n+        Right(dataset.select($(labelCol), $(weightCol), $(featuresCol)).map {\n+          case Row(label: Double, weight: Double, features: Vector) =>\n+            (label, weight, features)\n+        })\n+      }\n+\n     val handlePersistence = dataset.rdd.getStorageLevel == StorageLevel.NONE\n-    if (handlePersistence) instances.persist(StorageLevel.MEMORY_AND_DISK)\n-\n-    val (summarizer, labelSummarizer) = instances.treeAggregate(\n-      (new MultivariateOnlineSummarizer, new MultiClassSummarizer))(\n-        seqOp = (c, v) => (c, v) match {\n-          case ((summarizer: MultivariateOnlineSummarizer, labelSummarizer: MultiClassSummarizer),\n-          (label: Double, features: Vector)) =>\n-            (summarizer.add(features), labelSummarizer.add(label))\n-        },\n-        combOp = (c1, c2) => (c1, c2) match {\n-          case ((summarizer1: MultivariateOnlineSummarizer,\n-          classSummarizer1: MultiClassSummarizer), (summarizer2: MultivariateOnlineSummarizer,\n-          classSummarizer2: MultiClassSummarizer)) =>\n-            (summarizer1.merge(summarizer2), classSummarizer1.merge(classSummarizer2))\n-      })\n+    if (handlePersistence) instances.fold(identity, identity).persist(StorageLevel.MEMORY_AND_DISK)\n+\n+    val (summarizer, labelSummarizer) = {\n+      val combOp = (c1: (MultivariateOnlineSummarizer, MultiClassSummarizer),\n+        c2: (MultivariateOnlineSummarizer, MultiClassSummarizer)) =>\n+          (c1._1.merge(c2._1), c1._2.merge(c2._2))\n+\n+      instances match {"
+  }],
+  "prId": 7884
+}, {
+  "comments": [{
+    "author": {
+      "login": "feynmanliang"
+    },
+    "body": "ditto about pattern matching for `seqOp` to avoid the repeated `treeAggregate` calls\n",
+    "commit": "f53436a64797efbd2a8e09059e3cd9e8447e00a5",
+    "createdAt": "2015-08-26T18:44:09Z",
+    "diffHunk": "@@ -833,14 +871,20 @@ private class LogisticCostFun(\n     val numFeatures = featuresStd.length\n     val w = Vectors.fromBreeze(weights)\n \n-    val logisticAggregator = data.treeAggregate(new LogisticAggregator(w, numClasses, fitIntercept,\n-      featuresStd, featuresMean))(\n-        seqOp = (c, v) => (c, v) match {\n-          case (aggregator, (label, features)) => aggregator.add(label, features)\n-        },\n-        combOp = (c1, c2) => (c1, c2) match {\n-          case (aggregator1, aggregator2) => aggregator1.merge(aggregator2)\n-        })\n+    val logisticAggregator = {\n+      val combOp = (c1: LogisticAggregator, c2: LogisticAggregator) => c1.merge(c2)\n+      data match {"
+  }],
+  "prId": 7884
+}, {
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "- minor: `instance` might be better than `sample` here. `sample` might mean a sampled subset.\n- `each of training sample` -> `each training instance`\n",
+    "commit": "f53436a64797efbd2a8e09059e3cd9e8447e00a5",
+    "createdAt": "2015-09-02T21:27:02Z",
+    "diffHunk": "@@ -218,31 +217,51 @@ class LogisticRegression(override val uid: String)\n \n   override def getThreshold: Double = super.getThreshold\n \n+  /**\n+   * Whether to over-/undersamples each of training sample according to the given"
+  }],
+  "prId": 7884
+}, {
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "I didn't check the previous version. I would do the following:\n\n``` scala\nval w = if ($(weightCol).isEmpty) lit(1.0) else col($(weightCol))\ndataset.select(col($(label)), w, col($featuresCol)).map {\n  case Row(label: Double, weight: Double, features: Vector) =>\n    (label, weight, features)\n  }\n}\n```\n\nBtw, if it helps code readability, we can defined a private case class called `WeightedLabelPoint` or `Instance` in `LogisticRegression`.\n",
+    "commit": "f53436a64797efbd2a8e09059e3cd9e8447e00a5",
+    "createdAt": "2015-09-02T21:27:04Z",
+    "diffHunk": "@@ -218,31 +217,51 @@ class LogisticRegression(override val uid: String)\n \n   override def getThreshold: Double = super.getThreshold\n \n+  /**\n+   * Whether to over-/undersamples each of training sample according to the given\n+   * weight in `weightCol`. If empty, all samples are supposed to have weights as 1.0.\n+   * Default is empty, so all samples have weight one.\n+   * @group setParam\n+   */\n+  def setWeightCol(value: String): this.type = set(weightCol, value)\n+  setDefault(weightCol -> \"\")\n+\n   override def setThresholds(value: Array[Double]): this.type = super.setThresholds(value)\n \n   override def getThresholds: Array[Double] = super.getThresholds\n \n   override protected def train(dataset: DataFrame): LogisticRegressionModel = {\n     // Extract columns from data.  If dataset is persisted, do not persist oldDataset.\n-    val instances = extractLabeledPoints(dataset).map {\n-      case LabeledPoint(label: Double, features: Vector) => (label, features)\n+    val instances: RDD[(Double, Double, Vector)] = if ($(weightCol).isEmpty) {"
+  }, {
+    "author": {
+      "login": "dbtsai"
+    },
+    "body": "How about I have `WeightedLabelPoint` together with `LabledPoint` but I make it private so LiR and IsotonicRegression can use it?\n",
+    "commit": "f53436a64797efbd2a8e09059e3cd9e8447e00a5",
+    "createdAt": "2015-09-02T22:00:33Z",
+    "diffHunk": "@@ -218,31 +217,51 @@ class LogisticRegression(override val uid: String)\n \n   override def getThreshold: Double = super.getThreshold\n \n+  /**\n+   * Whether to over-/undersamples each of training sample according to the given\n+   * weight in `weightCol`. If empty, all samples are supposed to have weights as 1.0.\n+   * Default is empty, so all samples have weight one.\n+   * @group setParam\n+   */\n+  def setWeightCol(value: String): this.type = set(weightCol, value)\n+  setDefault(weightCol -> \"\")\n+\n   override def setThresholds(value: Array[Double]): this.type = super.setThresholds(value)\n \n   override def getThresholds: Array[Double] = super.getThresholds\n \n   override protected def train(dataset: DataFrame): LogisticRegressionModel = {\n     // Extract columns from data.  If dataset is persisted, do not persist oldDataset.\n-    val instances = extractLabeledPoints(dataset).map {\n-      case LabeledPoint(label: Double, features: Vector) => (label, features)\n+    val instances: RDD[(Double, Double, Vector)] = if ($(weightCol).isEmpty) {"
+  }, {
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "That could be done in a separate PR. For this PR, let's just have a private case class defined inside `LogisticRegression`.\n",
+    "commit": "f53436a64797efbd2a8e09059e3cd9e8447e00a5",
+    "createdAt": "2015-09-02T23:02:02Z",
+    "diffHunk": "@@ -218,31 +217,51 @@ class LogisticRegression(override val uid: String)\n \n   override def getThreshold: Double = super.getThreshold\n \n+  /**\n+   * Whether to over-/undersamples each of training sample according to the given\n+   * weight in `weightCol`. If empty, all samples are supposed to have weights as 1.0.\n+   * Default is empty, so all samples have weight one.\n+   * @group setParam\n+   */\n+  def setWeightCol(value: String): this.type = set(weightCol, value)\n+  setDefault(weightCol -> \"\")\n+\n   override def setThresholds(value: Array[Double]): this.type = super.setThresholds(value)\n \n   override def getThresholds: Array[Double] = super.getThresholds\n \n   override protected def train(dataset: DataFrame): LogisticRegressionModel = {\n     // Extract columns from data.  If dataset is persisted, do not persist oldDataset.\n-    val instances = extractLabeledPoints(dataset).map {\n-      case LabeledPoint(label: Double, features: Vector) => (label, features)\n+    val instances: RDD[(Double, Double, Vector)] = if ($(weightCol).isEmpty) {"
+  }, {
+    "author": {
+      "login": "dbtsai"
+    },
+    "body": "I like to have it as `Instance` as you suggest, so we can have different type of instance.\n",
+    "commit": "f53436a64797efbd2a8e09059e3cd9e8447e00a5",
+    "createdAt": "2015-09-14T00:29:50Z",
+    "diffHunk": "@@ -218,31 +217,51 @@ class LogisticRegression(override val uid: String)\n \n   override def getThreshold: Double = super.getThreshold\n \n+  /**\n+   * Whether to over-/undersamples each of training sample according to the given\n+   * weight in `weightCol`. If empty, all samples are supposed to have weights as 1.0.\n+   * Default is empty, so all samples have weight one.\n+   * @group setParam\n+   */\n+  def setWeightCol(value: String): this.type = set(weightCol, value)\n+  setDefault(weightCol -> \"\")\n+\n   override def setThresholds(value: Array[Double]): this.type = super.setThresholds(value)\n \n   override def getThresholds: Array[Double] = super.getThresholds\n \n   override protected def train(dataset: DataFrame): LogisticRegressionModel = {\n     // Extract columns from data.  If dataset is persisted, do not persist oldDataset.\n-    val instances = extractLabeledPoints(dataset).map {\n-      case LabeledPoint(label: Double, features: Vector) => (label, features)\n+    val instances: RDD[(Double, Double, Vector)] = if ($(weightCol).isEmpty) {"
+  }],
+  "prId": 7884
+}, {
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "``` scala\ninstances.treeAggregate(\n  new MultivariateOnlineSummarizer, new MultiClassSummarizer\n)(seqOp, combOp)\n```\n",
+    "commit": "f53436a64797efbd2a8e09059e3cd9e8447e00a5",
+    "createdAt": "2015-09-02T21:27:07Z",
+    "diffHunk": "@@ -218,31 +217,51 @@ class LogisticRegression(override val uid: String)\n \n   override def getThreshold: Double = super.getThreshold\n \n+  /**\n+   * Whether to over-/undersamples each of training sample according to the given\n+   * weight in `weightCol`. If empty, all samples are supposed to have weights as 1.0.\n+   * Default is empty, so all samples have weight one.\n+   * @group setParam\n+   */\n+  def setWeightCol(value: String): this.type = set(weightCol, value)\n+  setDefault(weightCol -> \"\")\n+\n   override def setThresholds(value: Array[Double]): this.type = super.setThresholds(value)\n \n   override def getThresholds: Array[Double] = super.getThresholds\n \n   override protected def train(dataset: DataFrame): LogisticRegressionModel = {\n     // Extract columns from data.  If dataset is persisted, do not persist oldDataset.\n-    val instances = extractLabeledPoints(dataset).map {\n-      case LabeledPoint(label: Double, features: Vector) => (label, features)\n+    val instances: RDD[(Double, Double, Vector)] = if ($(weightCol).isEmpty) {\n+      dataset.select($(labelCol), $(featuresCol)).map {\n+        case Row(label: Double, features: Vector) =>\n+          (label, 1.0, features)\n+      }\n+    } else {\n+      dataset.select($(labelCol), $(weightCol), $(featuresCol)).map {\n+        case Row(label: Double, weight: Double, features: Vector) =>\n+          (label, weight, features)\n+      }\n     }\n+\n     val handlePersistence = dataset.rdd.getStorageLevel == StorageLevel.NONE\n     if (handlePersistence) instances.persist(StorageLevel.MEMORY_AND_DISK)\n \n-    val (summarizer, labelSummarizer) = instances.treeAggregate(\n-      (new MultivariateOnlineSummarizer, new MultiClassSummarizer))(\n-        seqOp = (c, v) => (c, v) match {\n-          case ((summarizer: MultivariateOnlineSummarizer, labelSummarizer: MultiClassSummarizer),\n-          (label: Double, features: Vector)) =>\n-            (summarizer.add(features), labelSummarizer.add(label))\n-        },\n-        combOp = (c1, c2) => (c1, c2) match {\n-          case ((summarizer1: MultivariateOnlineSummarizer,\n-          classSummarizer1: MultiClassSummarizer), (summarizer2: MultivariateOnlineSummarizer,\n-          classSummarizer2: MultiClassSummarizer)) =>\n-            (summarizer1.merge(summarizer2), classSummarizer1.merge(classSummarizer2))\n-      })\n+    val (summarizer, labelSummarizer) = {\n+      val combOp = (c1: (MultivariateOnlineSummarizer, MultiClassSummarizer),\n+        c2: (MultivariateOnlineSummarizer, MultiClassSummarizer)) =>\n+          (c1._1.merge(c2._1), c1._2.merge(c2._2))\n+\n+      val seqOp = (c: (MultivariateOnlineSummarizer, MultiClassSummarizer),\n+        v: (Double, Double, Vector)) => {\n+          val weight = v._2\n+          (c._1.add(v._3, weight), c._2.add(v._1, weight))\n+        }\n+\n+      instances.treeAggregate(new MultivariateOnlineSummarizer,"
+  }],
+  "prId": 7884
+}, {
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "Move `require(...)` right after L530. This optimization is not very necessary. It helps code readability if we put all preconditions at the beginning.\n",
+    "commit": "f53436a64797efbd2a8e09059e3cd9e8447e00a5",
+    "createdAt": "2015-09-02T21:27:10Z",
+    "diffHunk": "@@ -499,22 +518,26 @@ class LogisticRegressionModel private[ml] (\n  * corresponding joint dataset.\n  */\n private[classification] class MultiClassSummarizer extends Serializable {\n-  private val distinctMap = new mutable.HashMap[Int, Long]\n+  private val distinctMap = new mutable.HashMap[Int, Double]\n   private var totalInvalidCnt: Long = 0L\n \n   /**\n    * Add a new label into this MultilabelSummarizer, and update the distinct map.\n    * @param label The label for this data point.\n+   * @param weight The weight of this sample.\n    * @return This MultilabelSummarizer\n    */\n-  def add(label: Double): this.type = {\n+  def add(label: Double, weight: Double = 1.0): this.type = {\n+    if (weight == 0.0) return this\n+    require(weight > 0.0, s\"sample weight, ${weight} has to be >= 0.0\")"
+  }],
+  "prId": 7884
+}, {
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "Why we need `weightSum >= 1.0`? I think `> 0.0` would suffice.\n",
+    "commit": "f53436a64797efbd2a8e09059e3cd9e8447e00a5",
+    "createdAt": "2015-09-02T21:27:38Z",
+    "diffHunk": "@@ -803,13 +829,17 @@ private class LogisticAggregator(\n     this\n   }\n \n-  def count: Long = totalCnt\n-\n-  def loss: Double = lossSum / totalCnt\n+  def loss: Double = {\n+    require(weightSum >= 1.0, s\"The effective number of samples should be \" +"
+  }, {
+    "author": {
+      "login": "dbtsai"
+    },
+    "body": "When computing the variance, there is no definition of variance when 0.0 < # of sample < 1.0\n",
+    "commit": "f53436a64797efbd2a8e09059e3cd9e8447e00a5",
+    "createdAt": "2015-09-02T22:03:19Z",
+    "diffHunk": "@@ -803,13 +829,17 @@ private class LogisticAggregator(\n     this\n   }\n \n-  def count: Long = totalCnt\n-\n-  def loss: Double = lossSum / totalCnt\n+  def loss: Double = {\n+    require(weightSum >= 1.0, s\"The effective number of samples should be \" +"
+  }, {
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "We shouldn't define variance that way. `weight` is not necessarily representing how many instances. For example, the following definition would be compatible with the case when `weight === 1.0`:\n\n```\nVar[X] = E[X^2] - E[X]^2\n  ~= (\\sum_i w_i x_i^2 / sum_i w_i) - (\\sum_i w_i x_i / sum_i w_i)^2\n```\n\nthough we still need to figure out how to make it compatible with unbiased version and implement it in a numerical stable way.\n",
+    "commit": "f53436a64797efbd2a8e09059e3cd9e8447e00a5",
+    "createdAt": "2015-09-02T23:02:07Z",
+    "diffHunk": "@@ -803,13 +829,17 @@ private class LogisticAggregator(\n     this\n   }\n \n-  def count: Long = totalCnt\n-\n-  def loss: Double = lossSum / totalCnt\n+  def loss: Double = {\n+    require(weightSum >= 1.0, s\"The effective number of samples should be \" +"
+  }, {
+    "author": {
+      "login": "rotationsymmetry"
+    },
+    "body": "For your consideration, the unbiased estimate of the variance can be found [here](https://en.wikipedia.org/wiki/Weighted_arithmetic_mean#Weighted_sample_covariance). There is no requirement for sum of weights > 1.\n",
+    "commit": "f53436a64797efbd2a8e09059e3cd9e8447e00a5",
+    "createdAt": "2015-09-03T01:11:48Z",
+    "diffHunk": "@@ -803,13 +829,17 @@ private class LogisticAggregator(\n     this\n   }\n \n-  def count: Long = totalCnt\n-\n-  def loss: Double = lossSum / totalCnt\n+  def loss: Double = {\n+    require(weightSum >= 1.0, s\"The effective number of samples should be \" +"
+  }, {
+    "author": {
+      "login": "dbtsai"
+    },
+    "body": "@rotationsymmetry  This definition requires sum of weights == 1. I was originally thinking about to use this definition, but that will not be compatible with unbiased version as @mengxr pointed out. What users want may be weight=2 means this instance appears in the training dataset twice. \n",
+    "commit": "f53436a64797efbd2a8e09059e3cd9e8447e00a5",
+    "createdAt": "2015-09-03T01:29:54Z",
+    "diffHunk": "@@ -803,13 +829,17 @@ private class LogisticAggregator(\n     this\n   }\n \n-  def count: Long = totalCnt\n-\n-  def loss: Double = lossSum / totalCnt\n+  def loss: Double = {\n+    require(weightSum >= 1.0, s\"The effective number of samples should be \" +"
+  }],
+  "prId": 7884
+}, {
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "ditto\n",
+    "commit": "f53436a64797efbd2a8e09059e3cd9e8447e00a5",
+    "createdAt": "2015-09-02T21:27:39Z",
+    "diffHunk": "@@ -803,13 +829,17 @@ private class LogisticAggregator(\n     this\n   }\n \n-  def count: Long = totalCnt\n-\n-  def loss: Double = lossSum / totalCnt\n+  def loss: Double = {\n+    require(weightSum >= 1.0, s\"The effective number of samples should be \" +\n+      s\"greater than or equal to 1.0, but $weightSum.\")\n+    lossSum / weightSum\n+  }\n \n   def gradient: Vector = {\n+    require(weightSum >= 1.0, s\"The effective number of samples should be \" +"
+  }],
+  "prId": 7884
+}, {
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "More readable if we define a private case class for weighted instances.\n",
+    "commit": "f53436a64797efbd2a8e09059e3cd9e8447e00a5",
+    "createdAt": "2015-09-02T21:28:12Z",
+    "diffHunk": "@@ -833,14 +863,13 @@ private class LogisticCostFun(\n     val numFeatures = featuresStd.length\n     val w = Vectors.fromBreeze(weights)\n \n-    val logisticAggregator = data.treeAggregate(new LogisticAggregator(w, numClasses, fitIntercept,\n-      featuresStd, featuresMean))(\n-        seqOp = (c, v) => (c, v) match {\n-          case (aggregator, (label, features)) => aggregator.add(label, features)\n-        },\n-        combOp = (c1, c2) => (c1, c2) match {\n-          case (aggregator1, aggregator2) => aggregator1.merge(aggregator2)\n-        })\n+    val logisticAggregator = {\n+      val combOp = (c1: LogisticAggregator, c2: LogisticAggregator) => c1.merge(c2)\n+      val seqOp = (c: LogisticAggregator, v: (Double, Double, Vector)) => c.add(v._1, v._3, v._2)"
+  }],
+  "prId": 7884
+}, {
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "``` scala\ndata.treeAggregate(\n  new LogisticAggregator(w, numClasses, fitIntercept, featuresStd, featuresMean)\n)(seqOp, combOp)\n```\n",
+    "commit": "f53436a64797efbd2a8e09059e3cd9e8447e00a5",
+    "createdAt": "2015-09-02T21:28:41Z",
+    "diffHunk": "@@ -833,14 +863,13 @@ private class LogisticCostFun(\n     val numFeatures = featuresStd.length\n     val w = Vectors.fromBreeze(weights)\n \n-    val logisticAggregator = data.treeAggregate(new LogisticAggregator(w, numClasses, fitIntercept,\n-      featuresStd, featuresMean))(\n-        seqOp = (c, v) => (c, v) match {\n-          case (aggregator, (label, features)) => aggregator.add(label, features)\n-        },\n-        combOp = (c1, c2) => (c1, c2) match {\n-          case (aggregator1, aggregator2) => aggregator1.merge(aggregator2)\n-        })\n+    val logisticAggregator = {\n+      val combOp = (c1: LogisticAggregator, c2: LogisticAggregator) => c1.merge(c2)\n+      val seqOp = (c: LogisticAggregator, v: (Double, Double, Vector)) => c.add(v._1, v._3, v._2)\n+\n+      data.treeAggregate(new LogisticAggregator(w, numClasses, fitIntercept, featuresStd,\n+        featuresMean))(seqOp, combOp)"
+  }],
+  "prId": 7884
+}, {
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "\"Whether to over-/under-sample training instances according to the given weights in `weightCol`. If empty, all instances are treated equally (weight 1.0).\"\n",
+    "commit": "f53436a64797efbd2a8e09059e3cd9e8447e00a5",
+    "createdAt": "2015-09-14T19:24:08Z",
+    "diffHunk": "@@ -218,31 +228,48 @@ class LogisticRegression(override val uid: String)\n \n   override def getThreshold: Double = super.getThreshold\n \n+  /**\n+   * Whether to over-/undersamples each of training instance according to the given"
+  }],
+  "prId": 7884
+}, {
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "From my previous comment, using `val w = if ($(weightCol).isEmpty) lit(1.0) else col($(weightCol))` could simplify this block.\n",
+    "commit": "f53436a64797efbd2a8e09059e3cd9e8447e00a5",
+    "createdAt": "2015-09-15T04:50:55Z",
+    "diffHunk": "@@ -218,31 +228,48 @@ class LogisticRegression(override val uid: String)\n \n   override def getThreshold: Double = super.getThreshold\n \n+  /**\n+   * Whether to over-/under-sample training instances according to the given weights in weightCol.\n+   * If empty, all instances are treated equally (weight 1.0).\n+   * Default is empty, so all instances have weight one.\n+   * @group setParam\n+   */\n+  def setWeightCol(value: String): this.type = set(weightCol, value)\n+  setDefault(weightCol -> \"\")\n+\n   override def setThresholds(value: Array[Double]): this.type = super.setThresholds(value)\n \n   override def getThresholds: Array[Double] = super.getThresholds\n \n   override protected def train(dataset: DataFrame): LogisticRegressionModel = {\n     // Extract columns from data.  If dataset is persisted, do not persist oldDataset.\n-    val instances = extractLabeledPoints(dataset).map {\n-      case LabeledPoint(label: Double, features: Vector) => (label, features)\n+    val instances: RDD[Instance] = if ($(weightCol).isEmpty) {"
+  }],
+  "prId": 7884
+}, {
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "should keep `count` and add `weightSum`, both of which are useful\n",
+    "commit": "f53436a64797efbd2a8e09059e3cd9e8447e00a5",
+    "createdAt": "2015-09-15T04:50:58Z",
+    "diffHunk": "@@ -501,22 +529,27 @@ class LogisticRegressionModel private[ml] (\n  * corresponding joint dataset.\n  */\n private[classification] class MultiClassSummarizer extends Serializable {\n-  private val distinctMap = new mutable.HashMap[Int, Long]\n+  private val distinctMap = new mutable.HashMap[Int, Double]\n   private var totalInvalidCnt: Long = 0L\n \n   /**\n    * Add a new label into this MultilabelSummarizer, and update the distinct map.\n    * @param label The label for this data point.\n+   * @param weight The weight of this instances.\n    * @return This MultilabelSummarizer\n    */\n-  def add(label: Double): this.type = {\n+  def add(label: Double, weight: Double = 1.0): this.type = {\n+    require(weight >= 0.0, s\"instance weight, ${weight} has to be >= 0.0\")\n+\n+    if (weight == 0.0) return this\n+\n     if (label - label.toInt != 0.0 || label < 0) {\n       totalInvalidCnt += 1\n       this\n     }\n     else {\n-      val counts: Long = distinctMap.getOrElse(label.toInt, 0L)\n-      distinctMap.put(label.toInt, counts + 1)\n+      val counts: Double = distinctMap.getOrElse(label.toInt, 0.0)"
+  }, {
+    "author": {
+      "login": "dbtsai"
+    },
+    "body": "I have this information available now. `histogram` function will return array of `weightSum`, and we need another api for  getting `counts`. Let's do it in follow-up JIRA. In fact, we should move MultiClassSummarizer out to use it elsewhere. \n",
+    "commit": "f53436a64797efbd2a8e09059e3cd9e8447e00a5",
+    "createdAt": "2015-09-15T05:47:51Z",
+    "diffHunk": "@@ -501,22 +529,27 @@ class LogisticRegressionModel private[ml] (\n  * corresponding joint dataset.\n  */\n private[classification] class MultiClassSummarizer extends Serializable {\n-  private val distinctMap = new mutable.HashMap[Int, Long]\n+  private val distinctMap = new mutable.HashMap[Int, Double]\n   private var totalInvalidCnt: Long = 0L\n \n   /**\n    * Add a new label into this MultilabelSummarizer, and update the distinct map.\n    * @param label The label for this data point.\n+   * @param weight The weight of this instances.\n    * @return This MultilabelSummarizer\n    */\n-  def add(label: Double): this.type = {\n+  def add(label: Double, weight: Double = 1.0): this.type = {\n+    require(weight >= 0.0, s\"instance weight, ${weight} has to be >= 0.0\")\n+\n+    if (weight == 0.0) return this\n+\n     if (label - label.toInt != 0.0 || label < 0) {\n       totalInvalidCnt += 1\n       this\n     }\n     else {\n-      val counts: Long = distinctMap.getOrElse(label.toInt, 0L)\n-      distinctMap.put(label.toInt, counts + 1)\n+      val counts: Double = distinctMap.getOrElse(label.toInt, 0.0)"
+  }],
+  "prId": 7884
+}]

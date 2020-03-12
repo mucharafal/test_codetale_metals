@@ -1,0 +1,126 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "squito"
+    },
+    "body": "any reason to only use `localDirs(0)` instead of checking all localDirs?  I worry that you might get another local dir pre-pended or something during a configuration change + restart\r\n\r\nalso it seems you're creating a path like \"[local-dir]/registeredExecutors/registeredExecutors.ldb\", any reason for the extra level?",
+    "commit": "475d27817b6ef37eed9b7b39fee709427811f0d6",
+    "createdAt": "2019-01-04T17:23:55Z",
+    "diffHunk": "@@ -56,11 +60,55 @@ class ExternalShuffleService(sparkConf: SparkConf, securityManager: SecurityMana\n \n   private var server: TransportServer = _\n \n+  private final val  MAX_DIR_CREATION_ATTEMPTS = 10\n+\n   private val shuffleServiceSource = new ExternalShuffleServiceSource\n \n+  protected def createDirectory(root: String, name: String): File = {\n+    var attempts = 0\n+    val maxAttempts = MAX_DIR_CREATION_ATTEMPTS\n+    var dir: File = null\n+    while (dir == null) {\n+      attempts += 1\n+      if (attempts > maxAttempts) {\n+        throw new IOException(\"Failed to create a temp directory (under \" + root + \") after \" +\n+          maxAttempts + \" attempts!\")\n+      }\n+      try {\n+        dir = new File(root, \"registeredExecutors\")\n+        if (!dir.exists() && !dir.mkdirs()) {\n+          dir = null\n+        }\n+      } catch { case e: SecurityException => dir = null; }\n+    }\n+    logInfo(s\"registeredExecutorsDb path is ${dir.getAbsolutePath}\")\n+    new File(dir.getAbsolutePath, name)\n+  }\n+\n+  protected def initRegisteredExecutorsDB(dbName: String): File = {\n+    val localDirs = sparkConf.get(\"spark.local.dir\", \"\").split(\",\")\n+    if (localDirs.length >= 1 && !\"\".equals(localDirs(0))) {\n+      createDirectory(localDirs(0), dbName)"
+  }, {
+    "author": {
+      "login": "weixiuli"
+    },
+    "body": "Hi, @squito , as you agreed that it certainly should be possible to do it. \r\n`the one which comes to mind is, what happens if an application is stopped while the external shuffle service is down?  In yarn, we rely on being told the application was stopped even after the NM comes back.`\r\nNow , It  can  leave an entry in the DB forever when some time like above.   As you said that  Maybe this is rare enough and low-impact enough ,  but at least worth thinking through and documenting. So I think  we can add some core to remove  the entry  with WorkDirCleanup  when set #spark.worker.cleanup.enabled = true in standalone mode. can you have any good idea ? \r\n\r\nThis commit uses  `localDirs(0)` instead of checking all localDirs to make sure it's  a same path to be used by DB  and  make sure initRegisteredExecutorsDB  to work , `localDirs(0) ` is just to \r\nbe used  for DB  instead of  additional set. \r\n\r\nCreating a path like \"[local-dir]/registeredExecutors/registeredExecutors.ldb\" is just to make it look clearly .\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n",
+    "commit": "475d27817b6ef37eed9b7b39fee709427811f0d6",
+    "createdAt": "2019-01-08T11:35:10Z",
+    "diffHunk": "@@ -56,11 +60,55 @@ class ExternalShuffleService(sparkConf: SparkConf, securityManager: SecurityMana\n \n   private var server: TransportServer = _\n \n+  private final val  MAX_DIR_CREATION_ATTEMPTS = 10\n+\n   private val shuffleServiceSource = new ExternalShuffleServiceSource\n \n+  protected def createDirectory(root: String, name: String): File = {\n+    var attempts = 0\n+    val maxAttempts = MAX_DIR_CREATION_ATTEMPTS\n+    var dir: File = null\n+    while (dir == null) {\n+      attempts += 1\n+      if (attempts > maxAttempts) {\n+        throw new IOException(\"Failed to create a temp directory (under \" + root + \") after \" +\n+          maxAttempts + \" attempts!\")\n+      }\n+      try {\n+        dir = new File(root, \"registeredExecutors\")\n+        if (!dir.exists() && !dir.mkdirs()) {\n+          dir = null\n+        }\n+      } catch { case e: SecurityException => dir = null; }\n+    }\n+    logInfo(s\"registeredExecutorsDb path is ${dir.getAbsolutePath}\")\n+    new File(dir.getAbsolutePath, name)\n+  }\n+\n+  protected def initRegisteredExecutorsDB(dbName: String): File = {\n+    val localDirs = sparkConf.get(\"spark.local.dir\", \"\").split(\",\")\n+    if (localDirs.length >= 1 && !\"\".equals(localDirs(0))) {\n+      createDirectory(localDirs(0), dbName)"
+  }, {
+    "author": {
+      "login": "squito"
+    },
+    "body": "yes I think WorkDirCleanup maybe just what we need to ensure things get cleaned up, good idea.\r\n\r\nI understand wanting to use a consistent directory, but like I said I'm worried about restarts after configuration changes (maybe not a concern in a standalone mode?  does it always require a total restart?)  You could do something like what was done in the original patch for yarn, to check all the dirs, but fallback to dir[0] (that code has since changed to take advantage of other yarn features for recovery):\r\n\r\nhttps://github.com/apache/spark/blob/708036c1de52d674ceff30ac465e1dcedeb8dde8/network/yarn/src/main/java/org/apache/spark/network/yarn/YarnShuffleService.java#L192-L200",
+    "commit": "475d27817b6ef37eed9b7b39fee709427811f0d6",
+    "createdAt": "2019-01-08T16:22:18Z",
+    "diffHunk": "@@ -56,11 +60,55 @@ class ExternalShuffleService(sparkConf: SparkConf, securityManager: SecurityMana\n \n   private var server: TransportServer = _\n \n+  private final val  MAX_DIR_CREATION_ATTEMPTS = 10\n+\n   private val shuffleServiceSource = new ExternalShuffleServiceSource\n \n+  protected def createDirectory(root: String, name: String): File = {\n+    var attempts = 0\n+    val maxAttempts = MAX_DIR_CREATION_ATTEMPTS\n+    var dir: File = null\n+    while (dir == null) {\n+      attempts += 1\n+      if (attempts > maxAttempts) {\n+        throw new IOException(\"Failed to create a temp directory (under \" + root + \") after \" +\n+          maxAttempts + \" attempts!\")\n+      }\n+      try {\n+        dir = new File(root, \"registeredExecutors\")\n+        if (!dir.exists() && !dir.mkdirs()) {\n+          dir = null\n+        }\n+      } catch { case e: SecurityException => dir = null; }\n+    }\n+    logInfo(s\"registeredExecutorsDb path is ${dir.getAbsolutePath}\")\n+    new File(dir.getAbsolutePath, name)\n+  }\n+\n+  protected def initRegisteredExecutorsDB(dbName: String): File = {\n+    val localDirs = sparkConf.get(\"spark.local.dir\", \"\").split(\",\")\n+    if (localDirs.length >= 1 && !\"\".equals(localDirs(0))) {\n+      createDirectory(localDirs(0), dbName)"
+  }],
+  "prId": 23393
+}, {
+  "comments": [{
+    "author": {
+      "login": "squito"
+    },
+    "body": "I think renaming to `findRegisteredExecutorsDBFile` would be better, nothing is really getting initialized here",
+    "commit": "475d27817b6ef37eed9b7b39fee709427811f0d6",
+    "createdAt": "2019-03-04T21:20:03Z",
+    "diffHunk": "@@ -58,9 +62,42 @@ class ExternalShuffleService(sparkConf: SparkConf, securityManager: SecurityMana\n \n   private val shuffleServiceSource = new ExternalShuffleServiceSource\n \n+  protected def initRegisteredExecutorsDB(dbName: String): File = {"
+  }, {
+    "author": {
+      "login": "weixiuli"
+    },
+    "body": "ok,done",
+    "commit": "475d27817b6ef37eed9b7b39fee709427811f0d6",
+    "createdAt": "2019-03-06T10:49:04Z",
+    "diffHunk": "@@ -58,9 +62,42 @@ class ExternalShuffleService(sparkConf: SparkConf, securityManager: SecurityMana\n \n   private val shuffleServiceSource = new ExternalShuffleServiceSource\n \n+  protected def initRegisteredExecutorsDB(dbName: String): File = {"
+  }],
+  "prId": 23393
+}, {
+  "comments": [{
+    "author": {
+      "login": "attilapiros"
+    },
+    "body": "The if with `localDirs(0).nonEmpty` can be spared by using this line:\r\n \r\n```\r\nval localDirs = sparkConf.getOption(\"spark.local.dir\").map(_.split(\",\")).getOrElse(Array())\r\n```",
+    "commit": "475d27817b6ef37eed9b7b39fee709427811f0d6",
+    "createdAt": "2019-03-06T16:20:12Z",
+    "diffHunk": "@@ -58,9 +62,42 @@ class ExternalShuffleService(sparkConf: SparkConf, securityManager: SecurityMana\n \n   private val shuffleServiceSource = new ExternalShuffleServiceSource\n \n+  protected def findRegisteredExecutorsDBFile(dbName: String): File = {\n+    val localDirs = sparkConf.get(\"spark.local.dir\", \"\").split(\",\")"
+  }, {
+    "author": {
+      "login": "weixiuli"
+    },
+    "body": "That's a good idea,thank you.",
+    "commit": "475d27817b6ef37eed9b7b39fee709427811f0d6",
+    "createdAt": "2019-03-07T13:30:02Z",
+    "diffHunk": "@@ -58,9 +62,42 @@ class ExternalShuffleService(sparkConf: SparkConf, securityManager: SecurityMana\n \n   private val shuffleServiceSource = new ExternalShuffleServiceSource\n \n+  protected def findRegisteredExecutorsDBFile(dbName: String): File = {\n+    val localDirs = sparkConf.get(\"spark.local.dir\", \"\").split(\",\")"
+  }],
+  "prId": 23393
+}, {
+  "comments": [{
+    "author": {
+      "login": "attilapiros"
+    },
+    "body": "Nit: indentation \r\n\r\n```\r\nif () {\r\n...\r\n} else {\r\n...\r\n}\r\n```",
+    "commit": "475d27817b6ef37eed9b7b39fee709427811f0d6",
+    "createdAt": "2019-03-06T16:31:22Z",
+    "diffHunk": "@@ -58,9 +62,42 @@ class ExternalShuffleService(sparkConf: SparkConf, securityManager: SecurityMana\n \n   private val shuffleServiceSource = new ExternalShuffleServiceSource\n \n+  protected def findRegisteredExecutorsDBFile(dbName: String): File = {\n+    val localDirs = sparkConf.get(\"spark.local.dir\", \"\").split(\",\")\n+    var dbFile: File = null\n+    if (localDirs.length > 1 || (localDirs.length == 1 && localDirs(0).nonEmpty)) {\n+      for (dir <- localDirs) {\n+        val tmpFile = new File(dir, dbName)\n+        if (tmpFile.exists()) {\n+          dbFile = tmpFile\n+        }\n+      }\n+      if (dbFile != null) {\n+        dbFile\n+      }\n+      else {"
+  }, {
+    "author": {
+      "login": "weixiuli"
+    },
+    "body": "sorry,done",
+    "commit": "475d27817b6ef37eed9b7b39fee709427811f0d6",
+    "createdAt": "2019-03-07T13:19:15Z",
+    "diffHunk": "@@ -58,9 +62,42 @@ class ExternalShuffleService(sparkConf: SparkConf, securityManager: SecurityMana\n \n   private val shuffleServiceSource = new ExternalShuffleServiceSource\n \n+  protected def findRegisteredExecutorsDBFile(dbName: String): File = {\n+    val localDirs = sparkConf.get(\"spark.local.dir\", \"\").split(\",\")\n+    var dbFile: File = null\n+    if (localDirs.length > 1 || (localDirs.length == 1 && localDirs(0).nonEmpty)) {\n+      for (dir <- localDirs) {\n+        val tmpFile = new File(dir, dbName)\n+        if (tmpFile.exists()) {\n+          dbFile = tmpFile\n+        }\n+      }\n+      if (dbFile != null) {\n+        dbFile\n+      }\n+      else {"
+  }],
+  "prId": 23393
+}, {
+  "comments": [{
+    "author": {
+      "login": "attilapiros"
+    },
+    "body": "Nit: indentation as above. \r\n\r\nAlso there are few other places with this indentation error but I do not want to spam your PR.",
+    "commit": "475d27817b6ef37eed9b7b39fee709427811f0d6",
+    "createdAt": "2019-03-06T16:32:32Z",
+    "diffHunk": "@@ -58,9 +62,42 @@ class ExternalShuffleService(sparkConf: SparkConf, securityManager: SecurityMana\n \n   private val shuffleServiceSource = new ExternalShuffleServiceSource\n \n+  protected def findRegisteredExecutorsDBFile(dbName: String): File = {\n+    val localDirs = sparkConf.get(\"spark.local.dir\", \"\").split(\",\")\n+    var dbFile: File = null\n+    if (localDirs.length > 1 || (localDirs.length == 1 && localDirs(0).nonEmpty)) {\n+      for (dir <- localDirs) {\n+        val tmpFile = new File(dir, dbName)\n+        if (tmpFile.exists()) {\n+          dbFile = tmpFile\n+        }\n+      }\n+      if (dbFile != null) {\n+        dbFile\n+      }\n+      else {\n+        new File(localDirs(0), dbName)\n+      }\n+    }"
+  }],
+  "prId": 23393
+}, {
+  "comments": [{
+    "author": {
+      "login": "attilapiros"
+    },
+    "body": "Checkstyle: space before and after operators",
+    "commit": "475d27817b6ef37eed9b7b39fee709427811f0d6",
+    "createdAt": "2019-03-12T14:39:11Z",
+    "diffHunk": "@@ -58,9 +62,39 @@ class ExternalShuffleService(sparkConf: SparkConf, securityManager: SecurityMana\n \n   private val shuffleServiceSource = new ExternalShuffleServiceSource\n \n+  protected def findRegisteredExecutorsDBFile(dbName: String): File = {\n+    val localDirs = sparkConf.getOption(\"spark.local.dir\").map(_.split(\",\")).getOrElse(Array())\n+    var dbFile: File = null\n+    if (localDirs.length >=1) {"
+  }],
+  "prId": 23393
+}, {
+  "comments": [{
+    "author": {
+      "login": "attilapiros"
+    },
+    "body": "I just have seen the default value of \"spark.local.dir\" is 64 and might happen the first one contains the \"registeredExecutors.ldb\" file so what about replacing the `for` and the `if` to something like:\r\n\r\n```scala\r\nlocalDirs\r\n  .find(dir => new File(dir, dbName).exists())\r\n  .getOrElse(new File(localDirs(0), dbName))\r\n```\r\n\r\nAs `find` stops at the first occurrence.",
+    "commit": "475d27817b6ef37eed9b7b39fee709427811f0d6",
+    "createdAt": "2019-03-13T14:01:26Z",
+    "diffHunk": "@@ -58,9 +61,39 @@ class ExternalShuffleService(sparkConf: SparkConf, securityManager: SecurityMana\n \n   private val shuffleServiceSource = new ExternalShuffleServiceSource\n \n+  protected def findRegisteredExecutorsDBFile(dbName: String): File = {\n+    val localDirs = sparkConf.getOption(\"spark.local.dir\").map(_.split(\",\")).getOrElse(Array())\n+    var dbFile: File = null"
+  }, {
+    "author": {
+      "login": "attilapiros"
+    },
+    "body": "To be precise (with fixed indentation):\r\n``` scala\r\n    val localDirs =\r\n      sparkConf.getOption(\"spark.local.dir\").map(_.split(\",\")).getOrElse(Array())\r\n    if (localDirs.length >= 1) {\r\n      new File(localDirs.find(new File(_, dbName).exists()).getOrElse(localDirs(0)), dbName)\r\n    } else {\r\n      logWarning(s\"'spark.local.dir' should be set first.\")\r\n      null\r\n    }\r\n```",
+    "commit": "475d27817b6ef37eed9b7b39fee709427811f0d6",
+    "createdAt": "2019-03-13T14:25:36Z",
+    "diffHunk": "@@ -58,9 +61,39 @@ class ExternalShuffleService(sparkConf: SparkConf, securityManager: SecurityMana\n \n   private val shuffleServiceSource = new ExternalShuffleServiceSource\n \n+  protected def findRegisteredExecutorsDBFile(dbName: String): File = {\n+    val localDirs = sparkConf.getOption(\"spark.local.dir\").map(_.split(\",\")).getOrElse(Array())\n+    var dbFile: File = null"
+  }],
+  "prId": 23393
+}]

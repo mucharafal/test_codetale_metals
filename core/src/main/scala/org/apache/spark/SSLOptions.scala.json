@@ -1,0 +1,58 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "HeartSaVioR"
+    },
+    "body": "nit: we could add `needClientAuth` as well if we would like to dump all.",
+    "commit": "fa8cdcd6b716ea1cd1784efa9167d3ee76631224",
+    "createdAt": "2019-03-22T03:37:32Z",
+    "diffHunk": "@@ -131,8 +132,9 @@ private[spark] case class SSLOptions(\n   /** Returns a string representation of this SSLOptions with all the passwords masked. */\n   override def toString: String = s\"SSLOptions{enabled=$enabled, port=$port, \" +\n       s\"keyStore=$keyStore, keyStorePassword=${keyStorePassword.map(_ => \"xxx\")}, \" +\n+      s\"keyPassword=${keyPassword.map(_ => \"xxx\")}, keyStoreType=$keyStoreType, \" +"
+  }, {
+    "author": {
+      "login": "gaborgsomogyi"
+    },
+    "body": "Yeah, added to make it complete.",
+    "commit": "fa8cdcd6b716ea1cd1784efa9167d3ee76631224",
+    "createdAt": "2019-03-22T09:36:03Z",
+    "diffHunk": "@@ -131,8 +132,9 @@ private[spark] case class SSLOptions(\n   /** Returns a string representation of this SSLOptions with all the passwords masked. */\n   override def toString: String = s\"SSLOptions{enabled=$enabled, port=$port, \" +\n       s\"keyStore=$keyStore, keyStorePassword=${keyStorePassword.map(_ => \"xxx\")}, \" +\n+      s\"keyPassword=${keyPassword.map(_ => \"xxx\")}, keyStoreType=$keyStoreType, \" +"
+  }],
+  "prId": 24170
+}, {
+  "comments": [{
+    "author": {
+      "login": "HeartSaVioR"
+    },
+    "body": "I have no idea so I'm asking, Is there a case which default can be `None`? If then I guess we also need to warn if `(parameterValue.isDefined && !default.isDefined)` is true. \r\n\r\nOne liner (but long) would be `if (parameterValue.isDefined && (!default.isDefined || (parameterValue.get != default.get)))`",
+    "commit": "fa8cdcd6b716ea1cd1784efa9167d3ee76631224",
+    "createdAt": "2019-03-22T03:45:01Z",
+    "diffHunk": "@@ -231,5 +230,45 @@ private[spark] object SSLOptions extends Logging {\n       enabledAlgorithms)\n   }\n \n+  private def getPassword(\n+      conf: SparkConf,\n+      hadoopConf: Configuration,\n+      ns: String,\n+      parameter: String,\n+      default: Option[String]): Option[String] = {\n+    var parameterValue = conf.getWithSubstitution(s\"$ns.$parameter\")\n+      .orElse(Option(hadoopConf.getPassword(s\"$ns.$parameter\")).map(new String(_)))\n+      .orElse(default)\n+    if (parameterValue.isDefined && default.isDefined && parameterValue.get != default.get) {"
+  }, {
+    "author": {
+      "login": "gaborgsomogyi"
+    },
+    "body": "It's a valid possibility so changed.",
+    "commit": "fa8cdcd6b716ea1cd1784efa9167d3ee76631224",
+    "createdAt": "2019-03-22T09:36:57Z",
+    "diffHunk": "@@ -231,5 +230,45 @@ private[spark] object SSLOptions extends Logging {\n       enabledAlgorithms)\n   }\n \n+  private def getPassword(\n+      conf: SparkConf,\n+      hadoopConf: Configuration,\n+      ns: String,\n+      parameter: String,\n+      default: Option[String]): Option[String] = {\n+    var parameterValue = conf.getWithSubstitution(s\"$ns.$parameter\")\n+      .orElse(Option(hadoopConf.getPassword(s\"$ns.$parameter\")).map(new String(_)))\n+      .orElse(default)\n+    if (parameterValue.isDefined && default.isDefined && parameterValue.get != default.get) {"
+  }],
+  "prId": 24170
+}, {
+  "comments": [{
+    "author": {
+      "login": "HeartSaVioR"
+    },
+    "body": "nit: remove `the` ",
+    "commit": "fa8cdcd6b716ea1cd1784efa9167d3ee76631224",
+    "createdAt": "2019-03-22T03:46:28Z",
+    "diffHunk": "@@ -231,5 +230,45 @@ private[spark] object SSLOptions extends Logging {\n       enabledAlgorithms)\n   }\n \n+  private def getPassword(\n+      conf: SparkConf,\n+      hadoopConf: Configuration,\n+      ns: String,\n+      parameter: String,\n+      default: Option[String]): Option[String] = {\n+    var parameterValue = conf.getWithSubstitution(s\"$ns.$parameter\")\n+      .orElse(Option(hadoopConf.getPassword(s\"$ns.$parameter\")).map(new String(_)))\n+      .orElse(default)\n+    if (parameterValue.isDefined && default.isDefined && parameterValue.get != default.get) {\n+      logWarning(\n+        s\"$ns.$parameter configuration parameter defined which may cause security problems. When \" +\n+        \"its configured as command line argument then plain text password can be dumped by \" +\n+        \"listing the process command line arguments. The more secure alternative solution is to \" +\n+        s\"use $ns.${parameter}File.\"\n+      )\n+    }\n+\n+    val parameterFileValue = conf.getWithSubstitution(s\"$ns.${parameter}File\")\n+      .orElse(Option(hadoopConf.getPassword(s\"$ns.${parameter}File\")).map(new String(_)))\n+    if (parameterFileValue.isDefined) {\n+      val parameterFileContent = readPasswordFile(parameterFileValue.get)\n+      if (parameterValue.isDefined && parameterValue.get != parameterFileContent) {\n+        throw new IllegalArgumentException(s\"Both $ns.$parameter and $ns.${parameter}File \" +\n+          \"parameters defined but the they differ.\")"
+  }, {
+    "author": {
+      "login": "gaborgsomogyi"
+    },
+    "body": "Removed.",
+    "commit": "fa8cdcd6b716ea1cd1784efa9167d3ee76631224",
+    "createdAt": "2019-03-22T09:37:05Z",
+    "diffHunk": "@@ -231,5 +230,45 @@ private[spark] object SSLOptions extends Logging {\n       enabledAlgorithms)\n   }\n \n+  private def getPassword(\n+      conf: SparkConf,\n+      hadoopConf: Configuration,\n+      ns: String,\n+      parameter: String,\n+      default: Option[String]): Option[String] = {\n+    var parameterValue = conf.getWithSubstitution(s\"$ns.$parameter\")\n+      .orElse(Option(hadoopConf.getPassword(s\"$ns.$parameter\")).map(new String(_)))\n+      .orElse(default)\n+    if (parameterValue.isDefined && default.isDefined && parameterValue.get != default.get) {\n+      logWarning(\n+        s\"$ns.$parameter configuration parameter defined which may cause security problems. When \" +\n+        \"its configured as command line argument then plain text password can be dumped by \" +\n+        \"listing the process command line arguments. The more secure alternative solution is to \" +\n+        s\"use $ns.${parameter}File.\"\n+      )\n+    }\n+\n+    val parameterFileValue = conf.getWithSubstitution(s\"$ns.${parameter}File\")\n+      .orElse(Option(hadoopConf.getPassword(s\"$ns.${parameter}File\")).map(new String(_)))\n+    if (parameterFileValue.isDefined) {\n+      val parameterFileContent = readPasswordFile(parameterFileValue.get)\n+      if (parameterValue.isDefined && parameterValue.get != parameterFileContent) {\n+        throw new IllegalArgumentException(s\"Both $ns.$parameter and $ns.${parameter}File \" +\n+          \"parameters defined but the they differ.\")"
+  }],
+  "prId": 24170
+}]

@@ -1,0 +1,132 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "It seems you're making this change so that it's safe to call `feedData` when there is still data to process.\r\n\r\nThat's unnecessary; this class is not general purpose, and is only used in one place, where the surrounding code makes sure all this data is consumed after `feedData` is called. If you're worried, a check for the buffer being empty + throwing an exception should be enough.\r\n\r\n(I'd kinda like to rewrite this stuff at some point to avoid so much copying and add new features, but that requires time...)",
+    "commit": "fb79d0ac15c6f572ec3d26fde4e73727cff95a9d",
+    "createdAt": "2019-11-20T17:04:37Z",
+    "diffHunk": "@@ -19,23 +19,64 @@\n \n import java.io.IOException;\n import java.nio.ByteBuffer;\n+import java.nio.channels.ClosedChannelException;\n import java.nio.channels.ReadableByteChannel;\n \n import io.netty.buffer.ByteBuf;\n \n public class ByteArrayReadableChannel implements ReadableByteChannel {\n   private ByteBuf data;\n+  private boolean closed;\n \n   public int readableBytes() {\n-    return data.readableBytes();\n+    return data == null ? 0 : data.readableBytes();\n   }\n \n   public void feedData(ByteBuf buf) {\n-    data = buf;\n+    if (closed) {\n+      buf.release();\n+      return;\n+    }\n+    ByteBuf currentData = data;\n+    if (currentData == null) {\n+      data = buf;\n+    } else {\n+      int currentReadable = currentData.readableBytes();"
+  }, {
+    "author": {
+      "login": "normanmaurer"
+    },
+    "body": "@vanzin the class is public and as it is today very error-prone. What happens if someone start using it from another place ? So either we should throw or change the class to be safe to use (which I did here). If you prefer throwing that's fine as well.",
+    "commit": "fb79d0ac15c6f572ec3d26fde4e73727cff95a9d",
+    "createdAt": "2019-11-20T19:27:57Z",
+    "diffHunk": "@@ -19,23 +19,64 @@\n \n import java.io.IOException;\n import java.nio.ByteBuffer;\n+import java.nio.channels.ClosedChannelException;\n import java.nio.channels.ReadableByteChannel;\n \n import io.netty.buffer.ByteBuf;\n \n public class ByteArrayReadableChannel implements ReadableByteChannel {\n   private ByteBuf data;\n+  private boolean closed;\n \n   public int readableBytes() {\n-    return data.readableBytes();\n+    return data == null ? 0 : data.readableBytes();\n   }\n \n   public void feedData(ByteBuf buf) {\n-    data = buf;\n+    if (closed) {\n+      buf.release();\n+      return;\n+    }\n+    ByteBuf currentData = data;\n+    if (currentData == null) {\n+      data = buf;\n+    } else {\n+      int currentReadable = currentData.readableBytes();"
+  }, {
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "It's not a public API for Spark. Spark has a lot of public classes that are not considered part of its public API. People shouldn't use those except at their own risk.\r\n\r\n(Only the classes in Spark's public API docs are considered really public, and this whole module is not there.)",
+    "commit": "fb79d0ac15c6f572ec3d26fde4e73727cff95a9d",
+    "createdAt": "2019-11-20T21:46:52Z",
+    "diffHunk": "@@ -19,23 +19,64 @@\n \n import java.io.IOException;\n import java.nio.ByteBuffer;\n+import java.nio.channels.ClosedChannelException;\n import java.nio.channels.ReadableByteChannel;\n \n import io.netty.buffer.ByteBuf;\n \n public class ByteArrayReadableChannel implements ReadableByteChannel {\n   private ByteBuf data;\n+  private boolean closed;\n \n   public int readableBytes() {\n-    return data.readableBytes();\n+    return data == null ? 0 : data.readableBytes();\n   }\n \n   public void feedData(ByteBuf buf) {\n-    data = buf;\n+    if (closed) {\n+      buf.release();\n+      return;\n+    }\n+    ByteBuf currentData = data;\n+    if (currentData == null) {\n+      data = buf;\n+    } else {\n+      int currentReadable = currentData.readableBytes();"
+  }],
+  "prId": 26609
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "This feels like the wrong place to do it. Shouldn't `TransportCipher.channelRead` do that instead after it decrypts the buffer? (Then you also don't need L46.)",
+    "commit": "fb79d0ac15c6f572ec3d26fde4e73727cff95a9d",
+    "createdAt": "2019-11-20T17:08:04Z",
+    "diffHunk": "@@ -45,18 +86,24 @@ public int read(ByteBuffer dst) throws IOException {\n \n     if (data.readableBytes() == 0) {\n       data.release();\n+      data = null;\n     }\n \n     return totalRead;\n   }\n \n   @Override\n   public void close() throws IOException {\n+    closed = true;\n+    if (data != null) {\n+      data.release();"
+  }, {
+    "author": {
+      "login": "normanmaurer"
+    },
+    "body": "@vanzin again this class is public and so I think it is not guaranteed that read(...) will always consume the whole buffer.  The `ByteArrayReadableChannel` is wrapped in a `CryptoInputStream` and who knows if it always is guaranteed that it will consume all data (for example there is at least one case where you catch an `InternalError` which may cause that the previous feed data was not released (as it was not fully consumed).\r\n\r\nSo with all this in mind I think it is the safest to at least ensure we release everything once `close()` is called. ",
+    "commit": "fb79d0ac15c6f572ec3d26fde4e73727cff95a9d",
+    "createdAt": "2019-11-20T19:31:34Z",
+    "diffHunk": "@@ -45,18 +86,24 @@ public int read(ByteBuffer dst) throws IOException {\n \n     if (data.readableBytes() == 0) {\n       data.release();\n+      data = null;\n     }\n \n     return totalRead;\n   }\n \n   @Override\n   public void close() throws IOException {\n+    closed = true;\n+    if (data != null) {\n+      data.release();"
+  }],
+  "prId": 26609
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Where are you setting `data` to null?\r\n\r\n(In the spirit of keeping this class as small and dumb as possible, it might be better to check that `buffer.readableBytes()` is 0 before returning from `channelRead`. Then you may even be able to get rid of the `readableBytes()` method in this class.)",
+    "commit": "fb79d0ac15c6f572ec3d26fde4e73727cff95a9d",
+    "createdAt": "2019-11-21T18:41:50Z",
+    "diffHunk": "@@ -19,44 +19,54 @@\n \n import java.io.IOException;\n import java.nio.ByteBuffer;\n+import java.nio.channels.ClosedChannelException;\n import java.nio.channels.ReadableByteChannel;\n \n import io.netty.buffer.ByteBuf;\n \n public class ByteArrayReadableChannel implements ReadableByteChannel {\n   private ByteBuf data;\n+  private boolean closed;\n \n   public int readableBytes() {\n-    return data.readableBytes();\n+    return data == null ? 0 : data.readableBytes();\n   }\n \n-  public void feedData(ByteBuf buf) {\n+  public void feedData(ByteBuf buf) throws ClosedChannelException {\n+    if (closed) {\n+      throw new ClosedChannelException();\n+    }\n+    if (data != null) {"
+  }],
+  "prId": 26609
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "This is ok by itself, but I don't see any code calling `close()` so it's basically dead code...",
+    "commit": "fb79d0ac15c6f572ec3d26fde4e73727cff95a9d",
+    "createdAt": "2019-11-21T18:45:15Z",
+    "diffHunk": "@@ -19,44 +19,54 @@\n \n import java.io.IOException;\n import java.nio.ByteBuffer;\n+import java.nio.channels.ClosedChannelException;\n import java.nio.channels.ReadableByteChannel;\n \n import io.netty.buffer.ByteBuf;\n \n public class ByteArrayReadableChannel implements ReadableByteChannel {\n   private ByteBuf data;\n+  private boolean closed;\n \n   public int readableBytes() {\n-    return data.readableBytes();\n+    return data == null ? 0 : data.readableBytes();\n   }\n \n-  public void feedData(ByteBuf buf) {\n+  public void feedData(ByteBuf buf) throws ClosedChannelException {\n+    if (closed) {\n+      throw new ClosedChannelException();\n+    }\n+    if (data != null) {\n+      throw new IllegalStateException(\"Already holding a ByteBuf\");\n+    }\n     data = buf;\n   }\n \n   @Override\n   public int read(ByteBuffer dst) throws IOException {\n+    if (closed) {",
+    "line": 27
+  }, {
+    "author": {
+      "login": "normanmaurer"
+    },
+    "body": "I can remove it if you like but that is basically the contract of a `ReadableByteChannel`.",
+    "commit": "fb79d0ac15c6f572ec3d26fde4e73727cff95a9d",
+    "createdAt": "2019-11-21T19:11:39Z",
+    "diffHunk": "@@ -19,44 +19,54 @@\n \n import java.io.IOException;\n import java.nio.ByteBuffer;\n+import java.nio.channels.ClosedChannelException;\n import java.nio.channels.ReadableByteChannel;\n \n import io.netty.buffer.ByteBuf;\n \n public class ByteArrayReadableChannel implements ReadableByteChannel {\n   private ByteBuf data;\n+  private boolean closed;\n \n   public int readableBytes() {\n-    return data.readableBytes();\n+    return data == null ? 0 : data.readableBytes();\n   }\n \n-  public void feedData(ByteBuf buf) {\n+  public void feedData(ByteBuf buf) throws ClosedChannelException {\n+    if (closed) {\n+      throw new ClosedChannelException();\n+    }\n+    if (data != null) {\n+      throw new IllegalStateException(\"Already holding a ByteBuf\");\n+    }\n     data = buf;\n   }\n \n   @Override\n   public int read(ByteBuffer dst) throws IOException {\n+    if (closed) {",
+    "line": 27
+  }, {
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "I think is fine. I took another look and `close()` is probably being called as part of closing the `CryptoInputStream`.",
+    "commit": "fb79d0ac15c6f572ec3d26fde4e73727cff95a9d",
+    "createdAt": "2019-11-21T19:14:34Z",
+    "diffHunk": "@@ -19,44 +19,54 @@\n \n import java.io.IOException;\n import java.nio.ByteBuffer;\n+import java.nio.channels.ClosedChannelException;\n import java.nio.channels.ReadableByteChannel;\n \n import io.netty.buffer.ByteBuf;\n \n public class ByteArrayReadableChannel implements ReadableByteChannel {\n   private ByteBuf data;\n+  private boolean closed;\n \n   public int readableBytes() {\n-    return data.readableBytes();\n+    return data == null ? 0 : data.readableBytes();\n   }\n \n-  public void feedData(ByteBuf buf) {\n+  public void feedData(ByteBuf buf) throws ClosedChannelException {\n+    if (closed) {\n+      throw new ClosedChannelException();\n+    }\n+    if (data != null) {\n+      throw new IllegalStateException(\"Already holding a ByteBuf\");\n+    }\n     data = buf;\n   }\n \n   @Override\n   public int read(ByteBuffer dst) throws IOException {\n+    if (closed) {",
+    "line": 27
+  }],
+  "prId": 26609
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "I'd throw an `IllegalStateException` instead.",
+    "commit": "fb79d0ac15c6f572ec3d26fde4e73727cff95a9d",
+    "createdAt": "2019-11-21T18:45:52Z",
+    "diffHunk": "@@ -19,44 +19,54 @@\n \n import java.io.IOException;\n import java.nio.ByteBuffer;\n+import java.nio.channels.ClosedChannelException;\n import java.nio.channels.ReadableByteChannel;\n \n import io.netty.buffer.ByteBuf;\n \n public class ByteArrayReadableChannel implements ReadableByteChannel {\n   private ByteBuf data;\n+  private boolean closed;\n \n   public int readableBytes() {\n-    return data.readableBytes();\n+    return data == null ? 0 : data.readableBytes();\n   }\n \n-  public void feedData(ByteBuf buf) {\n+  public void feedData(ByteBuf buf) throws ClosedChannelException {\n+    if (closed) {\n+      throw new ClosedChannelException();\n+    }\n+    if (data != null) {\n+      throw new IllegalStateException(\"Already holding a ByteBuf\");\n+    }\n     data = buf;\n   }\n \n   @Override\n   public int read(ByteBuffer dst) throws IOException {\n+    if (closed) {\n+      throw new ClosedChannelException();\n+    }\n+    if (data == null) {\n+      return 0;"
+  }],
+  "prId": 26609
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Not sure, does this need to be volatile? I'm not sure if there are thread safety concerns here.",
+    "commit": "fb79d0ac15c6f572ec3d26fde4e73727cff95a9d",
+    "createdAt": "2019-11-22T19:01:51Z",
+    "diffHunk": "@@ -19,44 +19,44 @@\n \n import java.io.IOException;\n import java.nio.ByteBuffer;\n+import java.nio.channels.ClosedChannelException;\n import java.nio.channels.ReadableByteChannel;\n \n import io.netty.buffer.ByteBuf;\n \n public class ByteArrayReadableChannel implements ReadableByteChannel {\n   private ByteBuf data;\n+  private boolean closed;",
+    "line": 11
+  }, {
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "streams / channels are not thread-safe.",
+    "commit": "fb79d0ac15c6f572ec3d26fde4e73727cff95a9d",
+    "createdAt": "2019-11-22T19:07:30Z",
+    "diffHunk": "@@ -19,44 +19,44 @@\n \n import java.io.IOException;\n import java.nio.ByteBuffer;\n+import java.nio.channels.ClosedChannelException;\n import java.nio.channels.ReadableByteChannel;\n \n import io.netty.buffer.ByteBuf;\n \n public class ByteArrayReadableChannel implements ReadableByteChannel {\n   private ByteBuf data;\n+  private boolean closed;",
+    "line": 11
+  }],
+  "prId": 26609
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Just checking this is no longer needed because of the new cleanup?",
+    "commit": "fb79d0ac15c6f572ec3d26fde4e73727cff95a9d",
+    "createdAt": "2019-11-22T19:03:19Z",
+    "diffHunk": "@@ -19,44 +19,44 @@\n \n import java.io.IOException;\n import java.nio.ByteBuffer;\n+import java.nio.channels.ClosedChannelException;\n import java.nio.channels.ReadableByteChannel;\n \n import io.netty.buffer.ByteBuf;\n \n public class ByteArrayReadableChannel implements ReadableByteChannel {\n   private ByteBuf data;\n+  private boolean closed;\n \n-  public int readableBytes() {\n-    return data.readableBytes();\n-  }\n-\n-  public void feedData(ByteBuf buf) {\n+  public void feedData(ByteBuf buf) throws ClosedChannelException {\n+    if (closed) {\n+      throw new ClosedChannelException();\n+    }\n     data = buf;\n   }\n \n   @Override\n   public int read(ByteBuffer dst) throws IOException {\n+    if (closed) {\n+      throw new ClosedChannelException();\n+    }\n     int totalRead = 0;\n     while (data.readableBytes() > 0 && dst.remaining() > 0) {\n       int bytesToRead = Math.min(data.readableBytes(), dst.remaining());\n       dst.put(data.readSlice(bytesToRead).nioBuffer());\n       totalRead += bytesToRead;\n     }\n \n-    if (data.readableBytes() == 0) {\n-      data.release();",
+    "line": 38
+  }],
+  "prId": 26609
+}]

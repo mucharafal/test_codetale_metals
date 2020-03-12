@@ -1,0 +1,55 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "You should use `isEmpty` rather than count the whole data set. Does this help much? You get an exception either way. Although this makes the message nicer. At the cost of non-trivial extra work.\n\nAt this stage wouldn't the size have already had to be positive? have you encountered this in real life?\n",
+    "commit": "3b1d08afa17c235ebf156eff727b558f0e3ccc9b",
+    "createdAt": "2015-04-30T20:39:48Z",
+    "diffHunk": "@@ -107,8 +107,11 @@ private[tree] object DecisionTreeMetadata extends Logging {\n       numTrees: Int,\n       featureSubsetStrategy: String): DecisionTreeMetadata = {\n \n-    val numFeatures = input.take(1)(0).features.size\n     val numExamples = input.count()\n+    require(numExamples > 0, s\"DecisionTree requires size of input RDD > 0, \" +"
+  }, {
+    "author": {
+      "login": "aihex"
+    },
+    "body": "Yes. After some filter work on dataset, the result rdd turns out to be empty which is unexpected but happens. This exception actually comes from the nature of the dataset but has not been captured by the Decision Tree algorithm.\n",
+    "commit": "3b1d08afa17c235ebf156eff727b558f0e3ccc9b",
+    "createdAt": "2015-04-30T20:54:31Z",
+    "diffHunk": "@@ -107,8 +107,11 @@ private[tree] object DecisionTreeMetadata extends Logging {\n       numTrees: Int,\n       featureSubsetStrategy: String): DecisionTreeMetadata = {\n \n-    val numFeatures = input.take(1)(0).features.size\n     val numExamples = input.count()\n+    require(numExamples > 0, s\"DecisionTree requires size of input RDD > 0, \" +"
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "OK. I'm fine with this as long as it only uses `isEmpty`.\n",
+    "commit": "3b1d08afa17c235ebf156eff727b558f0e3ccc9b",
+    "createdAt": "2015-04-30T21:18:28Z",
+    "diffHunk": "@@ -107,8 +107,11 @@ private[tree] object DecisionTreeMetadata extends Logging {\n       numTrees: Int,\n       featureSubsetStrategy: String): DecisionTreeMetadata = {\n \n-    val numFeatures = input.take(1)(0).features.size\n     val numExamples = input.count()\n+    require(numExamples > 0, s\"DecisionTree requires size of input RDD > 0, \" +"
+  }, {
+    "author": {
+      "login": "aihex"
+    },
+    "body": "Changed it.\n",
+    "commit": "3b1d08afa17c235ebf156eff727b558f0e3ccc9b",
+    "createdAt": "2015-04-30T22:07:13Z",
+    "diffHunk": "@@ -107,8 +107,11 @@ private[tree] object DecisionTreeMetadata extends Logging {\n       numTrees: Int,\n       featureSubsetStrategy: String): DecisionTreeMetadata = {\n \n-    val numFeatures = input.take(1)(0).features.size\n     val numExamples = input.count()\n+    require(numExamples > 0, s\"DecisionTree requires size of input RDD > 0, \" +"
+  }],
+  "prId": 5810
+}, {
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "This will trigger `take(1)` twice. Should be\n\n``` scala\nval numFeatures = input.map(_.features.size).take(1).headOption.getOrElse {\n  throw new IllegalArgumentException(\"...\")\n}\n```\n",
+    "commit": "3b1d08afa17c235ebf156eff727b558f0e3ccc9b",
+    "createdAt": "2015-04-30T23:36:27Z",
+    "diffHunk": "@@ -107,8 +107,11 @@ private[tree] object DecisionTreeMetadata extends Logging {\n       numTrees: Int,\n       featureSubsetStrategy: String): DecisionTreeMetadata = {\n \n-    val numFeatures = input.take(1)(0).features.size\n+    require(!input.isEmpty, s\"DecisionTree requires size of input RDD > 0, \" +"
+  }, {
+    "author": {
+      "login": "aihex"
+    },
+    "body": "Good point. I also think this line should be placed before \"val numExamples = input.count()\" thus there will be a fast fail.\n",
+    "commit": "3b1d08afa17c235ebf156eff727b558f0e3ccc9b",
+    "createdAt": "2015-05-04T22:29:43Z",
+    "diffHunk": "@@ -107,8 +107,11 @@ private[tree] object DecisionTreeMetadata extends Logging {\n       numTrees: Int,\n       featureSubsetStrategy: String): DecisionTreeMetadata = {\n \n-    val numFeatures = input.take(1)(0).features.size\n+    require(!input.isEmpty, s\"DecisionTree requires size of input RDD > 0, \" +"
+  }],
+  "prId": 5810
+}]

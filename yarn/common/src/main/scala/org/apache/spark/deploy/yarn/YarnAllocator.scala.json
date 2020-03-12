@@ -1,0 +1,44 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "tgravescs"
+    },
+    "body": "Any reason we don't print the diagnostics message here also?\n",
+    "commit": "858a268360254cdf224665b9f09b1739cda1b1c2",
+    "createdAt": "2014-10-28T14:11:53Z",
+    "diffHunk": "@@ -330,12 +331,21 @@ private[yarn] abstract class YarnAllocator(\n           logInfo(\"Completed container %s (state: %s, exit status: %s)\".format(\n             containerId,\n             completedContainer.getState,\n-            completedContainer.getExitStatus()))\n+            completedContainer.getExitStatus))\n           // Hadoop 2.2.X added a ContainerExitStatus we should switch to use\n           // there are some exit status' we shouldn't necessarily count against us, but for\n           // now I think its ok as none of the containers are expected to exit\n-          if (completedContainer.getExitStatus() != 0) {\n-            logInfo(\"Container marked as failed: \" + containerId)\n+          if (completedContainer.getExitStatus == -103) { // vmem limit exceeded\n+            logWarning(MemLimitLogger.memLimitExceededLogMessage(\n+              completedContainer.getDiagnostics,\n+              MemLimitLogger.VMEM_EXCEEDED_PATTERN))\n+          } else if (completedContainer.getExitStatus == -104) { // pmem limit exceeded\n+            logWarning(MemLimitLogger.memLimitExceededLogMessage(\n+              completedContainer.getDiagnostics,\n+              MemLimitLogger.PMEM_EXCEEDED_PATTERN))\n+          } else if (completedContainer.getExitStatus != 0) {\n+            logInfo(\"Container marked as failed: \" + containerId + \". Exit status: \" +"
+  }],
+  "prId": 2744
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "`ContainerExitStatus` is `@Public`. Does it not exist in yarn-alpha?\n\nIf that's why you're using the numbers directly, I'd leave a comment saying this can be cleaned up when yarn-alpha is removed.\n",
+    "commit": "858a268360254cdf224665b9f09b1739cda1b1c2",
+    "createdAt": "2014-10-28T18:09:08Z",
+    "diffHunk": "@@ -330,12 +331,21 @@ private[yarn] abstract class YarnAllocator(\n           logInfo(\"Completed container %s (state: %s, exit status: %s)\".format(\n             containerId,\n             completedContainer.getState,\n-            completedContainer.getExitStatus()))\n+            completedContainer.getExitStatus))\n           // Hadoop 2.2.X added a ContainerExitStatus we should switch to use\n           // there are some exit status' we shouldn't necessarily count against us, but for\n           // now I think its ok as none of the containers are expected to exit\n-          if (completedContainer.getExitStatus() != 0) {\n-            logInfo(\"Container marked as failed: \" + containerId)\n+          if (completedContainer.getExitStatus == -103) { // vmem limit exceeded",
+    "line": 19
+  }, {
+    "author": {
+      "login": "sryza"
+    },
+    "body": "The constants don't exist in earlier versions of the 2.x line either\n",
+    "commit": "858a268360254cdf224665b9f09b1739cda1b1c2",
+    "createdAt": "2014-10-29T23:36:48Z",
+    "diffHunk": "@@ -330,12 +331,21 @@ private[yarn] abstract class YarnAllocator(\n           logInfo(\"Completed container %s (state: %s, exit status: %s)\".format(\n             containerId,\n             completedContainer.getState,\n-            completedContainer.getExitStatus()))\n+            completedContainer.getExitStatus))\n           // Hadoop 2.2.X added a ContainerExitStatus we should switch to use\n           // there are some exit status' we shouldn't necessarily count against us, but for\n           // now I think its ok as none of the containers are expected to exit\n-          if (completedContainer.getExitStatus() != 0) {\n-            logInfo(\"Container marked as failed: \" + containerId)\n+          if (completedContainer.getExitStatus == -103) { // vmem limit exceeded",
+    "line": 19
+  }],
+  "prId": 2744
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Mostly personal preference I guess, but it feels too heavy-handed to add an object for this (instead of placing these things inside YarnAllocator directly ).\n",
+    "commit": "858a268360254cdf224665b9f09b1739cda1b1c2",
+    "createdAt": "2014-10-28T18:19:27Z",
+    "diffHunk": "@@ -463,3 +473,19 @@ private[yarn] abstract class YarnAllocator(\n   }\n \n }\n+\n+private[yarn] object MemLimitLogger {"
+  }],
+  "prId": 2744
+}]

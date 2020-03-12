@@ -1,0 +1,174 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "viirya"
+    },
+    "body": "partitionPaths contains only the paths on a specific Spark task, isn't?",
+    "commit": "9526f8507c2dd3f504308894f131b96fedc817a0",
+    "createdAt": "2019-09-19T04:08:57Z",
+    "diffHunk": "@@ -66,4 +68,18 @@ class SQLHadoopMapReduceCommitProtocol(\n     logInfo(s\"Using output committer class ${committer.getClass.getCanonicalName}\")\n     committer\n   }\n+\n+  override def newTaskTempFile(\n+      taskContext: TaskAttemptContext, dir: Option[String], ext: String): String = {\n+    val path = super.newTaskTempFile(taskContext, dir, ext)\n+    if (dynamicPartitionOverwrite) {\n+      val numParts = partitionPaths.size\n+      if (numParts > maxDynamicPartitions) {"
+  }, {
+    "author": {
+      "login": "LantaoJin"
+    },
+    "body": "Oh, you are right. `partitionPaths` may be similar to `hive.exec.max.dynamic.partitions.pernode`. And the implementation of total limitation has to add a `var totalPartitions: Int` for checking.",
+    "commit": "9526f8507c2dd3f504308894f131b96fedc817a0",
+    "createdAt": "2019-09-19T04:37:17Z",
+    "diffHunk": "@@ -66,4 +68,18 @@ class SQLHadoopMapReduceCommitProtocol(\n     logInfo(s\"Using output committer class ${committer.getClass.getCanonicalName}\")\n     committer\n   }\n+\n+  override def newTaskTempFile(\n+      taskContext: TaskAttemptContext, dir: Option[String], ext: String): String = {\n+    val path = super.newTaskTempFile(taskContext, dir, ext)\n+    if (dynamicPartitionOverwrite) {\n+      val numParts = partitionPaths.size\n+      if (numParts > maxDynamicPartitions) {"
+  }, {
+    "author": {
+      "login": "LantaoJin"
+    },
+    "body": "@viirya fixed",
+    "commit": "9526f8507c2dd3f504308894f131b96fedc817a0",
+    "createdAt": "2019-09-19T07:42:10Z",
+    "diffHunk": "@@ -66,4 +68,18 @@ class SQLHadoopMapReduceCommitProtocol(\n     logInfo(s\"Using output committer class ${committer.getClass.getCanonicalName}\")\n     committer\n   }\n+\n+  override def newTaskTempFile(\n+      taskContext: TaskAttemptContext, dir: Option[String], ext: String): String = {\n+    val path = super.newTaskTempFile(taskContext, dir, ext)\n+    if (dynamicPartitionOverwrite) {\n+      val numParts = partitionPaths.size\n+      if (numParts > maxDynamicPartitions) {"
+  }],
+  "prId": 25840
+}, {
+  "comments": [{
+    "author": {
+      "login": "itskals"
+    },
+    "body": "Please help me understand how to ensure that the check that you have added is applicable for all forms of commit Protocol that could be added in the future. For example, PathOutputCommitProtocol[https://github.com/hortonworks-spark/cloud-integration/blob/master/spark-cloud-integration/src/main/site/markdown/index.md](url) might not enter this flow at all. ",
+    "commit": "9526f8507c2dd3f504308894f131b96fedc817a0",
+    "createdAt": "2019-09-19T06:16:58Z",
+    "diffHunk": "@@ -66,4 +68,18 @@ class SQLHadoopMapReduceCommitProtocol(\n     logInfo(s\"Using output committer class ${committer.getClass.getCanonicalName}\")\n     committer\n   }\n+\n+  override def newTaskTempFile("
+  }, {
+    "author": {
+      "login": "LantaoJin"
+    },
+    "body": "The limitation only configures in SQLConf. So it only ensures the `SQLHadoopMapReduceCommitProtocol`. It cannot be used in any non-sql implementation package. I will describe it in the configuration doc.",
+    "commit": "9526f8507c2dd3f504308894f131b96fedc817a0",
+    "createdAt": "2019-09-19T07:52:43Z",
+    "diffHunk": "@@ -66,4 +68,18 @@ class SQLHadoopMapReduceCommitProtocol(\n     logInfo(s\"Using output committer class ${committer.getClass.getCanonicalName}\")\n     committer\n   }\n+\n+  override def newTaskTempFile("
+  }, {
+    "author": {
+      "login": "itskals"
+    },
+    "body": "Do we have any limitation like this before? I can help me recollect case where the config is only for SQL and not for other modes of operation?",
+    "commit": "9526f8507c2dd3f504308894f131b96fedc817a0",
+    "createdAt": "2019-10-14T03:54:49Z",
+    "diffHunk": "@@ -66,4 +68,18 @@ class SQLHadoopMapReduceCommitProtocol(\n     logInfo(s\"Using output committer class ${committer.getClass.getCanonicalName}\")\n     committer\n   }\n+\n+  override def newTaskTempFile("
+  }],
+  "prId": 25840
+}, {
+  "comments": [{
+    "author": {
+      "login": "itskals"
+    },
+    "body": "If my understanding on SQLConf.DYNAMIC_PARTITION_MAX_PARTITIONS is correct, that it is the max number of partitions a data source can have at any given time, then I am not sure that this is the right place to check the total number of partitions in the data source. The best would have been [here](https://github.com/apache/spark/blob/76ebf2241a3f2149de13d6c89adcb86325b06004/sql/core/src/main/scala/org/apache/spark/sql/execution/datasources/InsertIntoHadoopFsRelationCommand.scala#L137) \r\nBut it might be too late by the time control reaches there.\r\nOne way is we can pass the initial partitions in the data source at the beginning, and here can check if the combined number is more than the configured value. But I am not sure if this is the safest way (can another insert happen in parallel on the data source and commit, this affecting the value known here.)",
+    "commit": "9526f8507c2dd3f504308894f131b96fedc817a0",
+    "createdAt": "2019-09-20T04:59:40Z",
+    "diffHunk": "@@ -63,7 +70,29 @@ class SQLHadoopMapReduceCommitProtocol(\n         committer = ctor.newInstance()\n       }\n     }\n+    totalPartitions = new AtomicInteger(0)\n     logInfo(s\"Using output committer class ${committer.getClass.getCanonicalName}\")\n     committer\n   }\n+\n+  override def newTaskTempFile(\n+      taskContext: TaskAttemptContext, dir: Option[String], ext: String): String = {\n+    val path = super.newTaskTempFile(taskContext, dir, ext)\n+    totalPartitions.incrementAndGet()\n+    if (dynamicPartitionOverwrite) {\n+      if (totalPartitions.get > maxDynamicPartitions) {"
+  }, {
+    "author": {
+      "login": "LantaoJin"
+    },
+    "body": "> it is the max number of partitions a data source can have at any given time\r\n\r\nI don't think so. We should keep the same syntax with Hive. Notice that in Hive's documentation: https://cwiki.apache.org/confluence/display/Hive/Tutorial#Tutorial-Dynamic-PartitionInsert\r\n\r\n>hive.exec.max.dynamic.partitions (default value being 1000) is the total number of dynamic partitions could be created **by one DML**. \r\n\r\n\r\n",
+    "commit": "9526f8507c2dd3f504308894f131b96fedc817a0",
+    "createdAt": "2019-09-23T07:00:52Z",
+    "diffHunk": "@@ -63,7 +70,29 @@ class SQLHadoopMapReduceCommitProtocol(\n         committer = ctor.newInstance()\n       }\n     }\n+    totalPartitions = new AtomicInteger(0)\n     logInfo(s\"Using output committer class ${committer.getClass.getCanonicalName}\")\n     committer\n   }\n+\n+  override def newTaskTempFile(\n+      taskContext: TaskAttemptContext, dir: Option[String], ext: String): String = {\n+    val path = super.newTaskTempFile(taskContext, dir, ext)\n+    totalPartitions.incrementAndGet()\n+    if (dynamicPartitionOverwrite) {\n+      if (totalPartitions.get > maxDynamicPartitions) {"
+  }, {
+    "author": {
+      "login": "LantaoJin"
+    },
+    "body": "But you remind me to update it in the SQL documentation.",
+    "commit": "9526f8507c2dd3f504308894f131b96fedc817a0",
+    "createdAt": "2019-09-23T08:03:36Z",
+    "diffHunk": "@@ -63,7 +70,29 @@ class SQLHadoopMapReduceCommitProtocol(\n         committer = ctor.newInstance()\n       }\n     }\n+    totalPartitions = new AtomicInteger(0)\n     logInfo(s\"Using output committer class ${committer.getClass.getCanonicalName}\")\n     committer\n   }\n+\n+  override def newTaskTempFile(\n+      taskContext: TaskAttemptContext, dir: Option[String], ext: String): String = {\n+    val path = super.newTaskTempFile(taskContext, dir, ext)\n+    totalPartitions.incrementAndGet()\n+    if (dynamicPartitionOverwrite) {\n+      if (totalPartitions.get > maxDynamicPartitions) {"
+  }, {
+    "author": {
+      "login": "itskals"
+    },
+    "body": "> > it is the max number of partitions a data source can have at any given time\r\n> \r\n> I don't think so. We should keep the same syntax with Hive. Notice that in Hive's documentation: https://cwiki.apache.org/confluence/display/Hive/Tutorial#Tutorial-Dynamic-PartitionInsert\r\n> \r\n> > hive.exec.max.dynamic.partitions (default value being 1000) is the total number of dynamic partitions could be created **by one DML**.\r\n\r\nI saw the two links that you shared in this PR. [One](https://cwiki.apache.org/confluence/display/Hive/LanguageManual+DML#LanguageManualDML-DynamicPartitionInserts), that you had specified in the Description of this PR. and Another [here](https://cwiki.apache.org/confluence/display/Hive/Tutorial#Tutorial-Dynamic-PartitionInsert). It is not clear to me if `hive.exec.max.dynamic.partitions` is per DML or for the life-time of the data source.. Please clarify.",
+    "commit": "9526f8507c2dd3f504308894f131b96fedc817a0",
+    "createdAt": "2019-09-23T08:29:07Z",
+    "diffHunk": "@@ -63,7 +70,29 @@ class SQLHadoopMapReduceCommitProtocol(\n         committer = ctor.newInstance()\n       }\n     }\n+    totalPartitions = new AtomicInteger(0)\n     logInfo(s\"Using output committer class ${committer.getClass.getCanonicalName}\")\n     committer\n   }\n+\n+  override def newTaskTempFile(\n+      taskContext: TaskAttemptContext, dir: Option[String], ext: String): String = {\n+    val path = super.newTaskTempFile(taskContext, dir, ext)\n+    totalPartitions.incrementAndGet()\n+    if (dynamicPartitionOverwrite) {\n+      if (totalPartitions.get > maxDynamicPartitions) {"
+  }, {
+    "author": {
+      "login": "LantaoJin"
+    },
+    "body": "Thank you for point it. The descriptions are both from official documentations, but I prefer the [second one](https://cwiki.apache.org/confluence/display/Hive/Tutorial#Tutorial-Dynamic-PartitionInsert). Actually, there is no restriction for life-time of the data source in Hive, unless it stored into Hive Metastore. But these parameters hive.exec.max.dynamic.partitions.* only take effect in Hive Client. So they are for per DML.",
+    "commit": "9526f8507c2dd3f504308894f131b96fedc817a0",
+    "createdAt": "2019-09-23T09:01:31Z",
+    "diffHunk": "@@ -63,7 +70,29 @@ class SQLHadoopMapReduceCommitProtocol(\n         committer = ctor.newInstance()\n       }\n     }\n+    totalPartitions = new AtomicInteger(0)\n     logInfo(s\"Using output committer class ${committer.getClass.getCanonicalName}\")\n     committer\n   }\n+\n+  override def newTaskTempFile(\n+      taskContext: TaskAttemptContext, dir: Option[String], ext: String): String = {\n+    val path = super.newTaskTempFile(taskContext, dir, ext)\n+    totalPartitions.incrementAndGet()\n+    if (dynamicPartitionOverwrite) {\n+      if (totalPartitions.get > maxDynamicPartitions) {"
+  }, {
+    "author": {
+      "login": "LantaoJin"
+    },
+    "body": "Here is a simple testing for Hive table:\r\n```sql\r\nbin/spark-sql --master local --hiveconf hive.exec.dynamic.partition.mode=nonstrict --hiveconf hive.exec.dynamic.partition=true --hiveconf hive.exec.max.dynamic.partitions=3\r\n\r\nspark-sql>create temporary view t4 (key, value) as select 2, explode(array(1, 2, 3, 4));\r\nspark-sql>select * from t4;\r\n2\t1\r\n2\t2\r\n2\t3\r\n2\t4\r\n>insert into table p partition(key) select key, value from t4;\r\nError in query: org.apache.hadoop.hive.ql.metadata.HiveException: Number of dynamic partitions created is 4, which is more than 3. To solve this try to set hive.exec.max.dynamic.partitions to at least 4.;\r\n\r\nspark-sql>create temporary view t3 (key, value) as select 2, explode(array(1, 2, 3));\r\nspark-sql>select * from t3;\r\n2\t1\r\n2\t2\r\n2\t3\r\nspark-sql>insert into table p partition(key) select key, value from t3;\r\nspark-sql>insert into table p partition(key) select key, value from t3;\r\nspark-sql>select * from p;\r\n2\t1\r\n2\t1\r\n2\t2\r\n2\t2\r\n2\t3\r\n2\t3\r\n```",
+    "commit": "9526f8507c2dd3f504308894f131b96fedc817a0",
+    "createdAt": "2019-09-23T09:47:04Z",
+    "diffHunk": "@@ -63,7 +70,29 @@ class SQLHadoopMapReduceCommitProtocol(\n         committer = ctor.newInstance()\n       }\n     }\n+    totalPartitions = new AtomicInteger(0)\n     logInfo(s\"Using output committer class ${committer.getClass.getCanonicalName}\")\n     committer\n   }\n+\n+  override def newTaskTempFile(\n+      taskContext: TaskAttemptContext, dir: Option[String], ext: String): String = {\n+    val path = super.newTaskTempFile(taskContext, dir, ext)\n+    totalPartitions.incrementAndGet()\n+    if (dynamicPartitionOverwrite) {\n+      if (totalPartitions.get > maxDynamicPartitions) {"
+  }, {
+    "author": {
+      "login": "itskals"
+    },
+    "body": "oh thanks. now it makes things clearer. Thanks.",
+    "commit": "9526f8507c2dd3f504308894f131b96fedc817a0",
+    "createdAt": "2019-10-14T03:55:51Z",
+    "diffHunk": "@@ -63,7 +70,29 @@ class SQLHadoopMapReduceCommitProtocol(\n         committer = ctor.newInstance()\n       }\n     }\n+    totalPartitions = new AtomicInteger(0)\n     logInfo(s\"Using output committer class ${committer.getClass.getCanonicalName}\")\n     committer\n   }\n+\n+  override def newTaskTempFile(\n+      taskContext: TaskAttemptContext, dir: Option[String], ext: String): String = {\n+    val path = super.newTaskTempFile(taskContext, dir, ext)\n+    totalPartitions.incrementAndGet()\n+    if (dynamicPartitionOverwrite) {\n+      if (totalPartitions.get > maxDynamicPartitions) {"
+  }],
+  "prId": 25840
+}, {
+  "comments": [{
+    "author": {
+      "login": "itskals"
+    },
+    "body": "Can we make this parameter a collection/set/map. ?? making it so keeps the interface fixed and also extendable for future.\r\nSuppose we have more such behaviours to be added (which I am sure will happen), we cannot create new interfaces and break the contract each time(though we try not to).\r\nHaving a Key-Value pair of configuration will be much easier for such extensions.",
+    "commit": "9526f8507c2dd3f504308894f131b96fedc817a0",
+    "createdAt": "2019-09-24T04:11:15Z",
+    "diffHunk": "@@ -32,10 +35,14 @@ import org.apache.spark.sql.internal.SQLConf\n class SQLHadoopMapReduceCommitProtocol(\n     jobId: String,\n     path: String,\n-    dynamicPartitionOverwrite: Boolean = false)\n+    dynamicPartitionOverwrite: Boolean = false,",
+    "line": 15
+  }, {
+    "author": {
+      "login": "LantaoJin"
+    },
+    "body": "Done for this.",
+    "commit": "9526f8507c2dd3f504308894f131b96fedc817a0",
+    "createdAt": "2019-09-24T07:04:15Z",
+    "diffHunk": "@@ -32,10 +35,14 @@ import org.apache.spark.sql.internal.SQLConf\n class SQLHadoopMapReduceCommitProtocol(\n     jobId: String,\n     path: String,\n-    dynamicPartitionOverwrite: Boolean = false)\n+    dynamicPartitionOverwrite: Boolean = false,",
+    "line": 15
+  }, {
+    "author": {
+      "login": "itskals"
+    },
+    "body": "thanks. ",
+    "commit": "9526f8507c2dd3f504308894f131b96fedc817a0",
+    "createdAt": "2019-10-14T03:57:47Z",
+    "diffHunk": "@@ -32,10 +35,14 @@ import org.apache.spark.sql.internal.SQLConf\n class SQLHadoopMapReduceCommitProtocol(\n     jobId: String,\n     path: String,\n-    dynamicPartitionOverwrite: Boolean = false)\n+    dynamicPartitionOverwrite: Boolean = false,",
+    "line": 15
+  }],
+  "prId": 25840
+}, {
+  "comments": [{
+    "author": {
+      "login": "itskals"
+    },
+    "body": "this implementation completely hides org.apache.spark.internal.io.HadoopMapReduceCommitProtocol#commitTask, which was the behaviour earlier.\r\n\r\nIs it intensional?",
+    "commit": "9526f8507c2dd3f504308894f131b96fedc817a0",
+    "createdAt": "2019-10-14T04:07:54Z",
+    "diffHunk": "@@ -66,4 +91,37 @@ class SQLHadoopMapReduceCommitProtocol(\n     logInfo(s\"Using output committer class ${committer.getClass.getCanonicalName}\")\n     committer\n   }\n+\n+  /**\n+   * Called on the driver after a task commits. This can be used to access task commit messages\n+   * before the job has finished. These same task commit messages will be passed to commitJob()\n+   * if the entire job succeeds.\n+   * Override it to check dynamic partition limitation on driver side.\n+   */\n+  override def onTaskCommit(taskCommit: TaskCommitMessage): Unit = {",
+    "line": 56
+  }, {
+    "author": {
+      "login": "LantaoJin"
+    },
+    "body": "> this implementation completely hides org.apache.spark.internal.io.HadoopMapReduceCommitProtocol#commitTask\r\n\r\nNo. `onTaskCommit`  doesn't hide `commitTask`. Actually, `commitTask` is called on executor side but `onTaskCommit` is called on driver side.",
+    "commit": "9526f8507c2dd3f504308894f131b96fedc817a0",
+    "createdAt": "2019-10-14T06:10:57Z",
+    "diffHunk": "@@ -66,4 +91,37 @@ class SQLHadoopMapReduceCommitProtocol(\n     logInfo(s\"Using output committer class ${committer.getClass.getCanonicalName}\")\n     committer\n   }\n+\n+  /**\n+   * Called on the driver after a task commits. This can be used to access task commit messages\n+   * before the job has finished. These same task commit messages will be passed to commitJob()\n+   * if the entire job succeeds.\n+   * Override it to check dynamic partition limitation on driver side.\n+   */\n+  override def onTaskCommit(taskCommit: TaskCommitMessage): Unit = {",
+    "line": 56
+  }, {
+    "author": {
+      "login": "LantaoJin"
+    },
+    "body": "`SQLHadoopMapReduceCommitProtocol.onTaskCommit` overrides `FileCommitProtocol.onTaskCommit` on purpose.",
+    "commit": "9526f8507c2dd3f504308894f131b96fedc817a0",
+    "createdAt": "2019-10-14T06:14:08Z",
+    "diffHunk": "@@ -66,4 +91,37 @@ class SQLHadoopMapReduceCommitProtocol(\n     logInfo(s\"Using output committer class ${committer.getClass.getCanonicalName}\")\n     committer\n   }\n+\n+  /**\n+   * Called on the driver after a task commits. This can be used to access task commit messages\n+   * before the job has finished. These same task commit messages will be passed to commitJob()\n+   * if the entire job succeeds.\n+   * Override it to check dynamic partition limitation on driver side.\n+   */\n+  override def onTaskCommit(taskCommit: TaskCommitMessage): Unit = {",
+    "line": 56
+  }],
+  "prId": 25840
+}]

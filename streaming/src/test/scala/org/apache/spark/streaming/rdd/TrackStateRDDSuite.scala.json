@@ -1,0 +1,50 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "can you use proper docs style?\n",
+    "commit": "a1cec18651f5089701e3a517c2bc2a53ae801fbd",
+    "createdAt": "2015-11-19T18:49:51Z",
+    "diffHunk": "@@ -278,6 +287,50 @@ class TrackStateRDDSuite extends SparkFunSuite with BeforeAndAfterAll {\n       rdd7, Seq((\"k3\", 2)), Set())\n   }\n \n+  test(\"checkpointing\") {\n+    /*\n+      This tests whether the TrackStateRDD correctly truncates any references to its parent RDDs -\n+      the data RDD and the parent TrackStateRDD.\n+     */"
+  }, {
+    "author": {
+      "login": "tdas"
+    },
+    "body": "yikes. right. \n",
+    "commit": "a1cec18651f5089701e3a517c2bc2a53ae801fbd",
+    "createdAt": "2015-11-19T21:46:17Z",
+    "diffHunk": "@@ -278,6 +287,50 @@ class TrackStateRDDSuite extends SparkFunSuite with BeforeAndAfterAll {\n       rdd7, Seq((\"k3\", 2)), Set())\n   }\n \n+  test(\"checkpointing\") {\n+    /*\n+      This tests whether the TrackStateRDD correctly truncates any references to its parent RDDs -\n+      the data RDD and the parent TrackStateRDD.\n+     */"
+  }],
+  "prId": 9831
+}, {
+  "comments": [{
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "It's better to test with a long lineage `partitionedDataRDD`.\n",
+    "commit": "a1cec18651f5089701e3a517c2bc2a53ae801fbd",
+    "createdAt": "2015-11-19T20:17:04Z",
+    "diffHunk": "@@ -278,6 +287,50 @@ class TrackStateRDDSuite extends SparkFunSuite with BeforeAndAfterAll {\n       rdd7, Seq((\"k3\", 2)), Set())\n   }\n \n+  test(\"checkpointing\") {\n+    /*\n+      This tests whether the TrackStateRDD correctly truncates any references to its parent RDDs -\n+      the data RDD and the parent TrackStateRDD.\n+     */\n+    def rddCollectFunc(rdd: RDD[TrackStateRDDRecord[Int, Int, Int]]) = {\n+      rdd.map { record => (record.stateMap.getAll().toList, record.emittedRecords.toList) }\n+         .collect.toSet\n+    }\n+\n+    /** Generate TrackStateRDD with data RDD having a long lineage */\n+    def makeStateRDDWithLongLineageDataRDD(longLineageRDD: RDD[Int])\n+      : TrackStateRDD[Int, Int, Int, Int] = {\n+      TrackStateRDD.createFromPairRDD(longLineageRDD.map { _ -> 1}, partitioner, Time(0))\n+    }\n+\n+    testRDD(\n+      makeStateRDDWithLongLineageDataRDD, reliableCheckpoint = true, rddCollectFunc _)\n+    testRDDPartitions(\n+      makeStateRDDWithLongLineageDataRDD, reliableCheckpoint = true, rddCollectFunc _)\n+\n+    /** Generate TrackStateRDD with parent state RDD having a long lineage */\n+    def makeStateRDDWithLongLineageParenttateRDD(\n+        longLineageRDD: RDD[Int]): TrackStateRDD[Int, Int, Int, Int] = {\n+\n+      // Create a TrackStateRDD that has a long lineage using the data RDD with a long lineage\n+      val stateRDDWithLongLineage = makeStateRDDWithLongLineageDataRDD(longLineageRDD)\n+\n+      // Create a new TrackStateRDD, with the lineage lineage TrackStateRDD as the parent\n+      new TrackStateRDD[Int, Int, Int, Int](\n+        stateRDDWithLongLineage,\n+        stateRDDWithLongLineage.sparkContext.emptyRDD[(Int, Int)].partitionBy(partitioner),",
+    "line": 80
+  }, {
+    "author": {
+      "login": "tdas"
+    },
+    "body": "Testing with long lineage data RDD is covered in the above case  `makeStateRDDWithLongLineageDataRDD`. \n\nTesting the parents individually independent of the other parent so that if there is any failure, it is easy to attribute the culprit parent RDD.\n",
+    "commit": "a1cec18651f5089701e3a517c2bc2a53ae801fbd",
+    "createdAt": "2015-11-19T21:54:30Z",
+    "diffHunk": "@@ -278,6 +287,50 @@ class TrackStateRDDSuite extends SparkFunSuite with BeforeAndAfterAll {\n       rdd7, Seq((\"k3\", 2)), Set())\n   }\n \n+  test(\"checkpointing\") {\n+    /*\n+      This tests whether the TrackStateRDD correctly truncates any references to its parent RDDs -\n+      the data RDD and the parent TrackStateRDD.\n+     */\n+    def rddCollectFunc(rdd: RDD[TrackStateRDDRecord[Int, Int, Int]]) = {\n+      rdd.map { record => (record.stateMap.getAll().toList, record.emittedRecords.toList) }\n+         .collect.toSet\n+    }\n+\n+    /** Generate TrackStateRDD with data RDD having a long lineage */\n+    def makeStateRDDWithLongLineageDataRDD(longLineageRDD: RDD[Int])\n+      : TrackStateRDD[Int, Int, Int, Int] = {\n+      TrackStateRDD.createFromPairRDD(longLineageRDD.map { _ -> 1}, partitioner, Time(0))\n+    }\n+\n+    testRDD(\n+      makeStateRDDWithLongLineageDataRDD, reliableCheckpoint = true, rddCollectFunc _)\n+    testRDDPartitions(\n+      makeStateRDDWithLongLineageDataRDD, reliableCheckpoint = true, rddCollectFunc _)\n+\n+    /** Generate TrackStateRDD with parent state RDD having a long lineage */\n+    def makeStateRDDWithLongLineageParenttateRDD(\n+        longLineageRDD: RDD[Int]): TrackStateRDD[Int, Int, Int, Int] = {\n+\n+      // Create a TrackStateRDD that has a long lineage using the data RDD with a long lineage\n+      val stateRDDWithLongLineage = makeStateRDDWithLongLineageDataRDD(longLineageRDD)\n+\n+      // Create a new TrackStateRDD, with the lineage lineage TrackStateRDD as the parent\n+      new TrackStateRDD[Int, Int, Int, Int](\n+        stateRDDWithLongLineage,\n+        stateRDDWithLongLineage.sparkContext.emptyRDD[(Int, Int)].partitionBy(partitioner),",
+    "line": 80
+  }, {
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "I see. LGTM\n",
+    "commit": "a1cec18651f5089701e3a517c2bc2a53ae801fbd",
+    "createdAt": "2015-11-19T22:01:20Z",
+    "diffHunk": "@@ -278,6 +287,50 @@ class TrackStateRDDSuite extends SparkFunSuite with BeforeAndAfterAll {\n       rdd7, Seq((\"k3\", 2)), Set())\n   }\n \n+  test(\"checkpointing\") {\n+    /*\n+      This tests whether the TrackStateRDD correctly truncates any references to its parent RDDs -\n+      the data RDD and the parent TrackStateRDD.\n+     */\n+    def rddCollectFunc(rdd: RDD[TrackStateRDDRecord[Int, Int, Int]]) = {\n+      rdd.map { record => (record.stateMap.getAll().toList, record.emittedRecords.toList) }\n+         .collect.toSet\n+    }\n+\n+    /** Generate TrackStateRDD with data RDD having a long lineage */\n+    def makeStateRDDWithLongLineageDataRDD(longLineageRDD: RDD[Int])\n+      : TrackStateRDD[Int, Int, Int, Int] = {\n+      TrackStateRDD.createFromPairRDD(longLineageRDD.map { _ -> 1}, partitioner, Time(0))\n+    }\n+\n+    testRDD(\n+      makeStateRDDWithLongLineageDataRDD, reliableCheckpoint = true, rddCollectFunc _)\n+    testRDDPartitions(\n+      makeStateRDDWithLongLineageDataRDD, reliableCheckpoint = true, rddCollectFunc _)\n+\n+    /** Generate TrackStateRDD with parent state RDD having a long lineage */\n+    def makeStateRDDWithLongLineageParenttateRDD(\n+        longLineageRDD: RDD[Int]): TrackStateRDD[Int, Int, Int, Int] = {\n+\n+      // Create a TrackStateRDD that has a long lineage using the data RDD with a long lineage\n+      val stateRDDWithLongLineage = makeStateRDDWithLongLineageDataRDD(longLineageRDD)\n+\n+      // Create a new TrackStateRDD, with the lineage lineage TrackStateRDD as the parent\n+      new TrackStateRDD[Int, Int, Int, Int](\n+        stateRDDWithLongLineage,\n+        stateRDDWithLongLineage.sparkContext.emptyRDD[(Int, Int)].partitionBy(partitioner),",
+    "line": 80
+  }],
+  "prId": 9831
+}]

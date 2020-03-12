@@ -1,0 +1,47 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "yanboliang"
+    },
+    "body": "If set ```maxIter = 2```, the result is not converged, so the result is vulnerable. We should check the last converged result. ",
+    "commit": "a87d5c0c578542916706745cdbeca58ae24269e8",
+    "createdAt": "2017-04-25T14:44:09Z",
+    "diffHunk": "@@ -284,22 +284,11 @@ test_that(\"spark.mlp\", {\n                c(\"1.0\", \"1.0\", \"1.0\", \"1.0\", \"0.0\", \"1.0\", \"2.0\", \"2.0\", \"1.0\", \"0.0\"))\n \n   # test initialWeights\n-  model <- spark.mlp(df, label ~ features, layers = c(4, 3), maxIter = 2, initialWeights =\n+  model <- spark.mlp(df, label ~ features, layers = c(4, 3), initialWeights =\n     c(0, 0, 0, 0, 0, 5, 5, 5, 5, 5, 9, 9, 9, 9, 9))\n   mlpPredictions <- collect(select(predict(model, mlpTestDF), \"prediction\"))\n   expect_equal(head(mlpPredictions$prediction, 10),\n-               c(\"1.0\", \"1.0\", \"1.0\", \"1.0\", \"2.0\", \"1.0\", \"2.0\", \"2.0\", \"1.0\", \"0.0\"))\n-\n-  model <- spark.mlp(df, label ~ features, layers = c(4, 3), maxIter = 2, initialWeights ="
+  }],
+  "prId": 17757
+}, {
+  "comments": [{
+    "author": {
+      "login": "felixcheung"
+    },
+    "body": "so is there any result we could use when it is converged?\r\nwe have remove a call to predict - we should keep the call to make sure the api works and ideally check for the prediction results too if we could\r\n",
+    "commit": "a87d5c0c578542916706745cdbeca58ae24269e8",
+    "createdAt": "2017-04-25T18:09:14Z",
+    "diffHunk": "@@ -284,22 +284,11 @@ test_that(\"spark.mlp\", {\n                c(\"1.0\", \"1.0\", \"1.0\", \"1.0\", \"0.0\", \"1.0\", \"2.0\", \"2.0\", \"1.0\", \"0.0\"))\n \n   # test initialWeights\n-  model <- spark.mlp(df, label ~ features, layers = c(4, 3), maxIter = 2, initialWeights =\n+  model <- spark.mlp(df, label ~ features, layers = c(4, 3), initialWeights =\n     c(0, 0, 0, 0, 0, 5, 5, 5, 5, 5, 9, 9, 9, 9, 9))\n   mlpPredictions <- collect(select(predict(model, mlpTestDF), \"prediction\"))\n   expect_equal(head(mlpPredictions$prediction, 10),\n-               c(\"1.0\", \"1.0\", \"1.0\", \"1.0\", \"2.0\", \"1.0\", \"2.0\", \"2.0\", \"1.0\", \"0.0\"))\n-\n-  model <- spark.mlp(df, label ~ features, layers = c(4, 3), maxIter = 2, initialWeights =\n-    c(0.0, 0.0, 0.0, 0.0, 0.0, 5.0, 5.0, 5.0, 5.0, 5.0, 9.0, 9.0, 9.0, 9.0, 9.0))\n-  mlpPredictions <- collect(select(predict(model, mlpTestDF), \"prediction\"))\n-  expect_equal(head(mlpPredictions$prediction, 10),\n-               c(\"1.0\", \"1.0\", \"1.0\", \"1.0\", \"2.0\", \"1.0\", \"2.0\", \"2.0\", \"1.0\", \"0.0\"))\n-\n-  model <- spark.mlp(df, label ~ features, layers = c(4, 3), maxIter = 2)\n-  mlpPredictions <- collect(select(predict(model, mlpTestDF), \"prediction\"))\n-  expect_equal(head(mlpPredictions$prediction, 10),\n-               c(\"1.0\", \"1.0\", \"1.0\", \"1.0\", \"0.0\", \"1.0\", \"0.0\", \"2.0\", \"1.0\", \"0.0\"))\n+               c(\"1.0\", \"1.0\", \"1.0\", \"1.0\", \"0.0\", \"1.0\", \"2.0\", \"2.0\", \"1.0\", \"0.0\"))"
+  }, {
+    "author": {
+      "login": "yanboliang"
+    },
+    "body": "Yeah, here we just removed the unconverged test(with ```maxIter = 2```), since we can't guarantee any equality during the iteration. I think the best way to test the api works well is to check number of iterations. If we set proper initial weights, the number of iterations to converge would be different from other initial weights or no initial weights. Let's open a separate JIRA to expose training summary for MLP at MLlib side, and then we can expose them at SparkR and add check here. Thanks.",
+    "commit": "a87d5c0c578542916706745cdbeca58ae24269e8",
+    "createdAt": "2017-04-26T04:07:20Z",
+    "diffHunk": "@@ -284,22 +284,11 @@ test_that(\"spark.mlp\", {\n                c(\"1.0\", \"1.0\", \"1.0\", \"1.0\", \"0.0\", \"1.0\", \"2.0\", \"2.0\", \"1.0\", \"0.0\"))\n \n   # test initialWeights\n-  model <- spark.mlp(df, label ~ features, layers = c(4, 3), maxIter = 2, initialWeights =\n+  model <- spark.mlp(df, label ~ features, layers = c(4, 3), initialWeights =\n     c(0, 0, 0, 0, 0, 5, 5, 5, 5, 5, 9, 9, 9, 9, 9))\n   mlpPredictions <- collect(select(predict(model, mlpTestDF), \"prediction\"))\n   expect_equal(head(mlpPredictions$prediction, 10),\n-               c(\"1.0\", \"1.0\", \"1.0\", \"1.0\", \"2.0\", \"1.0\", \"2.0\", \"2.0\", \"1.0\", \"0.0\"))\n-\n-  model <- spark.mlp(df, label ~ features, layers = c(4, 3), maxIter = 2, initialWeights =\n-    c(0.0, 0.0, 0.0, 0.0, 0.0, 5.0, 5.0, 5.0, 5.0, 5.0, 9.0, 9.0, 9.0, 9.0, 9.0))\n-  mlpPredictions <- collect(select(predict(model, mlpTestDF), \"prediction\"))\n-  expect_equal(head(mlpPredictions$prediction, 10),\n-               c(\"1.0\", \"1.0\", \"1.0\", \"1.0\", \"2.0\", \"1.0\", \"2.0\", \"2.0\", \"1.0\", \"0.0\"))\n-\n-  model <- spark.mlp(df, label ~ features, layers = c(4, 3), maxIter = 2)\n-  mlpPredictions <- collect(select(predict(model, mlpTestDF), \"prediction\"))\n-  expect_equal(head(mlpPredictions$prediction, 10),\n-               c(\"1.0\", \"1.0\", \"1.0\", \"1.0\", \"0.0\", \"1.0\", \"0.0\", \"2.0\", \"1.0\", \"0.0\"))\n+               c(\"1.0\", \"1.0\", \"1.0\", \"1.0\", \"0.0\", \"1.0\", \"2.0\", \"2.0\", \"1.0\", \"0.0\"))"
+  }, {
+    "author": {
+      "login": "felixcheung"
+    },
+    "body": "I got the uncoverged test with the maxIter. \r\nMy main concern at this end is to at least exercise calling from R to JVM for each public API we export (ie. by calling `predict` on the MLP model) - we have had issues in the past the API never works and/or it is broken and we don't know.\r\n",
+    "commit": "a87d5c0c578542916706745cdbeca58ae24269e8",
+    "createdAt": "2017-04-26T04:23:26Z",
+    "diffHunk": "@@ -284,22 +284,11 @@ test_that(\"spark.mlp\", {\n                c(\"1.0\", \"1.0\", \"1.0\", \"1.0\", \"0.0\", \"1.0\", \"2.0\", \"2.0\", \"1.0\", \"0.0\"))\n \n   # test initialWeights\n-  model <- spark.mlp(df, label ~ features, layers = c(4, 3), maxIter = 2, initialWeights =\n+  model <- spark.mlp(df, label ~ features, layers = c(4, 3), initialWeights =\n     c(0, 0, 0, 0, 0, 5, 5, 5, 5, 5, 9, 9, 9, 9, 9))\n   mlpPredictions <- collect(select(predict(model, mlpTestDF), \"prediction\"))\n   expect_equal(head(mlpPredictions$prediction, 10),\n-               c(\"1.0\", \"1.0\", \"1.0\", \"1.0\", \"2.0\", \"1.0\", \"2.0\", \"2.0\", \"1.0\", \"0.0\"))\n-\n-  model <- spark.mlp(df, label ~ features, layers = c(4, 3), maxIter = 2, initialWeights =\n-    c(0.0, 0.0, 0.0, 0.0, 0.0, 5.0, 5.0, 5.0, 5.0, 5.0, 9.0, 9.0, 9.0, 9.0, 9.0))\n-  mlpPredictions <- collect(select(predict(model, mlpTestDF), \"prediction\"))\n-  expect_equal(head(mlpPredictions$prediction, 10),\n-               c(\"1.0\", \"1.0\", \"1.0\", \"1.0\", \"2.0\", \"1.0\", \"2.0\", \"2.0\", \"1.0\", \"0.0\"))\n-\n-  model <- spark.mlp(df, label ~ features, layers = c(4, 3), maxIter = 2)\n-  mlpPredictions <- collect(select(predict(model, mlpTestDF), \"prediction\"))\n-  expect_equal(head(mlpPredictions$prediction, 10),\n-               c(\"1.0\", \"1.0\", \"1.0\", \"1.0\", \"0.0\", \"1.0\", \"0.0\", \"2.0\", \"1.0\", \"0.0\"))\n+               c(\"1.0\", \"1.0\", \"1.0\", \"1.0\", \"0.0\", \"1.0\", \"2.0\", \"2.0\", \"1.0\", \"0.0\"))"
+  }, {
+    "author": {
+      "login": "felixcheung"
+    },
+    "body": "checking more closely it looks like earlier tests do call `predict`. I'm good with simplifying this part of the test with weights.\r\n",
+    "commit": "a87d5c0c578542916706745cdbeca58ae24269e8",
+    "createdAt": "2017-04-26T04:25:16Z",
+    "diffHunk": "@@ -284,22 +284,11 @@ test_that(\"spark.mlp\", {\n                c(\"1.0\", \"1.0\", \"1.0\", \"1.0\", \"0.0\", \"1.0\", \"2.0\", \"2.0\", \"1.0\", \"0.0\"))\n \n   # test initialWeights\n-  model <- spark.mlp(df, label ~ features, layers = c(4, 3), maxIter = 2, initialWeights =\n+  model <- spark.mlp(df, label ~ features, layers = c(4, 3), initialWeights =\n     c(0, 0, 0, 0, 0, 5, 5, 5, 5, 5, 9, 9, 9, 9, 9))\n   mlpPredictions <- collect(select(predict(model, mlpTestDF), \"prediction\"))\n   expect_equal(head(mlpPredictions$prediction, 10),\n-               c(\"1.0\", \"1.0\", \"1.0\", \"1.0\", \"2.0\", \"1.0\", \"2.0\", \"2.0\", \"1.0\", \"0.0\"))\n-\n-  model <- spark.mlp(df, label ~ features, layers = c(4, 3), maxIter = 2, initialWeights =\n-    c(0.0, 0.0, 0.0, 0.0, 0.0, 5.0, 5.0, 5.0, 5.0, 5.0, 9.0, 9.0, 9.0, 9.0, 9.0))\n-  mlpPredictions <- collect(select(predict(model, mlpTestDF), \"prediction\"))\n-  expect_equal(head(mlpPredictions$prediction, 10),\n-               c(\"1.0\", \"1.0\", \"1.0\", \"1.0\", \"2.0\", \"1.0\", \"2.0\", \"2.0\", \"1.0\", \"0.0\"))\n-\n-  model <- spark.mlp(df, label ~ features, layers = c(4, 3), maxIter = 2)\n-  mlpPredictions <- collect(select(predict(model, mlpTestDF), \"prediction\"))\n-  expect_equal(head(mlpPredictions$prediction, 10),\n-               c(\"1.0\", \"1.0\", \"1.0\", \"1.0\", \"0.0\", \"1.0\", \"0.0\", \"2.0\", \"1.0\", \"0.0\"))\n+               c(\"1.0\", \"1.0\", \"1.0\", \"1.0\", \"0.0\", \"1.0\", \"2.0\", \"2.0\", \"1.0\", \"0.0\"))"
+  }],
+  "prId": 17757
+}]

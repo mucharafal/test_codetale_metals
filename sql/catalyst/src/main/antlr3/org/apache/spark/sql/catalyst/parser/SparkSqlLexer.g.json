@@ -1,0 +1,103 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "viirya"
+    },
+    "body": "Old rule simply strips backquotes. I think we should keep it because it has special meaning. At least, column name rule will need it.\n",
+    "commit": "8b7086e85c10d537cd21e926d9129f9edf853445",
+    "createdAt": "2016-01-21T05:05:56Z",
+    "diffHunk": "@@ -465,7 +467,7 @@ Identifier\n fragment    \n QuotedIdentifier \n     :\n-    '`'  ( '``' | ~('`') )* '`' { setText(getText().substring(1, getText().length() -1 ).replaceAll(\"``\", \"`\")); }\n+    '`'  ( '``' | ~('`') )* '`' { setText(getText().replaceAll(\"``\", \"`\")); }",
+    "line": 14
+  }, {
+    "author": {
+      "login": "hvanhovell"
+    },
+    "body": "So we are nog stripping quotes in the middle of strings anymore?\n",
+    "commit": "8b7086e85c10d537cd21e926d9129f9edf853445",
+    "createdAt": "2016-01-23T12:22:48Z",
+    "diffHunk": "@@ -465,7 +467,7 @@ Identifier\n fragment    \n QuotedIdentifier \n     :\n-    '`'  ( '``' | ~('`') )* '`' { setText(getText().substring(1, getText().length() -1 ).replaceAll(\"``\", \"`\")); }\n+    '`'  ( '``' | ~('`') )* '`' { setText(getText().replaceAll(\"``\", \"`\")); }",
+    "line": 14
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "Just don't strip the first and last backquotes as I remove the calling of `substring`.\n",
+    "commit": "8b7086e85c10d537cd21e926d9129f9edf853445",
+    "createdAt": "2016-01-25T07:59:59Z",
+    "diffHunk": "@@ -465,7 +467,7 @@ Identifier\n fragment    \n QuotedIdentifier \n     :\n-    '`'  ( '``' | ~('`') )* '`' { setText(getText().substring(1, getText().length() -1 ).replaceAll(\"``\", \"`\")); }\n+    '`'  ( '``' | ~('`') )* '`' { setText(getText().replaceAll(\"``\", \"`\")); }",
+    "line": 14
+  }, {
+    "author": {
+      "login": "hvanhovell"
+    },
+    "body": "So we want backticks at the beginning and the end of the identifier? I thought the first and the last backtick are a means of identifying a quoted identifier, and not a part of the name. Do these backticks remain a part of the name throughout the code?\n",
+    "commit": "8b7086e85c10d537cd21e926d9129f9edf853445",
+    "createdAt": "2016-01-27T18:02:05Z",
+    "diffHunk": "@@ -465,7 +467,7 @@ Identifier\n fragment    \n QuotedIdentifier \n     :\n-    '`'  ( '``' | ~('`') )* '`' { setText(getText().substring(1, getText().length() -1 ).replaceAll(\"``\", \"`\")); }\n+    '`'  ( '``' | ~('`') )* '`' { setText(getText().replaceAll(\"``\", \"`\")); }",
+    "line": 14
+  }, {
+    "author": {
+      "login": "hvanhovell"
+    },
+    "body": "You are using the CatalystQl `cleanIdentifier` function to get rid of the remaining backticks. What happens if we do this:\n\n``````\nsql(\"select * from (select 1 as ```weird`name`) as a\")\n``````\n",
+    "commit": "8b7086e85c10d537cd21e926d9129f9edf853445",
+    "createdAt": "2016-01-27T18:16:43Z",
+    "diffHunk": "@@ -465,7 +467,7 @@ Identifier\n fragment    \n QuotedIdentifier \n     :\n-    '`'  ( '``' | ~('`') )* '`' { setText(getText().substring(1, getText().length() -1 ).replaceAll(\"``\", \"`\")); }\n+    '`'  ( '``' | ~('`') )* '`' { setText(getText().replaceAll(\"``\", \"`\")); }",
+    "line": 14
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "`QuotedIdentifier` originally strips first and last backticks. So we don't know if an identifier is quoted or not. In create table ddl commands, you can specify a column name with quoted string to use special characters. If we strip backticks early at `QuotedIdentifier`, then we can not have these column names passed in. So I change it to not strip the first and last backticks and use `cleanIdentifier` to get rid of the backticks.\n",
+    "commit": "8b7086e85c10d537cd21e926d9129f9edf853445",
+    "createdAt": "2016-01-28T03:11:24Z",
+    "diffHunk": "@@ -465,7 +467,7 @@ Identifier\n fragment    \n QuotedIdentifier \n     :\n-    '`'  ( '``' | ~('`') )* '`' { setText(getText().substring(1, getText().length() -1 ).replaceAll(\"``\", \"`\")); }\n+    '`'  ( '``' | ~('`') )* '`' { setText(getText().replaceAll(\"``\", \"`\")); }",
+    "line": 14
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "The above query will get ParseException: mismatched character '<EOF>' expecting '`', in both Hive and this PR.\n",
+    "commit": "8b7086e85c10d537cd21e926d9129f9edf853445",
+    "createdAt": "2016-01-28T03:12:12Z",
+    "diffHunk": "@@ -465,7 +467,7 @@ Identifier\n fragment    \n QuotedIdentifier \n     :\n-    '`'  ( '``' | ~('`') )* '`' { setText(getText().substring(1, getText().length() -1 ).replaceAll(\"``\", \"`\")); }\n+    '`'  ( '``' | ~('`') )* '`' { setText(getText().replaceAll(\"``\", \"`\")); }",
+    "line": 14
+  }, {
+    "author": {
+      "login": "hvanhovell"
+    },
+    "body": "Sorry I mispasted the query (github also uses backticks for escaping):\n\n``````\nsql(\"select * from (select 1 as ```weird``name`) as a\")\n``````\n\nWe currently also support backticks in the name. The regex used in `CatalystQl.cleanIdentifiers` is quite limited and will not strip the inital and final backticks in this case. So were are expecting this:\n\n```\n`weird`name\n```\n\nAnd getting this:\n\n```\n``weird`name`\n```\n",
+    "commit": "8b7086e85c10d537cd21e926d9129f9edf853445",
+    "createdAt": "2016-01-28T07:00:03Z",
+    "diffHunk": "@@ -465,7 +467,7 @@ Identifier\n fragment    \n QuotedIdentifier \n     :\n-    '`'  ( '``' | ~('`') )* '`' { setText(getText().substring(1, getText().length() -1 ).replaceAll(\"``\", \"`\")); }\n+    '`'  ( '``' | ~('`') )* '`' { setText(getText().replaceAll(\"``\", \"`\")); }",
+    "line": 14
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "Then I think we can make `cleanIdentifier` to strip the initial and final backticks for this case too. Actually it should strip initial and final backticks for all cases.\n",
+    "commit": "8b7086e85c10d537cd21e926d9129f9edf853445",
+    "createdAt": "2016-01-28T09:18:43Z",
+    "diffHunk": "@@ -465,7 +467,7 @@ Identifier\n fragment    \n QuotedIdentifier \n     :\n-    '`'  ( '``' | ~('`') )* '`' { setText(getText().substring(1, getText().length() -1 ).replaceAll(\"``\", \"`\")); }\n+    '`'  ( '``' | ~('`') )* '`' { setText(getText().replaceAll(\"``\", \"`\")); }",
+    "line": 14
+  }, {
+    "author": {
+      "login": "hvanhovell"
+    },
+    "body": "That would solve it.\n",
+    "commit": "8b7086e85c10d537cd21e926d9129f9edf853445",
+    "createdAt": "2016-01-28T10:39:04Z",
+    "diffHunk": "@@ -465,7 +467,7 @@ Identifier\n fragment    \n QuotedIdentifier \n     :\n-    '`'  ( '``' | ~('`') )* '`' { setText(getText().substring(1, getText().length() -1 ).replaceAll(\"``\", \"`\")); }\n+    '`'  ( '``' | ~('`') )* '`' { setText(getText().replaceAll(\"``\", \"`\")); }",
+    "line": 14
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "Yeah, I will update this later. Thanks.\n",
+    "commit": "8b7086e85c10d537cd21e926d9129f9edf853445",
+    "createdAt": "2016-01-28T10:54:02Z",
+    "diffHunk": "@@ -465,7 +467,7 @@ Identifier\n fragment    \n QuotedIdentifier \n     :\n-    '`'  ( '``' | ~('`') )* '`' { setText(getText().substring(1, getText().length() -1 ).replaceAll(\"``\", \"`\")); }\n+    '`'  ( '``' | ~('`') )* '`' { setText(getText().replaceAll(\"``\", \"`\")); }",
+    "line": 14
+  }],
+  "prId": 10723
+}]

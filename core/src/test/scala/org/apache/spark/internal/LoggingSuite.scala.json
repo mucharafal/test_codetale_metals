@@ -1,0 +1,13 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "reset `sparkShellThresholdLevel` too?",
+    "commit": "893ff759cff0df3aa1d2773de21e3f4adcfed0c8",
+    "createdAt": "2019-01-29T20:40:56Z",
+    "diffHunk": "@@ -0,0 +1,57 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.internal\n+\n+import org.apache.log4j.{Level, Logger}\n+import org.apache.log4j.spi.{Filter, LoggingEvent}\n+\n+import org.apache.spark.SparkFunSuite\n+import org.apache.spark.util.Utils\n+\n+class LoggingSuite extends SparkFunSuite {\n+\n+  test(\"spark-shell logging filter\") {\n+    val ssf = new SparkShellLoggingFilter()\n+    val rootLogger = Logger.getRootLogger()\n+    val originalLevel = rootLogger.getLevel()\n+    rootLogger.setLevel(Level.INFO)\n+    Logging.sparkShellThresholdLevel = Level.WARN\n+    try {\n+      val logger = Logger.getLogger(\"a.b.c.D\")\n+      val logEvent = new LoggingEvent(logger.getName(), logger, Level.INFO, \"Test\", null)\n+      assert(ssf.decide(logEvent) === Filter.DENY)\n+\n+      // log level is less than threshold level but different from root level\n+      val logEvent1 = new LoggingEvent(logger.getName(), logger, Level.DEBUG, \"Test\", null)\n+      assert(ssf.decide(logEvent1) != Filter.DENY)\n+\n+      // custom log level configured\n+      val parentLogger = Logger.getLogger(\"a.b.c\")\n+      parentLogger.setLevel(Level.INFO)\n+      assert(ssf.decide(logEvent) != Filter.DENY)\n+\n+      // log level is greater than or equal to threshold level\n+      val logger2 = Logger.getLogger(\"a.b.E\")\n+      val logEvent2 = new LoggingEvent(logger2.getName(), logger2, Level.INFO, \"Test\", null)\n+      Utils.setLogLevel(Level.INFO)\n+      assert(ssf.decide(logEvent2) != Filter.DENY)\n+    } finally {\n+      rootLogger.setLevel(originalLevel)",
+    "line": 55
+  }],
+  "prId": 23675
+}]

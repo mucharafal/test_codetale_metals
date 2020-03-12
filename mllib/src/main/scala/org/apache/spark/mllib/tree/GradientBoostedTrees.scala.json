@@ -1,0 +1,69 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "Use \"baseLearnerWeights(0)\" instead of \"1.0\"\n",
+    "commit": "0b5d65900b22db5a0a9047fd2c3a1010d9d8c36b",
+    "createdAt": "2015-04-02T21:44:19Z",
+    "diffHunk": "@@ -195,17 +195,24 @@ object GradientBoostedTrees extends Logging {\n     baseLearners(0) = firstTreeModel\n     baseLearnerWeights(0) = 1.0\n     val startingModel = new GradientBoostedTreesModel(Regression, Array(firstTreeModel), Array(1.0))\n-    logDebug(\"error of gbt = \" + loss.computeError(startingModel, input))\n+\n+    var predError: RDD[(Double, Double)] = GradientBoostedTreesModel.\n+      computeInitialPredictionAndError(input, 1.0, firstTreeModel, loss)"
+  }],
+  "prId": 5330
+}, {
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "\"psuedo\" --> \"pseudo\"  (I didn't notice before)\n",
+    "commit": "0b5d65900b22db5a0a9047fd2c3a1010d9d8c36b",
+    "createdAt": "2015-04-02T21:44:20Z",
+    "diffHunk": "@@ -195,17 +195,24 @@ object GradientBoostedTrees extends Logging {\n     baseLearners(0) = firstTreeModel\n     baseLearnerWeights(0) = 1.0\n     val startingModel = new GradientBoostedTreesModel(Regression, Array(firstTreeModel), Array(1.0))\n-    logDebug(\"error of gbt = \" + loss.computeError(startingModel, input))\n+\n+    var predError: RDD[(Double, Double)] = GradientBoostedTreesModel.\n+      computeInitialPredictionAndError(input, 1.0, firstTreeModel, loss)\n+    logDebug(\"error of gbt = \" + predError.values.mean())\n \n     // Note: A model of type regression is used since we require raw prediction\n     timer.stop(\"building tree 0\")\n \n-    var bestValidateError = if (validate) loss.computeError(startingModel, validationInput) else 0.0\n+    var validatePredError: RDD[(Double, Double)] = GradientBoostedTreesModel.\n+      computeInitialPredictionAndError(validationInput, 1.0, firstTreeModel, loss)\n+    var bestValidateError = if (validate) validatePredError.values.mean() else 0.0\n     var bestM = 1\n \n     // psuedo-residual for second iteration"
+  }],
+  "prId": 5330
+}, {
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "This looks like a bug---not from you, but from before.  Shouldn't there be a \"-\" in front of \"loss.gradient\" (as in the gradient computation in the loop below)?\n\nAlso, style: Put \"case ... =>\" on the line above:\n\n```\ndata = predError.zip(input).map { case (...) =>\n  LabeledPoint(...)\n}\n```\n",
+    "commit": "0b5d65900b22db5a0a9047fd2c3a1010d9d8c36b",
+    "createdAt": "2015-04-02T21:44:21Z",
+    "diffHunk": "@@ -195,17 +195,24 @@ object GradientBoostedTrees extends Logging {\n     baseLearners(0) = firstTreeModel\n     baseLearnerWeights(0) = 1.0\n     val startingModel = new GradientBoostedTreesModel(Regression, Array(firstTreeModel), Array(1.0))\n-    logDebug(\"error of gbt = \" + loss.computeError(startingModel, input))\n+\n+    var predError: RDD[(Double, Double)] = GradientBoostedTreesModel.\n+      computeInitialPredictionAndError(input, 1.0, firstTreeModel, loss)\n+    logDebug(\"error of gbt = \" + predError.values.mean())\n \n     // Note: A model of type regression is used since we require raw prediction\n     timer.stop(\"building tree 0\")\n \n-    var bestValidateError = if (validate) loss.computeError(startingModel, validationInput) else 0.0\n+    var validatePredError: RDD[(Double, Double)] = GradientBoostedTreesModel.\n+      computeInitialPredictionAndError(validationInput, 1.0, firstTreeModel, loss)\n+    var bestValidateError = if (validate) validatePredError.values.mean() else 0.0\n     var bestM = 1\n \n     // psuedo-residual for second iteration\n-    data = input.map(point => LabeledPoint(loss.gradient(startingModel, point),\n-      point.features))\n+    data = predError.zip(input).map {\n+      case ((pred, _), point) =>  LabeledPoint(loss.gradient(pred, point.label), point.features)"
+  }, {
+    "author": {
+      "login": "MechCoder"
+    },
+    "body": "Could you tell me why should there be a negative sign in any case?\n",
+    "commit": "0b5d65900b22db5a0a9047fd2c3a1010d9d8c36b",
+    "createdAt": "2015-04-03T06:49:44Z",
+    "diffHunk": "@@ -195,17 +195,24 @@ object GradientBoostedTrees extends Logging {\n     baseLearners(0) = firstTreeModel\n     baseLearnerWeights(0) = 1.0\n     val startingModel = new GradientBoostedTreesModel(Regression, Array(firstTreeModel), Array(1.0))\n-    logDebug(\"error of gbt = \" + loss.computeError(startingModel, input))\n+\n+    var predError: RDD[(Double, Double)] = GradientBoostedTreesModel.\n+      computeInitialPredictionAndError(input, 1.0, firstTreeModel, loss)\n+    logDebug(\"error of gbt = \" + predError.values.mean())\n \n     // Note: A model of type regression is used since we require raw prediction\n     timer.stop(\"building tree 0\")\n \n-    var bestValidateError = if (validate) loss.computeError(startingModel, validationInput) else 0.0\n+    var validatePredError: RDD[(Double, Double)] = GradientBoostedTreesModel.\n+      computeInitialPredictionAndError(validationInput, 1.0, firstTreeModel, loss)\n+    var bestValidateError = if (validate) validatePredError.values.mean() else 0.0\n     var bestM = 1\n \n     // psuedo-residual for second iteration\n-    data = input.map(point => LabeledPoint(loss.gradient(startingModel, point),\n-      point.features))\n+    data = predError.zip(input).map {\n+      case ((pred, _), point) =>  LabeledPoint(loss.gradient(pred, point.label), point.features)"
+  }, {
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "You can check out Algorithm 1 in this paper: Friedman. \"Stochastic Gradient Boosting.\" 1999.\nIntuitively, we want to minimize the loss, and using the gradient of the loss gives useful weights indicating how well/poorly we are doing at predicting each instance.  Since the gradient points in the direction of increasing loss, we want to negate it.\n",
+    "commit": "0b5d65900b22db5a0a9047fd2c3a1010d9d8c36b",
+    "createdAt": "2015-04-03T17:53:10Z",
+    "diffHunk": "@@ -195,17 +195,24 @@ object GradientBoostedTrees extends Logging {\n     baseLearners(0) = firstTreeModel\n     baseLearnerWeights(0) = 1.0\n     val startingModel = new GradientBoostedTreesModel(Regression, Array(firstTreeModel), Array(1.0))\n-    logDebug(\"error of gbt = \" + loss.computeError(startingModel, input))\n+\n+    var predError: RDD[(Double, Double)] = GradientBoostedTreesModel.\n+      computeInitialPredictionAndError(input, 1.0, firstTreeModel, loss)\n+    logDebug(\"error of gbt = \" + predError.values.mean())\n \n     // Note: A model of type regression is used since we require raw prediction\n     timer.stop(\"building tree 0\")\n \n-    var bestValidateError = if (validate) loss.computeError(startingModel, validationInput) else 0.0\n+    var validatePredError: RDD[(Double, Double)] = GradientBoostedTreesModel.\n+      computeInitialPredictionAndError(validationInput, 1.0, firstTreeModel, loss)\n+    var bestValidateError = if (validate) validatePredError.values.mean() else 0.0\n     var bestM = 1\n \n     // psuedo-residual for second iteration\n-    data = input.map(point => LabeledPoint(loss.gradient(startingModel, point),\n-      point.features))\n+    data = predError.zip(input).map {\n+      case ((pred, _), point) =>  LabeledPoint(loss.gradient(pred, point.label), point.features)"
+  }, {
+    "author": {
+      "login": "MechCoder"
+    },
+    "body": "Got it. Thanks a lot for the intuitive explanation. Any other comments?\n",
+    "commit": "0b5d65900b22db5a0a9047fd2c3a1010d9d8c36b",
+    "createdAt": "2015-04-04T06:19:20Z",
+    "diffHunk": "@@ -195,17 +195,24 @@ object GradientBoostedTrees extends Logging {\n     baseLearners(0) = firstTreeModel\n     baseLearnerWeights(0) = 1.0\n     val startingModel = new GradientBoostedTreesModel(Regression, Array(firstTreeModel), Array(1.0))\n-    logDebug(\"error of gbt = \" + loss.computeError(startingModel, input))\n+\n+    var predError: RDD[(Double, Double)] = GradientBoostedTreesModel.\n+      computeInitialPredictionAndError(input, 1.0, firstTreeModel, loss)\n+    logDebug(\"error of gbt = \" + predError.values.mean())\n \n     // Note: A model of type regression is used since we require raw prediction\n     timer.stop(\"building tree 0\")\n \n-    var bestValidateError = if (validate) loss.computeError(startingModel, validationInput) else 0.0\n+    var validatePredError: RDD[(Double, Double)] = GradientBoostedTreesModel.\n+      computeInitialPredictionAndError(validationInput, 1.0, firstTreeModel, loss)\n+    var bestValidateError = if (validate) validatePredError.values.mean() else 0.0\n     var bestM = 1\n \n     // psuedo-residual for second iteration\n-    data = input.map(point => LabeledPoint(loss.gradient(startingModel, point),\n-      point.features))\n+    data = predError.zip(input).map {\n+      case ((pred, _), point) =>  LabeledPoint(loss.gradient(pred, point.label), point.features)"
+  }],
+  "prId": 5330
+}, {
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "remove extra space after \"=>\"\n",
+    "commit": "0b5d65900b22db5a0a9047fd2c3a1010d9d8c36b",
+    "createdAt": "2015-04-02T21:44:23Z",
+    "diffHunk": "@@ -242,8 +255,9 @@ object GradientBoostedTrees extends Logging {\n         }\n       }\n       // Update data with pseudo-residuals\n-      data = input.map(point => LabeledPoint(-loss.gradient(partialModel, point),\n-        point.features))\n+      data = predError.zip(input).map {\n+        case ((pred, _), point) =>  LabeledPoint(-loss.gradient(pred, point.label), point.features)"
+  }],
+  "prId": 5330
+}]

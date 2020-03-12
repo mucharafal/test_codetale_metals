@@ -1,0 +1,58 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "sethah"
+    },
+    "body": "change it to \"It may return less than 2 rows when not enough approximate near-neighbor candidates are found.\" ?",
+    "commit": "36fd9bc6366d58541c8306803d8742649be69098",
+    "createdAt": "2017-02-13T19:25:46Z",
+    "diffHunk": "@@ -37,38 +38,44 @@ object MinHashLSHExample {\n       (0, Vectors.sparse(6, Seq((0, 1.0), (1, 1.0), (2, 1.0)))),\n       (1, Vectors.sparse(6, Seq((2, 1.0), (3, 1.0), (4, 1.0)))),\n       (2, Vectors.sparse(6, Seq((0, 1.0), (2, 1.0), (4, 1.0))))\n-    )).toDF(\"id\", \"keys\")\n+    )).toDF(\"id\", \"features\")\n \n     val dfB = spark.createDataFrame(Seq(\n       (3, Vectors.sparse(6, Seq((1, 1.0), (3, 1.0), (5, 1.0)))),\n       (4, Vectors.sparse(6, Seq((2, 1.0), (3, 1.0), (5, 1.0)))),\n       (5, Vectors.sparse(6, Seq((1, 1.0), (2, 1.0), (4, 1.0))))\n-    )).toDF(\"id\", \"keys\")\n+    )).toDF(\"id\", \"features\")\n \n     val key = Vectors.sparse(6, Seq((1, 1.0), (3, 1.0)))\n \n     val mh = new MinHashLSH()\n-      .setNumHashTables(3)\n-      .setInputCol(\"keys\")\n-      .setOutputCol(\"values\")\n+      .setNumHashTables(5)\n+      .setInputCol(\"features\")\n+      .setOutputCol(\"hashes\")\n \n     val model = mh.fit(dfA)\n \n     // Feature Transformation\n+    println(\"The hashed dataset where hashed values are stored in the column 'hashes':\")\n     model.transform(dfA).show()\n-    // Cache the transformed columns\n-    val transformedA = model.transform(dfA).cache()\n-    val transformedB = model.transform(dfB).cache()\n \n-    // Approximate similarity join\n-    model.approxSimilarityJoin(dfA, dfB, 0.6).show()\n-    model.approxSimilarityJoin(transformedA, transformedB, 0.6).show()\n-    // Self Join\n-    model.approxSimilarityJoin(dfA, dfA, 0.6).filter(\"datasetA.id < datasetB.id\").show()\n+    // Compute the locality sensitive hashes for the input rows, then perform approximate\n+    // similarity join.\n+    // We could avoid computing hashes by passing in the already-transformed dataset, e.g.\n+    // `model.approxSimilarityJoin(transformedA, transformedB, 0.6)`\n+    println(\"Approximately joining dfA and dfB on Jaccard distance smaller than 0.6:\")\n+    model.approxSimilarityJoin(dfA, dfB, 0.6)\n+      .select(col(\"datasetA.id\").alias(\"idA\"),\n+        col(\"datasetB.id\").alias(\"idB\"),\n+        col(\"distCol\").alias(\"JaccardDistance\")).show()\n \n-    // Approximate nearest neighbor search\n+    // Compute the locality sensitive hashes for the input rows, then perform approximate nearest\n+    // neighbor search.\n+    // We could avoid computing hashes by passing in the already-transformed dataset, e.g.\n+    // `model.approxNearestNeighbors(transformedA, key, 2)`\n+    // It may return less than 2 rows because of lack of elements in the hash buckets."
+  }, {
+    "author": {
+      "login": "Yunni"
+    },
+    "body": "Done.",
+    "commit": "36fd9bc6366d58541c8306803d8742649be69098",
+    "createdAt": "2017-02-14T06:19:41Z",
+    "diffHunk": "@@ -37,38 +38,44 @@ object MinHashLSHExample {\n       (0, Vectors.sparse(6, Seq((0, 1.0), (1, 1.0), (2, 1.0)))),\n       (1, Vectors.sparse(6, Seq((2, 1.0), (3, 1.0), (4, 1.0)))),\n       (2, Vectors.sparse(6, Seq((0, 1.0), (2, 1.0), (4, 1.0))))\n-    )).toDF(\"id\", \"keys\")\n+    )).toDF(\"id\", \"features\")\n \n     val dfB = spark.createDataFrame(Seq(\n       (3, Vectors.sparse(6, Seq((1, 1.0), (3, 1.0), (5, 1.0)))),\n       (4, Vectors.sparse(6, Seq((2, 1.0), (3, 1.0), (5, 1.0)))),\n       (5, Vectors.sparse(6, Seq((1, 1.0), (2, 1.0), (4, 1.0))))\n-    )).toDF(\"id\", \"keys\")\n+    )).toDF(\"id\", \"features\")\n \n     val key = Vectors.sparse(6, Seq((1, 1.0), (3, 1.0)))\n \n     val mh = new MinHashLSH()\n-      .setNumHashTables(3)\n-      .setInputCol(\"keys\")\n-      .setOutputCol(\"values\")\n+      .setNumHashTables(5)\n+      .setInputCol(\"features\")\n+      .setOutputCol(\"hashes\")\n \n     val model = mh.fit(dfA)\n \n     // Feature Transformation\n+    println(\"The hashed dataset where hashed values are stored in the column 'hashes':\")\n     model.transform(dfA).show()\n-    // Cache the transformed columns\n-    val transformedA = model.transform(dfA).cache()\n-    val transformedB = model.transform(dfB).cache()\n \n-    // Approximate similarity join\n-    model.approxSimilarityJoin(dfA, dfB, 0.6).show()\n-    model.approxSimilarityJoin(transformedA, transformedB, 0.6).show()\n-    // Self Join\n-    model.approxSimilarityJoin(dfA, dfA, 0.6).filter(\"datasetA.id < datasetB.id\").show()\n+    // Compute the locality sensitive hashes for the input rows, then perform approximate\n+    // similarity join.\n+    // We could avoid computing hashes by passing in the already-transformed dataset, e.g.\n+    // `model.approxSimilarityJoin(transformedA, transformedB, 0.6)`\n+    println(\"Approximately joining dfA and dfB on Jaccard distance smaller than 0.6:\")\n+    model.approxSimilarityJoin(dfA, dfB, 0.6)\n+      .select(col(\"datasetA.id\").alias(\"idA\"),\n+        col(\"datasetB.id\").alias(\"idB\"),\n+        col(\"distCol\").alias(\"JaccardDistance\")).show()\n \n-    // Approximate nearest neighbor search\n+    // Compute the locality sensitive hashes for the input rows, then perform approximate nearest\n+    // neighbor search.\n+    // We could avoid computing hashes by passing in the already-transformed dataset, e.g.\n+    // `model.approxNearestNeighbors(transformedA, key, 2)`\n+    // It may return less than 2 rows because of lack of elements in the hash buckets."
+  }],
+  "prId": 16715
+}, {
+  "comments": [{
+    "author": {
+      "login": "sethah"
+    },
+    "body": "pass distCol as method parameter instead of alias",
+    "commit": "36fd9bc6366d58541c8306803d8742649be69098",
+    "createdAt": "2017-02-14T07:07:11Z",
+    "diffHunk": "@@ -37,38 +43,45 @@ object MinHashLSHExample {\n       (0, Vectors.sparse(6, Seq((0, 1.0), (1, 1.0), (2, 1.0)))),\n       (1, Vectors.sparse(6, Seq((2, 1.0), (3, 1.0), (4, 1.0)))),\n       (2, Vectors.sparse(6, Seq((0, 1.0), (2, 1.0), (4, 1.0))))\n-    )).toDF(\"id\", \"keys\")\n+    )).toDF(\"id\", \"features\")\n \n     val dfB = spark.createDataFrame(Seq(\n       (3, Vectors.sparse(6, Seq((1, 1.0), (3, 1.0), (5, 1.0)))),\n       (4, Vectors.sparse(6, Seq((2, 1.0), (3, 1.0), (5, 1.0)))),\n       (5, Vectors.sparse(6, Seq((1, 1.0), (2, 1.0), (4, 1.0))))\n-    )).toDF(\"id\", \"keys\")\n+    )).toDF(\"id\", \"features\")\n \n     val key = Vectors.sparse(6, Seq((1, 1.0), (3, 1.0)))\n \n     val mh = new MinHashLSH()\n-      .setNumHashTables(3)\n-      .setInputCol(\"keys\")\n-      .setOutputCol(\"values\")\n+      .setNumHashTables(5)\n+      .setInputCol(\"features\")\n+      .setOutputCol(\"hashes\")\n \n     val model = mh.fit(dfA)\n \n     // Feature Transformation\n+    println(\"The hashed dataset where hashed values are stored in the column 'hashes':\")\n     model.transform(dfA).show()\n-    // Cache the transformed columns\n-    val transformedA = model.transform(dfA).cache()\n-    val transformedB = model.transform(dfB).cache()\n \n-    // Approximate similarity join\n-    model.approxSimilarityJoin(dfA, dfB, 0.6).show()\n-    model.approxSimilarityJoin(transformedA, transformedB, 0.6).show()\n-    // Self Join\n-    model.approxSimilarityJoin(dfA, dfA, 0.6).filter(\"datasetA.id < datasetB.id\").show()\n+    // Compute the locality sensitive hashes for the input rows, then perform approximate\n+    // similarity join.\n+    // We could avoid computing hashes by passing in the already-transformed dataset, e.g.\n+    // `model.approxSimilarityJoin(transformedA, transformedB, 0.6)`\n+    println(\"Approximately joining dfA and dfB on Jaccard distance smaller than 0.6:\")\n+    model.approxSimilarityJoin(dfA, dfB, 0.6)\n+      .select(col(\"datasetA.id\").alias(\"idA\"),\n+        col(\"datasetB.id\").alias(\"idB\"),\n+        col(\"distCol\").alias(\"JaccardDistance\")).show()"
+  }, {
+    "author": {
+      "login": "Yunni"
+    },
+    "body": "Done.",
+    "commit": "36fd9bc6366d58541c8306803d8742649be69098",
+    "createdAt": "2017-02-14T17:14:18Z",
+    "diffHunk": "@@ -37,38 +43,45 @@ object MinHashLSHExample {\n       (0, Vectors.sparse(6, Seq((0, 1.0), (1, 1.0), (2, 1.0)))),\n       (1, Vectors.sparse(6, Seq((2, 1.0), (3, 1.0), (4, 1.0)))),\n       (2, Vectors.sparse(6, Seq((0, 1.0), (2, 1.0), (4, 1.0))))\n-    )).toDF(\"id\", \"keys\")\n+    )).toDF(\"id\", \"features\")\n \n     val dfB = spark.createDataFrame(Seq(\n       (3, Vectors.sparse(6, Seq((1, 1.0), (3, 1.0), (5, 1.0)))),\n       (4, Vectors.sparse(6, Seq((2, 1.0), (3, 1.0), (5, 1.0)))),\n       (5, Vectors.sparse(6, Seq((1, 1.0), (2, 1.0), (4, 1.0))))\n-    )).toDF(\"id\", \"keys\")\n+    )).toDF(\"id\", \"features\")\n \n     val key = Vectors.sparse(6, Seq((1, 1.0), (3, 1.0)))\n \n     val mh = new MinHashLSH()\n-      .setNumHashTables(3)\n-      .setInputCol(\"keys\")\n-      .setOutputCol(\"values\")\n+      .setNumHashTables(5)\n+      .setInputCol(\"features\")\n+      .setOutputCol(\"hashes\")\n \n     val model = mh.fit(dfA)\n \n     // Feature Transformation\n+    println(\"The hashed dataset where hashed values are stored in the column 'hashes':\")\n     model.transform(dfA).show()\n-    // Cache the transformed columns\n-    val transformedA = model.transform(dfA).cache()\n-    val transformedB = model.transform(dfB).cache()\n \n-    // Approximate similarity join\n-    model.approxSimilarityJoin(dfA, dfB, 0.6).show()\n-    model.approxSimilarityJoin(transformedA, transformedB, 0.6).show()\n-    // Self Join\n-    model.approxSimilarityJoin(dfA, dfA, 0.6).filter(\"datasetA.id < datasetB.id\").show()\n+    // Compute the locality sensitive hashes for the input rows, then perform approximate\n+    // similarity join.\n+    // We could avoid computing hashes by passing in the already-transformed dataset, e.g.\n+    // `model.approxSimilarityJoin(transformedA, transformedB, 0.6)`\n+    println(\"Approximately joining dfA and dfB on Jaccard distance smaller than 0.6:\")\n+    model.approxSimilarityJoin(dfA, dfB, 0.6)\n+      .select(col(\"datasetA.id\").alias(\"idA\"),\n+        col(\"datasetB.id\").alias(\"idB\"),\n+        col(\"distCol\").alias(\"JaccardDistance\")).show()"
+  }],
+  "prId": 16715
+}, {
+  "comments": [{
+    "author": {
+      "login": "sethah"
+    },
+    "body": "just import col here and above",
+    "commit": "36fd9bc6366d58541c8306803d8742649be69098",
+    "createdAt": "2017-02-14T07:11:13Z",
+    "diffHunk": "@@ -21,9 +21,15 @@ package org.apache.spark.examples.ml\n // $example on$\n import org.apache.spark.ml.feature.MinHashLSH\n import org.apache.spark.ml.linalg.Vectors\n+import org.apache.spark.sql.functions._"
+  }, {
+    "author": {
+      "login": "Yunni"
+    },
+    "body": "Done.",
+    "commit": "36fd9bc6366d58541c8306803d8742649be69098",
+    "createdAt": "2017-02-14T17:14:20Z",
+    "diffHunk": "@@ -21,9 +21,15 @@ package org.apache.spark.examples.ml\n // $example on$\n import org.apache.spark.ml.feature.MinHashLSH\n import org.apache.spark.ml.linalg.Vectors\n+import org.apache.spark.sql.functions._"
+  }],
+  "prId": 16715
+}]

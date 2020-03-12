@@ -1,0 +1,12 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Seems reasonable to me, except that moving the `cache()` call here doesn't do anything. It won't be materialized until it's accessed anyway. So this reduces to making sure to properly unpersist the RDDs.\n",
+    "commit": "66a7cfb3e119739ada90c31cf12c2f38ddc8e02d",
+    "createdAt": "2015-02-13T19:30:36Z",
+    "diffHunk": "@@ -77,10 +77,12 @@ class CrossValidator extends Estimator[CrossValidatorModel] with CrossValidatorP\n     val splits = MLUtils.kFold(dataset.rdd, map(numFolds), 0)\n     splits.zipWithIndex.foreach { case ((training, validation), splitIndex) =>\n       val trainingDataset = sqlCtx.createDataFrame(training, schema).cache()\n-      val validationDataset = sqlCtx.createDataFrame(validation, schema).cache()\n+      val validationDataset = sqlCtx.createDataFrame(validation, schema)\n       // multi-model training\n       logDebug(s\"Train split $splitIndex with multiple sets of parameters.\")\n       val models = est.fit(trainingDataset, epm).asInstanceOf[Seq[Model[_]]]\n+      trainingDataset.unpersist()\n+      validationDataset.cache()"
+  }],
+  "prId": 4595
+}]

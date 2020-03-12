@@ -1,0 +1,149 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "mgummelt"
+    },
+    "body": "I still don't know how to place these in the `test` scope, which is where they belong.  See my comment here: https://github.com/apache/spark/pull/17665/files#r112337820",
+    "commit": "c4149ddb940c32285fde8b1c08a5b212fced5d66",
+    "createdAt": "2017-04-21T22:39:30Z",
+    "diffHunk": "@@ -357,6 +357,34 @@\n       <groupId>org.apache.commons</groupId>\n       <artifactId>commons-crypto</artifactId>\n     </dependency>\n+\n+    <!--\n+     Testing Hive reflection needs hive on the test classpath only.\n+     It doesn't need the spark hive modules, so the -Phive flag is not checked.\n+      -->\n+    <dependency>\n+      <groupId>${hive.group}</groupId>\n+      <artifactId>hive-exec</artifactId>"
+  }, {
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "So I tried a few things, and the one that got me further was just having this:\r\n\r\n```\r\n    <dependency>\r\n      <groupId>${hive.group}</groupId>\r\n      <artifactId>hive-metastore</artifactId>\r\n      <scope>test</scope>\r\n    </dependency>\r\n```\r\n\r\nAnd nix the others. Adding the others in test scope caused some weird error in sbt, even with all dependencies (we have the dependencies you had problems with cached locally).\r\n\r\nMy comment was going to be to add that, then rewrite the code to use the metastore API instead of the `Hive` class from hive-exec... but then I noticed that test is not doing much, because there are no metastore servers to talk to. It's even there, hardcoded in the test:\r\n\r\n```\r\n  test(\"obtain tokens For HiveMetastore\") {\r\n    ...\r\n    credentials.getAllTokens.size() should be (0)\r\n```\r\n\r\nAll it seems to be doing is making sure the reflection-based code is not completely broken. That is something already, though.\r\n\r\nSo I have two suggestions, in order of preference:\r\n\r\n- add the dependencies in \"provided\" scope, and change the code to use actual types and not reflection. Because the classes may not exist at runtime, that means having to handle `NoClassDefFoundError` in creative ways.\r\n\r\n- keep the reflection code, and remove this test. Or maybe move it to a separate module as others have suggested.\r\n\r\nI kinda like the first because it's always good to avoid reflection, and this is a particularly ugly use of it.",
+    "commit": "c4149ddb940c32285fde8b1c08a5b212fced5d66",
+    "createdAt": "2017-06-01T22:58:05Z",
+    "diffHunk": "@@ -357,6 +357,34 @@\n       <groupId>org.apache.commons</groupId>\n       <artifactId>commons-crypto</artifactId>\n     </dependency>\n+\n+    <!--\n+     Testing Hive reflection needs hive on the test classpath only.\n+     It doesn't need the spark hive modules, so the -Phive flag is not checked.\n+      -->\n+    <dependency>\n+      <groupId>${hive.group}</groupId>\n+      <artifactId>hive-exec</artifactId>"
+  }, {
+    "author": {
+      "login": "mgummelt"
+    },
+    "body": "Thanks for looking into it. \r\n\r\nDo you know why reflection was used in the first place?  Why not just add the Hive dependencies to compile scope?  I'm thinking that's what we should do now, and drop reflection.\r\n\r\nSo I'm agreeing with your first bullet point, but proposing that we add the hive deps to `compile` rather than `provided`.",
+    "commit": "c4149ddb940c32285fde8b1c08a5b212fced5d66",
+    "createdAt": "2017-06-02T01:25:38Z",
+    "diffHunk": "@@ -357,6 +357,34 @@\n       <groupId>org.apache.commons</groupId>\n       <artifactId>commons-crypto</artifactId>\n     </dependency>\n+\n+    <!--\n+     Testing Hive reflection needs hive on the test classpath only.\n+     It doesn't need the spark hive modules, so the -Phive flag is not checked.\n+      -->\n+    <dependency>\n+      <groupId>${hive.group}</groupId>\n+      <artifactId>hive-exec</artifactId>"
+  }, {
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "> Why not just add the Hive dependencies to compile scope?\r\n\r\nBecause technically Hive is an optional dependency for Spark, and moving it to compile scope would break that.\r\n\r\n(Whether that should change or not is a separate discussion, but probably better not to have it as part of this change.)",
+    "commit": "c4149ddb940c32285fde8b1c08a5b212fced5d66",
+    "createdAt": "2017-06-02T04:14:37Z",
+    "diffHunk": "@@ -357,6 +357,34 @@\n       <groupId>org.apache.commons</groupId>\n       <artifactId>commons-crypto</artifactId>\n     </dependency>\n+\n+    <!--\n+     Testing Hive reflection needs hive on the test classpath only.\n+     It doesn't need the spark hive modules, so the -Phive flag is not checked.\n+      -->\n+    <dependency>\n+      <groupId>${hive.group}</groupId>\n+      <artifactId>hive-exec</artifactId>"
+  }, {
+    "author": {
+      "login": "mgummelt"
+    },
+    "body": "Alright I added hive-exec to provided scope, and removed the reflection.  ",
+    "commit": "c4149ddb940c32285fde8b1c08a5b212fced5d66",
+    "createdAt": "2017-06-02T19:08:23Z",
+    "diffHunk": "@@ -357,6 +357,34 @@\n       <groupId>org.apache.commons</groupId>\n       <artifactId>commons-crypto</artifactId>\n     </dependency>\n+\n+    <!--\n+     Testing Hive reflection needs hive on the test classpath only.\n+     It doesn't need the spark hive modules, so the -Phive flag is not checked.\n+      -->\n+    <dependency>\n+      <groupId>${hive.group}</groupId>\n+      <artifactId>hive-exec</artifactId>"
+  }],
+  "prId": 17723
+}, {
+  "comments": [{
+    "author": {
+      "login": "mridulm"
+    },
+    "body": "The reason why I had introduced `SparkHadoopUtil` a while back was to prevent `core` from depending on `yarn` - ofcourse we also had to support hadoop 1.x at that time in addition to standalone, mesos, etc.\r\n\r\nI would expect `core` should still not depend on `yarn` - did anything change in this regard ?\r\nThis dependency might bring in unnecessary restrictions in evolution of non yarn schedulers (through dependencies, etc).",
+    "commit": "c4149ddb940c32285fde8b1c08a5b212fced5d66",
+    "createdAt": "2017-04-28T23:52:13Z",
+    "diffHunk": "@@ -357,6 +357,34 @@\n       <groupId>org.apache.commons</groupId>\n       <artifactId>commons-crypto</artifactId>\n     </dependency>\n+\n+    <!--\n+     Testing Hive reflection needs hive on the test classpath only.\n+     It doesn't need the spark hive modules, so the -Phive flag is not checked.\n+      -->\n+    <dependency>\n+      <groupId>${hive.group}</groupId>\n+      <artifactId>hive-exec</artifactId>\n+    </dependency>\n+    <dependency>\n+      <groupId>${hive.group}</groupId>\n+      <artifactId>hive-metastore</artifactId>\n+    </dependency>\n+    <dependency>\n+      <groupId>org.apache.thrift</groupId>\n+      <artifactId>libthrift</artifactId>\n+      <scope>test</scope>\n+    </dependency>\n+    <dependency>\n+      <groupId>org.apache.thrift</groupId>\n+      <artifactId>libfb303</artifactId>\n+      <scope>test</scope>\n+    </dependency>\n+\n+    <dependency>\n+      <groupId>org.apache.hadoop</groupId>\n+      <artifactId>hadoop-yarn-api</artifactId>"
+  }, {
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Core depends on `hadoop-client` which depends on YARN already. So the explicit dependency here isn't really needed.\r\n\r\nThe distinction was useful when Spark supported Hadoop 1.x (no YARN), but right now, it's mostly theoretical - every Spark build has YARN classes, regardless of whether the YARN module is included.",
+    "commit": "c4149ddb940c32285fde8b1c08a5b212fced5d66",
+    "createdAt": "2017-04-29T00:14:00Z",
+    "diffHunk": "@@ -357,6 +357,34 @@\n       <groupId>org.apache.commons</groupId>\n       <artifactId>commons-crypto</artifactId>\n     </dependency>\n+\n+    <!--\n+     Testing Hive reflection needs hive on the test classpath only.\n+     It doesn't need the spark hive modules, so the -Phive flag is not checked.\n+      -->\n+    <dependency>\n+      <groupId>${hive.group}</groupId>\n+      <artifactId>hive-exec</artifactId>\n+    </dependency>\n+    <dependency>\n+      <groupId>${hive.group}</groupId>\n+      <artifactId>hive-metastore</artifactId>\n+    </dependency>\n+    <dependency>\n+      <groupId>org.apache.thrift</groupId>\n+      <artifactId>libthrift</artifactId>\n+      <scope>test</scope>\n+    </dependency>\n+    <dependency>\n+      <groupId>org.apache.thrift</groupId>\n+      <artifactId>libfb303</artifactId>\n+      <scope>test</scope>\n+    </dependency>\n+\n+    <dependency>\n+      <groupId>org.apache.hadoop</groupId>\n+      <artifactId>hadoop-yarn-api</artifactId>"
+  }, {
+    "author": {
+      "login": "mridulm"
+    },
+    "body": "Thanks for pointing it out, I just noticed that hadoop-client deps have changed in the long interim since I last looked at it :-)",
+    "commit": "c4149ddb940c32285fde8b1c08a5b212fced5d66",
+    "createdAt": "2017-04-29T00:27:25Z",
+    "diffHunk": "@@ -357,6 +357,34 @@\n       <groupId>org.apache.commons</groupId>\n       <artifactId>commons-crypto</artifactId>\n     </dependency>\n+\n+    <!--\n+     Testing Hive reflection needs hive on the test classpath only.\n+     It doesn't need the spark hive modules, so the -Phive flag is not checked.\n+      -->\n+    <dependency>\n+      <groupId>${hive.group}</groupId>\n+      <artifactId>hive-exec</artifactId>\n+    </dependency>\n+    <dependency>\n+      <groupId>${hive.group}</groupId>\n+      <artifactId>hive-metastore</artifactId>\n+    </dependency>\n+    <dependency>\n+      <groupId>org.apache.thrift</groupId>\n+      <artifactId>libthrift</artifactId>\n+      <scope>test</scope>\n+    </dependency>\n+    <dependency>\n+      <groupId>org.apache.thrift</groupId>\n+      <artifactId>libfb303</artifactId>\n+      <scope>test</scope>\n+    </dependency>\n+\n+    <dependency>\n+      <groupId>org.apache.hadoop</groupId>\n+      <artifactId>hadoop-yarn-api</artifactId>"
+  }],
+  "prId": 17723
+}, {
+  "comments": [{
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "Is that possible to avoid adding these dependencies to core? Does it make sense to do the test in `org.apache.spark.sql.hive`? cc @vanzin @mridulm \r\n\r\n",
+    "commit": "c4149ddb940c32285fde8b1c08a5b212fced5d66",
+    "createdAt": "2017-05-19T17:43:31Z",
+    "diffHunk": "@@ -357,6 +357,34 @@\n       <groupId>org.apache.commons</groupId>\n       <artifactId>commons-crypto</artifactId>\n     </dependency>\n+\n+    <!--\n+     Testing Hive reflection needs hive on the test classpath only."
+  }, {
+    "author": {
+      "login": "mgummelt"
+    },
+    "body": "The code is in core, so the test should be in core.",
+    "commit": "c4149ddb940c32285fde8b1c08a5b212fced5d66",
+    "createdAt": "2017-05-24T00:46:21Z",
+    "diffHunk": "@@ -357,6 +357,34 @@\n       <groupId>org.apache.commons</groupId>\n       <artifactId>commons-crypto</artifactId>\n     </dependency>\n+\n+    <!--\n+     Testing Hive reflection needs hive on the test classpath only."
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "can we workaround it? It's weird to test code of sql module in hive module, but it's weirder to let sql module depends on hive module. If we can't work around it, I'd like to move the test to hive module.",
+    "commit": "c4149ddb940c32285fde8b1c08a5b212fced5d66",
+    "createdAt": "2017-05-30T21:37:50Z",
+    "diffHunk": "@@ -357,6 +357,34 @@\n       <groupId>org.apache.commons</groupId>\n       <artifactId>commons-crypto</artifactId>\n     </dependency>\n+\n+    <!--\n+     Testing Hive reflection needs hive on the test classpath only."
+  }, {
+    "author": {
+      "login": "mgummelt"
+    },
+    "body": "I'm not sure what you mean.  This is the core module, not the sql module.",
+    "commit": "c4149ddb940c32285fde8b1c08a5b212fced5d66",
+    "createdAt": "2017-05-30T21:47:27Z",
+    "diffHunk": "@@ -357,6 +357,34 @@\n       <groupId>org.apache.commons</groupId>\n       <artifactId>commons-crypto</artifactId>\n     </dependency>\n+\n+    <!--\n+     Testing Hive reflection needs hive on the test classpath only."
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "oh sorry I made a mistake, but it's much weirder to let core module depend on hive module...",
+    "commit": "c4149ddb940c32285fde8b1c08a5b212fced5d66",
+    "createdAt": "2017-05-30T21:56:04Z",
+    "diffHunk": "@@ -357,6 +357,34 @@\n       <groupId>org.apache.commons</groupId>\n       <artifactId>commons-crypto</artifactId>\n     </dependency>\n+\n+    <!--\n+     Testing Hive reflection needs hive on the test classpath only."
+  }, {
+    "author": {
+      "login": "mgummelt"
+    },
+    "body": "We went back in forth on this in the main thread, which is admittedly long and hard to follow at this point.  Here's the same concern laid out by mridulm: https://github.com/apache/spark/pull/17723#issuecomment-298222247\r\n\r\nWe ultimately decided that it would be acceptable to add these dependencies, so long as we don't expose them in the public Spark interfaces.  Here's a comment to that effect: https://github.com/apache/spark/pull/17723#issuecomment-298463750\r\n\r\nThe reason they're required is that this PR moves the Hadoop delegation token providers from the yarn module into the core module, so that other resource managers, such as Mesos, can also fetch delegation tokens to access secure hadoop services.  One of those delegation token providers is Hive: https://github.com/apache/spark/pull/17723/files#diff-8be1059872a069d1bb4c5fc3ca394968",
+    "commit": "c4149ddb940c32285fde8b1c08a5b212fced5d66",
+    "createdAt": "2017-05-30T23:34:17Z",
+    "diffHunk": "@@ -357,6 +357,34 @@\n       <groupId>org.apache.commons</groupId>\n       <artifactId>commons-crypto</artifactId>\n     </dependency>\n+\n+    <!--\n+     Testing Hive reflection needs hive on the test classpath only."
+  }, {
+    "author": {
+      "login": "mgummelt"
+    },
+    "body": "Also, to clarify, this is not adding a dependency to the Spark hive module.  It's adding a dependency to Apache Hive.",
+    "commit": "c4149ddb940c32285fde8b1c08a5b212fced5d66",
+    "createdAt": "2017-05-30T23:39:58Z",
+    "diffHunk": "@@ -357,6 +357,34 @@\n       <groupId>org.apache.commons</groupId>\n       <artifactId>commons-crypto</artifactId>\n     </dependency>\n+\n+    <!--\n+     Testing Hive reflection needs hive on the test classpath only."
+  }],
+  "prId": 17723
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Minor, but this comment is a little stale now after all the changes. There's no reflection anymore, so the \"provided\" scope is just so we can still package Spark without Hive.",
+    "commit": "c4149ddb940c32285fde8b1c08a5b212fced5d66",
+    "createdAt": "2017-06-09T22:37:53Z",
+    "diffHunk": "@@ -357,6 +357,34 @@\n       <groupId>org.apache.commons</groupId>\n       <artifactId>commons-crypto</artifactId>\n     </dependency>\n+\n+    <!--\n+     Testing Hive reflection needs hive on the test classpath only, however, while adding hive-exec to the test"
+  }, {
+    "author": {
+      "login": "mgummelt"
+    },
+    "body": "fixed",
+    "commit": "c4149ddb940c32285fde8b1c08a5b212fced5d66",
+    "createdAt": "2017-06-12T17:20:11Z",
+    "diffHunk": "@@ -357,6 +357,34 @@\n       <groupId>org.apache.commons</groupId>\n       <artifactId>commons-crypto</artifactId>\n     </dependency>\n+\n+    <!--\n+     Testing Hive reflection needs hive on the test classpath only, however, while adding hive-exec to the test"
+  }],
+  "prId": 17723
+}]

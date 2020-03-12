@@ -1,0 +1,68 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Just to be clear, this is exactly the field used to compute min/max stats, etc?",
+    "commit": "f639b693b67661e4466fe752194e25b9a832b948",
+    "createdAt": "2019-10-28T13:23:33Z",
+    "diffHunk": "@@ -417,19 +417,8 @@ private[ui] class StageDataSource(\n       case Some(t) => UIUtils.formatDate(t)\n       case None => \"Unknown\"\n     }\n-    val finishTime = stageData.completionTime.map(_.getTime()).getOrElse(currentTime)\n-\n-    // The submission time for a stage is misleading because it counts the time\n-    // the stage waits to be launched. (SPARK-10930)\n-    val duration = stageData.firstTaskLaunchedTime.map { date =>\n-      val time = date.getTime()\n-      if (finishTime > time) {\n-        finishTime - time\n-      } else {\n-        None\n-        currentTime - time\n-      }\n-    }\n+\n+    val duration = Some(stageData.executorRunTime)"
+  }, {
+    "author": {
+      "login": "shahidki31"
+    },
+    "body": "I think no. `stageData.executorRunTime` represents summation of `executorRunTime` of every task corresponding to the stage. Tasks need not be execute in sequential order (can be parallel also). So, I think this might not give the correct duration.\r\n\r\nI think, field used to compute min/max stats, etc are `taskMetrics.executorRunTime`. @teeyog please correct me if I am wrong.",
+    "commit": "f639b693b67661e4466fe752194e25b9a832b948",
+    "createdAt": "2019-10-28T13:43:38Z",
+    "diffHunk": "@@ -417,19 +417,8 @@ private[ui] class StageDataSource(\n       case Some(t) => UIUtils.formatDate(t)\n       case None => \"Unknown\"\n     }\n-    val finishTime = stageData.completionTime.map(_.getTime()).getOrElse(currentTime)\n-\n-    // The submission time for a stage is misleading because it counts the time\n-    // the stage waits to be launched. (SPARK-10930)\n-    val duration = stageData.firstTaskLaunchedTime.map { date =>\n-      val time = date.getTime()\n-      if (finishTime > time) {\n-        finishTime - time\n-      } else {\n-        None\n-        currentTime - time\n-      }\n-    }\n+\n+    val duration = Some(stageData.executorRunTime)"
+  }, {
+    "author": {
+      "login": "teeyog"
+    },
+    "body": "> I think no. `stageData.executorRunTime` represents summation of `executorRunTime` of every task corresponding to the stage. Tasks need not be execute in sequential order (can be parallel also). So, I think this might not give the correct duration.\r\n> \r\n> I think, field used to compute min/max stats, etc are `taskMetrics.executorRunTime`. @teeyog please correct me if I am wrong.\r\n\r\nWhat you said is correct. When the task is executed in parallel, the result is wrong. Then I think the task duration should not use executorRunTime. As shown in the previous figure, their values ​​are not match.\r\n\r\n",
+    "commit": "f639b693b67661e4466fe752194e25b9a832b948",
+    "createdAt": "2019-10-29T01:53:13Z",
+    "diffHunk": "@@ -417,19 +417,8 @@ private[ui] class StageDataSource(\n       case Some(t) => UIUtils.formatDate(t)\n       case None => \"Unknown\"\n     }\n-    val finishTime = stageData.completionTime.map(_.getTime()).getOrElse(currentTime)\n-\n-    // The submission time for a stage is misleading because it counts the time\n-    // the stage waits to be launched. (SPARK-10930)\n-    val duration = stageData.firstTaskLaunchedTime.map { date =>\n-      val time = date.getTime()\n-      if (finishTime > time) {\n-        finishTime - time\n-      } else {\n-        None\n-        currentTime - time\n-      }\n-    }\n+\n+    val duration = Some(stageData.executorRunTime)"
+  }, {
+    "author": {
+      "login": "teeyog"
+    },
+    "body": "Do you think I am right, if I am going to develop",
+    "commit": "f639b693b67661e4466fe752194e25b9a832b948",
+    "createdAt": "2019-10-29T01:53:58Z",
+    "diffHunk": "@@ -417,19 +417,8 @@ private[ui] class StageDataSource(\n       case Some(t) => UIUtils.formatDate(t)\n       case None => \"Unknown\"\n     }\n-    val finishTime = stageData.completionTime.map(_.getTime()).getOrElse(currentTime)\n-\n-    // The submission time for a stage is misleading because it counts the time\n-    // the stage waits to be launched. (SPARK-10930)\n-    val duration = stageData.firstTaskLaunchedTime.map { date =>\n-      val time = date.getTime()\n-      if (finishTime > time) {\n-        finishTime - time\n-      } else {\n-        None\n-        currentTime - time\n-      }\n-    }\n+\n+    val duration = Some(stageData.executorRunTime)"
+  }, {
+    "author": {
+      "login": "shahidki31"
+    },
+    "body": "Thanks @teeyog. I think this was the behavior in the previous versions of spark. I am not sure we need to change it. What ever you are proposing is `duration = executorRunTime + ser/deser time + gettingResultTime`. But, Already these 3 columns are getting disaplyed in the task table right? If we unify all would we need to display individual columns?",
+    "commit": "f639b693b67661e4466fe752194e25b9a832b948",
+    "createdAt": "2019-10-29T05:47:21Z",
+    "diffHunk": "@@ -417,19 +417,8 @@ private[ui] class StageDataSource(\n       case Some(t) => UIUtils.formatDate(t)\n       case None => \"Unknown\"\n     }\n-    val finishTime = stageData.completionTime.map(_.getTime()).getOrElse(currentTime)\n-\n-    // The submission time for a stage is misleading because it counts the time\n-    // the stage waits to be launched. (SPARK-10930)\n-    val duration = stageData.firstTaskLaunchedTime.map { date =>\n-      val time = date.getTime()\n-      if (finishTime > time) {\n-        finishTime - time\n-      } else {\n-        None\n-        currentTime - time\n-      }\n-    }\n+\n+    val duration = Some(stageData.executorRunTime)"
+  }, {
+    "author": {
+      "login": "teeyog"
+    },
+    "body": "@shahidki31 I think the task duration should be calculated using the ```completed time - launched time``` instead of the executorRunTime. This ensures that a stage has only one task, and the stage duration and task duration are the same.",
+    "commit": "f639b693b67661e4466fe752194e25b9a832b948",
+    "createdAt": "2019-10-29T06:36:51Z",
+    "diffHunk": "@@ -417,19 +417,8 @@ private[ui] class StageDataSource(\n       case Some(t) => UIUtils.formatDate(t)\n       case None => \"Unknown\"\n     }\n-    val finishTime = stageData.completionTime.map(_.getTime()).getOrElse(currentTime)\n-\n-    // The submission time for a stage is misleading because it counts the time\n-    // the stage waits to be launched. (SPARK-10930)\n-    val duration = stageData.firstTaskLaunchedTime.map { date =>\n-      val time = date.getTime()\n-      if (finishTime > time) {\n-        finishTime - time\n-      } else {\n-        None\n-        currentTime - time\n-      }\n-    }\n+\n+    val duration = Some(stageData.executorRunTime)"
+  }, {
+    "author": {
+      "login": "shahidki31"
+    },
+    "body": "Yes. `completed time - launched time = executorRunTime + ser/deser time + gettingResultTime`. right? Also, I think these 3 columns are getting displayed in the task table, Right?. If you really want, you may can add a new column and you can name it  `totalTime`, which displays the summation of 3. But still, I am not sure that will match with stage duration, as stage may can have other parameters for duration.",
+    "commit": "f639b693b67661e4466fe752194e25b9a832b948",
+    "createdAt": "2019-10-29T06:55:58Z",
+    "diffHunk": "@@ -417,19 +417,8 @@ private[ui] class StageDataSource(\n       case Some(t) => UIUtils.formatDate(t)\n       case None => \"Unknown\"\n     }\n-    val finishTime = stageData.completionTime.map(_.getTime()).getOrElse(currentTime)\n-\n-    // The submission time for a stage is misleading because it counts the time\n-    // the stage waits to be launched. (SPARK-10930)\n-    val duration = stageData.firstTaskLaunchedTime.map { date =>\n-      val time = date.getTime()\n-      if (finishTime > time) {\n-        finishTime - time\n-      } else {\n-        None\n-        currentTime - time\n-      }\n-    }\n+\n+    val duration = Some(stageData.executorRunTime)"
+  }, {
+    "author": {
+      "login": "teeyog"
+    },
+    "body": "@shahidki31 \r\nYes, I think this can match with stage duration",
+    "commit": "f639b693b67661e4466fe752194e25b9a832b948",
+    "createdAt": "2019-10-29T10:16:14Z",
+    "diffHunk": "@@ -417,19 +417,8 @@ private[ui] class StageDataSource(\n       case Some(t) => UIUtils.formatDate(t)\n       case None => \"Unknown\"\n     }\n-    val finishTime = stageData.completionTime.map(_.getTime()).getOrElse(currentTime)\n-\n-    // The submission time for a stage is misleading because it counts the time\n-    // the stage waits to be launched. (SPARK-10930)\n-    val duration = stageData.firstTaskLaunchedTime.map { date =>\n-      val time = date.getTime()\n-      if (finishTime > time) {\n-        finishTime - time\n-      } else {\n-        None\n-        currentTime - time\n-      }\n-    }\n+\n+    val duration = Some(stageData.executorRunTime)"
+  }],
+  "prId": 26241
+}]

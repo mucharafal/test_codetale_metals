@@ -1,0 +1,31 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "In the current design, users need to re-cache the queries by themselves.\r\n\r\nAfter this change, insertion could be super slow. Each insert could trigger the recache of many involved cached data, each of which could be very complex and expensive. That is a trade-off. Although we keep the data correctness/consistence, we could sacrifice the performance/user experience. ",
+    "commit": "067ddf59ef3f998b21de33578dd760664839d771",
+    "createdAt": "2017-03-06T05:54:00Z",
+    "diffHunk": "@@ -42,8 +42,9 @@ case class InsertIntoDataSourceCommand(\n     val df = sparkSession.internalCreateDataFrame(data.queryExecution.toRdd, logicalRelation.schema)\n     relation.insert(df, overwrite)\n \n-    // Invalidate the cache.\n-    sparkSession.sharedState.cacheManager.invalidateCache(logicalRelation)\n+    // Re-cache all cached plans(including this relation itself, if it's cached) that refer to this\n+    // data source relation.\n+    sparkSession.sharedState.cacheManager.recacheByPlan(sparkSession, logicalRelation)",
+    "line": 8
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "I didn't change the behavior, just rename `invalidateCache` to `recacheByPlan`.\r\n\r\nI'll open a new discussion about whether we should do recache after insertion or not.",
+    "commit": "067ddf59ef3f998b21de33578dd760664839d771",
+    "createdAt": "2017-03-06T08:12:29Z",
+    "diffHunk": "@@ -42,8 +42,9 @@ case class InsertIntoDataSourceCommand(\n     val df = sparkSession.internalCreateDataFrame(data.queryExecution.toRdd, logicalRelation.schema)\n     relation.insert(df, overwrite)\n \n-    // Invalidate the cache.\n-    sparkSession.sharedState.cacheManager.invalidateCache(logicalRelation)\n+    // Re-cache all cached plans(including this relation itself, if it's cached) that refer to this\n+    // data source relation.\n+    sparkSession.sharedState.cacheManager.recacheByPlan(sparkSession, logicalRelation)",
+    "line": 8
+  }, {
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "uh... My fault... `invalidateCache` is misleading. Renaming is good!",
+    "commit": "067ddf59ef3f998b21de33578dd760664839d771",
+    "createdAt": "2017-03-06T21:12:54Z",
+    "diffHunk": "@@ -42,8 +42,9 @@ case class InsertIntoDataSourceCommand(\n     val df = sparkSession.internalCreateDataFrame(data.queryExecution.toRdd, logicalRelation.schema)\n     relation.insert(df, overwrite)\n \n-    // Invalidate the cache.\n-    sparkSession.sharedState.cacheManager.invalidateCache(logicalRelation)\n+    // Re-cache all cached plans(including this relation itself, if it's cached) that refer to this\n+    // data source relation.\n+    sparkSession.sharedState.cacheManager.recacheByPlan(sparkSession, logicalRelation)",
+    "line": 8
+  }],
+  "prId": 17097
+}]

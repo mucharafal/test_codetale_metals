@@ -1,0 +1,49 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "chenghao-intel"
+    },
+    "body": "This is probably not always true for the `Expression`, the `defaultConcreteType` depends on what the data type of child expression in lots of case.\ne.g. `Length` expects both `StringType` and `BinaryType`, `Hex` etc.\n\nAnd we probably need to review those expressions override the function of `checkInputDataTypes()`.\n",
+    "commit": "c714ca104f3b4bd05234705e49ef592a2cbf85b4",
+    "createdAt": "2015-07-03T04:21:54Z",
+    "diffHunk": "@@ -28,7 +28,45 @@ import org.apache.spark.util.Utils\n  * A non-concrete data type, reserved for internal uses.\n  */\n private[sql] abstract class AbstractDataType {\n+  /**\n+   * The default concrete type to use if we want to cast a null literal into this type.\n+   */\n   private[sql] def defaultConcreteType: DataType\n+\n+  /**\n+   * Returns true if this data type is a parent of the `childCandidate`.\n+   */\n+  private[sql] def isParentOf(childCandidate: DataType): Boolean\n+}\n+\n+\n+/**\n+ * A collection of types that can be used to specify type constraints. The sequence also specifies\n+ * precedence: an earlier type takes precedence over a latter type.\n+ *\n+ * {{{\n+ *   TypeCollection(StringType, BinaryType)\n+ * }}}\n+ *\n+ * This means that we prefer StringType over BinaryType if it is possible to cast to StringType.\n+ */\n+private[sql] class TypeCollection(private val types: Seq[DataType]) extends AbstractDataType {\n+  require(types.nonEmpty, s\"TypeCollection ($types) cannot be empty\")\n+\n+  private[sql] override def defaultConcreteType: DataType = types.head",
+    "line": 29
+  }, {
+    "author": {
+      "login": "chenghao-intel"
+    },
+    "body": "BTW, is the `NullType` will be the default value in the `TypeCollection`?\n",
+    "commit": "c714ca104f3b4bd05234705e49ef592a2cbf85b4",
+    "createdAt": "2015-07-03T04:22:27Z",
+    "diffHunk": "@@ -28,7 +28,45 @@ import org.apache.spark.util.Utils\n  * A non-concrete data type, reserved for internal uses.\n  */\n private[sql] abstract class AbstractDataType {\n+  /**\n+   * The default concrete type to use if we want to cast a null literal into this type.\n+   */\n   private[sql] def defaultConcreteType: DataType\n+\n+  /**\n+   * Returns true if this data type is a parent of the `childCandidate`.\n+   */\n+  private[sql] def isParentOf(childCandidate: DataType): Boolean\n+}\n+\n+\n+/**\n+ * A collection of types that can be used to specify type constraints. The sequence also specifies\n+ * precedence: an earlier type takes precedence over a latter type.\n+ *\n+ * {{{\n+ *   TypeCollection(StringType, BinaryType)\n+ * }}}\n+ *\n+ * This means that we prefer StringType over BinaryType if it is possible to cast to StringType.\n+ */\n+private[sql] class TypeCollection(private val types: Seq[DataType]) extends AbstractDataType {\n+  require(types.nonEmpty, s\"TypeCollection ($types) cannot be empty\")\n+\n+  private[sql] override def defaultConcreteType: DataType = types.head",
+    "line": 29
+  }, {
+    "author": {
+      "login": "rxin"
+    },
+    "body": "This is only used for null type. so your concern isn't really a problem.\n",
+    "commit": "c714ca104f3b4bd05234705e49ef592a2cbf85b4",
+    "createdAt": "2015-07-03T04:24:32Z",
+    "diffHunk": "@@ -28,7 +28,45 @@ import org.apache.spark.util.Utils\n  * A non-concrete data type, reserved for internal uses.\n  */\n private[sql] abstract class AbstractDataType {\n+  /**\n+   * The default concrete type to use if we want to cast a null literal into this type.\n+   */\n   private[sql] def defaultConcreteType: DataType\n+\n+  /**\n+   * Returns true if this data type is a parent of the `childCandidate`.\n+   */\n+  private[sql] def isParentOf(childCandidate: DataType): Boolean\n+}\n+\n+\n+/**\n+ * A collection of types that can be used to specify type constraints. The sequence also specifies\n+ * precedence: an earlier type takes precedence over a latter type.\n+ *\n+ * {{{\n+ *   TypeCollection(StringType, BinaryType)\n+ * }}}\n+ *\n+ * This means that we prefer StringType over BinaryType if it is possible to cast to StringType.\n+ */\n+private[sql] class TypeCollection(private val types: Seq[DataType]) extends AbstractDataType {\n+  require(types.nonEmpty, s\"TypeCollection ($types) cannot be empty\")\n+\n+  private[sql] override def defaultConcreteType: DataType = types.head",
+    "line": 29
+  }, {
+    "author": {
+      "login": "chenghao-intel"
+    },
+    "body": "Ok, I will rebase my code once this merged, let's see if we need something else.\n",
+    "commit": "c714ca104f3b4bd05234705e49ef592a2cbf85b4",
+    "createdAt": "2015-07-03T04:27:42Z",
+    "diffHunk": "@@ -28,7 +28,45 @@ import org.apache.spark.util.Utils\n  * A non-concrete data type, reserved for internal uses.\n  */\n private[sql] abstract class AbstractDataType {\n+  /**\n+   * The default concrete type to use if we want to cast a null literal into this type.\n+   */\n   private[sql] def defaultConcreteType: DataType\n+\n+  /**\n+   * Returns true if this data type is a parent of the `childCandidate`.\n+   */\n+  private[sql] def isParentOf(childCandidate: DataType): Boolean\n+}\n+\n+\n+/**\n+ * A collection of types that can be used to specify type constraints. The sequence also specifies\n+ * precedence: an earlier type takes precedence over a latter type.\n+ *\n+ * {{{\n+ *   TypeCollection(StringType, BinaryType)\n+ * }}}\n+ *\n+ * This means that we prefer StringType over BinaryType if it is possible to cast to StringType.\n+ */\n+private[sql] class TypeCollection(private val types: Seq[DataType]) extends AbstractDataType {\n+  require(types.nonEmpty, s\"TypeCollection ($types) cannot be empty\")\n+\n+  private[sql] override def defaultConcreteType: DataType = types.head",
+    "line": 29
+  }, {
+    "author": {
+      "login": "rxin"
+    },
+    "body": "i could probably rename the function to make it more clear though. i don't have a good one in mind yet.\n",
+    "commit": "c714ca104f3b4bd05234705e49ef592a2cbf85b4",
+    "createdAt": "2015-07-03T04:29:12Z",
+    "diffHunk": "@@ -28,7 +28,45 @@ import org.apache.spark.util.Utils\n  * A non-concrete data type, reserved for internal uses.\n  */\n private[sql] abstract class AbstractDataType {\n+  /**\n+   * The default concrete type to use if we want to cast a null literal into this type.\n+   */\n   private[sql] def defaultConcreteType: DataType\n+\n+  /**\n+   * Returns true if this data type is a parent of the `childCandidate`.\n+   */\n+  private[sql] def isParentOf(childCandidate: DataType): Boolean\n+}\n+\n+\n+/**\n+ * A collection of types that can be used to specify type constraints. The sequence also specifies\n+ * precedence: an earlier type takes precedence over a latter type.\n+ *\n+ * {{{\n+ *   TypeCollection(StringType, BinaryType)\n+ * }}}\n+ *\n+ * This means that we prefer StringType over BinaryType if it is possible to cast to StringType.\n+ */\n+private[sql] class TypeCollection(private val types: Seq[DataType]) extends AbstractDataType {\n+  require(types.nonEmpty, s\"TypeCollection ($types) cannot be empty\")\n+\n+  private[sql] override def defaultConcreteType: DataType = types.head",
+    "line": 29
+  }],
+  "prId": 7202
+}]

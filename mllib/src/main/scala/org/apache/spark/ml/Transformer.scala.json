@@ -1,0 +1,22 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "viirya"
+    },
+    "body": "`HashingTF` is an example that the metadata is created in `transformSchema` and attached to `outputSchema`. So my question is, do we need an extra API `outputMetadata` to do this?",
+    "commit": "09cbbb14eef917bb0615c39e8b60c9fa70c9e750",
+    "createdAt": "2018-09-06T00:06:35Z",
+    "diffHunk": "@@ -116,10 +116,17 @@ abstract class UnaryTransformer[IN, OUT, T <: UnaryTransformer[IN, OUT, T]]\n     StructType(outputFields)\n   }\n \n+  /**\n+   * Returns [[Metadata]] to be attached to the output column.\n+   */\n+  protected def outputMetadata(outputSchema: StructType, dataset: Dataset[_]): Metadata =\n+    Metadata.empty\n+\n   override def transform(dataset: Dataset[_]): DataFrame = {\n-    transformSchema(dataset.schema, logging = true)\n+    val outputSchema = transformSchema(dataset.schema, logging = true)\n     val transformUDF = udf(this.createTransformFunc, outputDataType)\n-    dataset.withColumn($(outputCol), transformUDF(dataset($(inputCol))))\n+    val metadata = outputMetadata(outputSchema, dataset)",
+    "line": 15
+  }, {
+    "author": {
+      "login": "dongjinleekr"
+    },
+    "body": "Sorry for the late reply. Here is the answer: **because the ultimate goal is [to make `HashingTF` to extend `UnaryTransformer`](https://issues.apache.org/jira/browse/SPARK-13998), not just attaching attribute**. Yes, you are right, `HashingTF` is an example of how metadata is created and attached to `outputSchema`. However, we need a method to wrap that metadata routine to replace `HashingTF extends Transformer with HasInputCol with HasOutputCol` into `HashingTF extends UnaryTransformer`. It's why. (Please refer Joseph K. Bradley's comment at [SPARK-13998](https://issues.apache.org/jira/browse/SPARK-13998))",
+    "commit": "09cbbb14eef917bb0615c39e8b60c9fa70c9e750",
+    "createdAt": "2018-09-10T14:03:59Z",
+    "diffHunk": "@@ -116,10 +116,17 @@ abstract class UnaryTransformer[IN, OUT, T <: UnaryTransformer[IN, OUT, T]]\n     StructType(outputFields)\n   }\n \n+  /**\n+   * Returns [[Metadata]] to be attached to the output column.\n+   */\n+  protected def outputMetadata(outputSchema: StructType, dataset: Dataset[_]): Metadata =\n+    Metadata.empty\n+\n   override def transform(dataset: Dataset[_]): DataFrame = {\n-    transformSchema(dataset.schema, logging = true)\n+    val outputSchema = transformSchema(dataset.schema, logging = true)\n     val transformUDF = udf(this.createTransformFunc, outputDataType)\n-    dataset.withColumn($(outputCol), transformUDF(dataset($(inputCol))))\n+    val metadata = outputMetadata(outputSchema, dataset)",
+    "line": 15
+  }],
+  "prId": 21525
+}]

@@ -1,0 +1,47 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Use jUnit asserts.",
+    "commit": "3d3748180777b8afca0b69085f2ea7e2df066c66",
+    "createdAt": "2018-12-20T21:13:24Z",
+    "diffHunk": "@@ -0,0 +1,66 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.network.shuffle;\n+\n+import io.netty.channel.Channel;\n+import org.apache.spark.network.buffer.ManagedBuffer;\n+import org.apache.spark.network.buffer.NioManagedBuffer;\n+import org.apache.spark.network.client.RpcResponseCallback;\n+import org.apache.spark.network.client.TransportClient;\n+import org.apache.spark.network.client.TransportResponseHandler;\n+import org.apache.spark.network.server.OneForOneStreamManager;\n+import org.apache.spark.network.server.RpcHandler;\n+import org.apache.spark.network.shuffle.protocol.OpenBlocks;\n+import org.junit.Test;\n+\n+import java.nio.ByteBuffer;\n+\n+import static org.mockito.Mockito.mock;\n+import static org.mockito.Mockito.when;\n+\n+public class StreamStatesCleanupSuite {\n+\n+  @Test\n+  public void testStreamsAreRemovedCorrectly() {\n+    OneForOneStreamManager streamManager = new OneForOneStreamManager();\n+    ExternalShuffleBlockResolver blockResolver = mock(ExternalShuffleBlockResolver.class);\n+    TransportClient reverseClient\n+      = new TransportClient(mock(Channel.class), mock(TransportResponseHandler.class));\n+    RpcHandler handler = new ExternalShuffleBlockHandler(streamManager, blockResolver);\n+\n+    ManagedBuffer block0Marker = new NioManagedBuffer(ByteBuffer.wrap(new byte[3]));\n+    ManagedBuffer block1Marker = new NioManagedBuffer(ByteBuffer.wrap(new byte[7]));\n+    when(blockResolver.getBlockData(\"app0\", \"exec1\", 0, 0, 0))\n+      .thenReturn(block0Marker);\n+    when(blockResolver.getBlockData(\"app0\", \"exec1\", 0, 0, 1))\n+      .thenReturn(block1Marker);\n+    ByteBuffer openBlocks = new OpenBlocks(\"app0\", \"exec1\",\n+      new String[]{\"shuffle_0_0_0\", \"shuffle_0_0_1\"})\n+      .toByteBuffer();\n+\n+    RpcResponseCallback callback = mock(RpcResponseCallback.class);\n+\n+    // Open blocks\n+    handler.receive(reverseClient, openBlocks, callback);\n+    // Connection closed before any FetchChunk request received\n+    streamManager.connectionTerminated(reverseClient.getChannel());\n+\n+    assert streamManager.getStreamsSize() == 0;"
+  }],
+  "prId": 23355
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Java imports go first.",
+    "commit": "3d3748180777b8afca0b69085f2ea7e2df066c66",
+    "createdAt": "2018-12-20T21:13:58Z",
+    "diffHunk": "@@ -0,0 +1,66 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.network.shuffle;\n+\n+import io.netty.channel.Channel;\n+import org.apache.spark.network.buffer.ManagedBuffer;\n+import org.apache.spark.network.buffer.NioManagedBuffer;\n+import org.apache.spark.network.client.RpcResponseCallback;\n+import org.apache.spark.network.client.TransportClient;\n+import org.apache.spark.network.client.TransportResponseHandler;\n+import org.apache.spark.network.server.OneForOneStreamManager;\n+import org.apache.spark.network.server.RpcHandler;\n+import org.apache.spark.network.shuffle.protocol.OpenBlocks;\n+import org.junit.Test;\n+\n+import java.nio.ByteBuffer;"
+  }],
+  "prId": 23355
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Spark imports go into their own group. See existing code.",
+    "commit": "3d3748180777b8afca0b69085f2ea7e2df066c66",
+    "createdAt": "2018-12-20T21:14:10Z",
+    "diffHunk": "@@ -0,0 +1,66 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.network.shuffle;\n+\n+import io.netty.channel.Channel;\n+import org.apache.spark.network.buffer.ManagedBuffer;",
+    "line": 29
+  }],
+  "prId": 23355
+}, {
+  "comments": [{
+    "author": {
+      "login": "Ngone51"
+    },
+    "body": "Assert stream count after receiving an `OpenBlocks` message.",
+    "commit": "3d3748180777b8afca0b69085f2ea7e2df066c66",
+    "createdAt": "2018-12-29T03:04:34Z",
+    "diffHunk": "@@ -0,0 +1,68 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.network.shuffle;\n+\n+import java.nio.ByteBuffer;\n+\n+import io.netty.channel.Channel;\n+import org.junit.Test;\n+\n+import static org.junit.Assert.assertEquals;\n+import static org.mockito.Mockito.mock;\n+import static org.mockito.Mockito.when;\n+\n+import org.apache.spark.network.buffer.ManagedBuffer;\n+import org.apache.spark.network.buffer.NioManagedBuffer;\n+import org.apache.spark.network.client.RpcResponseCallback;\n+import org.apache.spark.network.client.TransportClient;\n+import org.apache.spark.network.client.TransportResponseHandler;\n+import org.apache.spark.network.server.OneForOneStreamManager;\n+import org.apache.spark.network.server.RpcHandler;\n+import org.apache.spark.network.shuffle.protocol.OpenBlocks;\n+\n+public class StreamStatesCleanupSuite {\n+\n+  @Test\n+  public void testStreamsAreRemovedCorrectly() {\n+    OneForOneStreamManager streamManager = new OneForOneStreamManager();\n+    ExternalShuffleBlockResolver blockResolver = mock(ExternalShuffleBlockResolver.class);\n+    TransportClient reverseClient\n+      = new TransportClient(mock(Channel.class), mock(TransportResponseHandler.class));\n+    RpcHandler handler = new ExternalShuffleBlockHandler(streamManager, blockResolver);\n+\n+    ManagedBuffer block0Marker = new NioManagedBuffer(ByteBuffer.wrap(new byte[3]));\n+    ManagedBuffer block1Marker = new NioManagedBuffer(ByteBuffer.wrap(new byte[7]));\n+    when(blockResolver.getBlockData(\"app0\", \"exec1\", 0, 0, 0))\n+      .thenReturn(block0Marker);\n+    when(blockResolver.getBlockData(\"app0\", \"exec1\", 0, 0, 1))\n+      .thenReturn(block1Marker);\n+    ByteBuffer openBlocks = new OpenBlocks(\"app0\", \"exec1\",\n+      new String[]{\"shuffle_0_0_0\", \"shuffle_0_0_1\"})\n+      .toByteBuffer();\n+\n+    RpcResponseCallback callback = mock(RpcResponseCallback.class);\n+\n+    // Open blocks\n+    handler.receive(reverseClient, openBlocks, callback);",
+    "line": 61
+  }],
+  "prId": 23355
+}]

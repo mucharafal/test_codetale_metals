@@ -1,0 +1,93 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "what is the exception type when the executor is dead during shuffle fetch?",
+    "commit": "90b1d7e720d8bc2ba3ebe51f8f8bc065834ab14a",
+    "createdAt": "2019-05-06T12:48:17Z",
+    "diffHunk": "@@ -178,7 +202,11 @@ private synchronized boolean shouldRetry(Throwable e) {\n     boolean isIOException = e instanceof IOException"
+  }, {
+    "author": {
+      "login": "turboFei"
+    },
+    "body": "It's IOException, as follows \r\n```\r\n2019-04-26 12:18:50,291 [26151] - WARN  [shuffle-client-4-1:TransportChannelHandler@78] - Exception in connection from hostname/ipAddress:port\r\njava.io.IOException: Connection reset by peer\r\n```\r\n@cloud-fan  thanks",
+    "commit": "90b1d7e720d8bc2ba3ebe51f8f8bc065834ab14a",
+    "createdAt": "2019-05-06T13:12:27Z",
+    "diffHunk": "@@ -178,7 +202,11 @@ private synchronized boolean shouldRetry(Throwable e) {\n     boolean isIOException = e instanceof IOException"
+  }],
+  "prId": 24533
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "is it possible to throw a different exception when we find out the executor is dead?",
+    "commit": "90b1d7e720d8bc2ba3ebe51f8f8bc065834ab14a",
+    "createdAt": "2019-05-08T12:16:44Z",
+    "diffHunk": "@@ -178,7 +202,11 @@ private synchronized boolean shouldRetry(Throwable e) {\n     boolean isIOException = e instanceof IOException\n       || (e.getCause() != null && e.getCause() instanceof IOException);\n     boolean hasRemainingRetries = retryCount < maxRetries;\n-    return isIOException && hasRemainingRetries;"
+  }, {
+    "author": {
+      "login": "turboFei"
+    },
+    "body": "> is it possible to throw a different exception when we find out the executor is dead?\r\nA good idea, I will do it.\r\n",
+    "commit": "90b1d7e720d8bc2ba3ebe51f8f8bc065834ab14a",
+    "createdAt": "2019-05-08T12:58:53Z",
+    "diffHunk": "@@ -178,7 +202,11 @@ private synchronized boolean shouldRetry(Throwable e) {\n     boolean isIOException = e instanceof IOException\n       || (e.getCause() != null && e.getCause() instanceof IOException);\n     boolean hasRemainingRetries = retryCount < maxRetries;\n-    return isIOException && hasRemainingRetries;"
+  }, {
+    "author": {
+      "login": "turboFei"
+    },
+    "body": "> is it possible to throw a different exception when we find out the executor is dead?\r\n\r\n@cloud-fan  I have added a new Exception class `ExecutorDeadException` and throw an ExecutorDeadException instance when we find out the executor is dead. \r\nYour valuable advice is most welcome.",
+    "commit": "90b1d7e720d8bc2ba3ebe51f8f8bc065834ab14a",
+    "createdAt": "2019-05-08T14:11:53Z",
+    "diffHunk": "@@ -178,7 +202,11 @@ private synchronized boolean shouldRetry(Throwable e) {\n     boolean isIOException = e instanceof IOException\n       || (e.getCause() != null && e.getCause() instanceof IOException);\n     boolean hasRemainingRetries = retryCount < maxRetries;\n-    return isIOException && hasRemainingRetries;"
+  }, {
+    "author": {
+      "login": "turboFei"
+    },
+    "body": "@cloud-fan Hi, thanks for your review~ ",
+    "commit": "90b1d7e720d8bc2ba3ebe51f8f8bc065834ab14a",
+    "createdAt": "2019-05-09T12:57:33Z",
+    "diffHunk": "@@ -178,7 +202,11 @@ private synchronized boolean shouldRetry(Throwable e) {\n     boolean isIOException = e instanceof IOException\n       || (e.getCause() != null && e.getCause() instanceof IOException);\n     boolean hasRemainingRetries = retryCount < maxRetries;\n-    return isIOException && hasRemainingRetries;"
+  }],
+  "prId": 24533
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "shouldn't we just change this line to `if (shouldRetry(e) && !executorAliveChecker.check())`?",
+    "commit": "90b1d7e720d8bc2ba3ebe51f8f8bc065834ab14a",
+    "createdAt": "2019-05-09T15:11:36Z",
+    "diffHunk": "@@ -143,11 +167,22 @@ private void fetchAllOutstanding() {\n       logger.error(String.format(\"Exception while beginning fetch of %s outstanding blocks %s\",\n         blockIdsToFetch.length, numRetries > 0 ? \"(after \" + numRetries + \" retries)\" : \"\"), e);\n \n-      if (shouldRetry(e)) {"
+  }, {
+    "author": {
+      "login": "turboFei"
+    },
+    "body": "> shouldn't we just change this line to `if (shouldRetry(e) && !executorAliveChecker.check())`?\r\nDone.\r\n",
+    "commit": "90b1d7e720d8bc2ba3ebe51f8f8bc065834ab14a",
+    "createdAt": "2019-05-10T01:09:51Z",
+    "diffHunk": "@@ -143,11 +167,22 @@ private void fetchAllOutstanding() {\n       logger.error(String.format(\"Exception while beginning fetch of %s outstanding blocks %s\",\n         blockIdsToFetch.length, numRetries > 0 ? \"(after \" + numRetries + \" retries)\" : \"\"), e);\n \n-      if (shouldRetry(e)) {"
+  }],
+  "prId": 24533
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "can we throw the exception earlier? like in `fetchStarter.createAndStart`.",
+    "commit": "90b1d7e720d8bc2ba3ebe51f8f8bc065834ab14a",
+    "createdAt": "2019-05-09T15:12:11Z",
+    "diffHunk": "@@ -178,6 +213,12 @@ private synchronized boolean shouldRetry(Throwable e) {\n     boolean isIOException = e instanceof IOException\n       || (e.getCause() != null && e.getCause() instanceof IOException);\n     boolean hasRemainingRetries = retryCount < maxRetries;\n+    if (isIOException && hasRemainingRetries && executorAliveChecker != null) {\n+       if (!executorAliveChecker.check()) {\n+         throw new ExecutorDeadException(\"The relative remote executor,\" +"
+  }, {
+    "author": {
+      "login": "turboFei"
+    },
+    "body": "Yes, done.",
+    "commit": "90b1d7e720d8bc2ba3ebe51f8f8bc065834ab14a",
+    "createdAt": "2019-05-10T01:11:27Z",
+    "diffHunk": "@@ -178,6 +213,12 @@ private synchronized boolean shouldRetry(Throwable e) {\n     boolean isIOException = e instanceof IOException\n       || (e.getCause() != null && e.getCause() instanceof IOException);\n     boolean hasRemainingRetries = retryCount < maxRetries;\n+    if (isIOException && hasRemainingRetries && executorAliveChecker != null) {\n+       if (!executorAliveChecker.check()) {\n+         throw new ExecutorDeadException(\"The relative remote executor,\" +"
+  }],
+  "prId": 24533
+}]

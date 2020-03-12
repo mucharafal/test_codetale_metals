@@ -1,0 +1,12 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "yhuai"
+    },
+    "body": "`StructType.fields.exists`?\n",
+    "commit": "6f647468d48ceb3f74386a34b6da2c4874f43355",
+    "createdAt": "2014-11-08T03:17:18Z",
+    "diffHunk": "@@ -121,4 +121,54 @@ class InsertIntoHiveTableSuite extends QueryTest {\n     sql(\"DROP TABLE table_with_partition\")\n     sql(\"DROP TABLE tmp_table\")\n   }\n+\n+  test(\"Insert ArrayType.containsNull == false\") {\n+    val schema = StructType(Seq(\n+      StructField(\"a\", ArrayType(StringType, containsNull = false))))\n+    val rowRDD = TestHive.sparkContext.parallelize((1 to 100).map(i => Row(Seq(s\"value$i\"))))\n+    val schemaRDD = applySchema(rowRDD, schema)\n+    schemaRDD.registerTempTable(\"tableWithArrayValue\")\n+    sql(\"CREATE TABLE hiveTableWithArrayValue(a Array <STRING>)\")\n+    sql(\"INSERT OVERWRITE TABLE hiveTableWithArrayValue SELECT a FROM tableWithArrayValue\")\n+\n+    checkAnswer(\n+      sql(\"SELECT * FROM hiveTableWithArrayValue\"),\n+      rowRDD.collect().toSeq)\n+\n+    sql(\"DROP TABLE hiveTableWithArrayValue\")\n+  }\n+\n+  test(\"Insert MapType.valueContainsNull == false\") {\n+    val schema = StructType(Seq(\n+      StructField(\"m\", MapType(StringType, StringType, valueContainsNull = false))))\n+    val rowRDD = TestHive.sparkContext.parallelize(\n+      (1 to 100).map(i => Row(Map(s\"key$i\" -> s\"value$i\"))))\n+    val schemaRDD = applySchema(rowRDD, schema)\n+    schemaRDD.registerTempTable(\"tableWithMapValue\")\n+    sql(\"CREATE TABLE hiveTableWithMapValue(m Map <STRING, STRING>)\")\n+    sql(\"INSERT OVERWRITE TABLE hiveTableWithMapValue SELECT m FROM tableWithMapValue\")\n+\n+    checkAnswer(\n+      sql(\"SELECT * FROM hiveTableWithMapValue\"),\n+      rowRDD.collect().toSeq)\n+\n+    sql(\"DROP TABLE hiveTableWithMapValue\")\n+  }\n+\n+  test(\"Insert StringType.fields.exists(_.nullable == false)\") {"
+  }],
+  "prId": 3110
+}]

@@ -1,0 +1,67 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "tgravescs"
+    },
+    "body": "You can just use sparkConf.get(\"spark.driver.appUIAddress\", \"\")\n",
+    "commit": "6022bcd4277c6038baf7da42b890d04d14e9d262",
+    "createdAt": "2014-06-23T14:28:27Z",
+    "diffHunk": "@@ -142,9 +149,19 @@ class ExecutorLauncher(args: ApplicationMasterArguments, conf: Configuration, sp\n   }\n \n   private def registerApplicationMaster(): RegisterApplicationMasterResponse = {\n-    logInfo(\"Registering the ApplicationMaster\")\n-    // TODO: Find out client's Spark UI address and fill in here?\n-    amClient.registerApplicationMaster(Utils.localHostName(), 0, \"\")\n+    val appUIAddress = sparkConf.getOption(\"spark.driver.appUIAddress\").getOrElse(\"\")"
+  }],
+  "prId": 1112
+}, {
+  "comments": [{
+    "author": {
+      "login": "tgravescs"
+    },
+    "body": "add space after =\n",
+    "commit": "6022bcd4277c6038baf7da42b890d04d14e9d262",
+    "createdAt": "2014-06-23T14:33:41Z",
+    "diffHunk": "@@ -142,9 +149,19 @@ class ExecutorLauncher(args: ApplicationMasterArguments, conf: Configuration, sp\n   }\n \n   private def registerApplicationMaster(): RegisterApplicationMasterResponse = {\n-    logInfo(\"Registering the ApplicationMaster\")\n-    // TODO: Find out client's Spark UI address and fill in here?\n-    amClient.registerApplicationMaster(Utils.localHostName(), 0, \"\")\n+    val appUIAddress = sparkConf.getOption(\"spark.driver.appUIAddress\").getOrElse(\"\")\n+    logInfo(s\"Registering the ApplicationMaster with appUIAddress: $appUIAddress\")\n+    amClient.registerApplicationMaster(Utils.localHostName(), 0, appUIAddress)\n+  }\n+\n+  // add the yarn amIpFilter that Yarn requires for properly securing the UI\n+  private def addAmIpFilter() {\n+    val proxy = WebAppUtils.getProxyHostAndPort(conf)\n+    val parts : Array[String] = proxy.split(\":\")\n+    val proxyBase =System.getenv(ApplicationConstants.APPLICATION_WEB_PROXY_BASE_ENV)"
+  }],
+  "prId": 1112
+}, {
+  "comments": [{
+    "author": {
+      "login": "rahulsinghaliitd"
+    },
+    "body": "Can the functions addAmIpFilter() in ApplicationMaster.scala and ExecutorLauncher.scala be combined in say a new file YarnUtil.scala?\n",
+    "commit": "6022bcd4277c6038baf7da42b890d04d14e9d262",
+    "createdAt": "2014-06-27T04:23:52Z",
+    "diffHunk": "@@ -142,9 +149,20 @@ class ExecutorLauncher(args: ApplicationMasterArguments, conf: Configuration, sp\n   }\n \n   private def registerApplicationMaster(): RegisterApplicationMasterResponse = {\n-    logInfo(\"Registering the ApplicationMaster\")\n-    // TODO: Find out client's Spark UI address and fill in here?\n-    amClient.registerApplicationMaster(Utils.localHostName(), 0, \"\")\n+    val appUIAddress = sparkConf.get(\"spark.driver.appUIAddress\", \"\")\n+    logInfo(s\"Registering the ApplicationMaster with appUIAddress: $appUIAddress\")\n+    amClient.registerApplicationMaster(Utils.localHostName(), 0, appUIAddress)\n+  }\n+\n+  // add the yarn amIpFilter that Yarn requires for properly securing the UI\n+  private def addAmIpFilter() {",
+    "line": 44
+  }, {
+    "author": {
+      "login": "witgo"
+    },
+    "body": "There are differences in the code.Should not be combined.\n",
+    "commit": "6022bcd4277c6038baf7da42b890d04d14e9d262",
+    "createdAt": "2014-07-10T16:13:04Z",
+    "diffHunk": "@@ -142,9 +149,20 @@ class ExecutorLauncher(args: ApplicationMasterArguments, conf: Configuration, sp\n   }\n \n   private def registerApplicationMaster(): RegisterApplicationMasterResponse = {\n-    logInfo(\"Registering the ApplicationMaster\")\n-    // TODO: Find out client's Spark UI address and fill in here?\n-    amClient.registerApplicationMaster(Utils.localHostName(), 0, \"\")\n+    val appUIAddress = sparkConf.get(\"spark.driver.appUIAddress\", \"\")\n+    logInfo(s\"Registering the ApplicationMaster with appUIAddress: $appUIAddress\")\n+    amClient.registerApplicationMaster(Utils.localHostName(), 0, appUIAddress)\n+  }\n+\n+  // add the yarn amIpFilter that Yarn requires for properly securing the UI\n+  private def addAmIpFilter() {",
+    "line": 44
+  }],
+  "prId": 1112
+}, {
+  "comments": [{
+    "author": {
+      "login": "tgravescs"
+    },
+    "body": "remove the comment.  The UI is already running at this point.\n",
+    "commit": "6022bcd4277c6038baf7da42b890d04d14e9d262",
+    "createdAt": "2014-07-15T01:51:42Z",
+    "diffHunk": "@@ -99,6 +104,8 @@ class ExecutorLauncher(args: ApplicationMasterArguments, conf: Configuration, sp\n     registerApplicationMaster()\n \n     waitForSparkMaster()\n+    // setup AmIpFilter for the SparkUI - do this before we start the UI"
+  }],
+  "prId": 1112
+}, {
+  "comments": [{
+    "author": {
+      "login": "tgravescs"
+    },
+    "body": "Can you make the same changes for yarn alpha mode also please\n",
+    "commit": "6022bcd4277c6038baf7da42b890d04d14e9d262",
+    "createdAt": "2014-07-15T14:01:48Z",
+    "diffHunk": "@@ -82,6 +84,9 @@ class ExecutorLauncher(args: ApplicationMasterArguments, conf: Configuration, sp\n       case x: DisassociatedEvent =>\n         logInfo(s\"Driver terminated or disconnected! Shutting down. $x\")\n         driverClosed = true\n+      case x: AddWebUIFilter =>",
+    "line": 17
+  }],
+  "prId": 1112
+}]

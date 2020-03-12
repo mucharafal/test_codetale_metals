@@ -1,0 +1,296 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "I'm actually not sure why it calls `.mapPartitions` here. There's nothing partition-wise about it. I think this could also just be:\r\n```\r\nval assignments = kMeansModel.map { case (id, cluster) => Assignment(id, cluster) }\r\n```",
+    "commit": "598a7a2b19395250c2bb06b6155ef7759632c5f3",
+    "createdAt": "2019-05-05T22:59:13Z",
+    "diffHunk": "@@ -226,11 +226,14 @@ class PowerIterationClustering private[clustering] (\n    */\n   private def pic(w: Graph[Double, Double]): PowerIterationClusteringModel = {\n     val v = powerIter(w, maxIterations)\n-    val assignments = kMeans(v, k).mapPartitions({ iter =>\n+    val kMeansModel = kMeans(v, k)\n+    val assignments = kMeansModel.mapPartitions({ iter =>"
+  }, {
+    "author": {
+      "login": "shahidki31"
+    },
+    "body": "Thank you @srowen for the review.\r\nYes. I have updated",
+    "commit": "598a7a2b19395250c2bb06b6155ef7759632c5f3",
+    "createdAt": "2019-05-05T23:35:46Z",
+    "diffHunk": "@@ -226,11 +226,14 @@ class PowerIterationClustering private[clustering] (\n    */\n   private def pic(w: Graph[Double, Double]): PowerIterationClusteringModel = {\n     val v = powerIter(w, maxIterations)\n-    val assignments = kMeans(v, k).mapPartitions({ iter =>\n+    val kMeansModel = kMeans(v, k)\n+    val assignments = kMeansModel.mapPartitions({ iter =>"
+  }],
+  "prId": 24531
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "No need to set blocking = true. Just don't specify.",
+    "commit": "598a7a2b19395250c2bb06b6155ef7759632c5f3",
+    "createdAt": "2019-05-05T23:00:05Z",
+    "diffHunk": "@@ -296,12 +299,15 @@ object PowerIterationClustering extends Logging {\n       },\n       mergeMsg = _ + _,\n       TripletFields.EdgeOnly)\n-    Graph(vD, gA.edges)\n-      .mapTriplets(\n-        e => e.attr / math.max(e.srcAttr, MLUtils.EPSILON),\n-        new TripletFields(/* useSrc */ true,\n-                          /* useDst */ false,\n-                          /* useEdge */ true))\n+    val graph = Graph(vD, gA.edges).mapTriplets(\n+      e => e.attr / math.max(e.srcAttr, MLUtils.EPSILON),\n+      new TripletFields(/* useSrc */ true,\n+        /* useDst */ false,\n+        /* useEdge */ true))\n+    materialize(graph)\n+    gA.unpersist(true)"
+  }, {
+    "author": {
+      "login": "shahidki31"
+    },
+    "body": "Done.",
+    "commit": "598a7a2b19395250c2bb06b6155ef7759632c5f3",
+    "createdAt": "2019-05-05T23:35:59Z",
+    "diffHunk": "@@ -296,12 +299,15 @@ object PowerIterationClustering extends Logging {\n       },\n       mergeMsg = _ + _,\n       TripletFields.EdgeOnly)\n-    Graph(vD, gA.edges)\n-      .mapTriplets(\n-        e => e.attr / math.max(e.srcAttr, MLUtils.EPSILON),\n-        new TripletFields(/* useSrc */ true,\n-                          /* useDst */ false,\n-                          /* useEdge */ true))\n+    val graph = Graph(vD, gA.edges).mapTriplets(\n+      e => e.attr / math.max(e.srcAttr, MLUtils.EPSILON),\n+      new TripletFields(/* useSrc */ true,\n+        /* useDst */ false,\n+        /* useEdge */ true))\n+    materialize(graph)\n+    gA.unpersist(true)"
+  }],
+  "prId": 24531
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Can just be `.mapValues(model.predict)` while we're here. Same with `Vectors.dense` above.",
+    "commit": "598a7a2b19395250c2bb06b6155ef7759632c5f3",
+    "createdAt": "2019-05-05T23:01:11Z",
+    "diffHunk": "@@ -417,6 +435,17 @@ object PowerIterationClustering extends Logging {\n       .setK(k)\n       .setSeed(0L)\n       .run(points.values)\n-    points.mapValues(p => model.predict(p)).cache()\n+\n+    val predict = points.mapValues(p => model.predict(p)).cache()"
+  }, {
+    "author": {
+      "login": "shahidki31"
+    },
+    "body": "modified to `.mapValues(model.predict(_))` also for Vectors.dense",
+    "commit": "598a7a2b19395250c2bb06b6155ef7759632c5f3",
+    "createdAt": "2019-05-05T23:37:47Z",
+    "diffHunk": "@@ -417,6 +435,17 @@ object PowerIterationClustering extends Logging {\n       .setK(k)\n       .setSeed(0L)\n       .run(points.values)\n-    points.mapValues(p => model.predict(p)).cache()\n+\n+    val predict = points.mapValues(p => model.predict(p)).cache()"
+  }],
+  "prId": 24531
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Why not just not cache `predict` here? that avoids dealing with unpersisting in the single caller above.",
+    "commit": "598a7a2b19395250c2bb06b6155ef7759632c5f3",
+    "createdAt": "2019-05-05T23:04:49Z",
+    "diffHunk": "@@ -417,6 +435,17 @@ object PowerIterationClustering extends Logging {\n       .setK(k)\n       .setSeed(0L)\n       .run(points.values)\n-    points.mapValues(p => model.predict(p)).cache()\n+\n+    val predict = points.mapValues(p => model.predict(p)).cache()\n+    predict.count()\n+    points.unpersist()\n+    predict",
+    "line": 111
+  }, {
+    "author": {
+      "login": "shahidki31"
+    },
+    "body": "Yes. removed the caching of `predict`",
+    "commit": "598a7a2b19395250c2bb06b6155ef7759632c5f3",
+    "createdAt": "2019-05-05T23:36:36Z",
+    "diffHunk": "@@ -417,6 +435,17 @@ object PowerIterationClustering extends Logging {\n       .setK(k)\n       .setSeed(0L)\n       .run(points.values)\n-    points.mapValues(p => model.predict(p)).cache()\n+\n+    val predict = points.mapValues(p => model.predict(p)).cache()\n+    predict.count()\n+    points.unpersist()\n+    predict",
+    "line": 111
+  }],
+  "prId": 24531
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "I think we can just avoid having the result of kMeans be persisted to begin with, see below",
+    "commit": "598a7a2b19395250c2bb06b6155ef7759632c5f3",
+    "createdAt": "2019-05-05T23:05:17Z",
+    "diffHunk": "@@ -226,11 +226,14 @@ class PowerIterationClustering private[clustering] (\n    */\n   private def pic(w: Graph[Double, Double]): PowerIterationClusteringModel = {\n     val v = powerIter(w, maxIterations)\n-    val assignments = kMeans(v, k).mapPartitions({ iter =>\n+    val kMeansModel = kMeans(v, k)\n+    val assignments = kMeansModel.mapPartitions({ iter =>\n       iter.map { case (id, cluster) =>\n         Assignment(id, cluster)\n       }\n-    }, preservesPartitioning = true)\n+    }, preservesPartitioning = true).cache()\n+    assignments.count()\n+    kMeansModel.unpersist()"
+  }, {
+    "author": {
+      "login": "shahidki31"
+    },
+    "body": "Done.",
+    "commit": "598a7a2b19395250c2bb06b6155ef7759632c5f3",
+    "createdAt": "2019-05-05T23:36:50Z",
+    "diffHunk": "@@ -226,11 +226,14 @@ class PowerIterationClustering private[clustering] (\n    */\n   private def pic(w: Graph[Double, Double]): PowerIterationClusteringModel = {\n     val v = powerIter(w, maxIterations)\n-    val assignments = kMeans(v, k).mapPartitions({ iter =>\n+    val kMeansModel = kMeans(v, k)\n+    val assignments = kMeansModel.mapPartitions({ iter =>\n       iter.map { case (id, cluster) =>\n         Assignment(id, cluster)\n       }\n-    }, preservesPartitioning = true)\n+    }, preservesPartitioning = true).cache()\n+    assignments.count()\n+    kMeansModel.unpersist()"
+  }],
+  "prId": 24531
+}, {
+  "comments": [{
+    "author": {
+      "login": "viirya"
+    },
+    "body": "This looks unnecessary. `map` doesn't preserves the partitioner. It might be better to preserve it.",
+    "commit": "598a7a2b19395250c2bb06b6155ef7759632c5f3",
+    "createdAt": "2019-05-06T02:02:12Z",
+    "diffHunk": "@@ -226,11 +226,10 @@ class PowerIterationClustering private[clustering] (\n    */\n   private def pic(w: Graph[Double, Double]): PowerIterationClusteringModel = {\n     val v = powerIter(w, maxIterations)\n-    val assignments = kMeans(v, k).mapPartitions({ iter =>\n-      iter.map { case (id, cluster) =>\n-        Assignment(id, cluster)\n-      }\n-    }, preservesPartitioning = true)\n+    val assignments = kMeans(v, k).map {\n+      case (id, cluster) => Assignment(id, cluster)\n+    }",
+    "line": 29
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "`.map` is 1:1. It inherently preserves partitioning.",
+    "commit": "598a7a2b19395250c2bb06b6155ef7759632c5f3",
+    "createdAt": "2019-05-06T02:14:48Z",
+    "diffHunk": "@@ -226,11 +226,10 @@ class PowerIterationClustering private[clustering] (\n    */\n   private def pic(w: Graph[Double, Double]): PowerIterationClusteringModel = {\n     val v = powerIter(w, maxIterations)\n-    val assignments = kMeans(v, k).mapPartitions({ iter =>\n-      iter.map { case (id, cluster) =>\n-        Assignment(id, cluster)\n-      }\n-    }, preservesPartitioning = true)\n+    val assignments = kMeans(v, k).map {\n+      case (id, cluster) => Assignment(id, cluster)\n+    }",
+    "line": 29
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "In `map`, it creates `MapPartitionsRDD` with `preservesPartitioning` = false?",
+    "commit": "598a7a2b19395250c2bb06b6155ef7759632c5f3",
+    "createdAt": "2019-05-06T02:20:33Z",
+    "diffHunk": "@@ -226,11 +226,10 @@ class PowerIterationClustering private[clustering] (\n    */\n   private def pic(w: Graph[Double, Double]): PowerIterationClusteringModel = {\n     val v = powerIter(w, maxIterations)\n-    val assignments = kMeans(v, k).mapPartitions({ iter =>\n-      iter.map { case (id, cluster) =>\n-        Assignment(id, cluster)\n-      }\n-    }, preservesPartitioning = true)\n+    val assignments = kMeans(v, k).map {\n+      case (id, cluster) => Assignment(id, cluster)\n+    }",
+    "line": 29
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Hm yeah that's a good point. I am not sure it's valid to say this RDD preservers partitioning because the default hash partitioners would has the tuples and case class differently. The result is not a pair RDD. I don't feel strongly about it, but i'd keep this change.",
+    "commit": "598a7a2b19395250c2bb06b6155ef7759632c5f3",
+    "createdAt": "2019-05-06T02:24:56Z",
+    "diffHunk": "@@ -226,11 +226,10 @@ class PowerIterationClustering private[clustering] (\n    */\n   private def pic(w: Graph[Double, Double]): PowerIterationClusteringModel = {\n     val v = powerIter(w, maxIterations)\n-    val assignments = kMeans(v, k).mapPartitions({ iter =>\n-      iter.map { case (id, cluster) =>\n-        Assignment(id, cluster)\n-      }\n-    }, preservesPartitioning = true)\n+    val assignments = kMeans(v, k).map {\n+      case (id, cluster) => Assignment(id, cluster)\n+    }",
+    "line": 29
+  }],
+  "prId": 24531
+}, {
+  "comments": [{
+    "author": {
+      "login": "viirya"
+    },
+    "body": "Is `gA` persisted? I don't look into it very deeply inside `Graph.fromEdges`, but seems it shouldn't persist it silently.",
+    "commit": "598a7a2b19395250c2bb06b6155ef7759632c5f3",
+    "createdAt": "2019-05-06T02:04:31Z",
+    "diffHunk": "@@ -296,12 +295,15 @@ object PowerIterationClustering extends Logging {\n       },\n       mergeMsg = _ + _,\n       TripletFields.EdgeOnly)\n-    Graph(vD, gA.edges)\n-      .mapTriplets(\n-        e => e.attr / math.max(e.srcAttr, MLUtils.EPSILON),\n-        new TripletFields(/* useSrc */ true,\n-                          /* useDst */ false,\n-                          /* useEdge */ true))\n+    val graph = Graph(vD, gA.edges).mapTriplets(\n+      e => e.attr / math.max(e.srcAttr, MLUtils.EPSILON),\n+      new TripletFields(/* useSrc */ true,\n+        /* useDst */ false,\n+        /* useEdge */ true))\n+    materialize(graph)\n+    gA.unpersist()",
+    "line": 50
+  }],
+  "prId": 24531
+}, {
+  "comments": [{
+    "author": {
+      "login": "viirya"
+    },
+    "body": "`g` is a given `Graph` parameter. From the view of `randomInit`, it looks pretty weird to unpersist a given graph, before knowing it's persisted or not...",
+    "commit": "598a7a2b19395250c2bb06b6155ef7759632c5f3",
+    "createdAt": "2019-05-06T02:08:34Z",
+    "diffHunk": "@@ -322,7 +324,11 @@ object PowerIterationClustering extends Logging {\n       }, preservesPartitioning = true).cache()\n     val sum = r.values.map(math.abs).sum()\n     val v0 = r.mapValues(x => x / sum)\n-    Graph(VertexRDD(v0), g.edges)\n+    val graph = Graph(VertexRDD(v0), g.edges)\n+    materialize(graph)\n+    g.unpersist()"
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Internally it persists its vertices and edges.",
+    "commit": "598a7a2b19395250c2bb06b6155ef7759632c5f3",
+    "createdAt": "2019-05-06T02:15:05Z",
+    "diffHunk": "@@ -322,7 +324,11 @@ object PowerIterationClustering extends Logging {\n       }, preservesPartitioning = true).cache()\n     val sum = r.values.map(math.abs).sum()\n     val v0 = r.mapValues(x => x / sum)\n-    Graph(VertexRDD(v0), g.edges)\n+    val graph = Graph(VertexRDD(v0), g.edges)\n+    materialize(graph)\n+    g.unpersist()"
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "oh, I see. Graph construction uses MEMORY_ONLY as default StorageLevel...",
+    "commit": "598a7a2b19395250c2bb06b6155ef7759632c5f3",
+    "createdAt": "2019-05-06T02:26:23Z",
+    "diffHunk": "@@ -322,7 +324,11 @@ object PowerIterationClustering extends Logging {\n       }, preservesPartitioning = true).cache()\n     val sum = r.values.map(math.abs).sum()\n     val v0 = r.mapValues(x => x / sum)\n-    Graph(VertexRDD(v0), g.edges)\n+    val graph = Graph(VertexRDD(v0), g.edges)\n+    materialize(graph)\n+    g.unpersist()"
+  }],
+  "prId": 24531
+}, {
+  "comments": [{
+    "author": {
+      "login": "viirya"
+    },
+    "body": "`materialize` runs `foreachPartition` on the graph's edges. I didn't see it is persisted, so not sure why you want to materialize it without caching it?",
+    "commit": "598a7a2b19395250c2bb06b6155ef7759632c5f3",
+    "createdAt": "2019-05-06T02:12:13Z",
+    "diffHunk": "@@ -322,7 +324,11 @@ object PowerIterationClustering extends Logging {\n       }, preservesPartitioning = true).cache()\n     val sum = r.values.map(math.abs).sum()\n     val v0 = r.mapValues(x => x / sum)\n-    Graph(VertexRDD(v0), g.edges)\n+    val graph = Graph(VertexRDD(v0), g.edges)\n+    materialize(graph)",
+    "line": 62
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Same deal, it's really materializing the edges and vertices RDDs.",
+    "commit": "598a7a2b19395250c2bb06b6155ef7759632c5f3",
+    "createdAt": "2019-05-06T02:15:32Z",
+    "diffHunk": "@@ -322,7 +324,11 @@ object PowerIterationClustering extends Logging {\n       }, preservesPartitioning = true).cache()\n     val sum = r.values.map(math.abs).sum()\n     val v0 = r.mapValues(x => x / sum)\n-    Graph(VertexRDD(v0), g.edges)\n+    val graph = Graph(VertexRDD(v0), g.edges)\n+    materialize(graph)",
+    "line": 62
+  }],
+  "prId": 24531
+}, {
+  "comments": [{
+    "author": {
+      "login": "viirya"
+    },
+    "body": "nit: just `curG.unpersist`?",
+    "commit": "598a7a2b19395250c2bb06b6155ef7759632c5f3",
+    "createdAt": "2019-05-06T02:34:43Z",
+    "diffHunk": "@@ -397,10 +406,15 @@ object PowerIterationClustering extends Logging {\n             s\" difference delta = ${diffDelta} and norm = ${norm}\")\n         }\n       }\n+      curG.vertices.unpersist()\n+      curG.edges.unpersist()",
+    "line": 84
+  }, {
+    "author": {
+      "login": "shahidki31"
+    },
+    "body": "Actually `curG.unpersist` doesn't seem unpersist the edges rdd. One `EdgeRDD` block is getting cached in every iteration. That is why I have explicitely uncached into both edges and vertices",
+    "commit": "598a7a2b19395250c2bb06b6155ef7759632c5f3",
+    "createdAt": "2019-05-06T19:19:44Z",
+    "diffHunk": "@@ -397,10 +406,15 @@ object PowerIterationClustering extends Logging {\n             s\" difference delta = ${diffDelta} and norm = ${norm}\")\n         }\n       }\n+      curG.vertices.unpersist()\n+      curG.edges.unpersist()",
+    "line": 84
+  }],
+  "prId": 24531
+}, {
+  "comments": [{
+    "author": {
+      "login": "viirya"
+    },
+    "body": "Unpersisting the input Graph at `randomInit` and `initDegreeVector` is actually unpersisting the same Graph. I think it is better to unpersist it in `run`:\r\n\r\n```scala\r\ndef run(graph: Graph[Double, Double]): PowerIterationClusteringModel = {\r\n    val w = normalize(graph)\r\n    val w0 = initMode match {\r\n      case \"random\" => randomInit(w)\r\n      case \"degree\" => initDegreeVector(w)\r\n    }\r\n    w.unpersist()\r\n    pic(w0)\r\n  }\r\n```\r\n\r\nIt looks more reasonable, as it looks a bit strange that a function unpersists an input from outside.",
+    "commit": "598a7a2b19395250c2bb06b6155ef7759632c5f3",
+    "createdAt": "2019-05-06T02:47:36Z",
+    "diffHunk": "@@ -337,7 +343,10 @@ object PowerIterationClustering extends Logging {\n   def initDegreeVector(g: Graph[Double, Double]): Graph[Double, Double] = {\n     val sum = g.vertices.values.sum()\n     val v0 = g.vertices.mapValues(_ / sum)\n-    Graph(VertexRDD(v0), g.edges)\n+    val graph = Graph(VertexRDD(v0), g.edges)\n+    materialize(graph)\n+    g.unpersist()"
+  }, {
+    "author": {
+      "login": "shahidki31"
+    },
+    "body": "Updated. Thanks",
+    "commit": "598a7a2b19395250c2bb06b6155ef7759632c5f3",
+    "createdAt": "2019-05-06T19:20:02Z",
+    "diffHunk": "@@ -337,7 +343,10 @@ object PowerIterationClustering extends Logging {\n   def initDegreeVector(g: Graph[Double, Double]): Graph[Double, Double] = {\n     val sum = g.vertices.values.sum()\n     val v0 = g.vertices.mapValues(_ / sum)\n-    Graph(VertexRDD(v0), g.edges)\n+    val graph = Graph(VertexRDD(v0), g.edges)\n+    materialize(graph)\n+    g.unpersist()"
+  }],
+  "prId": 24531
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Isn't this unpersisting eigenVectorRDD? they're the same RDD",
+    "commit": "598a7a2b19395250c2bb06b6155ef7759632c5f3",
+    "createdAt": "2019-05-07T13:52:32Z",
+    "diffHunk": "@@ -397,11 +409,21 @@ object PowerIterationClustering extends Logging {\n             s\" difference delta = ${diffDelta} and norm = ${norm}\")\n         }\n       }\n+      curG.vertices.unpersist()\n+      curG.edges.unpersist()\n       // update v\n       curG = Graph(VertexRDD(v1), g.edges)\n+      materialize(curG)\n+      v.unpersist()\n       prevDelta = delta\n     }\n-    curG.vertices\n+    val eigenVectorRDD = curG.vertices.cache()\n+    // materialize the eigen vector RDD and unpersist the graph\n+    eigenVectorRDD.count()\n+    curG.vertices.unpersist()"
+  }, {
+    "author": {
+      "login": "shahidki31"
+    },
+    "body": "Sorry, updated the code",
+    "commit": "598a7a2b19395250c2bb06b6155ef7759632c5f3",
+    "createdAt": "2019-05-07T19:05:10Z",
+    "diffHunk": "@@ -397,11 +409,21 @@ object PowerIterationClustering extends Logging {\n             s\" difference delta = ${diffDelta} and norm = ${norm}\")\n         }\n       }\n+      curG.vertices.unpersist()\n+      curG.edges.unpersist()\n       // update v\n       curG = Graph(VertexRDD(v1), g.edges)\n+      materialize(curG)\n+      v.unpersist()\n       prevDelta = delta\n     }\n-    curG.vertices\n+    val eigenVectorRDD = curG.vertices.cache()\n+    // materialize the eigen vector RDD and unpersist the graph\n+    eigenVectorRDD.count()\n+    curG.vertices.unpersist()"
+  }],
+  "prId": 24531
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Not a big deal but you can remove `(_)` here and below",
+    "commit": "598a7a2b19395250c2bb06b6155ef7759632c5f3",
+    "createdAt": "2019-05-07T13:52:59Z",
+    "diffHunk": "@@ -412,11 +434,21 @@ object PowerIterationClustering extends Logging {\n    */\n   private[clustering]\n   def kMeans(v: VertexRDD[Double], k: Int): VertexRDD[Int] = {\n-    val points = v.mapValues(x => Vectors.dense(x)).cache()\n+    val points = v.mapValues(Vectors.dense(_)).cache()",
+    "line": 102
+  }, {
+    "author": {
+      "login": "shahidki31"
+    },
+    "body": "I think we can't remove `(_)`, because there are multiple implementations for the methods.\r\nhttps://github.com/apache/spark/blob/2f558094257c38d26650049f2ac93be6d65d6d85/mllib/src/main/scala/org/apache/spark/mllib/clustering/KMeansModel.scala#L75-L94",
+    "commit": "598a7a2b19395250c2bb06b6155ef7759632c5f3",
+    "createdAt": "2019-05-07T19:07:51Z",
+    "diffHunk": "@@ -412,11 +434,21 @@ object PowerIterationClustering extends Logging {\n    */\n   private[clustering]\n   def kMeans(v: VertexRDD[Double], k: Int): VertexRDD[Int] = {\n-    val points = v.mapValues(x => Vectors.dense(x)).cache()\n+    val points = v.mapValues(Vectors.dense(_)).cache()",
+    "line": 102
+  }],
+  "prId": 24531
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Oops, one more nit: this needs to indent 1 more space",
+    "commit": "598a7a2b19395250c2bb06b6155ef7759632c5f3",
+    "createdAt": "2019-05-07T20:04:56Z",
+    "diffHunk": "@@ -205,7 +207,10 @@ class PowerIterationClustering private[clustering] (\n       case \"random\" => randomInit(w)\n       case \"degree\" => initDegreeVector(w)\n     }\n-    pic(w0)\n+\n+   // Materialized the graph w0 in randomInit/initDegreeVector, hence we can unpersist w."
+  }, {
+    "author": {
+      "login": "shahidki31"
+    },
+    "body": "Thanks. done.",
+    "commit": "598a7a2b19395250c2bb06b6155ef7759632c5f3",
+    "createdAt": "2019-05-08T00:37:33Z",
+    "diffHunk": "@@ -205,7 +207,10 @@ class PowerIterationClustering private[clustering] (\n       case \"random\" => randomInit(w)\n       case \"degree\" => initDegreeVector(w)\n     }\n-    pic(w0)\n+\n+   // Materialized the graph w0 in randomInit/initDegreeVector, hence we can unpersist w."
+  }],
+  "prId": 24531
+}]

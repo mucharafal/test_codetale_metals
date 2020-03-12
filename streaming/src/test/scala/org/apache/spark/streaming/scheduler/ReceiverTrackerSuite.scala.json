@@ -1,0 +1,36 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "This cannot test the issue. Right? Before any receiver starts, `ssc.scheduler.receiverTracker.allocatedExecutors` will return `Map.empty` as well.\n",
+    "commit": "4440605c9e0b73968f29e305fb95e00bb54151ee",
+    "createdAt": "2016-04-08T20:45:35Z",
+    "diffHunk": "@@ -102,6 +102,31 @@ class ReceiverTrackerSuite extends TestSuiteBase {\n       }\n     }\n   }\n+\n+  test(\"get allocated executors\") {\n+    // Test get allocated executors when 1 receiver is registered\n+    withStreamingContext(new StreamingContext(conf, Milliseconds(100))) { ssc =>\n+      val input = ssc.receiverStream(new TestReceiver)\n+      val output = new TestOutputStream(input)\n+      output.register()\n+      ssc.start()\n+      eventually(timeout(10 seconds), interval(10 millis)) {\n+        assert(ssc.scheduler.receiverTracker.allocatedExecutors().size === 1)\n+      }\n+    }\n+\n+    // Test get allocated executors when there's no receiver registered\n+    withStreamingContext(new StreamingContext(conf, Milliseconds(100))) { ssc =>\n+      val rdd = ssc.sc.parallelize(1 to 10)\n+      val input = new ConstantInputDStream(ssc, rdd)\n+      val output = new TestOutputStream(input)\n+      output.register()\n+      ssc.start()\n+      eventually(timeout(10 seconds), interval(10 millis)) {\n+        assert(ssc.scheduler.receiverTracker.allocatedExecutors() === Map.empty)"
+  }, {
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "Never mind. I cannot find any way to test it. \n\nBy the way, `ReceiverTracker.start` should be called after `StreamingContext.start` returns. Therefore we don't need `eventually` here.\n",
+    "commit": "4440605c9e0b73968f29e305fb95e00bb54151ee",
+    "createdAt": "2016-04-08T21:02:50Z",
+    "diffHunk": "@@ -102,6 +102,31 @@ class ReceiverTrackerSuite extends TestSuiteBase {\n       }\n     }\n   }\n+\n+  test(\"get allocated executors\") {\n+    // Test get allocated executors when 1 receiver is registered\n+    withStreamingContext(new StreamingContext(conf, Milliseconds(100))) { ssc =>\n+      val input = ssc.receiverStream(new TestReceiver)\n+      val output = new TestOutputStream(input)\n+      output.register()\n+      ssc.start()\n+      eventually(timeout(10 seconds), interval(10 millis)) {\n+        assert(ssc.scheduler.receiverTracker.allocatedExecutors().size === 1)\n+      }\n+    }\n+\n+    // Test get allocated executors when there's no receiver registered\n+    withStreamingContext(new StreamingContext(conf, Milliseconds(100))) { ssc =>\n+      val rdd = ssc.sc.parallelize(1 to 10)\n+      val input = new ConstantInputDStream(ssc, rdd)\n+      val output = new TestOutputStream(input)\n+      output.register()\n+      ssc.start()\n+      eventually(timeout(10 seconds), interval(10 millis)) {\n+        assert(ssc.scheduler.receiverTracker.allocatedExecutors() === Map.empty)"
+  }, {
+    "author": {
+      "login": "jerryshao"
+    },
+    "body": "Alright, let me change it.\n",
+    "commit": "4440605c9e0b73968f29e305fb95e00bb54151ee",
+    "createdAt": "2016-04-09T01:48:53Z",
+    "diffHunk": "@@ -102,6 +102,31 @@ class ReceiverTrackerSuite extends TestSuiteBase {\n       }\n     }\n   }\n+\n+  test(\"get allocated executors\") {\n+    // Test get allocated executors when 1 receiver is registered\n+    withStreamingContext(new StreamingContext(conf, Milliseconds(100))) { ssc =>\n+      val input = ssc.receiverStream(new TestReceiver)\n+      val output = new TestOutputStream(input)\n+      output.register()\n+      ssc.start()\n+      eventually(timeout(10 seconds), interval(10 millis)) {\n+        assert(ssc.scheduler.receiverTracker.allocatedExecutors().size === 1)\n+      }\n+    }\n+\n+    // Test get allocated executors when there's no receiver registered\n+    withStreamingContext(new StreamingContext(conf, Milliseconds(100))) { ssc =>\n+      val rdd = ssc.sc.parallelize(1 to 10)\n+      val input = new ConstantInputDStream(ssc, rdd)\n+      val output = new TestOutputStream(input)\n+      output.register()\n+      ssc.start()\n+      eventually(timeout(10 seconds), interval(10 millis)) {\n+        assert(ssc.scheduler.receiverTracker.allocatedExecutors() === Map.empty)"
+  }, {
+    "author": {
+      "login": "jerryshao"
+    },
+    "body": "> Before any receiver starts, ssc.scheduler.receiverTracker.allocatedExecutors will return Map.empty as well.\n\nI see your point, this might cause streaming dynamic allocation to kill the executor which has a receiver to be started unexpectedly. This might be happened in some extreme cases.\n",
+    "commit": "4440605c9e0b73968f29e305fb95e00bb54151ee",
+    "createdAt": "2016-04-09T02:20:23Z",
+    "diffHunk": "@@ -102,6 +102,31 @@ class ReceiverTrackerSuite extends TestSuiteBase {\n       }\n     }\n   }\n+\n+  test(\"get allocated executors\") {\n+    // Test get allocated executors when 1 receiver is registered\n+    withStreamingContext(new StreamingContext(conf, Milliseconds(100))) { ssc =>\n+      val input = ssc.receiverStream(new TestReceiver)\n+      val output = new TestOutputStream(input)\n+      output.register()\n+      ssc.start()\n+      eventually(timeout(10 seconds), interval(10 millis)) {\n+        assert(ssc.scheduler.receiverTracker.allocatedExecutors().size === 1)\n+      }\n+    }\n+\n+    // Test get allocated executors when there's no receiver registered\n+    withStreamingContext(new StreamingContext(conf, Milliseconds(100))) { ssc =>\n+      val rdd = ssc.sc.parallelize(1 to 10)\n+      val input = new ConstantInputDStream(ssc, rdd)\n+      val output = new TestOutputStream(input)\n+      output.register()\n+      ssc.start()\n+      eventually(timeout(10 seconds), interval(10 millis)) {\n+        assert(ssc.scheduler.receiverTracker.allocatedExecutors() === Map.empty)"
+  }],
+  "prId": 12236
+}]

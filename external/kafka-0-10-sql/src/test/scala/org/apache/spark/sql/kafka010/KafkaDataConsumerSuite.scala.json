@@ -1,0 +1,13 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "HeartSaVioR"
+    },
+    "body": "I'd say consumer2 should be cached as it's created after invalidation, but here you only address test so that's OK.",
+    "commit": "d6602ece506469bc706f74d8b0e4eda4dc4d229b",
+    "createdAt": "2019-08-26T14:52:48Z",
+    "diffHunk": "@@ -60,23 +70,40 @@ class KafkaDataConsumerSuite extends SharedSparkSession with PrivateMethodTester\n     assert(e.getCause === cause)\n   }\n \n+  test(\"new KafkaDataConsumer instance in case of Task retry\") {\n+    try {\n+      KafkaDataConsumer.cache.clear()\n+\n+      val kafkaParams = getKafkaParams()\n+      val key = new CacheKey(groupId, topicPartition)\n+\n+      val context1 = new TaskContextImpl(0, 0, 0, 0, 0, null, null, null)\n+      TaskContext.setTaskContext(context1)\n+      val consumer1 = KafkaDataConsumer.acquire(topicPartition, kafkaParams, true)\n+      consumer1.release()\n+\n+      assert(KafkaDataConsumer.cache.size() == 1)\n+      assert(KafkaDataConsumer.cache.get(key).eq(consumer1.internalConsumer))\n+\n+      val context2 = new TaskContextImpl(0, 0, 0, 0, 1, null, null, null)\n+      TaskContext.setTaskContext(context2)\n+      val consumer2 = KafkaDataConsumer.acquire(topicPartition, kafkaParams, true)\n+      consumer2.release()\n+\n+      // The first consumer should be removed from cache and new non-cached should be returned",
+    "line": 68
+  }],
+  "prId": 25582
+}]

@@ -1,0 +1,52 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "? Hi, @mccheah . We import `java.*` and `scala.*` before any others.",
+    "commit": "a93fe0c85a48ceb263a3b56927439b70dff47e0a",
+    "createdAt": "2018-12-07T06:33:56Z",
+    "diffHunk": "@@ -16,10 +16,13 @@\n  */\n package org.apache.spark.deploy.k8s.features\n \n-import scala.collection.JavaConverters._\n+import java.io.File\n+import java.nio.charset.StandardCharsets\n+import java.nio.file.Files\n \n import io.fabric8.kubernetes.api.model._\n import org.scalatest.BeforeAndAfter\n+import scala.collection.JavaConverters._"
+  }, {
+    "author": {
+      "login": "mccheah"
+    },
+    "body": "Think I fixed this.",
+    "commit": "a93fe0c85a48ceb263a3b56927439b70dff47e0a",
+    "createdAt": "2018-12-08T02:43:40Z",
+    "diffHunk": "@@ -16,10 +16,13 @@\n  */\n package org.apache.spark.deploy.k8s.features\n \n-import scala.collection.JavaConverters._\n+import java.io.File\n+import java.nio.charset.StandardCharsets\n+import java.nio.file.Files\n \n import io.fabric8.kubernetes.api.model._\n import org.scalatest.BeforeAndAfter\n+import scala.collection.JavaConverters._"
+  }],
+  "prId": 23252
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "`!KubernetesFeaturesTestUtils.containerHasEnvVar(...)`",
+    "commit": "a93fe0c85a48ceb263a3b56927439b70dff47e0a",
+    "createdAt": "2018-12-07T18:22:33Z",
+    "diffHunk": "@@ -158,6 +161,25 @@ class BasicExecutorFeatureStepSuite extends SparkFunSuite with BeforeAndAfter {\n     checkEnv(executor, conf, Map(SecurityManager.ENV_AUTH_SECRET -> secMgr.getSecretKey()))\n   }\n \n+  test(\"Auth secret shouldn't propagate if files are loaded.\") {\n+    val secretDir = Utils.createTempDir(\"temp-secret\")\n+    val secretFile = new File(secretDir, \"secret-file.txt\")\n+    Files.write(secretFile.toPath, \"some-secret\".getBytes(StandardCharsets.UTF_8))\n+    val conf = baseConf.clone()\n+      .set(NETWORK_AUTH_ENABLED, true)\n+      .set(AUTH_SECRET_FILE, secretFile.getAbsolutePath)\n+      .set(\"spark.master\", \"k8s://127.0.0.1\")\n+    val secMgr = new SecurityManager(conf)\n+    secMgr.initializeAuth()\n+\n+    val step = new BasicExecutorFeatureStep(KubernetesTestConf.createExecutorConf(sparkConf = conf),\n+      secMgr)\n+\n+    val executor = step.configurePod(SparkPod.initialPod())\n+    assert(!executor.container.getEnv.asScala.map(_.getName).contains("
+  }],
+  "prId": 23252
+}, {
+  "comments": [{
+    "author": {
+      "login": "ifilonenko"
+    },
+    "body": "Probably unnecessary, but maybe check contents? ",
+    "commit": "a93fe0c85a48ceb263a3b56927439b70dff47e0a",
+    "createdAt": "2018-12-10T18:29:33Z",
+    "diffHunk": "@@ -158,6 +162,25 @@ class BasicExecutorFeatureStepSuite extends SparkFunSuite with BeforeAndAfter {\n     checkEnv(executor, conf, Map(SecurityManager.ENV_AUTH_SECRET -> secMgr.getSecretKey()))\n   }\n \n+  test(\"Auth secret shouldn't propagate if files are loaded.\") {\n+    val secretDir = Utils.createTempDir(\"temp-secret\")\n+    val secretFile = new File(secretDir, \"secret-file.txt\")\n+    Files.write(secretFile.toPath, \"some-secret\".getBytes(StandardCharsets.UTF_8))\n+    val conf = baseConf.clone()\n+      .set(NETWORK_AUTH_ENABLED, true)\n+      .set(AUTH_SECRET_FILE, secretFile.getAbsolutePath)\n+      .set(\"spark.master\", \"k8s://127.0.0.1\")\n+    val secMgr = new SecurityManager(conf)\n+    secMgr.initializeAuth()\n+\n+    val step = new BasicExecutorFeatureStep(KubernetesTestConf.createExecutorConf(sparkConf = conf),\n+      secMgr)\n+\n+    val executor = step.configurePod(SparkPod.initialPod())\n+    assert(!KubernetesFeaturesTestUtils.containerHasEnvVar(\n+      executor.container, SecurityManager.ENV_AUTH_SECRET))",
+    "line": 31
+  }, {
+    "author": {
+      "login": "mccheah"
+    },
+    "body": "There should be no contents, which is what this assertion is checking.",
+    "commit": "a93fe0c85a48ceb263a3b56927439b70dff47e0a",
+    "createdAt": "2018-12-10T18:36:01Z",
+    "diffHunk": "@@ -158,6 +162,25 @@ class BasicExecutorFeatureStepSuite extends SparkFunSuite with BeforeAndAfter {\n     checkEnv(executor, conf, Map(SecurityManager.ENV_AUTH_SECRET -> secMgr.getSecretKey()))\n   }\n \n+  test(\"Auth secret shouldn't propagate if files are loaded.\") {\n+    val secretDir = Utils.createTempDir(\"temp-secret\")\n+    val secretFile = new File(secretDir, \"secret-file.txt\")\n+    Files.write(secretFile.toPath, \"some-secret\".getBytes(StandardCharsets.UTF_8))\n+    val conf = baseConf.clone()\n+      .set(NETWORK_AUTH_ENABLED, true)\n+      .set(AUTH_SECRET_FILE, secretFile.getAbsolutePath)\n+      .set(\"spark.master\", \"k8s://127.0.0.1\")\n+    val secMgr = new SecurityManager(conf)\n+    secMgr.initializeAuth()\n+\n+    val step = new BasicExecutorFeatureStep(KubernetesTestConf.createExecutorConf(sparkConf = conf),\n+      secMgr)\n+\n+    val executor = step.configurePod(SparkPod.initialPod())\n+    assert(!KubernetesFeaturesTestUtils.containerHasEnvVar(\n+      executor.container, SecurityManager.ENV_AUTH_SECRET))",
+    "line": 31
+  }],
+  "prId": 23252
+}]

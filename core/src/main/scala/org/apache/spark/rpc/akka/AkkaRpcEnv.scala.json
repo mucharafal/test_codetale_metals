@@ -1,0 +1,55 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "can you explain why this is necessary?\n",
+    "commit": "fc0fca3c7d3b9fb522e79adaa04a01358a8cf9f6",
+    "createdAt": "2015-07-14T21:30:42Z",
+    "diffHunk": "@@ -237,6 +237,12 @@ private[spark] class AkkaRpcEnv private[akka] (\n   }\n \n   override def toString: String = s\"${getClass.getSimpleName}($actorSystem)\"\n+\n+  def deserialize[T](deserializationAction: () => T): T = {\n+    JavaSerializer.currentSystem.withValue(actorSystem.asInstanceOf[ExtendedActorSystem]) {"
+  }, {
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "I see, because now we no longer pass akka's `Serialization`, which has information about the actor system, into `PersistenceEngine`, so here we ensure that we're using the actor system's serializer.\n\nBut more generally, since we always serialize with `JavaSerializer` in the new code, why can't we always deserialize with the same thing? I just find it a little strange that we have to pass a closure into this method.\n",
+    "commit": "fc0fca3c7d3b9fb522e79adaa04a01358a8cf9f6",
+    "createdAt": "2015-07-14T21:41:36Z",
+    "diffHunk": "@@ -237,6 +237,12 @@ private[spark] class AkkaRpcEnv private[akka] (\n   }\n \n   override def toString: String = s\"${getClass.getSimpleName}($actorSystem)\"\n+\n+  def deserialize[T](deserializationAction: () => T): T = {\n+    JavaSerializer.currentSystem.withValue(actorSystem.asInstanceOf[ExtendedActorSystem]) {"
+  }, {
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "spark JavaSerializer is used to deserialize objects. However, it does not have an actor system in the current context. I need to use Akka `JavaSerializer.currentSystem` to put the current actor system into a thread-local variable.\n",
+    "commit": "fc0fca3c7d3b9fb522e79adaa04a01358a8cf9f6",
+    "createdAt": "2015-07-15T00:52:03Z",
+    "diffHunk": "@@ -237,6 +237,12 @@ private[spark] class AkkaRpcEnv private[akka] (\n   }\n \n   override def toString: String = s\"${getClass.getSimpleName}($actorSystem)\"\n+\n+  def deserialize[T](deserializationAction: () => T): T = {\n+    JavaSerializer.currentSystem.withValue(actorSystem.asInstanceOf[ExtendedActorSystem]) {"
+  }, {
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "but why do we need the actor system to deserialize it? Can't we just deserialize it with `JavaSerializer`? @rxin\n",
+    "commit": "fc0fca3c7d3b9fb522e79adaa04a01358a8cf9f6",
+    "createdAt": "2015-07-15T20:55:00Z",
+    "diffHunk": "@@ -237,6 +237,12 @@ private[spark] class AkkaRpcEnv private[akka] (\n   }\n \n   override def toString: String = s\"${getClass.getSimpleName}($actorSystem)\"\n+\n+  def deserialize[T](deserializationAction: () => T): T = {\n+    JavaSerializer.currentSystem.withValue(actorSystem.asInstanceOf[ExtendedActorSystem]) {"
+  }, {
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "> but why do we need the actor system to deserialize it? Can't we just deserialize it with JavaSerializer?\n\nOh, that's because `WorkerInfo` and `ApplicationInfo` contain a reference to RpcEndpointRef.\n",
+    "commit": "fc0fca3c7d3b9fb522e79adaa04a01358a8cf9f6",
+    "createdAt": "2015-07-16T00:58:14Z",
+    "diffHunk": "@@ -237,6 +237,12 @@ private[spark] class AkkaRpcEnv private[akka] (\n   }\n \n   override def toString: String = s\"${getClass.getSimpleName}($actorSystem)\"\n+\n+  def deserialize[T](deserializationAction: () => T): T = {\n+    JavaSerializer.currentSystem.withValue(actorSystem.asInstanceOf[ExtendedActorSystem]) {"
+  }],
+  "prId": 7159
+}, {
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "can you make this override to be more explicit\n",
+    "commit": "fc0fca3c7d3b9fb522e79adaa04a01358a8cf9f6",
+    "createdAt": "2015-07-14T21:42:02Z",
+    "diffHunk": "@@ -237,6 +237,12 @@ private[spark] class AkkaRpcEnv private[akka] (\n   }\n \n   override def toString: String = s\"${getClass.getSimpleName}($actorSystem)\"\n+\n+  def deserialize[T](deserializationAction: () => T): T = {"
+  }],
+  "prId": 7159
+}]

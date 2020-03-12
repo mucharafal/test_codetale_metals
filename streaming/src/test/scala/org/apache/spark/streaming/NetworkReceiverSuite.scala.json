@@ -1,0 +1,90 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "tdas"
+    },
+    "body": "nit: waitTime [space] / [space] 1000\n",
+    "commit": "5514916153a6ae57d38cff8568ef14f9e588383d",
+    "createdAt": "2014-07-10T20:30:51Z",
+    "diffHunk": "@@ -146,6 +146,37 @@ class NetworkReceiverSuite extends FunSuite with Timeouts {\n     assert(recordedData.toSet === generatedData.toSet)\n   }\n \n+  test(\"block generator throttling\") {\n+    val blockGeneratorListener = new FakeBlockGeneratorListener\n+    val blockInterval = 1000\n+    val maxRate = 30\n+    val conf = new SparkConf().set(\"spark.streaming.blockInterval\", blockInterval.toString).\n+      set(\"spark.streaming.receiver.maxRate\", maxRate.toString)\n+    val blockGenerator = new BlockGenerator(blockGeneratorListener, 1, conf)\n+    val expectedBlocks = 1\n+    val waitTime = expectedBlocks * blockInterval\n+    val expectedMessages = maxRate * waitTime/1000"
+  }],
+  "prId": 945
+}, {
+  "comments": [{
+    "author": {
+      "login": "tdas"
+    },
+    "body": "Is it even possible for a block to have more than (maxRate \\* blockInterval / 1000)  messages?\n",
+    "commit": "5514916153a6ae57d38cff8568ef14f9e588383d",
+    "createdAt": "2014-07-10T20:42:58Z",
+    "diffHunk": "@@ -146,6 +146,37 @@ class NetworkReceiverSuite extends FunSuite with Timeouts {\n     assert(recordedData.toSet === generatedData.toSet)\n   }\n \n+  test(\"block generator throttling\") {\n+    val blockGeneratorListener = new FakeBlockGeneratorListener\n+    val blockInterval = 1000\n+    val maxRate = 30\n+    val conf = new SparkConf().set(\"spark.streaming.blockInterval\", blockInterval.toString).\n+      set(\"spark.streaming.receiver.maxRate\", maxRate.toString)\n+    val blockGenerator = new BlockGenerator(blockGeneratorListener, 1, conf)\n+    val expectedBlocks = 1\n+    val waitTime = expectedBlocks * blockInterval\n+    val expectedMessages = maxRate * waitTime/1000\n+    val generatedData = new ArrayBuffer[Int]\n+\n+    // Generate blocks\n+    val startTime = System.currentTimeMillis()\n+    blockGenerator.start()\n+    var count = 0\n+    while(System.currentTimeMillis - startTime < waitTime) {\n+      blockGenerator += count\n+      generatedData += count\n+      count += 1\n+      Thread.sleep(2)\n+    }\n+    blockGenerator.stop()\n+\n+    val recordedData = blockGeneratorListener.arrayBuffers.flatten\n+    assert(blockGeneratorListener.arrayBuffers.size > 0)\n+    assert(recordedData.toSet === generatedData.toSet)\n+    // recordedData size should be close to the expected rate\n+    assert(recordedData.size > expectedMessages * 0.7 && recordedData.size < expectedMessages * 1.5 )"
+  }, {
+    "author": {
+      "login": "ibuenros"
+    },
+    "body": "It is sometimes possible to get about one record more than expected. I made this check more strict in a new commit, but to avoid random failures, I still allow for some wiggle room in here.\n",
+    "commit": "5514916153a6ae57d38cff8568ef14f9e588383d",
+    "createdAt": "2014-07-10T21:41:56Z",
+    "diffHunk": "@@ -146,6 +146,37 @@ class NetworkReceiverSuite extends FunSuite with Timeouts {\n     assert(recordedData.toSet === generatedData.toSet)\n   }\n \n+  test(\"block generator throttling\") {\n+    val blockGeneratorListener = new FakeBlockGeneratorListener\n+    val blockInterval = 1000\n+    val maxRate = 30\n+    val conf = new SparkConf().set(\"spark.streaming.blockInterval\", blockInterval.toString).\n+      set(\"spark.streaming.receiver.maxRate\", maxRate.toString)\n+    val blockGenerator = new BlockGenerator(blockGeneratorListener, 1, conf)\n+    val expectedBlocks = 1\n+    val waitTime = expectedBlocks * blockInterval\n+    val expectedMessages = maxRate * waitTime/1000\n+    val generatedData = new ArrayBuffer[Int]\n+\n+    // Generate blocks\n+    val startTime = System.currentTimeMillis()\n+    blockGenerator.start()\n+    var count = 0\n+    while(System.currentTimeMillis - startTime < waitTime) {\n+      blockGenerator += count\n+      generatedData += count\n+      count += 1\n+      Thread.sleep(2)\n+    }\n+    blockGenerator.stop()\n+\n+    val recordedData = blockGeneratorListener.arrayBuffers.flatten\n+    assert(blockGeneratorListener.arrayBuffers.size > 0)\n+    assert(recordedData.toSet === generatedData.toSet)\n+    // recordedData size should be close to the expected rate\n+    assert(recordedData.size > expectedMessages * 0.7 && recordedData.size < expectedMessages * 1.5 )"
+  }],
+  "prId": 945
+}, {
+  "comments": [{
+    "author": {
+      "login": "tdas"
+    },
+    "body": "It would be great if you can modify this test slightly to make it strong. Can you try running a block interval 50 ms and a rate of 10 records / block interval . Then send records with a sleep of 1 ms. This means you are pushing at almost 50 records per block interval. Do this for multiple intervals, say for a wait time of the 1000 ms. Then the assert needs to check whether _every_ block (in the `blockGeneratorListener.arrayBuffers`) has <= (maxRate \\* blockInterval / 1000)    records. This effectively tests that the rate is maintained across multiple blocks. \n",
+    "commit": "5514916153a6ae57d38cff8568ef14f9e588383d",
+    "createdAt": "2014-07-10T20:48:07Z",
+    "diffHunk": "@@ -146,6 +146,37 @@ class NetworkReceiverSuite extends FunSuite with Timeouts {\n     assert(recordedData.toSet === generatedData.toSet)\n   }\n \n+  test(\"block generator throttling\") {\n+    val blockGeneratorListener = new FakeBlockGeneratorListener\n+    val blockInterval = 1000"
+  }],
+  "prId": 945
+}, {
+  "comments": [{
+    "author": {
+      "login": "kayousterhout"
+    },
+    "body": "This line is failing on Jenkins for an (I think) unrelated change (https://amplab.cs.berkeley.edu/jenkins/job/SparkPullRequestBuilder/16838/consoleFull) -- any change this is flaky?\n",
+    "commit": "5514916153a6ae57d38cff8568ef14f9e588383d",
+    "createdAt": "2014-07-19T00:29:34Z",
+    "diffHunk": "@@ -146,6 +146,44 @@ class NetworkReceiverSuite extends FunSuite with Timeouts {\n     assert(recordedData.toSet === generatedData.toSet)\n   }\n \n+  test(\"block generator throttling\") {\n+    val blockGeneratorListener = new FakeBlockGeneratorListener\n+    val blockInterval = 50\n+    val maxRate = 200\n+    val conf = new SparkConf().set(\"spark.streaming.blockInterval\", blockInterval.toString).\n+      set(\"spark.streaming.receiver.maxRate\", maxRate.toString)\n+    val blockGenerator = new BlockGenerator(blockGeneratorListener, 1, conf)\n+    val expectedBlocks = 20\n+    val waitTime = expectedBlocks * blockInterval\n+    val expectedMessages = maxRate * waitTime / 1000\n+    val expectedMessagesPerBlock = maxRate * blockInterval / 1000\n+    val generatedData = new ArrayBuffer[Int]\n+\n+    // Generate blocks\n+    val startTime = System.currentTimeMillis()\n+    blockGenerator.start()\n+    var count = 0\n+    while(System.currentTimeMillis - startTime < waitTime) {\n+      blockGenerator += count\n+      generatedData += count\n+      count += 1\n+      Thread.sleep(1)\n+    }\n+    blockGenerator.stop()\n+\n+    val recordedData = blockGeneratorListener.arrayBuffers\n+    assert(blockGeneratorListener.arrayBuffers.size > 0)\n+    assert(recordedData.flatten.toSet === generatedData.toSet)\n+    // recordedData size should be close to the expected rate\n+    assert(recordedData.flatten.size >= expectedMessages * 0.9 &&\n+      recordedData.flatten.size <= expectedMessages * 1.1 )\n+    // the first and last block may be incomplete, so we slice them out\n+    recordedData.slice(1, recordedData.size - 1).foreach { block =>\n+      assert(block.size >= expectedMessagesPerBlock * 0.8 &&",
+    "line": 37
+  }, {
+    "author": {
+      "login": "tdas"
+    },
+    "body": "Maybe. The Jenkins being often too slow at doing things, it maybe causing\nthe data rate in this test to be lower than expected.\n\nOn Fri, Jul 18, 2014 at 5:29 PM, Kay Ousterhout notifications@github.com\nwrote:\n\n> In\n> streaming/src/test/scala/org/apache/spark/streaming/NetworkReceiverSuite.scala:\n> \n> > -      blockGenerator += count\n> > -      generatedData += count\n> > -      count += 1\n> > -      Thread.sleep(1)\n> > -    }\n> > -    blockGenerator.stop()\n> >   +\n> > -    val recordedData = blockGeneratorListener.arrayBuffers\n> > -    assert(blockGeneratorListener.arrayBuffers.size > 0)\n> > -    assert(recordedData.flatten.toSet === generatedData.toSet)\n> > -    // recordedData size should be close to the expected rate\n> > -    assert(recordedData.flatten.size >= expectedMessages \\* 0.9 &&\n> > -      recordedData.flatten.size <= expectedMessages \\* 1.1 )\n> > -    // the first and last block may be incomplete, so we slice them out\n> > -    recordedData.slice(1, recordedData.size - 1).foreach { block =>\n> > -      assert(block.size >= expectedMessagesPerBlock \\* 0.8 &&\n> \n> This line is failing on Jenkins for an (I think) unrelated change (\n> https://amplab.cs.berkeley.edu/jenkins/job/SparkPullRequestBuilder/16838/consoleFull)\n> -- any change this is flaky?\n> \n> —\n> Reply to this email directly or view it on GitHub\n> https://github.com/apache/spark/pull/945/files#r15140315.\n",
+    "commit": "5514916153a6ae57d38cff8568ef14f9e588383d",
+    "createdAt": "2014-07-19T02:30:41Z",
+    "diffHunk": "@@ -146,6 +146,44 @@ class NetworkReceiverSuite extends FunSuite with Timeouts {\n     assert(recordedData.toSet === generatedData.toSet)\n   }\n \n+  test(\"block generator throttling\") {\n+    val blockGeneratorListener = new FakeBlockGeneratorListener\n+    val blockInterval = 50\n+    val maxRate = 200\n+    val conf = new SparkConf().set(\"spark.streaming.blockInterval\", blockInterval.toString).\n+      set(\"spark.streaming.receiver.maxRate\", maxRate.toString)\n+    val blockGenerator = new BlockGenerator(blockGeneratorListener, 1, conf)\n+    val expectedBlocks = 20\n+    val waitTime = expectedBlocks * blockInterval\n+    val expectedMessages = maxRate * waitTime / 1000\n+    val expectedMessagesPerBlock = maxRate * blockInterval / 1000\n+    val generatedData = new ArrayBuffer[Int]\n+\n+    // Generate blocks\n+    val startTime = System.currentTimeMillis()\n+    blockGenerator.start()\n+    var count = 0\n+    while(System.currentTimeMillis - startTime < waitTime) {\n+      blockGenerator += count\n+      generatedData += count\n+      count += 1\n+      Thread.sleep(1)\n+    }\n+    blockGenerator.stop()\n+\n+    val recordedData = blockGeneratorListener.arrayBuffers\n+    assert(blockGeneratorListener.arrayBuffers.size > 0)\n+    assert(recordedData.flatten.toSet === generatedData.toSet)\n+    // recordedData size should be close to the expected rate\n+    assert(recordedData.flatten.size >= expectedMessages * 0.9 &&\n+      recordedData.flatten.size <= expectedMessages * 1.1 )\n+    // the first and last block may be incomplete, so we slice them out\n+    recordedData.slice(1, recordedData.size - 1).foreach { block =>\n+      assert(block.size >= expectedMessagesPerBlock * 0.8 &&",
+    "line": 37
+  }, {
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "This test is still a frequent cause of Jenkins failures; I'm investigating fixes, but I'd appreciate help.\n",
+    "commit": "5514916153a6ae57d38cff8568ef14f9e588383d",
+    "createdAt": "2014-09-15T18:13:33Z",
+    "diffHunk": "@@ -146,6 +146,44 @@ class NetworkReceiverSuite extends FunSuite with Timeouts {\n     assert(recordedData.toSet === generatedData.toSet)\n   }\n \n+  test(\"block generator throttling\") {\n+    val blockGeneratorListener = new FakeBlockGeneratorListener\n+    val blockInterval = 50\n+    val maxRate = 200\n+    val conf = new SparkConf().set(\"spark.streaming.blockInterval\", blockInterval.toString).\n+      set(\"spark.streaming.receiver.maxRate\", maxRate.toString)\n+    val blockGenerator = new BlockGenerator(blockGeneratorListener, 1, conf)\n+    val expectedBlocks = 20\n+    val waitTime = expectedBlocks * blockInterval\n+    val expectedMessages = maxRate * waitTime / 1000\n+    val expectedMessagesPerBlock = maxRate * blockInterval / 1000\n+    val generatedData = new ArrayBuffer[Int]\n+\n+    // Generate blocks\n+    val startTime = System.currentTimeMillis()\n+    blockGenerator.start()\n+    var count = 0\n+    while(System.currentTimeMillis - startTime < waitTime) {\n+      blockGenerator += count\n+      generatedData += count\n+      count += 1\n+      Thread.sleep(1)\n+    }\n+    blockGenerator.stop()\n+\n+    val recordedData = blockGeneratorListener.arrayBuffers\n+    assert(blockGeneratorListener.arrayBuffers.size > 0)\n+    assert(recordedData.flatten.toSet === generatedData.toSet)\n+    // recordedData size should be close to the expected rate\n+    assert(recordedData.flatten.size >= expectedMessages * 0.9 &&\n+      recordedData.flatten.size <= expectedMessages * 1.1 )\n+    // the first and last block may be incomplete, so we slice them out\n+    recordedData.slice(1, recordedData.size - 1).foreach { block =>\n+      assert(block.size >= expectedMessagesPerBlock * 0.8 &&",
+    "line": 37
+  }, {
+    "author": {
+      "login": "ibuenros"
+    },
+    "body": "If the problem is Jenkins being slow, we could just remove the lower bound check. Line 178 is checking that the number of messages is not too small either way, so we won't be losing anything.\n",
+    "commit": "5514916153a6ae57d38cff8568ef14f9e588383d",
+    "createdAt": "2014-09-15T18:45:39Z",
+    "diffHunk": "@@ -146,6 +146,44 @@ class NetworkReceiverSuite extends FunSuite with Timeouts {\n     assert(recordedData.toSet === generatedData.toSet)\n   }\n \n+  test(\"block generator throttling\") {\n+    val blockGeneratorListener = new FakeBlockGeneratorListener\n+    val blockInterval = 50\n+    val maxRate = 200\n+    val conf = new SparkConf().set(\"spark.streaming.blockInterval\", blockInterval.toString).\n+      set(\"spark.streaming.receiver.maxRate\", maxRate.toString)\n+    val blockGenerator = new BlockGenerator(blockGeneratorListener, 1, conf)\n+    val expectedBlocks = 20\n+    val waitTime = expectedBlocks * blockInterval\n+    val expectedMessages = maxRate * waitTime / 1000\n+    val expectedMessagesPerBlock = maxRate * blockInterval / 1000\n+    val generatedData = new ArrayBuffer[Int]\n+\n+    // Generate blocks\n+    val startTime = System.currentTimeMillis()\n+    blockGenerator.start()\n+    var count = 0\n+    while(System.currentTimeMillis - startTime < waitTime) {\n+      blockGenerator += count\n+      generatedData += count\n+      count += 1\n+      Thread.sleep(1)\n+    }\n+    blockGenerator.stop()\n+\n+    val recordedData = blockGeneratorListener.arrayBuffers\n+    assert(blockGeneratorListener.arrayBuffers.size > 0)\n+    assert(recordedData.flatten.toSet === generatedData.toSet)\n+    // recordedData size should be close to the expected rate\n+    assert(recordedData.flatten.size >= expectedMessages * 0.9 &&\n+      recordedData.flatten.size <= expectedMessages * 1.1 )\n+    // the first and last block may be incomplete, so we slice them out\n+    recordedData.slice(1, recordedData.size - 1).foreach { block =>\n+      assert(block.size >= expectedMessagesPerBlock * 0.8 &&",
+    "line": 37
+  }, {
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "If we change this test, we should use [Scalatest's should matchers](http://www.scalatest.org/user_guide/using_matchers#creatingMatchersUsingLogicalOperators) so that the test failure message prints the actual values of the blocks that failed the assertion (or pass a failure message to `assert`).\n",
+    "commit": "5514916153a6ae57d38cff8568ef14f9e588383d",
+    "createdAt": "2014-09-15T18:50:49Z",
+    "diffHunk": "@@ -146,6 +146,44 @@ class NetworkReceiverSuite extends FunSuite with Timeouts {\n     assert(recordedData.toSet === generatedData.toSet)\n   }\n \n+  test(\"block generator throttling\") {\n+    val blockGeneratorListener = new FakeBlockGeneratorListener\n+    val blockInterval = 50\n+    val maxRate = 200\n+    val conf = new SparkConf().set(\"spark.streaming.blockInterval\", blockInterval.toString).\n+      set(\"spark.streaming.receiver.maxRate\", maxRate.toString)\n+    val blockGenerator = new BlockGenerator(blockGeneratorListener, 1, conf)\n+    val expectedBlocks = 20\n+    val waitTime = expectedBlocks * blockInterval\n+    val expectedMessages = maxRate * waitTime / 1000\n+    val expectedMessagesPerBlock = maxRate * blockInterval / 1000\n+    val generatedData = new ArrayBuffer[Int]\n+\n+    // Generate blocks\n+    val startTime = System.currentTimeMillis()\n+    blockGenerator.start()\n+    var count = 0\n+    while(System.currentTimeMillis - startTime < waitTime) {\n+      blockGenerator += count\n+      generatedData += count\n+      count += 1\n+      Thread.sleep(1)\n+    }\n+    blockGenerator.stop()\n+\n+    val recordedData = blockGeneratorListener.arrayBuffers\n+    assert(blockGeneratorListener.arrayBuffers.size > 0)\n+    assert(recordedData.flatten.toSet === generatedData.toSet)\n+    // recordedData size should be close to the expected rate\n+    assert(recordedData.flatten.size >= expectedMessages * 0.9 &&\n+      recordedData.flatten.size <= expectedMessages * 1.1 )\n+    // the first and last block may be incomplete, so we slice them out\n+    recordedData.slice(1, recordedData.size - 1).foreach { block =>\n+      assert(block.size >= expectedMessagesPerBlock * 0.8 &&",
+    "line": 37
+  }],
+  "prId": 945
+}]

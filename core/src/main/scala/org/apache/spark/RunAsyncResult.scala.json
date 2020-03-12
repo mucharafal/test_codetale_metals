@@ -1,0 +1,23 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "rxin"
+    },
+    "body": "note that this is not a reliable (actually very unreliable) way of cancelling a thread.\n\nthis only stops the thread if it is waiting on io or sleeping. if the user thread is actually executing stuff (or busy looping), this doesn't do anything.\n",
+    "commit": "48820826b985b5ff131c383fd2e286254256e0b7",
+    "createdAt": "2014-09-21T20:21:06Z",
+    "diffHunk": "@@ -0,0 +1,93 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark\n+\n+import scala.concurrent._\n+import scala.concurrent.duration.Duration\n+import scala.util.Try\n+\n+\n+/**\n+ * This is an extension of the Scala Future interface to support cancellation.\n+ */\n+class RunAsyncResult[T](jobGroupId: String,\n+                        jobGroupDescription: String,\n+                        sc: SparkContext,\n+                        func: => T) extends Future[T] {\n+\n+  // Pointer to the thread that is executing the action; it is set when the action is run.\n+  @volatile private var thread: Thread = _\n+\n+  // A promise used to signal the future.\n+  private val p = promise[T]()\n+\n+  /**\n+   * Cancel this Future and any Spark jobs launched from it.  The cancellation of Spark jobs is\n+   * performed asynchronously.\n+   */\n+  def cancel(): Unit = this.synchronized {\n+    if (thread != null) {\n+      thread.interrupt()"
+  }],
+  "prId": 2482
+}, {
+  "comments": [{
+    "author": {
+      "login": "rxin"
+    },
+    "body": "this only works for jobs that have been submitted in the past, not jobs that will be submitted in the future?\n\nupdate: ok this could work due to the previous thread.join. However, the assumption that we can cancel a thread using interrupt is still problematic.\n",
+    "commit": "48820826b985b5ff131c383fd2e286254256e0b7",
+    "createdAt": "2014-09-21T20:22:36Z",
+    "diffHunk": "@@ -0,0 +1,93 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark\n+\n+import scala.concurrent._\n+import scala.concurrent.duration.Duration\n+import scala.util.Try\n+\n+\n+/**\n+ * This is an extension of the Scala Future interface to support cancellation.\n+ */\n+class RunAsyncResult[T](jobGroupId: String,\n+                        jobGroupDescription: String,\n+                        sc: SparkContext,\n+                        func: => T) extends Future[T] {\n+\n+  // Pointer to the thread that is executing the action; it is set when the action is run.\n+  @volatile private var thread: Thread = _\n+\n+  // A promise used to signal the future.\n+  private val p = promise[T]()\n+\n+  /**\n+   * Cancel this Future and any Spark jobs launched from it.  The cancellation of Spark jobs is\n+   * performed asynchronously.\n+   */\n+  def cancel(): Unit = this.synchronized {\n+    if (thread != null) {\n+      thread.interrupt()\n+      thread.join()\n+      thread = null\n+    }\n+    sc.cancelJobGroup(jobGroupId)"
+  }],
+  "prId": 2482
+}]

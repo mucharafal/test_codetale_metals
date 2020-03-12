@@ -1,0 +1,58 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "This isn't actually a fraction. Perhaps what you meant is `multiplier` or something.\n",
+    "commit": "4abaa5d442d0c4224f8455df397c660a9c09441f",
+    "createdAt": "2014-09-18T23:43:01Z",
+    "diffHunk": "@@ -0,0 +1,27 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.scheduler.cluster.mesos\n+\n+import org.apache.spark.SparkContext\n+\n+object CommonProps {\n+  def memoryOverheadFraction(sc: SparkContext) =\n+    sc.conf.getOption(\"spark.executor.memory.overhead.fraction\")\n+      .getOrElse(\"1.15\")"
+  }, {
+    "author": {
+      "login": "brndnmtthws"
+    },
+    "body": "Because it's >0? It could default to 0.15, if that's the semantics you prefer.\n",
+    "commit": "4abaa5d442d0c4224f8455df397c660a9c09441f",
+    "createdAt": "2014-09-18T23:59:25Z",
+    "diffHunk": "@@ -0,0 +1,27 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.scheduler.cluster.mesos\n+\n+import org.apache.spark.SparkContext\n+\n+object CommonProps {\n+  def memoryOverheadFraction(sc: SparkContext) =\n+    sc.conf.getOption(\"spark.executor.memory.overhead.fraction\")\n+      .getOrElse(\"1.15\")"
+  }, {
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "In my mind a fraction is a value between 0 and 1, but 1.15 is not in this range. Even in the new code `MesosUtils.memoryOverheadFraction` still returns a value outside of this range. Maybe it's simpler if this method just computes the executor memory for you, since it already takes in `sc`. \n\n(Though the final value we use here will depend on #1391).\n",
+    "commit": "4abaa5d442d0c4224f8455df397c660a9c09441f",
+    "createdAt": "2014-09-19T00:05:13Z",
+    "diffHunk": "@@ -0,0 +1,27 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.scheduler.cluster.mesos\n+\n+import org.apache.spark.SparkContext\n+\n+object CommonProps {\n+  def memoryOverheadFraction(sc: SparkContext) =\n+    sc.conf.getOption(\"spark.executor.memory.overhead.fraction\")\n+      .getOrElse(\"1.15\")"
+  }, {
+    "author": {
+      "login": "brndnmtthws"
+    },
+    "body": "I was trying to keep the code looking clean, but I'll change `fraction` to `multiplier` in the method, if that seems more sensible.\n",
+    "commit": "4abaa5d442d0c4224f8455df397c660a9c09441f",
+    "createdAt": "2014-09-19T00:12:57Z",
+    "diffHunk": "@@ -0,0 +1,27 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.scheduler.cluster.mesos\n+\n+import org.apache.spark.SparkContext\n+\n+object CommonProps {\n+  def memoryOverheadFraction(sc: SparkContext) =\n+    sc.conf.getOption(\"spark.executor.memory.overhead.fraction\")\n+      .getOrElse(\"1.15\")"
+  }],
+  "prId": 2401
+}, {
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "This needs to be `private[spark]`. We shouldn't expect applications to be able to access this. Also, can we just call this `MesosUtils` or something to be more consistent with other classes we have? (e.g. `SparkHadoopUtils`, `KafkaUtils`)\n",
+    "commit": "4abaa5d442d0c4224f8455df397c660a9c09441f",
+    "createdAt": "2014-09-18T23:44:08Z",
+    "diffHunk": "@@ -0,0 +1,27 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.scheduler.cluster.mesos\n+\n+import org.apache.spark.SparkContext\n+\n+object CommonProps {"
+  }],
+  "prId": 2401
+}, {
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "Should we just make this `getExecutorMemory` or something? Then this can factor in the overhead part under the scene.\n",
+    "commit": "4abaa5d442d0c4224f8455df397c660a9c09441f",
+    "createdAt": "2014-09-18T23:45:32Z",
+    "diffHunk": "@@ -0,0 +1,27 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.scheduler.cluster.mesos\n+\n+import org.apache.spark.SparkContext\n+\n+object CommonProps {\n+  def memoryOverheadFraction(sc: SparkContext) ="
+  }],
+  "prId": 2401
+}]

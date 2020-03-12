@@ -1,0 +1,268 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "I think this should follow the semantics of `ProcessBuilder`, which is \"last one wins\". Try this out:\n\n```\n new ProcessBuilder(\"ls\").redirectOutput(ProcessBuilder.Redirect.PIPE).redirectOutput(ProcessBuilder.Redirect.INHERIT).start()\n```\n",
+    "commit": "bde3fa72af5117398fe561f54e8dac2c8c996176",
+    "createdAt": "2016-07-14T19:38:50Z",
+    "diffHunk": "@@ -455,6 +542,36 @@ private ProcessBuilder createBuilder() {\n     for (Map.Entry<String, String> e : builder.childEnv.entrySet()) {\n       pb.environment().put(e.getKey(), e.getValue());\n     }\n+\n+    if (builder.workingDir != null) {\n+      pb.directory(builder.workingDir);\n+    }\n+\n+    // Only one of redirectError, redirectError(...) can be specified.\n+    // If redirectToLog() is specified, none of the other redirect options can be specified\n+    if (builder.redirectToLog &&"
+  }],
+  "prId": 14201
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "There's probably no need to keep this reference. `OutputRedirector` starts a thread so it won't be garbage collected.\n",
+    "commit": "bde3fa72af5117398fe561f54e8dac2c8c996176",
+    "createdAt": "2016-07-14T19:40:39Z",
+    "diffHunk": "@@ -82,8 +83,12 @@\n   /** Used internally to create unique logger names. */\n   private static final AtomicInteger COUNTER = new AtomicInteger();\n \n+  public static final ThreadFactory REDIRECTOR_FACTORY = new NamedThreadFactory(\"launcher-proc-%d\");\n+\n   static final Map<String, String> launcherConfig = new HashMap<>();\n \n+  private OutputRedirector redirector; // Holds the possible OutputRedirector"
+  }, {
+    "author": {
+      "login": "a10y"
+    },
+    "body": "alright that was a concern of mine, will remove it in next patch\n",
+    "commit": "bde3fa72af5117398fe561f54e8dac2c8c996176",
+    "createdAt": "2016-07-14T21:37:11Z",
+    "diffHunk": "@@ -82,8 +83,12 @@\n   /** Used internally to create unique logger names. */\n   private static final AtomicInteger COUNTER = new AtomicInteger();\n \n+  public static final ThreadFactory REDIRECTOR_FACTORY = new NamedThreadFactory(\"launcher-proc-%d\");\n+\n   static final Map<String, String> launcherConfig = new HashMap<>();\n \n+  private OutputRedirector redirector; // Holds the possible OutputRedirector"
+  }],
+  "prId": 14201
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "in the whole file: \"driver\" is misleading, since in cluster mode the child process is not the driver. I'd say \"spark-submit\" instead.\n",
+    "commit": "bde3fa72af5117398fe561f54e8dac2c8c996176",
+    "createdAt": "2016-07-14T19:42:27Z",
+    "diffHunk": "@@ -359,6 +364,82 @@ public SparkLauncher setVerbose(boolean verbose) {\n   }\n \n   /**\n+   * Sets the working directory of the driver process."
+  }],
+  "prId": 14201
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "`setConf` instead of `builder.getEffectiveConfig().put`.\n",
+    "commit": "bde3fa72af5117398fe561f54e8dac2c8c996176",
+    "createdAt": "2016-07-14T19:43:10Z",
+    "diffHunk": "@@ -359,6 +364,82 @@ public SparkLauncher setVerbose(boolean verbose) {\n   }\n \n   /**\n+   * Sets the working directory of the driver process.\n+   * @param dir The directory to set as the driver's working directory.\n+   * @return This launcher.\n+     */\n+  public SparkLauncher directory(File dir) {\n+    builder.workingDir = dir;\n+    return this;\n+  }\n+\n+  /**\n+   * Specifies that stderr in the driver should be redirected to stdout.\n+   * @return This launcher.\n+   */\n+  public SparkLauncher redirectError() {\n+    builder.redirectErrorStream = true;\n+    return this;\n+  }\n+\n+  /**\n+   * Redirects error output to the specified Redirect.\n+   * @param to The method of redirection.\n+   * @return This launcher.\n+   */\n+  public SparkLauncher redirectError(ProcessBuilder.Redirect to) {\n+    builder.errorStream = to;\n+    return this;\n+  }\n+\n+  /**\n+   * Redirects standard output to the specified Redirect.\n+   * @param to The method of redirection.\n+   * @return This launcher.\n+   */\n+  public SparkLauncher redirectOutput(ProcessBuilder.Redirect to) {\n+    builder.outputStream = to;\n+    return this;\n+  }\n+\n+  /**\n+   * Redirects error output to the specified File.\n+   * @param errFile The file to which stderr is written.\n+   * @return This launcher.\n+   */\n+  public SparkLauncher redirectError(File errFile) {\n+    builder.errorStream = ProcessBuilder.Redirect.to(errFile);\n+    return this;\n+  }\n+\n+  /**\n+   * Redirects error output to the specified File.\n+   * @param outFile The file to which stdout is written.\n+   * @return This launcher.\n+   */\n+  public SparkLauncher redirectOutput(File outFile) {\n+    builder.outputStream = ProcessBuilder.Redirect.to(outFile);\n+    return this;\n+  }\n+\n+  /**\n+   * Sets all output to be logged and redirected to a logger with the specified name.\n+   * @param loggerName The name of the logger to log stdout and stderr.\n+   * @return This launcher.\n+     */\n+  public SparkLauncher redirectToLog(String loggerName) {\n+    try {\n+      // NOTE: the below ordering is important, so builder.redirectToLog is only set to true iff\n+      // the preceding put() finishes without exception.\n+      builder.getEffectiveConfig().put(CHILD_PROCESS_LOGGER_NAME, loggerName);"
+  }, {
+    "author": {
+      "login": "a10y"
+    },
+    "body": "Should I also modify `startApplication` to read from builder.conf? It appears to use `builder.getEffectiveConfig()` which as far as I can tell is sourced from a properties file\n",
+    "commit": "bde3fa72af5117398fe561f54e8dac2c8c996176",
+    "createdAt": "2016-07-15T00:18:00Z",
+    "diffHunk": "@@ -359,6 +364,82 @@ public SparkLauncher setVerbose(boolean verbose) {\n   }\n \n   /**\n+   * Sets the working directory of the driver process.\n+   * @param dir The directory to set as the driver's working directory.\n+   * @return This launcher.\n+     */\n+  public SparkLauncher directory(File dir) {\n+    builder.workingDir = dir;\n+    return this;\n+  }\n+\n+  /**\n+   * Specifies that stderr in the driver should be redirected to stdout.\n+   * @return This launcher.\n+   */\n+  public SparkLauncher redirectError() {\n+    builder.redirectErrorStream = true;\n+    return this;\n+  }\n+\n+  /**\n+   * Redirects error output to the specified Redirect.\n+   * @param to The method of redirection.\n+   * @return This launcher.\n+   */\n+  public SparkLauncher redirectError(ProcessBuilder.Redirect to) {\n+    builder.errorStream = to;\n+    return this;\n+  }\n+\n+  /**\n+   * Redirects standard output to the specified Redirect.\n+   * @param to The method of redirection.\n+   * @return This launcher.\n+   */\n+  public SparkLauncher redirectOutput(ProcessBuilder.Redirect to) {\n+    builder.outputStream = to;\n+    return this;\n+  }\n+\n+  /**\n+   * Redirects error output to the specified File.\n+   * @param errFile The file to which stderr is written.\n+   * @return This launcher.\n+   */\n+  public SparkLauncher redirectError(File errFile) {\n+    builder.errorStream = ProcessBuilder.Redirect.to(errFile);\n+    return this;\n+  }\n+\n+  /**\n+   * Redirects error output to the specified File.\n+   * @param outFile The file to which stdout is written.\n+   * @return This launcher.\n+   */\n+  public SparkLauncher redirectOutput(File outFile) {\n+    builder.outputStream = ProcessBuilder.Redirect.to(outFile);\n+    return this;\n+  }\n+\n+  /**\n+   * Sets all output to be logged and redirected to a logger with the specified name.\n+   * @param loggerName The name of the logger to log stdout and stderr.\n+   * @return This launcher.\n+     */\n+  public SparkLauncher redirectToLog(String loggerName) {\n+    try {\n+      // NOTE: the below ordering is important, so builder.redirectToLog is only set to true iff\n+      // the preceding put() finishes without exception.\n+      builder.getEffectiveConfig().put(CHILD_PROCESS_LOGGER_NAME, loggerName);"
+  }, {
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "No, `getEffectiveConfig()` is updated whenever you modify the configuration (e.g. via `setConf`).\n",
+    "commit": "bde3fa72af5117398fe561f54e8dac2c8c996176",
+    "createdAt": "2016-07-15T02:06:11Z",
+    "diffHunk": "@@ -359,6 +364,82 @@ public SparkLauncher setVerbose(boolean verbose) {\n   }\n \n   /**\n+   * Sets the working directory of the driver process.\n+   * @param dir The directory to set as the driver's working directory.\n+   * @return This launcher.\n+     */\n+  public SparkLauncher directory(File dir) {\n+    builder.workingDir = dir;\n+    return this;\n+  }\n+\n+  /**\n+   * Specifies that stderr in the driver should be redirected to stdout.\n+   * @return This launcher.\n+   */\n+  public SparkLauncher redirectError() {\n+    builder.redirectErrorStream = true;\n+    return this;\n+  }\n+\n+  /**\n+   * Redirects error output to the specified Redirect.\n+   * @param to The method of redirection.\n+   * @return This launcher.\n+   */\n+  public SparkLauncher redirectError(ProcessBuilder.Redirect to) {\n+    builder.errorStream = to;\n+    return this;\n+  }\n+\n+  /**\n+   * Redirects standard output to the specified Redirect.\n+   * @param to The method of redirection.\n+   * @return This launcher.\n+   */\n+  public SparkLauncher redirectOutput(ProcessBuilder.Redirect to) {\n+    builder.outputStream = to;\n+    return this;\n+  }\n+\n+  /**\n+   * Redirects error output to the specified File.\n+   * @param errFile The file to which stderr is written.\n+   * @return This launcher.\n+   */\n+  public SparkLauncher redirectError(File errFile) {\n+    builder.errorStream = ProcessBuilder.Redirect.to(errFile);\n+    return this;\n+  }\n+\n+  /**\n+   * Redirects error output to the specified File.\n+   * @param outFile The file to which stdout is written.\n+   * @return This launcher.\n+   */\n+  public SparkLauncher redirectOutput(File outFile) {\n+    builder.outputStream = ProcessBuilder.Redirect.to(outFile);\n+    return this;\n+  }\n+\n+  /**\n+   * Sets all output to be logged and redirected to a logger with the specified name.\n+   * @param loggerName The name of the logger to log stdout and stderr.\n+   * @return This launcher.\n+     */\n+  public SparkLauncher redirectToLog(String loggerName) {\n+    try {\n+      // NOTE: the below ordering is important, so builder.redirectToLog is only set to true iff\n+      // the preceding put() finishes without exception.\n+      builder.getEffectiveConfig().put(CHILD_PROCESS_LOGGER_NAME, loggerName);"
+  }],
+  "prId": 14201
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "It would be nice if the same factory were used by `ChildProcAppHandle` also. And this shouldn't be public.\n",
+    "commit": "bde3fa72af5117398fe561f54e8dac2c8c996176",
+    "createdAt": "2016-07-14T19:44:48Z",
+    "diffHunk": "@@ -82,8 +83,12 @@\n   /** Used internally to create unique logger names. */\n   private static final AtomicInteger COUNTER = new AtomicInteger();\n \n+  public static final ThreadFactory REDIRECTOR_FACTORY = new NamedThreadFactory(\"launcher-proc-%d\");"
+  }, {
+    "author": {
+      "login": "a10y"
+    },
+    "body": "How should this be shared do you think without making it public static in either SparkLauncher or ChildProcApphandle?\n",
+    "commit": "bde3fa72af5117398fe561f54e8dac2c8c996176",
+    "createdAt": "2016-07-15T00:11:31Z",
+    "diffHunk": "@@ -82,8 +83,12 @@\n   /** Used internally to create unique logger names. */\n   private static final AtomicInteger COUNTER = new AtomicInteger();\n \n+  public static final ThreadFactory REDIRECTOR_FACTORY = new NamedThreadFactory(\"launcher-proc-%d\");"
+  }, {
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "It doesn't need to be public. Package private (a.k.a. no modifier) is enough.\n",
+    "commit": "bde3fa72af5117398fe561f54e8dac2c8c996176",
+    "createdAt": "2016-07-15T02:05:19Z",
+    "diffHunk": "@@ -82,8 +83,12 @@\n   /** Used internally to create unique logger names. */\n   private static final AtomicInteger COUNTER = new AtomicInteger();\n \n+  public static final ThreadFactory REDIRECTOR_FACTORY = new NamedThreadFactory(\"launcher-proc-%d\");"
+  }],
+  "prId": 14201
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Probably ok to leave this one, but `ProcessBuilder` allows it even if it doesn't do what you'd expect.\n\n```\nnew ProcessBuilder(java.util.Arrays.asList(\"ls\", \"/foo\")).redirectErrorStream(true).redirectError(ProcessBuilder.Redirect.INHERIT).start()\n```\n",
+    "commit": "bde3fa72af5117398fe561f54e8dac2c8c996176",
+    "createdAt": "2016-07-14T19:48:22Z",
+    "diffHunk": "@@ -455,6 +542,36 @@ private ProcessBuilder createBuilder() {\n     for (Map.Entry<String, String> e : builder.childEnv.entrySet()) {\n       pb.environment().put(e.getKey(), e.getValue());\n     }\n+\n+    if (builder.workingDir != null) {\n+      pb.directory(builder.workingDir);\n+    }\n+\n+    // Only one of redirectError, redirectError(...) can be specified.\n+    // If redirectToLog() is specified, none of the other redirect options can be specified\n+    if (builder.redirectToLog &&\n+            (builder.redirectErrorStream\n+                    || (builder.errorStream != null)\n+                    || (builder.outputStream != null))) {\n+      throw new IllegalStateException(\"Cannot specify redirectToLog() in conjunction with other \" +\n+              \"redirection operations.\");\n+    }\n+\n+    // Only one of redirectError and redirectError(...) can be specified\n+    if (builder.redirectErrorStream && builder.errorStream != null) {"
+  }],
+  "prId": 14201
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "nit: can you add an empty line between the description and the param list in all the new methods?\n",
+    "commit": "bde3fa72af5117398fe561f54e8dac2c8c996176",
+    "createdAt": "2016-07-14T19:49:12Z",
+    "diffHunk": "@@ -359,6 +364,82 @@ public SparkLauncher setVerbose(boolean verbose) {\n   }\n \n   /**\n+   * Sets the working directory of the driver process.\n+   * @param dir The directory to set as the driver's working directory.\n+   * @return This launcher.\n+     */\n+  public SparkLauncher directory(File dir) {\n+    builder.workingDir = dir;\n+    return this;\n+  }\n+\n+  /**\n+   * Specifies that stderr in the driver should be redirected to stdout.\n+   * @return This launcher.\n+   */\n+  public SparkLauncher redirectError() {\n+    builder.redirectErrorStream = true;\n+    return this;\n+  }\n+\n+  /**\n+   * Redirects error output to the specified Redirect.\n+   * @param to The method of redirection.\n+   * @return This launcher.\n+   */\n+  public SparkLauncher redirectError(ProcessBuilder.Redirect to) {\n+    builder.errorStream = to;\n+    return this;\n+  }\n+\n+  /**\n+   * Redirects standard output to the specified Redirect.\n+   * @param to The method of redirection.\n+   * @return This launcher.\n+   */\n+  public SparkLauncher redirectOutput(ProcessBuilder.Redirect to) {\n+    builder.outputStream = to;\n+    return this;\n+  }\n+\n+  /**\n+   * Redirects error output to the specified File.\n+   * @param errFile The file to which stderr is written."
+  }],
+  "prId": 14201
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "nit: no need to add this line\n",
+    "commit": "bde3fa72af5117398fe561f54e8dac2c8c996176",
+    "createdAt": "2016-07-15T17:44:07Z",
+    "diffHunk": "@@ -82,8 +83,12 @@\n   /** Used internally to create unique logger names. */\n   private static final AtomicInteger COUNTER = new AtomicInteger();\n \n+  /** Factory for creating OutputRedirector threads. **/\n+  static final ThreadFactory REDIRECTOR_FACTORY = new NamedThreadFactory(\"launcher-proc-%d\");\n+\n   static final Map<String, String> launcherConfig = new HashMap<>();\n \n+"
+  }],
+  "prId": 14201
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "nit: alignment is off\n",
+    "commit": "bde3fa72af5117398fe561f54e8dac2c8c996176",
+    "createdAt": "2016-07-15T17:44:23Z",
+    "diffHunk": "@@ -359,6 +369,83 @@ public SparkLauncher setVerbose(boolean verbose) {\n   }\n \n   /**\n+   * Sets the working directory of spark-submit.\n+   *\n+   * @param dir The directory to set as spark-submit's working directory.\n+   * @return This launcher.\n+     */"
+  }],
+  "prId": 14201
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "nit: alignment is off\n",
+    "commit": "bde3fa72af5117398fe561f54e8dac2c8c996176",
+    "createdAt": "2016-07-15T17:45:06Z",
+    "diffHunk": "@@ -359,6 +369,83 @@ public SparkLauncher setVerbose(boolean verbose) {\n   }\n \n   /**\n+   * Sets the working directory of spark-submit.\n+   *\n+   * @param dir The directory to set as spark-submit's working directory.\n+   * @return This launcher.\n+     */\n+  public SparkLauncher directory(File dir) {\n+    workingDir = dir;\n+    return this;\n+  }\n+\n+  /**\n+   * Specifies that stderr in spark-submit should be redirected to stdout.\n+   *\n+   * @return This launcher.\n+   */\n+  public SparkLauncher redirectError() {\n+    redirectErrorStream = true;\n+    return this;\n+  }\n+\n+  /**\n+   * Redirects error output to the specified Redirect.\n+   *\n+   * @param to The method of redirection.\n+   * @return This launcher.\n+   */\n+  public SparkLauncher redirectError(ProcessBuilder.Redirect to) {\n+    errorStream = to;\n+    return this;\n+  }\n+\n+  /**\n+   * Redirects standard output to the specified Redirect.\n+   *\n+   * @param to The method of redirection.\n+   * @return This launcher.\n+   */\n+  public SparkLauncher redirectOutput(ProcessBuilder.Redirect to) {\n+    outputStream = to;\n+    return this;\n+  }\n+\n+  /**\n+   * Redirects error output to the specified File.\n+   *\n+   * @param errFile The file to which stderr is written.\n+   * @return This launcher.\n+   */\n+  public SparkLauncher redirectError(File errFile) {\n+    errorStream = ProcessBuilder.Redirect.to(errFile);\n+    return this;\n+  }\n+\n+  /**\n+   * Redirects error output to the specified File.\n+   *\n+   * @param outFile The file to which stdout is written.\n+   * @return This launcher.\n+   */\n+  public SparkLauncher redirectOutput(File outFile) {\n+    outputStream = ProcessBuilder.Redirect.to(outFile);\n+    return this;\n+  }\n+\n+  /**\n+   * Sets all output to be logged and redirected to a logger with the specified name.\n+   *\n+   * @param loggerName The name of the logger to log stdout and stderr.\n+   * @return This launcher.\n+     */"
+  }],
+  "prId": 14201
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "This should also set `redirectErrorStream` to `true`, otherwise, for example, `launch` will read the child's stdout but not stderr, leading to issues.\n",
+    "commit": "bde3fa72af5117398fe561f54e8dac2c8c996176",
+    "createdAt": "2016-07-15T17:46:34Z",
+    "diffHunk": "@@ -359,6 +369,83 @@ public SparkLauncher setVerbose(boolean verbose) {\n   }\n \n   /**\n+   * Sets the working directory of spark-submit.\n+   *\n+   * @param dir The directory to set as spark-submit's working directory.\n+   * @return This launcher.\n+     */\n+  public SparkLauncher directory(File dir) {\n+    workingDir = dir;\n+    return this;\n+  }\n+\n+  /**\n+   * Specifies that stderr in spark-submit should be redirected to stdout.\n+   *\n+   * @return This launcher.\n+   */\n+  public SparkLauncher redirectError() {\n+    redirectErrorStream = true;\n+    return this;\n+  }\n+\n+  /**\n+   * Redirects error output to the specified Redirect.\n+   *\n+   * @param to The method of redirection.\n+   * @return This launcher.\n+   */\n+  public SparkLauncher redirectError(ProcessBuilder.Redirect to) {\n+    errorStream = to;\n+    return this;\n+  }\n+\n+  /**\n+   * Redirects standard output to the specified Redirect.\n+   *\n+   * @param to The method of redirection.\n+   * @return This launcher.\n+   */\n+  public SparkLauncher redirectOutput(ProcessBuilder.Redirect to) {\n+    outputStream = to;\n+    return this;\n+  }\n+\n+  /**\n+   * Redirects error output to the specified File.\n+   *\n+   * @param errFile The file to which stderr is written.\n+   * @return This launcher.\n+   */\n+  public SparkLauncher redirectError(File errFile) {\n+    errorStream = ProcessBuilder.Redirect.to(errFile);\n+    return this;\n+  }\n+\n+  /**\n+   * Redirects error output to the specified File.\n+   *\n+   * @param outFile The file to which stdout is written.\n+   * @return This launcher.\n+   */\n+  public SparkLauncher redirectOutput(File outFile) {\n+    outputStream = ProcessBuilder.Redirect.to(outFile);\n+    return this;\n+  }\n+\n+  /**\n+   * Sets all output to be logged and redirected to a logger with the specified name.\n+   *\n+   * @param loggerName The name of the logger to log stdout and stderr.\n+   * @return This launcher.\n+     */\n+  public SparkLauncher redirectToLog(String loggerName) {\n+    setConf(CHILD_PROCESS_LOGGER_NAME, loggerName);\n+    redirectToLog = true;"
+  }, {
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Nevermind, I see this is handled when you create the builder.\n",
+    "commit": "bde3fa72af5117398fe561f54e8dac2c8c996176",
+    "createdAt": "2016-07-15T17:47:11Z",
+    "diffHunk": "@@ -359,6 +369,83 @@ public SparkLauncher setVerbose(boolean verbose) {\n   }\n \n   /**\n+   * Sets the working directory of spark-submit.\n+   *\n+   * @param dir The directory to set as spark-submit's working directory.\n+   * @return This launcher.\n+     */\n+  public SparkLauncher directory(File dir) {\n+    workingDir = dir;\n+    return this;\n+  }\n+\n+  /**\n+   * Specifies that stderr in spark-submit should be redirected to stdout.\n+   *\n+   * @return This launcher.\n+   */\n+  public SparkLauncher redirectError() {\n+    redirectErrorStream = true;\n+    return this;\n+  }\n+\n+  /**\n+   * Redirects error output to the specified Redirect.\n+   *\n+   * @param to The method of redirection.\n+   * @return This launcher.\n+   */\n+  public SparkLauncher redirectError(ProcessBuilder.Redirect to) {\n+    errorStream = to;\n+    return this;\n+  }\n+\n+  /**\n+   * Redirects standard output to the specified Redirect.\n+   *\n+   * @param to The method of redirection.\n+   * @return This launcher.\n+   */\n+  public SparkLauncher redirectOutput(ProcessBuilder.Redirect to) {\n+    outputStream = to;\n+    return this;\n+  }\n+\n+  /**\n+   * Redirects error output to the specified File.\n+   *\n+   * @param errFile The file to which stderr is written.\n+   * @return This launcher.\n+   */\n+  public SparkLauncher redirectError(File errFile) {\n+    errorStream = ProcessBuilder.Redirect.to(errFile);\n+    return this;\n+  }\n+\n+  /**\n+   * Redirects error output to the specified File.\n+   *\n+   * @param outFile The file to which stdout is written.\n+   * @return This launcher.\n+   */\n+  public SparkLauncher redirectOutput(File outFile) {\n+    outputStream = ProcessBuilder.Redirect.to(outFile);\n+    return this;\n+  }\n+\n+  /**\n+   * Sets all output to be logged and redirected to a logger with the specified name.\n+   *\n+   * @param loggerName The name of the logger to log stdout and stderr.\n+   * @return This launcher.\n+     */\n+  public SparkLauncher redirectToLog(String loggerName) {\n+    setConf(CHILD_PROCESS_LOGGER_NAME, loggerName);\n+    redirectToLog = true;"
+  }],
+  "prId": 14201
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "You can move the code that computes `appName` inside this condition.\n",
+    "commit": "bde3fa72af5117398fe561f54e8dac2c8c996176",
+    "createdAt": "2016-07-15T18:02:21Z",
+    "diffHunk": "@@ -418,9 +511,16 @@ public SparkAppHandle startApplication(SparkAppHandle.Listener... listeners) thr\n       }\n     }\n \n-    String loggerPrefix = getClass().getPackage().getName();\n-    String loggerName = String.format(\"%s.app.%s\", loggerPrefix, appName);\n-    ProcessBuilder pb = createBuilder().redirectErrorStream(true);\n+    String loggerName = builder.getEffectiveConfig().get(CHILD_PROCESS_LOGGER_NAME);\n+    ProcessBuilder pb = createBuilder();\n+    // Only setup stderr + stdout to logger redirection if user has not otherwise configured output\n+    // redirection.\n+    if (!redirectErrorStream && !redirectToLog && errorStream == null && outputStream == null) {\n+      String loggerPrefix = getClass().getPackage().getName();\n+      loggerName = String.format(\"%s.app.%s\", loggerPrefix, appName);"
+  }],
+  "prId": 14201
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "minor: you can use `checkState` (from `CommandBuilderUtils` which is already imported).\n",
+    "commit": "bde3fa72af5117398fe561f54e8dac2c8c996176",
+    "createdAt": "2016-07-15T18:03:10Z",
+    "diffHunk": "@@ -455,6 +555,26 @@ private ProcessBuilder createBuilder() {\n     for (Map.Entry<String, String> e : builder.childEnv.entrySet()) {\n       pb.environment().put(e.getKey(), e.getValue());\n     }\n+\n+    if (workingDir != null) {\n+      pb.directory(workingDir);\n+    }\n+\n+    // Only one of redirectError and redirectError(...) can be specified\n+    if (redirectErrorStream && errorStream != null) {"
+  }],
+  "prId": 14201
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "What do you think about adding `checkState` checks in these methods?\n\nRight now you can configure the launcher in a weird way:\n\n```\nlauncher.redirectOutput(Redirect.INHERIT).redirectToLog(...)\n```\n\nAnd that will launch a process and it's not clear what will happen. You have one check for error redirection, but it would be nice to add other checks.\n",
+    "commit": "bde3fa72af5117398fe561f54e8dac2c8c996176",
+    "createdAt": "2016-07-15T18:06:22Z",
+    "diffHunk": "@@ -359,6 +369,83 @@ public SparkLauncher setVerbose(boolean verbose) {\n   }\n \n   /**\n+   * Sets the working directory of spark-submit.\n+   *\n+   * @param dir The directory to set as spark-submit's working directory.\n+   * @return This launcher.\n+     */\n+  public SparkLauncher directory(File dir) {\n+    workingDir = dir;\n+    return this;\n+  }\n+\n+  /**\n+   * Specifies that stderr in spark-submit should be redirected to stdout.\n+   *\n+   * @return This launcher.\n+   */\n+  public SparkLauncher redirectError() {\n+    redirectErrorStream = true;\n+    return this;\n+  }\n+\n+  /**\n+   * Redirects error output to the specified Redirect.\n+   *\n+   * @param to The method of redirection.\n+   * @return This launcher.\n+   */\n+  public SparkLauncher redirectError(ProcessBuilder.Redirect to) {\n+    errorStream = to;\n+    return this;\n+  }\n+\n+  /**\n+   * Redirects standard output to the specified Redirect.\n+   *\n+   * @param to The method of redirection.\n+   * @return This launcher.\n+   */\n+  public SparkLauncher redirectOutput(ProcessBuilder.Redirect to) {\n+    outputStream = to;\n+    return this;\n+  }\n+\n+  /**\n+   * Redirects error output to the specified File.\n+   *\n+   * @param errFile The file to which stderr is written.\n+   * @return This launcher.\n+   */\n+  public SparkLauncher redirectError(File errFile) {\n+    errorStream = ProcessBuilder.Redirect.to(errFile);\n+    return this;\n+  }\n+\n+  /**\n+   * Redirects error output to the specified File.\n+   *\n+   * @param outFile The file to which stdout is written.\n+   * @return This launcher.\n+   */\n+  public SparkLauncher redirectOutput(File outFile) {\n+    outputStream = ProcessBuilder.Redirect.to(outFile);\n+    return this;\n+  }\n+\n+  /**\n+   * Sets all output to be logged and redirected to a logger with the specified name.\n+   *\n+   * @param loggerName The name of the logger to log stdout and stderr.\n+   * @return This launcher.\n+     */\n+  public SparkLauncher redirectToLog(String loggerName) {"
+  }, {
+    "author": {
+      "login": "a10y"
+    },
+    "body": "So I had an extra check in the last commit, thought there was a comment that it should be removed though, maybe I should just clarify here. I see 2 possible checks that we should be doing here:\n- Ensure that only one of `redirectError(...)` and `redirectError()` can be used (done)\n- Ensure that `redirectToLog()` is never used with any other `redirect*` method (removed in this diff, can be added back)\n\nAre there others that I'm missing?\n",
+    "commit": "bde3fa72af5117398fe561f54e8dac2c8c996176",
+    "createdAt": "2016-07-15T19:53:56Z",
+    "diffHunk": "@@ -359,6 +369,83 @@ public SparkLauncher setVerbose(boolean verbose) {\n   }\n \n   /**\n+   * Sets the working directory of spark-submit.\n+   *\n+   * @param dir The directory to set as spark-submit's working directory.\n+   * @return This launcher.\n+     */\n+  public SparkLauncher directory(File dir) {\n+    workingDir = dir;\n+    return this;\n+  }\n+\n+  /**\n+   * Specifies that stderr in spark-submit should be redirected to stdout.\n+   *\n+   * @return This launcher.\n+   */\n+  public SparkLauncher redirectError() {\n+    redirectErrorStream = true;\n+    return this;\n+  }\n+\n+  /**\n+   * Redirects error output to the specified Redirect.\n+   *\n+   * @param to The method of redirection.\n+   * @return This launcher.\n+   */\n+  public SparkLauncher redirectError(ProcessBuilder.Redirect to) {\n+    errorStream = to;\n+    return this;\n+  }\n+\n+  /**\n+   * Redirects standard output to the specified Redirect.\n+   *\n+   * @param to The method of redirection.\n+   * @return This launcher.\n+   */\n+  public SparkLauncher redirectOutput(ProcessBuilder.Redirect to) {\n+    outputStream = to;\n+    return this;\n+  }\n+\n+  /**\n+   * Redirects error output to the specified File.\n+   *\n+   * @param errFile The file to which stderr is written.\n+   * @return This launcher.\n+   */\n+  public SparkLauncher redirectError(File errFile) {\n+    errorStream = ProcessBuilder.Redirect.to(errFile);\n+    return this;\n+  }\n+\n+  /**\n+   * Redirects error output to the specified File.\n+   *\n+   * @param outFile The file to which stdout is written.\n+   * @return This launcher.\n+   */\n+  public SparkLauncher redirectOutput(File outFile) {\n+    outputStream = ProcessBuilder.Redirect.to(outFile);\n+    return this;\n+  }\n+\n+  /**\n+   * Sets all output to be logged and redirected to a logger with the specified name.\n+   *\n+   * @param loggerName The name of the logger to log stdout and stderr.\n+   * @return This launcher.\n+     */\n+  public SparkLauncher redirectToLog(String loggerName) {"
+  }, {
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Could also check that `redirectError` and `redirectOutput` fail if `redirectToLog` has been set.\n\n(I see that I commented on a previous diff asking you to remove a check, sorry about that. I can't see the original code, though.)\n",
+    "commit": "bde3fa72af5117398fe561f54e8dac2c8c996176",
+    "createdAt": "2016-07-15T20:02:10Z",
+    "diffHunk": "@@ -359,6 +369,83 @@ public SparkLauncher setVerbose(boolean verbose) {\n   }\n \n   /**\n+   * Sets the working directory of spark-submit.\n+   *\n+   * @param dir The directory to set as spark-submit's working directory.\n+   * @return This launcher.\n+     */\n+  public SparkLauncher directory(File dir) {\n+    workingDir = dir;\n+    return this;\n+  }\n+\n+  /**\n+   * Specifies that stderr in spark-submit should be redirected to stdout.\n+   *\n+   * @return This launcher.\n+   */\n+  public SparkLauncher redirectError() {\n+    redirectErrorStream = true;\n+    return this;\n+  }\n+\n+  /**\n+   * Redirects error output to the specified Redirect.\n+   *\n+   * @param to The method of redirection.\n+   * @return This launcher.\n+   */\n+  public SparkLauncher redirectError(ProcessBuilder.Redirect to) {\n+    errorStream = to;\n+    return this;\n+  }\n+\n+  /**\n+   * Redirects standard output to the specified Redirect.\n+   *\n+   * @param to The method of redirection.\n+   * @return This launcher.\n+   */\n+  public SparkLauncher redirectOutput(ProcessBuilder.Redirect to) {\n+    outputStream = to;\n+    return this;\n+  }\n+\n+  /**\n+   * Redirects error output to the specified File.\n+   *\n+   * @param errFile The file to which stderr is written.\n+   * @return This launcher.\n+   */\n+  public SparkLauncher redirectError(File errFile) {\n+    errorStream = ProcessBuilder.Redirect.to(errFile);\n+    return this;\n+  }\n+\n+  /**\n+   * Redirects error output to the specified File.\n+   *\n+   * @param outFile The file to which stdout is written.\n+   * @return This launcher.\n+   */\n+  public SparkLauncher redirectOutput(File outFile) {\n+    outputStream = ProcessBuilder.Redirect.to(outFile);\n+    return this;\n+  }\n+\n+  /**\n+   * Sets all output to be logged and redirected to a logger with the specified name.\n+   *\n+   * @param loggerName The name of the logger to log stdout and stderr.\n+   * @return This launcher.\n+     */\n+  public SparkLauncher redirectToLog(String loggerName) {"
+  }, {
+    "author": {
+      "login": "a10y"
+    },
+    "body": "Yep, that's what I'm saying with the second point above, so those two should probably be good enough\n",
+    "commit": "bde3fa72af5117398fe561f54e8dac2c8c996176",
+    "createdAt": "2016-07-15T20:27:55Z",
+    "diffHunk": "@@ -359,6 +369,83 @@ public SparkLauncher setVerbose(boolean verbose) {\n   }\n \n   /**\n+   * Sets the working directory of spark-submit.\n+   *\n+   * @param dir The directory to set as spark-submit's working directory.\n+   * @return This launcher.\n+     */\n+  public SparkLauncher directory(File dir) {\n+    workingDir = dir;\n+    return this;\n+  }\n+\n+  /**\n+   * Specifies that stderr in spark-submit should be redirected to stdout.\n+   *\n+   * @return This launcher.\n+   */\n+  public SparkLauncher redirectError() {\n+    redirectErrorStream = true;\n+    return this;\n+  }\n+\n+  /**\n+   * Redirects error output to the specified Redirect.\n+   *\n+   * @param to The method of redirection.\n+   * @return This launcher.\n+   */\n+  public SparkLauncher redirectError(ProcessBuilder.Redirect to) {\n+    errorStream = to;\n+    return this;\n+  }\n+\n+  /**\n+   * Redirects standard output to the specified Redirect.\n+   *\n+   * @param to The method of redirection.\n+   * @return This launcher.\n+   */\n+  public SparkLauncher redirectOutput(ProcessBuilder.Redirect to) {\n+    outputStream = to;\n+    return this;\n+  }\n+\n+  /**\n+   * Redirects error output to the specified File.\n+   *\n+   * @param errFile The file to which stderr is written.\n+   * @return This launcher.\n+   */\n+  public SparkLauncher redirectError(File errFile) {\n+    errorStream = ProcessBuilder.Redirect.to(errFile);\n+    return this;\n+  }\n+\n+  /**\n+   * Redirects error output to the specified File.\n+   *\n+   * @param outFile The file to which stdout is written.\n+   * @return This launcher.\n+   */\n+  public SparkLauncher redirectOutput(File outFile) {\n+    outputStream = ProcessBuilder.Redirect.to(outFile);\n+    return this;\n+  }\n+\n+  /**\n+   * Sets all output to be logged and redirected to a logger with the specified name.\n+   *\n+   * @param loggerName The name of the logger to log stdout and stderr.\n+   * @return This launcher.\n+     */\n+  public SparkLauncher redirectToLog(String loggerName) {"
+  }],
+  "prId": 14201
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "nit: indented too far\n",
+    "commit": "bde3fa72af5117398fe561f54e8dac2c8c996176",
+    "createdAt": "2016-07-15T22:42:39Z",
+    "diffHunk": "@@ -455,6 +553,29 @@ private ProcessBuilder createBuilder() {\n     for (Map.Entry<String, String> e : builder.childEnv.entrySet()) {\n       pb.environment().put(e.getKey(), e.getValue());\n     }\n+\n+    if (workingDir != null) {\n+      pb.directory(workingDir);\n+    }\n+\n+    // Only one of redirectError and redirectError(...) can be specified.\n+    // Similarly, if redirectToLog is specified, no other redirections should be specified.\n+    checkState(!redirectErrorStream || (redirectErrorStream && errorStream == null),\n+            \"Cannot specify both redirectError() and redirectError(...) \");"
+  }],
+  "prId": 14201
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "nit: indented too far\n",
+    "commit": "bde3fa72af5117398fe561f54e8dac2c8c996176",
+    "createdAt": "2016-07-15T22:42:51Z",
+    "diffHunk": "@@ -455,6 +553,29 @@ private ProcessBuilder createBuilder() {\n     for (Map.Entry<String, String> e : builder.childEnv.entrySet()) {\n       pb.environment().put(e.getKey(), e.getValue());\n     }\n+\n+    if (workingDir != null) {\n+      pb.directory(workingDir);\n+    }\n+\n+    // Only one of redirectError and redirectError(...) can be specified.\n+    // Similarly, if redirectToLog is specified, no other redirections should be specified.\n+    checkState(!redirectErrorStream || (redirectErrorStream && errorStream == null),\n+            \"Cannot specify both redirectError() and redirectError(...) \");\n+    checkState(!redirectToLog ||\n+            (redirectToLog && !redirectErrorStream && errorStream == null && outputStream == null),"
+  }, {
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "similarly you can drop `redirectToLog` from the check after the `||`.\n",
+    "commit": "bde3fa72af5117398fe561f54e8dac2c8c996176",
+    "createdAt": "2016-07-15T22:50:10Z",
+    "diffHunk": "@@ -455,6 +553,29 @@ private ProcessBuilder createBuilder() {\n     for (Map.Entry<String, String> e : builder.childEnv.entrySet()) {\n       pb.environment().put(e.getKey(), e.getValue());\n     }\n+\n+    if (workingDir != null) {\n+      pb.directory(workingDir);\n+    }\n+\n+    // Only one of redirectError and redirectError(...) can be specified.\n+    // Similarly, if redirectToLog is specified, no other redirections should be specified.\n+    checkState(!redirectErrorStream || (redirectErrorStream && errorStream == null),\n+            \"Cannot specify both redirectError() and redirectError(...) \");\n+    checkState(!redirectToLog ||\n+            (redirectToLog && !redirectErrorStream && errorStream == null && outputStream == null),"
+  }],
+  "prId": 14201
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Equivalent to: `!redirectErrorStream || errorStream == null`\n",
+    "commit": "bde3fa72af5117398fe561f54e8dac2c8c996176",
+    "createdAt": "2016-07-15T22:49:16Z",
+    "diffHunk": "@@ -455,6 +553,29 @@ private ProcessBuilder createBuilder() {\n     for (Map.Entry<String, String> e : builder.childEnv.entrySet()) {\n       pb.environment().put(e.getKey(), e.getValue());\n     }\n+\n+    if (workingDir != null) {\n+      pb.directory(workingDir);\n+    }\n+\n+    // Only one of redirectError and redirectError(...) can be specified.\n+    // Similarly, if redirectToLog is specified, no other redirections should be specified.\n+    checkState(!redirectErrorStream || (redirectErrorStream && errorStream == null),"
+  }],
+  "prId": 14201
+}]

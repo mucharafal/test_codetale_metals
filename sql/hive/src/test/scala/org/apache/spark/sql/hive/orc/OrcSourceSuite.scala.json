@@ -1,0 +1,104 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "Add a comment here to explain the test scenario. \r\n// to test the default of `spark.sql.orc.compression.codec` is snappy\r\n",
+    "commit": "9620e46c9a38549f72565e606d892c84b6301ccb",
+    "createdAt": "2017-08-29T16:02:39Z",
+    "diffHunk": "@@ -194,6 +196,24 @@ abstract class OrcSuite extends QueryTest with TestHiveSingleton with BeforeAndA\n       Utils.deleteRecursively(location)\n     }\n   }\n+\n+  test(\"SPARK-21839: Add SQL config for ORC compression\") {\n+    val conf = sqlContext.sessionState.conf\n+    assert(new OrcOptions(Map.empty[String, String], conf).compressionCodec == \"SNAPPY\")"
+  }, {
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "Sure",
+    "commit": "9620e46c9a38549f72565e606d892c84b6301ccb",
+    "createdAt": "2017-08-29T16:06:26Z",
+    "diffHunk": "@@ -194,6 +196,24 @@ abstract class OrcSuite extends QueryTest with TestHiveSingleton with BeforeAndA\n       Utils.deleteRecursively(location)\n     }\n   }\n+\n+  test(\"SPARK-21839: Add SQL config for ORC compression\") {\n+    val conf = sqlContext.sessionState.conf\n+    assert(new OrcOptions(Map.empty[String, String], conf).compressionCodec == \"SNAPPY\")"
+  }],
+  "prId": 19055
+}, {
+  "comments": [{
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "// to test all the valid options of `spark.sql.orc.compression.codec`\r\n\r\n> \"none\", \"uncompressed\", \"snappy\", \"zlib\", \"lzo\". \r\n\r\nYou missed one of it.",
+    "commit": "9620e46c9a38549f72565e606d892c84b6301ccb",
+    "createdAt": "2017-08-29T16:04:27Z",
+    "diffHunk": "@@ -194,6 +196,24 @@ abstract class OrcSuite extends QueryTest with TestHiveSingleton with BeforeAndA\n       Utils.deleteRecursively(location)\n     }\n   }\n+\n+  test(\"SPARK-21839: Add SQL config for ORC compression\") {\n+    val conf = sqlContext.sessionState.conf\n+    assert(new OrcOptions(Map.empty[String, String], conf).compressionCodec == \"SNAPPY\")\n+\n+    // OrcOptions's parameters have a higher priority than SQL configuration.\n+    withSQLConf(SQLConf.ORC_COMPRESSION.key -> \"uncompressed\") {\n+      assert(new OrcOptions(Map.empty[String, String], conf).compressionCodec == \"NONE\")\n+      assert(\n+        new OrcOptions(Map(\"orc.compress\" -> \"zlib\"), conf).compressionCodec == \"ZLIB\")\n+    }\n+\n+    Seq(\"NONE\", \"SNAPPY\", \"ZLIB\", \"LZO\").foreach { c =>"
+  }, {
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "Ur, It's intentional. It's tested in the above. \"UNCOMPRESSED\" is replaced into \"NONE\"\r\nSo, I omitted here.",
+    "commit": "9620e46c9a38549f72565e606d892c84b6301ccb",
+    "createdAt": "2017-08-29T16:06:31Z",
+    "diffHunk": "@@ -194,6 +196,24 @@ abstract class OrcSuite extends QueryTest with TestHiveSingleton with BeforeAndA\n       Utils.deleteRecursively(location)\n     }\n   }\n+\n+  test(\"SPARK-21839: Add SQL config for ORC compression\") {\n+    val conf = sqlContext.sessionState.conf\n+    assert(new OrcOptions(Map.empty[String, String], conf).compressionCodec == \"SNAPPY\")\n+\n+    // OrcOptions's parameters have a higher priority than SQL configuration.\n+    withSQLConf(SQLConf.ORC_COMPRESSION.key -> \"uncompressed\") {\n+      assert(new OrcOptions(Map.empty[String, String], conf).compressionCodec == \"NONE\")\n+      assert(\n+        new OrcOptions(Map(\"orc.compress\" -> \"zlib\"), conf).compressionCodec == \"ZLIB\")\n+    }\n+\n+    Seq(\"NONE\", \"SNAPPY\", \"ZLIB\", \"LZO\").foreach { c =>"
+  }, {
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "To add that, we need `if` condition. I'll add that.",
+    "commit": "9620e46c9a38549f72565e606d892c84b6301ccb",
+    "createdAt": "2017-08-29T16:07:58Z",
+    "diffHunk": "@@ -194,6 +196,24 @@ abstract class OrcSuite extends QueryTest with TestHiveSingleton with BeforeAndA\n       Utils.deleteRecursively(location)\n     }\n   }\n+\n+  test(\"SPARK-21839: Add SQL config for ORC compression\") {\n+    val conf = sqlContext.sessionState.conf\n+    assert(new OrcOptions(Map.empty[String, String], conf).compressionCodec == \"SNAPPY\")\n+\n+    // OrcOptions's parameters have a higher priority than SQL configuration.\n+    withSQLConf(SQLConf.ORC_COMPRESSION.key -> \"uncompressed\") {\n+      assert(new OrcOptions(Map.empty[String, String], conf).compressionCodec == \"NONE\")\n+      assert(\n+        new OrcOptions(Map(\"orc.compress\" -> \"zlib\"), conf).compressionCodec == \"ZLIB\")\n+    }\n+\n+    Seq(\"NONE\", \"SNAPPY\", \"ZLIB\", \"LZO\").foreach { c =>"
+  }],
+  "prId": 19055
+}, {
+  "comments": [{
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "Also please add another scenario when users specify `compression `",
+    "commit": "9620e46c9a38549f72565e606d892c84b6301ccb",
+    "createdAt": "2017-08-29T16:05:17Z",
+    "diffHunk": "@@ -194,6 +196,24 @@ abstract class OrcSuite extends QueryTest with TestHiveSingleton with BeforeAndA\n       Utils.deleteRecursively(location)\n     }\n   }\n+\n+  test(\"SPARK-21839: Add SQL config for ORC compression\") {\n+    val conf = sqlContext.sessionState.conf\n+    assert(new OrcOptions(Map.empty[String, String], conf).compressionCodec == \"SNAPPY\")\n+\n+    // OrcOptions's parameters have a higher priority than SQL configuration.\n+    withSQLConf(SQLConf.ORC_COMPRESSION.key -> \"uncompressed\") {\n+      assert(new OrcOptions(Map.empty[String, String], conf).compressionCodec == \"NONE\")\n+      assert(\n+        new OrcOptions(Map(\"orc.compress\" -> \"zlib\"), conf).compressionCodec == \"ZLIB\")"
+  }],
+  "prId": 19055
+}, {
+  "comments": [{
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "`val expected = if ... else c `\r\n` assert(new OrcOptions(Map.empty[String, String], conf).compressionCodec == expected)`",
+    "commit": "9620e46c9a38549f72565e606d892c84b6301ccb",
+    "createdAt": "2017-08-29T16:18:31Z",
+    "diffHunk": "@@ -194,6 +196,33 @@ abstract class OrcSuite extends QueryTest with TestHiveSingleton with BeforeAndA\n       Utils.deleteRecursively(location)\n     }\n   }\n+\n+  test(\"SPARK-21839: Add SQL config for ORC compression\") {\n+    val conf = sqlContext.sessionState.conf\n+    // Test if the default of spark.sql.orc.compression.codec is snappy\n+    assert(new OrcOptions(Map.empty[String, String], conf).compressionCodec == \"SNAPPY\")\n+\n+    // OrcOptions's parameters have a higher priority than SQL configuration.\n+    // `compression` -> `orc.compression` -> `spark.sql.orc.compression.codec`\n+    withSQLConf(SQLConf.ORC_COMPRESSION.key -> \"uncompressed\") {\n+      assert(new OrcOptions(Map.empty[String, String], conf).compressionCodec == \"NONE\")\n+      val map1 = Map(\"orc.compress\" -> \"zlib\")\n+      val map2 = Map(\"orc.compress\" -> \"zlib\", \"compression\" -> \"lzo\")\n+      assert(new OrcOptions(map1, conf).compressionCodec == \"ZLIB\")\n+      assert(new OrcOptions(map2, conf).compressionCodec == \"LZO\")\n+    }\n+\n+    // Test all the valid options of spark.sql.orc.compression.codec\n+    Seq(\"NONE\", \"UNCOMPRESSED\", \"SNAPPY\", \"ZLIB\", \"LZO\").foreach { c =>\n+      withSQLConf(SQLConf.ORC_COMPRESSION.key -> c) {\n+        if (c == \"UNCOMPRESSED\") {"
+  }, {
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "Yep! It's much better.",
+    "commit": "9620e46c9a38549f72565e606d892c84b6301ccb",
+    "createdAt": "2017-08-29T16:24:01Z",
+    "diffHunk": "@@ -194,6 +196,33 @@ abstract class OrcSuite extends QueryTest with TestHiveSingleton with BeforeAndA\n       Utils.deleteRecursively(location)\n     }\n   }\n+\n+  test(\"SPARK-21839: Add SQL config for ORC compression\") {\n+    val conf = sqlContext.sessionState.conf\n+    // Test if the default of spark.sql.orc.compression.codec is snappy\n+    assert(new OrcOptions(Map.empty[String, String], conf).compressionCodec == \"SNAPPY\")\n+\n+    // OrcOptions's parameters have a higher priority than SQL configuration.\n+    // `compression` -> `orc.compression` -> `spark.sql.orc.compression.codec`\n+    withSQLConf(SQLConf.ORC_COMPRESSION.key -> \"uncompressed\") {\n+      assert(new OrcOptions(Map.empty[String, String], conf).compressionCodec == \"NONE\")\n+      val map1 = Map(\"orc.compress\" -> \"zlib\")\n+      val map2 = Map(\"orc.compress\" -> \"zlib\", \"compression\" -> \"lzo\")\n+      assert(new OrcOptions(map1, conf).compressionCodec == \"ZLIB\")\n+      assert(new OrcOptions(map2, conf).compressionCodec == \"LZO\")\n+    }\n+\n+    // Test all the valid options of spark.sql.orc.compression.codec\n+    Seq(\"NONE\", \"UNCOMPRESSED\", \"SNAPPY\", \"ZLIB\", \"LZO\").foreach { c =>\n+      withSQLConf(SQLConf.ORC_COMPRESSION.key -> c) {\n+        if (c == \"UNCOMPRESSED\") {"
+  }, {
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "Thanks!",
+    "commit": "9620e46c9a38549f72565e606d892c84b6301ccb",
+    "createdAt": "2017-08-29T16:24:30Z",
+    "diffHunk": "@@ -194,6 +196,33 @@ abstract class OrcSuite extends QueryTest with TestHiveSingleton with BeforeAndA\n       Utils.deleteRecursively(location)\n     }\n   }\n+\n+  test(\"SPARK-21839: Add SQL config for ORC compression\") {\n+    val conf = sqlContext.sessionState.conf\n+    // Test if the default of spark.sql.orc.compression.codec is snappy\n+    assert(new OrcOptions(Map.empty[String, String], conf).compressionCodec == \"SNAPPY\")\n+\n+    // OrcOptions's parameters have a higher priority than SQL configuration.\n+    // `compression` -> `orc.compression` -> `spark.sql.orc.compression.codec`\n+    withSQLConf(SQLConf.ORC_COMPRESSION.key -> \"uncompressed\") {\n+      assert(new OrcOptions(Map.empty[String, String], conf).compressionCodec == \"NONE\")\n+      val map1 = Map(\"orc.compress\" -> \"zlib\")\n+      val map2 = Map(\"orc.compress\" -> \"zlib\", \"compression\" -> \"lzo\")\n+      assert(new OrcOptions(map1, conf).compressionCodec == \"ZLIB\")\n+      assert(new OrcOptions(map2, conf).compressionCodec == \"LZO\")\n+    }\n+\n+    // Test all the valid options of spark.sql.orc.compression.codec\n+    Seq(\"NONE\", \"UNCOMPRESSED\", \"SNAPPY\", \"ZLIB\", \"LZO\").foreach { c =>\n+      withSQLConf(SQLConf.ORC_COMPRESSION.key -> c) {\n+        if (c == \"UNCOMPRESSED\") {"
+  }],
+  "prId": 19055
+}, {
+  "comments": [{
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "Looks unused in this test.",
+    "commit": "9620e46c9a38549f72565e606d892c84b6301ccb",
+    "createdAt": "2017-08-30T02:14:40Z",
+    "diffHunk": "@@ -18,12 +18,13 @@\n package org.apache.spark.sql.hive.orc\n \n import java.io.File\n+import java.util.Locale"
+  }, {
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "Oops. Thanks!",
+    "commit": "9620e46c9a38549f72565e606d892c84b6301ccb",
+    "createdAt": "2017-08-30T02:24:38Z",
+    "diffHunk": "@@ -18,12 +18,13 @@\n package org.apache.spark.sql.hive.orc\n \n import java.io.File\n+import java.util.Locale"
+  }],
+  "prId": 19055
+}]

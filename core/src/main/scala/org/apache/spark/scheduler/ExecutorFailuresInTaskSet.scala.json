@@ -1,0 +1,88 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "kayousterhout"
+    },
+    "body": "comment looks out of date (should say expiry time rather than last failure time)\n",
+    "commit": "4501e6c089f99f2cc62443cca668f77fea2745aa",
+    "createdAt": "2016-09-29T00:13:49Z",
+    "diffHunk": "@@ -0,0 +1,45 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+package org.apache.spark.scheduler\n+\n+import scala.collection.mutable.HashMap\n+\n+/**\n+ * Small helper for tracking failed tasks for blacklisting purposes.  Info on all failures for one\n+ * task set, within one task set.\n+ */\n+class ExecutorFailuresInTaskSet(val node: String) {\n+  /**\n+   * Mapping from index of the tasks in the taskset, to the number of times it has failed on this\n+   * executor and the last time it failed."
+  }],
+  "prId": 15249
+}, {
+  "comments": [{
+    "author": {
+      "login": "kayousterhout"
+    },
+    "body": "maybe ExecutorFailureTracker?  the \"inTaskSet\" doesn't seem important here -- it's how it happens to be used, but I could imagine this being used more broadly later.\n\nAlso this could be a nested class in TaskSetBlacklist... I have mixed feelings about nested classes so up to you.\n",
+    "commit": "4501e6c089f99f2cc62443cca668f77fea2745aa",
+    "createdAt": "2016-09-29T20:42:20Z",
+    "diffHunk": "@@ -0,0 +1,45 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+package org.apache.spark.scheduler\n+\n+import scala.collection.mutable.HashMap\n+\n+/**\n+ * Small helper for tracking failed tasks for blacklisting purposes.  Info on all failures for one\n+ * task set, within one task set.\n+ */\n+class ExecutorFailuresInTaskSet(val node: String) {"
+  }, {
+    "author": {
+      "login": "squito"
+    },
+    "body": "I'd like to push back on this and keep this naming.  I think I actually came up with this name from an earlier comment of yours about being confused about some variables and asking for more particular names :) (maybe it was for other variables).\n\nthe naming could just be on instance variables and not on the class itself of course, but I think its helpful in this case to have it on the class.  I found even i got easily confused about the purpose of various little helper classes when I had to come back to this patch after a couple of days.  Where its used generally told me more about the important design tradeoffs -- eg., if its in a taskset, it'll get dropped when the taskset completes, which automatically takes care of memory leaks.  Maybe at some point in the future it'll be used for something else, but it seems like then that change go do the appropriate renaming.  I feel like the name would also make it clear to the later change to check existing assumptions about the scope of this helper.\n\nIt doesn't work as a nested class in the larger blacklist patch as I currently have it, so since you don't feel strongly I'll just leave at the top level (but I will make it `private[scheduler]`, which it should have been already).\n",
+    "commit": "4501e6c089f99f2cc62443cca668f77fea2745aa",
+    "createdAt": "2016-10-04T21:50:12Z",
+    "diffHunk": "@@ -0,0 +1,45 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+package org.apache.spark.scheduler\n+\n+import scala.collection.mutable.HashMap\n+\n+/**\n+ * Small helper for tracking failed tasks for blacklisting purposes.  Info on all failures for one\n+ * task set, within one task set.\n+ */\n+class ExecutorFailuresInTaskSet(val node: String) {"
+  }, {
+    "author": {
+      "login": "kayousterhout"
+    },
+    "body": "Ok makes sense / sounds good\n",
+    "commit": "4501e6c089f99f2cc62443cca668f77fea2745aa",
+    "createdAt": "2016-10-04T21:52:37Z",
+    "diffHunk": "@@ -0,0 +1,45 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+package org.apache.spark.scheduler\n+\n+import scala.collection.mutable.HashMap\n+\n+/**\n+ * Small helper for tracking failed tasks for blacklisting purposes.  Info on all failures for one\n+ * task set, within one task set.\n+ */\n+class ExecutorFailuresInTaskSet(val node: String) {"
+  }],
+  "prId": 15249
+}, {
+  "comments": [{
+    "author": {
+      "login": "mridulm"
+    },
+    "body": "nit: This assertion need not hold in face of clock skew, etc.\n(I faced similar issues elsewhere, ymmv ofcourse !)\n",
+    "commit": "4501e6c089f99f2cc62443cca668f77fea2745aa",
+    "createdAt": "2016-10-04T21:38:48Z",
+    "diffHunk": "@@ -0,0 +1,45 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+package org.apache.spark.scheduler\n+\n+import scala.collection.mutable.HashMap\n+\n+/**\n+ * Small helper for tracking failed tasks for blacklisting purposes.  Info on all failures for one\n+ * task set, within one task set.\n+ */\n+class ExecutorFailuresInTaskSet(val node: String) {\n+  /**\n+   * Mapping from index of the tasks in the taskset, to the number of times it has failed on this\n+   * executor and the last time it failed.\n+   */\n+  val taskToFailureCountAndExpiryTime = HashMap[Int, (Int, Long)]()\n+\n+  def updateWithFailure(taskIndex: Int, failureExpiryTime: Long): Unit = {\n+    val (prevFailureCount, prevFailureExpiryTime) =\n+      taskToFailureCountAndExpiryTime.getOrElse(taskIndex, (0, -1L))\n+    assert(failureExpiryTime >= prevFailureExpiryTime)"
+  }, {
+    "author": {
+      "login": "squito"
+    },
+    "body": "this always comes from the time reported by the driver, so the only problem would be if the time wasn't monotonic (and I think we already have issues in those cases, and there is an open jira to look into it ...) but good point, I will remove the assert and just take the max.\n",
+    "commit": "4501e6c089f99f2cc62443cca668f77fea2745aa",
+    "createdAt": "2016-10-05T03:17:41Z",
+    "diffHunk": "@@ -0,0 +1,45 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+package org.apache.spark.scheduler\n+\n+import scala.collection.mutable.HashMap\n+\n+/**\n+ * Small helper for tracking failed tasks for blacklisting purposes.  Info on all failures for one\n+ * task set, within one task set.\n+ */\n+class ExecutorFailuresInTaskSet(val node: String) {\n+  /**\n+   * Mapping from index of the tasks in the taskset, to the number of times it has failed on this\n+   * executor and the last time it failed.\n+   */\n+  val taskToFailureCountAndExpiryTime = HashMap[Int, (Int, Long)]()\n+\n+  def updateWithFailure(taskIndex: Int, failureExpiryTime: Long): Unit = {\n+    val (prevFailureCount, prevFailureExpiryTime) =\n+      taskToFailureCountAndExpiryTime.getOrElse(taskIndex, (0, -1L))\n+    assert(failureExpiryTime >= prevFailureExpiryTime)"
+  }],
+  "prId": 15249
+}, {
+  "comments": [{
+    "author": {
+      "login": "kayousterhout"
+    },
+    "body": "It would be nice to hold off on adding the expiry time and blacklist stuff until #14079, since it's a little misleading here. Given all of the tests etc. I'm guessing it's too much work to untangle though, so can you be more specific about this in the PR description (point out that all of the timeout stuff is unused here) so that it's tracked in the commit message?\n",
+    "commit": "4501e6c089f99f2cc62443cca668f77fea2745aa",
+    "createdAt": "2016-10-05T22:46:29Z",
+    "diffHunk": "@@ -0,0 +1,53 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+package org.apache.spark.scheduler\n+\n+import scala.collection.mutable.HashMap\n+\n+/**\n+ * Small helper for tracking failed tasks for blacklisting purposes.  Info on all failures on one\n+ * executor, within one task set.\n+ */\n+private[scheduler] class ExecutorFailuresInTaskSet(val node: String) {\n+  /**\n+   * Mapping from index of the tasks in the taskset, to the number of times it has failed on this\n+   * executor and the expiry time.\n+   */\n+  val taskToFailureCountAndExpiryTime = HashMap[Int, (Int, Long)]()"
+  }, {
+    "author": {
+      "login": "squito"
+    },
+    "body": "its fine, I can remove it here.  I just pushed a commit removing most of it (https://github.com/apache/spark/pull/15249/commits/354f36bd36c7615883c08542eea333704e421164).  I left in some of the stuff in `BlacklistTracker` around interaction w/ the legacy conf, just pending the ongoing discussion, but I can update that as well.\n\n`ExecutorFailuresInTaskSet` now seems like a bit of overkill, but hopefully its ok if we keep that for now -- I'll update the pr description a bit.\n",
+    "commit": "4501e6c089f99f2cc62443cca668f77fea2745aa",
+    "createdAt": "2016-10-06T03:42:34Z",
+    "diffHunk": "@@ -0,0 +1,53 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+package org.apache.spark.scheduler\n+\n+import scala.collection.mutable.HashMap\n+\n+/**\n+ * Small helper for tracking failed tasks for blacklisting purposes.  Info on all failures on one\n+ * executor, within one task set.\n+ */\n+private[scheduler] class ExecutorFailuresInTaskSet(val node: String) {\n+  /**\n+   * Mapping from index of the tasks in the taskset, to the number of times it has failed on this\n+   * executor and the expiry time.\n+   */\n+  val taskToFailureCountAndExpiryTime = HashMap[Int, (Int, Long)]()"
+  }],
+  "prId": 15249
+}, {
+  "comments": [{
+    "author": {
+      "login": "kayousterhout"
+    },
+    "body": "Can you elaborate a little here? Say times are all from the driver so should be ascending -- but take the max just incase of non-monotonicity (o/w non-obvious that clock skew isn't an issue, as mridul pointed out)\n",
+    "commit": "4501e6c089f99f2cc62443cca668f77fea2745aa",
+    "createdAt": "2016-10-06T01:32:04Z",
+    "diffHunk": "@@ -0,0 +1,53 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+package org.apache.spark.scheduler\n+\n+import scala.collection.mutable.HashMap\n+\n+/**\n+ * Small helper for tracking failed tasks for blacklisting purposes.  Info on all failures on one\n+ * executor, within one task set.\n+ */\n+private[scheduler] class ExecutorFailuresInTaskSet(val node: String) {\n+  /**\n+   * Mapping from index of the tasks in the taskset, to the number of times it has failed on this\n+   * executor and the expiry time.\n+   */\n+  val taskToFailureCountAndExpiryTime = HashMap[Int, (Int, Long)]()\n+\n+  def updateWithFailure(taskIndex: Int, failureExpiryTime: Long): Unit = {\n+    val (prevFailureCount, prevFailureExpiryTime) =\n+      taskToFailureCountAndExpiryTime.getOrElse(taskIndex, (0, -1L))\n+    // just in case we encounter non-monotonicity in the clock, take the max time"
+  }],
+  "prId": 15249
+}]

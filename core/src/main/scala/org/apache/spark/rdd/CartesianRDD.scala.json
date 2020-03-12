@@ -1,0 +1,31 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "squito"
+    },
+    "body": "I'm confused how this actually makes things any faster.  It seems like even if you do unroll `rdd2.iterator` into an array, you just get an iterator and you don't hold on to the array.  Doesn't this still lead to `rdd2.iterator` getting called for every element in `rdd1.iterator`? I'd think you would need to do something like:\n\n```\nval arrayValues: Option[Array[U]] = {\n  SparkEnv.get.blockManager.memoryStore.unrollSafely(key,\n    rdd2.iterator(currSplit.s2, context), updatedBlocks) match {\n      case Left(arr) => Some(arr)\n      case Right(it) => None\n  }\n}\n\ndef getRdd2Values(): Iterator[U] = arrayValues.getOrElse { rdd2.iterator(currSplit.s2, context) }\n```\n",
+    "commit": "72e199e348f719b89d91b3a92de028a59da252e5",
+    "createdAt": "2015-05-28T19:17:46Z",
+    "diffHunk": "@@ -72,8 +74,21 @@ class CartesianRDD[T: ClassTag, U: ClassTag](\n \n   override def compute(split: Partition, context: TaskContext): Iterator[(T, U)] = {\n     val currSplit = split.asInstanceOf[CartesianPartition]\n+\n+    val key = RDDBlockId(rdd2.id, currSplit.s2.index)\n+    val updatedBlocks = new ArrayBuffer[(BlockId, BlockStatus)]\n+    def cachedValues(): Iterator[U] = {\n+      SparkEnv.get.blockManager.memoryStore.unrollSafely(key,\n+        rdd2.iterator(currSplit.s2, context), updatedBlocks) match {\n+          case Left(arr) =>\n+            arr.iterator.asInstanceOf[Iterator[U]]\n+          case Right(it) =>\n+            it.asInstanceOf[Iterator[U]]\n+        }\n+    }\n+\n     for (x <- rdd1.iterator(currSplit.s1, context);\n-         y <- rdd2.iterator(currSplit.s2, context)) yield (x, y)\n+         y <- new InterruptibleIterator(context, cachedValues())) yield (x, y)",
+    "line": 31
+  }, {
+    "author": {
+      "login": "squito"
+    },
+    "body": "I think we also need to call `MemoryStore.releasePendingUnrollMemoryForThisThread` after we're done w/ this task ... I guess it we'd add that with `TaskContext.get.addTaskCompletionListener`.\n",
+    "commit": "72e199e348f719b89d91b3a92de028a59da252e5",
+    "createdAt": "2015-05-28T19:24:03Z",
+    "diffHunk": "@@ -72,8 +74,21 @@ class CartesianRDD[T: ClassTag, U: ClassTag](\n \n   override def compute(split: Partition, context: TaskContext): Iterator[(T, U)] = {\n     val currSplit = split.asInstanceOf[CartesianPartition]\n+\n+    val key = RDDBlockId(rdd2.id, currSplit.s2.index)\n+    val updatedBlocks = new ArrayBuffer[(BlockId, BlockStatus)]\n+    def cachedValues(): Iterator[U] = {\n+      SparkEnv.get.blockManager.memoryStore.unrollSafely(key,\n+        rdd2.iterator(currSplit.s2, context), updatedBlocks) match {\n+          case Left(arr) =>\n+            arr.iterator.asInstanceOf[Iterator[U]]\n+          case Right(it) =>\n+            it.asInstanceOf[Iterator[U]]\n+        }\n+    }\n+\n     for (x <- rdd1.iterator(currSplit.s1, context);\n-         y <- rdd2.iterator(currSplit.s2, context)) yield (x, y)\n+         y <- new InterruptibleIterator(context, cachedValues())) yield (x, y)",
+    "line": 31
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "@squito Yes. I noticed that but have not committed updates yet. Interesting is, the performance gap before and after applying the remotely caching approach #5572, seems to be pulled closer in latest codebase. Because this issue is there for a while, I wonder if other improvement already makes this update not important on performance. I will test it again to see if this is correct. If so, this two PRs can be closed.\n\n@tbertelsen Can you try latest Spark codebase for `RDD.cartesian` performance too?\n",
+    "commit": "72e199e348f719b89d91b3a92de028a59da252e5",
+    "createdAt": "2015-05-29T00:26:59Z",
+    "diffHunk": "@@ -72,8 +74,21 @@ class CartesianRDD[T: ClassTag, U: ClassTag](\n \n   override def compute(split: Partition, context: TaskContext): Iterator[(T, U)] = {\n     val currSplit = split.asInstanceOf[CartesianPartition]\n+\n+    val key = RDDBlockId(rdd2.id, currSplit.s2.index)\n+    val updatedBlocks = new ArrayBuffer[(BlockId, BlockStatus)]\n+    def cachedValues(): Iterator[U] = {\n+      SparkEnv.get.blockManager.memoryStore.unrollSafely(key,\n+        rdd2.iterator(currSplit.s2, context), updatedBlocks) match {\n+          case Left(arr) =>\n+            arr.iterator.asInstanceOf[Iterator[U]]\n+          case Right(it) =>\n+            it.asInstanceOf[Iterator[U]]\n+        }\n+    }\n+\n     for (x <- rdd1.iterator(currSplit.s1, context);\n-         y <- rdd2.iterator(currSplit.s2, context)) yield (x, y)\n+         y <- new InterruptibleIterator(context, cachedValues())) yield (x, y)",
+    "line": 31
+  }],
+  "prId": 6454
+}]

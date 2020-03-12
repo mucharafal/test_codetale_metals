@@ -1,0 +1,42 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "nit: use `msg.release` instead so as to decrease the reference count of `msg`.\n",
+    "commit": "014ca9be204edb9428fae569921571012d3fdbde",
+    "createdAt": "2016-02-16T17:42:26Z",
+    "diffHunk": "@@ -46,20 +50,43 @@ public void testShortWrite() throws Exception {\n   @Test\n   public void testByteBufBody() throws Exception {\n     ByteBuf header = Unpooled.copyLong(42);\n-    ByteBuf body = Unpooled.copyLong(84);\n-    MessageWithHeader msg = new MessageWithHeader(header, body, body.readableBytes());\n+    ByteBuf bodyPassedToNettyManagedBuffer = Unpooled.copyLong(84);\n+    assertEquals(1, header.refCnt());\n+    assertEquals(1, bodyPassedToNettyManagedBuffer.refCnt());\n+    ManagedBuffer managedBuf = new NettyManagedBuffer(bodyPassedToNettyManagedBuffer);\n \n+    Object body = managedBuf.convertToNetty();\n+    assertEquals(2, bodyPassedToNettyManagedBuffer.refCnt());\n+    assertEquals(1, header.refCnt());\n+\n+    MessageWithHeader msg = new MessageWithHeader(managedBuf, header, body, managedBuf.size());\n     ByteBuf result = doWrite(msg, 1);\n     assertEquals(msg.count(), result.readableBytes());\n     assertEquals(42, result.readLong());\n     assertEquals(84, result.readLong());\n+\n+    msg.deallocate();"
+  }],
+  "prId": 11193
+}, {
+  "comments": [{
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "nit: use `msg.release` instead so as to decrease the reference count of `msg`.\n",
+    "commit": "014ca9be204edb9428fae569921571012d3fdbde",
+    "createdAt": "2016-02-16T17:42:37Z",
+    "diffHunk": "@@ -46,20 +50,43 @@ public void testShortWrite() throws Exception {\n   @Test\n   public void testByteBufBody() throws Exception {\n     ByteBuf header = Unpooled.copyLong(42);\n-    ByteBuf body = Unpooled.copyLong(84);\n-    MessageWithHeader msg = new MessageWithHeader(header, body, body.readableBytes());\n+    ByteBuf bodyPassedToNettyManagedBuffer = Unpooled.copyLong(84);\n+    assertEquals(1, header.refCnt());\n+    assertEquals(1, bodyPassedToNettyManagedBuffer.refCnt());\n+    ManagedBuffer managedBuf = new NettyManagedBuffer(bodyPassedToNettyManagedBuffer);\n \n+    Object body = managedBuf.convertToNetty();\n+    assertEquals(2, bodyPassedToNettyManagedBuffer.refCnt());\n+    assertEquals(1, header.refCnt());\n+\n+    MessageWithHeader msg = new MessageWithHeader(managedBuf, header, body, managedBuf.size());\n     ByteBuf result = doWrite(msg, 1);\n     assertEquals(msg.count(), result.readableBytes());\n     assertEquals(42, result.readLong());\n     assertEquals(84, result.readLong());\n+\n+    msg.deallocate();\n+    assertEquals(0, bodyPassedToNettyManagedBuffer.refCnt());\n+    assertEquals(0, header.refCnt());\n+  }\n+\n+  @Test\n+  public void testDeallocateReleasesManagedBuffer() throws Exception {\n+    ByteBuf header = Unpooled.copyLong(42);\n+    ManagedBuffer managedBuf = Mockito.spy(new TestManagedBuffer(84));\n+    ByteBuf body = (ByteBuf) managedBuf.convertToNetty();\n+    assertEquals(2, body.refCnt());\n+    MessageWithHeader msg = new MessageWithHeader(managedBuf, header, body, body.readableBytes());\n+    msg.deallocate();"
+  }, {
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "Done.\n",
+    "commit": "014ca9be204edb9428fae569921571012d3fdbde",
+    "createdAt": "2016-02-16T17:51:11Z",
+    "diffHunk": "@@ -46,20 +50,43 @@ public void testShortWrite() throws Exception {\n   @Test\n   public void testByteBufBody() throws Exception {\n     ByteBuf header = Unpooled.copyLong(42);\n-    ByteBuf body = Unpooled.copyLong(84);\n-    MessageWithHeader msg = new MessageWithHeader(header, body, body.readableBytes());\n+    ByteBuf bodyPassedToNettyManagedBuffer = Unpooled.copyLong(84);\n+    assertEquals(1, header.refCnt());\n+    assertEquals(1, bodyPassedToNettyManagedBuffer.refCnt());\n+    ManagedBuffer managedBuf = new NettyManagedBuffer(bodyPassedToNettyManagedBuffer);\n \n+    Object body = managedBuf.convertToNetty();\n+    assertEquals(2, bodyPassedToNettyManagedBuffer.refCnt());\n+    assertEquals(1, header.refCnt());\n+\n+    MessageWithHeader msg = new MessageWithHeader(managedBuf, header, body, managedBuf.size());\n     ByteBuf result = doWrite(msg, 1);\n     assertEquals(msg.count(), result.readableBytes());\n     assertEquals(42, result.readLong());\n     assertEquals(84, result.readLong());\n+\n+    msg.deallocate();\n+    assertEquals(0, bodyPassedToNettyManagedBuffer.refCnt());\n+    assertEquals(0, header.refCnt());\n+  }\n+\n+  @Test\n+  public void testDeallocateReleasesManagedBuffer() throws Exception {\n+    ByteBuf header = Unpooled.copyLong(42);\n+    ManagedBuffer managedBuf = Mockito.spy(new TestManagedBuffer(84));\n+    ByteBuf body = (ByteBuf) managedBuf.convertToNetty();\n+    assertEquals(2, body.refCnt());\n+    MessageWithHeader msg = new MessageWithHeader(managedBuf, header, body, body.readableBytes());\n+    msg.deallocate();"
+  }],
+  "prId": 11193
+}, {
+  "comments": [{
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "nit: use `msg.release` instead so as to decrease the reference count of `msg`.\n",
+    "commit": "014ca9be204edb9428fae569921571012d3fdbde",
+    "createdAt": "2016-02-16T17:42:43Z",
+    "diffHunk": "@@ -67,6 +94,7 @@ private void testFileRegionBody(int totalWrites, int writesPerCall) throws Excep\n     for (long i = 0; i < 8; i++) {\n       assertEquals(i, result.readLong());\n     }\n+    msg.deallocate();"
+  }],
+  "prId": 11193
+}]

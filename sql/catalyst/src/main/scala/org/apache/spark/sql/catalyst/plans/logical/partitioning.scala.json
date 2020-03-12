@@ -1,0 +1,62 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "yhuai"
+    },
+    "body": "How about we just use `RepartitionByExpression`? Since users do not use classes in catalyst directly, it is fine to change the signature of the constructor. For the type of `numPartitions`, how about `Option[Int]`? If it is `None`, the number of partition is not specified. We can add a `require` clause to make sure this value is larger than 0 if `numPartitions` is a `Some`.\n\nbtw, regarding the format, the following one is preferred.\n\n```\ncase class PartitionByExpression(\n    partitionExpressions: Seq[Expression],\n    numPartitions: Option[Int] = None,\n    child: LogicalPlan)\n  extends RedistributeData\n```\n",
+    "commit": "98c05ae08281b14dd67151bf8edd55cb884d1061",
+    "createdAt": "2015-10-29T22:19:09Z",
+    "diffHunk": "@@ -38,3 +38,11 @@ case class SortPartitions(sortExpressions: Seq[SortOrder], child: LogicalPlan)\n  */\n case class RepartitionByExpression(partitionExpressions: Seq[Expression], child: LogicalPlan)\n   extends RedistributeData\n+\n+/**\n+ * This method repartitions data using [[Expression]]s into `numPartitions`. If numPartitions is\n+ * less than zero, a default is used. Otherwise this behaves identically to RepartitionByExpression.\n+ */\n+case class PartitionByExpression(partitionExpressions: Seq[Expression],\n+                                 child: LogicalPlan, numPartitions: Int = -1)\n+  extends RedistributeData"
+  }, {
+    "author": {
+      "login": "yhuai"
+    },
+    "body": "oh, we need to avoid of using `Option` in the public API `distributeBy` because it is not Java friendly. So, I am good if we use `numPartitions: Int` internally as well.\n",
+    "commit": "98c05ae08281b14dd67151bf8edd55cb884d1061",
+    "createdAt": "2015-10-29T22:34:54Z",
+    "diffHunk": "@@ -38,3 +38,11 @@ case class SortPartitions(sortExpressions: Seq[SortOrder], child: LogicalPlan)\n  */\n case class RepartitionByExpression(partitionExpressions: Seq[Expression], child: LogicalPlan)\n   extends RedistributeData\n+\n+/**\n+ * This method repartitions data using [[Expression]]s into `numPartitions`. If numPartitions is\n+ * less than zero, a default is used. Otherwise this behaves identically to RepartitionByExpression.\n+ */\n+case class PartitionByExpression(partitionExpressions: Seq[Expression],\n+                                 child: LogicalPlan, numPartitions: Int = -1)\n+  extends RedistributeData"
+  }],
+  "prId": 9364
+}, {
+  "comments": [{
+    "author": {
+      "login": "yhuai"
+    },
+    "body": "the partition in `child` is preserved. => the number of partitions of the `child` is preserved?\n",
+    "commit": "98c05ae08281b14dd67151bf8edd55cb884d1061",
+    "createdAt": "2015-10-30T22:19:34Z",
+    "diffHunk": "@@ -31,10 +31,11 @@ case class SortPartitions(sortExpressions: Seq[SortOrder], child: LogicalPlan)\n   extends RedistributeData\n \n /**\n- * This method repartitions data using [[Expression]]s, and receives information about the\n- * number of partitions during execution. Used when a specific ordering or distribution is\n- * expected by the consumer of the query result. Use [[Repartition]] for RDD-like\n+ * This method repartitions data using [[Expression]]s into `numPartitions`, and receives\n+ * information about the number of partitions during execution. Used when a specific ordering or\n+ * distribution is expected by the consumer of the query result. Use [[Repartition]] for RDD-like\n  * `coalesce` and `repartition`.\n+ * If `numPartitions` is not specified, the partition in `child` is preserved."
+  }],
+  "prId": 9364
+}, {
+  "comments": [{
+    "author": {
+      "login": "yhuai"
+    },
+    "body": "Change the format to the following one?\n\n```\ncase class RepartitionByExpression(\n    partitionExpressions: Seq[Expression],\n    child: LogicalPlan,\n    numPartitions: Option[Int] = None) extends RedistributeData\n```\n",
+    "commit": "98c05ae08281b14dd67151bf8edd55cb884d1061",
+    "createdAt": "2015-10-30T22:20:17Z",
+    "diffHunk": "@@ -31,10 +31,11 @@ case class SortPartitions(sortExpressions: Seq[SortOrder], child: LogicalPlan)\n   extends RedistributeData\n \n /**\n- * This method repartitions data using [[Expression]]s, and receives information about the\n- * number of partitions during execution. Used when a specific ordering or distribution is\n- * expected by the consumer of the query result. Use [[Repartition]] for RDD-like\n+ * This method repartitions data using [[Expression]]s into `numPartitions`, and receives\n+ * information about the number of partitions during execution. Used when a specific ordering or\n+ * distribution is expected by the consumer of the query result. Use [[Repartition]] for RDD-like\n  * `coalesce` and `repartition`.\n+ * If `numPartitions` is not specified, the partition in `child` is preserved.\n  */\n-case class RepartitionByExpression(partitionExpressions: Seq[Expression], child: LogicalPlan)\n-  extends RedistributeData\n+case class RepartitionByExpression(partitionExpressions: Seq[Expression],\n+    child: LogicalPlan, numPartitions: Option[Int] = None) extends RedistributeData"
+  }, {
+    "author": {
+      "login": "yhuai"
+    },
+    "body": "Also, how about we add a `require` to make sure we get a valid numPartitions?\n\n```\ncase class RepartitionByExpression(\n    partitionExpressions: Seq[Expression],\n    child: LogicalPlan,\n    numPartitions: Option[Int] = None) extends RedistributeData {\n\n  numPartitions match {\n    case Some(n) => require(n > 0, \"error message\")\n    case None => // OK\n  }\n}\n```\n",
+    "commit": "98c05ae08281b14dd67151bf8edd55cb884d1061",
+    "createdAt": "2015-10-30T22:32:52Z",
+    "diffHunk": "@@ -31,10 +31,11 @@ case class SortPartitions(sortExpressions: Seq[SortOrder], child: LogicalPlan)\n   extends RedistributeData\n \n /**\n- * This method repartitions data using [[Expression]]s, and receives information about the\n- * number of partitions during execution. Used when a specific ordering or distribution is\n- * expected by the consumer of the query result. Use [[Repartition]] for RDD-like\n+ * This method repartitions data using [[Expression]]s into `numPartitions`, and receives\n+ * information about the number of partitions during execution. Used when a specific ordering or\n+ * distribution is expected by the consumer of the query result. Use [[Repartition]] for RDD-like\n  * `coalesce` and `repartition`.\n+ * If `numPartitions` is not specified, the partition in `child` is preserved.\n  */\n-case class RepartitionByExpression(partitionExpressions: Seq[Expression], child: LogicalPlan)\n-  extends RedistributeData\n+case class RepartitionByExpression(partitionExpressions: Seq[Expression],\n+    child: LogicalPlan, numPartitions: Option[Int] = None) extends RedistributeData"
+  }],
+  "prId": 9364
+}, {
+  "comments": [{
+    "author": {
+      "login": "yhuai"
+    },
+    "body": "Seems we need to update this conf to something like `If numPartitions  is not specified, the value of spark.sql.shuffle.partitions will be used as the number of partitions.` I can fix it when I merge it.\n",
+    "commit": "98c05ae08281b14dd67151bf8edd55cb884d1061",
+    "createdAt": "2015-11-01T19:52:24Z",
+    "diffHunk": "@@ -31,10 +31,18 @@ case class SortPartitions(sortExpressions: Seq[SortOrder], child: LogicalPlan)\n   extends RedistributeData\n \n /**\n- * This method repartitions data using [[Expression]]s, and receives information about the\n- * number of partitions during execution. Used when a specific ordering or distribution is\n- * expected by the consumer of the query result. Use [[Repartition]] for RDD-like\n+ * This method repartitions data using [[Expression]]s into `numPartitions`, and receives\n+ * information about the number of partitions during execution. Used when a specific ordering or\n+ * distribution is expected by the consumer of the query result. Use [[Repartition]] for RDD-like\n  * `coalesce` and `repartition`.\n+ * If `numPartitions` is not specified, the partitioning of `child` is preserved.",
+    "line": 11
+  }],
+  "prId": 9364
+}]

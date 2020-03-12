@@ -1,0 +1,219 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Hmm.. it may be good to think about having a better way to define the number of cores here. The issue is that by using the default you may be wasting resources.\r\n\r\ne.g. if your container is only requesting 1 CPU but the host actually has 32 CPUs, this will create 64 allocation arenas.\r\n\r\n(For example, `SparkTransportConf.fromSparkConf` tries to limit thread pool sizes and thus the size of the allocators by using the configured number of CPUs.)\r\n\r\n",
+    "commit": "d0d9486e5df72bc3cfc6bf569fd82c666c93b93a",
+    "createdAt": "2018-12-10T22:26:02Z",
+    "diffHunk": "@@ -95,6 +99,21 @@ public static String getRemoteAddress(Channel channel) {\n     return \"<unknown remote>\";\n   }\n \n+  /**\n+   * Returns the lazily created shared pooled ByteBuf allocator for the specified allowCache\n+   * parameter value.\n+   */\n+  public static synchronized PooledByteBufAllocator getSharedPooledByteBufAllocator(\n+      boolean allowDirectBufs,\n+      boolean allowCache) {\n+    final int index = allowCache ? 0 : 1;\n+    if (_sharedPooledByteBufAllocator[index] == null) {\n+      _sharedPooledByteBufAllocator[index] =\n+        createPooledByteBufAllocator(allowDirectBufs, allowCache, 0 /* numCores */);"
+  }, {
+    "author": {
+      "login": "attilapiros"
+    },
+    "body": "I have moved  `MAX_DEFAULT_NETTY_THREADS` and `defaultNumThreads` from core to network-common (because of the dependency direction).",
+    "commit": "d0d9486e5df72bc3cfc6bf569fd82c666c93b93a",
+    "createdAt": "2018-12-10T23:14:50Z",
+    "diffHunk": "@@ -95,6 +99,21 @@ public static String getRemoteAddress(Channel channel) {\n     return \"<unknown remote>\";\n   }\n \n+  /**\n+   * Returns the lazily created shared pooled ByteBuf allocator for the specified allowCache\n+   * parameter value.\n+   */\n+  public static synchronized PooledByteBufAllocator getSharedPooledByteBufAllocator(\n+      boolean allowDirectBufs,\n+      boolean allowCache) {\n+    final int index = allowCache ? 0 : 1;\n+    if (_sharedPooledByteBufAllocator[index] == null) {\n+      _sharedPooledByteBufAllocator[index] =\n+        createPooledByteBufAllocator(allowDirectBufs, allowCache, 0 /* numCores */);"
+  }],
+  "prId": 23278
+}, {
+  "comments": [{
+    "author": {
+      "login": "ankuriitg"
+    },
+    "body": "I am not sure if it is a good idea to piggyback on allowCache to determine whether is a client/server pooled allocator. Maybe use another variable?",
+    "commit": "d0d9486e5df72bc3cfc6bf569fd82c666c93b93a",
+    "createdAt": "2018-12-11T19:20:03Z",
+    "diffHunk": "@@ -95,6 +111,38 @@ public static String getRemoteAddress(Channel channel) {\n     return \"<unknown remote>\";\n   }\n \n+  /**\n+   * Returns the default number of threads for both the Netty client and server thread pools.\n+   * If numUsableCores is 0, we will use Runtime get an approximate number of available cores.\n+   */\n+  public static int defaultNumThreads(int numUsableCores) {\n+    final int availableCores;\n+    if (numUsableCores > 0) {\n+      availableCores = numUsableCores;\n+    } else {\n+      availableCores = Runtime.getRuntime().availableProcessors();\n+    }\n+    return Math.min(availableCores, MAX_DEFAULT_NETTY_THREADS);\n+  }\n+\n+  /**\n+   * Returns the lazily created shared pooled ByteBuf allocator for the specified allowCache\n+   * parameter value.\n+   */\n+  public static synchronized PooledByteBufAllocator getSharedPooledByteBufAllocator(\n+      boolean allowDirectBufs,\n+      boolean allowCache) {\n+    final int index = allowCache ? 0 : 1;",
+    "line": 48
+  }, {
+    "author": {
+      "login": "attilapiros"
+    },
+    "body": "Thanks for reviewing it!\r\n\r\nIntroducing a new parameter like `isClient` would just hide the that the value of the  allowCache is differs but at the callers this level of abstraction is already introduced. I mean with calling `createPooledByteBufAllocator`, like: \r\n[TransportServer.java#L77](https://github.com/apache/spark/blob/ae8fa8e81510c69f84444c368cad25788f5423b4/common/network-common/src/main/java/org/apache/spark/network/server/TransportServer.java#L77 )\r\n\r\nSo I would keep this (or change createPooledByteBufAllocator too).  ",
+    "commit": "d0d9486e5df72bc3cfc6bf569fd82c666c93b93a",
+    "createdAt": "2018-12-11T20:17:16Z",
+    "diffHunk": "@@ -95,6 +111,38 @@ public static String getRemoteAddress(Channel channel) {\n     return \"<unknown remote>\";\n   }\n \n+  /**\n+   * Returns the default number of threads for both the Netty client and server thread pools.\n+   * If numUsableCores is 0, we will use Runtime get an approximate number of available cores.\n+   */\n+  public static int defaultNumThreads(int numUsableCores) {\n+    final int availableCores;\n+    if (numUsableCores > 0) {\n+      availableCores = numUsableCores;\n+    } else {\n+      availableCores = Runtime.getRuntime().availableProcessors();\n+    }\n+    return Math.min(availableCores, MAX_DEFAULT_NETTY_THREADS);\n+  }\n+\n+  /**\n+   * Returns the lazily created shared pooled ByteBuf allocator for the specified allowCache\n+   * parameter value.\n+   */\n+  public static synchronized PooledByteBufAllocator getSharedPooledByteBufAllocator(\n+      boolean allowDirectBufs,\n+      boolean allowCache) {\n+    final int index = allowCache ? 0 : 1;",
+    "line": 48
+  }, {
+    "author": {
+      "login": "ankuriitg"
+    },
+    "body": "I don't think that you need to change createPooledByteBufAllocator if you change this method. allowCache is used to determine whether to create a pool with or without cache in createPooledByteBufAllocator. This is different from getSharedPooledByteBufAllocator which is using allowCache to determine this plus, it is also using allowCache to determine whether to return a pooledAllocator for a client or a server.\r\n\r\nYou may still want to keep this change if allowCache is the only thing that distinguishes the two pooled allocators but if it is not then it may be better to create another variable.",
+    "commit": "d0d9486e5df72bc3cfc6bf569fd82c666c93b93a",
+    "createdAt": "2018-12-11T21:10:55Z",
+    "diffHunk": "@@ -95,6 +111,38 @@ public static String getRemoteAddress(Channel channel) {\n     return \"<unknown remote>\";\n   }\n \n+  /**\n+   * Returns the default number of threads for both the Netty client and server thread pools.\n+   * If numUsableCores is 0, we will use Runtime get an approximate number of available cores.\n+   */\n+  public static int defaultNumThreads(int numUsableCores) {\n+    final int availableCores;\n+    if (numUsableCores > 0) {\n+      availableCores = numUsableCores;\n+    } else {\n+      availableCores = Runtime.getRuntime().availableProcessors();\n+    }\n+    return Math.min(availableCores, MAX_DEFAULT_NETTY_THREADS);\n+  }\n+\n+  /**\n+   * Returns the lazily created shared pooled ByteBuf allocator for the specified allowCache\n+   * parameter value.\n+   */\n+  public static synchronized PooledByteBufAllocator getSharedPooledByteBufAllocator(\n+      boolean allowDirectBufs,\n+      boolean allowCache) {\n+    final int index = allowCache ? 0 : 1;",
+    "line": 48
+  }],
+  "prId": 23278
+}, {
+  "comments": [{
+    "author": {
+      "login": "ankuriitg"
+    },
+    "body": "Maybe use double-checked locking instead of method synchronization, since the instantiation just needs to happen once but this may unnecessarily block all later calls.",
+    "commit": "d0d9486e5df72bc3cfc6bf569fd82c666c93b93a",
+    "createdAt": "2018-12-11T19:25:57Z",
+    "diffHunk": "@@ -95,6 +111,38 @@ public static String getRemoteAddress(Channel channel) {\n     return \"<unknown remote>\";\n   }\n \n+  /**\n+   * Returns the default number of threads for both the Netty client and server thread pools.\n+   * If numUsableCores is 0, we will use Runtime get an approximate number of available cores.\n+   */\n+  public static int defaultNumThreads(int numUsableCores) {\n+    final int availableCores;\n+    if (numUsableCores > 0) {\n+      availableCores = numUsableCores;\n+    } else {\n+      availableCores = Runtime.getRuntime().availableProcessors();\n+    }\n+    return Math.min(availableCores, MAX_DEFAULT_NETTY_THREADS);\n+  }\n+\n+  /**\n+   * Returns the lazily created shared pooled ByteBuf allocator for the specified allowCache\n+   * parameter value.\n+   */\n+  public static synchronized PooledByteBufAllocator getSharedPooledByteBufAllocator(",
+    "line": 45
+  }, {
+    "author": {
+      "login": "attilapiros"
+    },
+    "body": "I have read once this article (so I try to avoid using it):\r\nhttps://www.javaworld.com/article/2074979/java-concurrency/double-checked-locking--clever--but-broken.html  ",
+    "commit": "d0d9486e5df72bc3cfc6bf569fd82c666c93b93a",
+    "createdAt": "2018-12-11T20:05:38Z",
+    "diffHunk": "@@ -95,6 +111,38 @@ public static String getRemoteAddress(Channel channel) {\n     return \"<unknown remote>\";\n   }\n \n+  /**\n+   * Returns the default number of threads for both the Netty client and server thread pools.\n+   * If numUsableCores is 0, we will use Runtime get an approximate number of available cores.\n+   */\n+  public static int defaultNumThreads(int numUsableCores) {\n+    final int availableCores;\n+    if (numUsableCores > 0) {\n+      availableCores = numUsableCores;\n+    } else {\n+      availableCores = Runtime.getRuntime().availableProcessors();\n+    }\n+    return Math.min(availableCores, MAX_DEFAULT_NETTY_THREADS);\n+  }\n+\n+  /**\n+   * Returns the lazily created shared pooled ByteBuf allocator for the specified allowCache\n+   * parameter value.\n+   */\n+  public static synchronized PooledByteBufAllocator getSharedPooledByteBufAllocator(",
+    "line": 45
+  }, {
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "What that article talks about was fixed in Java 1.5. Double-checked locking works fine since then.\r\n\r\nBut I think that's overkill here.",
+    "commit": "d0d9486e5df72bc3cfc6bf569fd82c666c93b93a",
+    "createdAt": "2018-12-11T20:13:27Z",
+    "diffHunk": "@@ -95,6 +111,38 @@ public static String getRemoteAddress(Channel channel) {\n     return \"<unknown remote>\";\n   }\n \n+  /**\n+   * Returns the default number of threads for both the Netty client and server thread pools.\n+   * If numUsableCores is 0, we will use Runtime get an approximate number of available cores.\n+   */\n+  public static int defaultNumThreads(int numUsableCores) {\n+    final int availableCores;\n+    if (numUsableCores > 0) {\n+      availableCores = numUsableCores;\n+    } else {\n+      availableCores = Runtime.getRuntime().availableProcessors();\n+    }\n+    return Math.min(availableCores, MAX_DEFAULT_NETTY_THREADS);\n+  }\n+\n+  /**\n+   * Returns the lazily created shared pooled ByteBuf allocator for the specified allowCache\n+   * parameter value.\n+   */\n+  public static synchronized PooledByteBufAllocator getSharedPooledByteBufAllocator(",
+    "line": 45
+  }, {
+    "author": {
+      "login": "attilapiros"
+    },
+    "body": "I see, thanks. \r\n\r\nWith volatile it would be fine:\r\nhttp://www.java67.com/2016/04/why-double-checked-locking-was-broken-before-java5.html ",
+    "commit": "d0d9486e5df72bc3cfc6bf569fd82c666c93b93a",
+    "createdAt": "2018-12-11T20:41:03Z",
+    "diffHunk": "@@ -95,6 +111,38 @@ public static String getRemoteAddress(Channel channel) {\n     return \"<unknown remote>\";\n   }\n \n+  /**\n+   * Returns the default number of threads for both the Netty client and server thread pools.\n+   * If numUsableCores is 0, we will use Runtime get an approximate number of available cores.\n+   */\n+  public static int defaultNumThreads(int numUsableCores) {\n+    final int availableCores;\n+    if (numUsableCores > 0) {\n+      availableCores = numUsableCores;\n+    } else {\n+      availableCores = Runtime.getRuntime().availableProcessors();\n+    }\n+    return Math.min(availableCores, MAX_DEFAULT_NETTY_THREADS);\n+  }\n+\n+  /**\n+   * Returns the lazily created shared pooled ByteBuf allocator for the specified allowCache\n+   * parameter value.\n+   */\n+  public static synchronized PooledByteBufAllocator getSharedPooledByteBufAllocator(",
+    "line": 45
+  }, {
+    "author": {
+      "login": "kiszk"
+    },
+    "body": "If you will use volatile, this code must use two `volatile` instance variables instead of one array. This is because `volatile PooledByteBufAllocator _s[]` is effective only for `_s` rather than `_s[0], _s[1], ...`.",
+    "commit": "d0d9486e5df72bc3cfc6bf569fd82c666c93b93a",
+    "createdAt": "2018-12-15T07:37:33Z",
+    "diffHunk": "@@ -95,6 +111,38 @@ public static String getRemoteAddress(Channel channel) {\n     return \"<unknown remote>\";\n   }\n \n+  /**\n+   * Returns the default number of threads for both the Netty client and server thread pools.\n+   * If numUsableCores is 0, we will use Runtime get an approximate number of available cores.\n+   */\n+  public static int defaultNumThreads(int numUsableCores) {\n+    final int availableCores;\n+    if (numUsableCores > 0) {\n+      availableCores = numUsableCores;\n+    } else {\n+      availableCores = Runtime.getRuntime().availableProcessors();\n+    }\n+    return Math.min(availableCores, MAX_DEFAULT_NETTY_THREADS);\n+  }\n+\n+  /**\n+   * Returns the lazily created shared pooled ByteBuf allocator for the specified allowCache\n+   * parameter value.\n+   */\n+  public static synchronized PooledByteBufAllocator getSharedPooledByteBufAllocator(",
+    "line": 45
+  }, {
+    "author": {
+      "login": "attilapiros"
+    },
+    "body": "Thanks! I decided to keep the `synchronized`.\r\n",
+    "commit": "d0d9486e5df72bc3cfc6bf569fd82c666c93b93a",
+    "createdAt": "2018-12-15T09:46:12Z",
+    "diffHunk": "@@ -95,6 +111,38 @@ public static String getRemoteAddress(Channel channel) {\n     return \"<unknown remote>\";\n   }\n \n+  /**\n+   * Returns the default number of threads for both the Netty client and server thread pools.\n+   * If numUsableCores is 0, we will use Runtime get an approximate number of available cores.\n+   */\n+  public static int defaultNumThreads(int numUsableCores) {\n+    final int availableCores;\n+    if (numUsableCores > 0) {\n+      availableCores = numUsableCores;\n+    } else {\n+      availableCores = Runtime.getRuntime().availableProcessors();\n+    }\n+    return Math.min(availableCores, MAX_DEFAULT_NETTY_THREADS);\n+  }\n+\n+  /**\n+   * Returns the lazily created shared pooled ByteBuf allocator for the specified allowCache\n+   * parameter value.\n+   */\n+  public static synchronized PooledByteBufAllocator getSharedPooledByteBufAllocator(",
+    "line": 45
+  }],
+  "prId": 23278
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Why not just two fields? their names could make their use clearer. Or else if there's a need for an array it can be final.",
+    "commit": "d0d9486e5df72bc3cfc6bf569fd82c666c93b93a",
+    "createdAt": "2018-12-15T14:46:08Z",
+    "diffHunk": "@@ -36,6 +36,22 @@\n  * Utilities for creating various Netty constructs based on whether we're using EPOLL or NIO.\n  */\n public class NettyUtils {\n+\n+  /**\n+   * Specifies an upper bound on the number of Netty threads that Spark requires by default.\n+   * In practice, only 2-4 cores should be required to transfer roughly 10 Gb/s, and each core\n+   * that we use will have an initial overhead of roughly 32 MB of off-heap memory, which comes\n+   * at a premium.\n+   *\n+   * Thus, this value should still retain maximum throughput and reduce wasted off-heap memory\n+   * allocation. It can be overridden by setting the number of serverThreads and clientThreads\n+   * manually in Spark's configuration.\n+   */\n+  private static int MAX_DEFAULT_NETTY_THREADS = 8;\n+\n+  private static PooledByteBufAllocator[] _sharedPooledByteBufAllocator ="
+  }, {
+    "author": {
+      "login": "attilapiros"
+    },
+    "body": "As only one method reads/writes this `_sharedPooledByteBufAllocator` I keep them together in this array, so I add the `final`.",
+    "commit": "d0d9486e5df72bc3cfc6bf569fd82c666c93b93a",
+    "createdAt": "2018-12-18T13:17:41Z",
+    "diffHunk": "@@ -36,6 +36,22 @@\n  * Utilities for creating various Netty constructs based on whether we're using EPOLL or NIO.\n  */\n public class NettyUtils {\n+\n+  /**\n+   * Specifies an upper bound on the number of Netty threads that Spark requires by default.\n+   * In practice, only 2-4 cores should be required to transfer roughly 10 Gb/s, and each core\n+   * that we use will have an initial overhead of roughly 32 MB of off-heap memory, which comes\n+   * at a premium.\n+   *\n+   * Thus, this value should still retain maximum throughput and reduce wasted off-heap memory\n+   * allocation. It can be overridden by setting the number of serverThreads and clientThreads\n+   * manually in Spark's configuration.\n+   */\n+  private static int MAX_DEFAULT_NETTY_THREADS = 8;\n+\n+  private static PooledByteBufAllocator[] _sharedPooledByteBufAllocator ="
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Why an array though? vs just two simple fields?",
+    "commit": "d0d9486e5df72bc3cfc6bf569fd82c666c93b93a",
+    "createdAt": "2018-12-18T15:07:46Z",
+    "diffHunk": "@@ -36,6 +36,22 @@\n  * Utilities for creating various Netty constructs based on whether we're using EPOLL or NIO.\n  */\n public class NettyUtils {\n+\n+  /**\n+   * Specifies an upper bound on the number of Netty threads that Spark requires by default.\n+   * In practice, only 2-4 cores should be required to transfer roughly 10 Gb/s, and each core\n+   * that we use will have an initial overhead of roughly 32 MB of off-heap memory, which comes\n+   * at a premium.\n+   *\n+   * Thus, this value should still retain maximum throughput and reduce wasted off-heap memory\n+   * allocation. It can be overridden by setting the number of serverThreads and clientThreads\n+   * manually in Spark's configuration.\n+   */\n+  private static int MAX_DEFAULT_NETTY_THREADS = 8;\n+\n+  private static PooledByteBufAllocator[] _sharedPooledByteBufAllocator ="
+  }, {
+    "author": {
+      "login": "attilapiros"
+    },
+    "body": "It is a bit simple to use and array as based on the index I can set the right element. \r\nDoes not matter which one (0 or 1) as long as it is consistent (and that one line of code calculating the index is consistent).\r\n\r\nOtherwise an extra if should be introduced to set the right field. Whit the checking of is it initialised it would be a scoped if. And I just prefer to avoid scoped if-s, like:\r\n\r\n```scala\r\n  public static synchronized PooledByteBufAllocator getSharedPooledByteBufAllocator(\r\n      boolean allowDirectBufs,\r\n      boolean allowCache) {\r\n    if (allowCache) {\r\n      if (_sharedPooledByteBufAllocatorWithAllowCache == null) {\r\n        _sharedPooledByteBufAllocatorWithAllowCache =\r\n            createPooledByteBufAllocator(\r\n                allowDirectBufs,\r\n                allowCache,\r\n                defaultNumThreads(0));\r\n      }\r\n      return _sharedPooledByteBufAllocatorWithAllowCache;\r\n    } else {\r\n      if (_sharedPooledByteBufAllocatorWithoutAllowCache == null) {\r\n        _sharedPooledByteBufAllocatorWithoutAllowCache =\r\n            createPooledByteBufAllocator(\r\n                allowDirectBufs,\r\n                allowCache,\r\n                defaultNumThreads(0));\r\n      }\r\n      return _sharedPooledByteBufAllocatorWithoutAllowCache;\r\n    }\r\n  }\r\n```\r\nOr am I miss something?",
+    "commit": "d0d9486e5df72bc3cfc6bf569fd82c666c93b93a",
+    "createdAt": "2018-12-18T17:16:05Z",
+    "diffHunk": "@@ -36,6 +36,22 @@\n  * Utilities for creating various Netty constructs based on whether we're using EPOLL or NIO.\n  */\n public class NettyUtils {\n+\n+  /**\n+   * Specifies an upper bound on the number of Netty threads that Spark requires by default.\n+   * In practice, only 2-4 cores should be required to transfer roughly 10 Gb/s, and each core\n+   * that we use will have an initial overhead of roughly 32 MB of off-heap memory, which comes\n+   * at a premium.\n+   *\n+   * Thus, this value should still retain maximum throughput and reduce wasted off-heap memory\n+   * allocation. It can be overridden by setting the number of serverThreads and clientThreads\n+   * manually in Spark's configuration.\n+   */\n+  private static int MAX_DEFAULT_NETTY_THREADS = 8;\n+\n+  private static PooledByteBufAllocator[] _sharedPooledByteBufAllocator ="
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "I guess you could check `allowCache` twice to figure out what reference to check for null, and which to update. OK I don't feel strongly about it.",
+    "commit": "d0d9486e5df72bc3cfc6bf569fd82c666c93b93a",
+    "createdAt": "2018-12-18T17:19:53Z",
+    "diffHunk": "@@ -36,6 +36,22 @@\n  * Utilities for creating various Netty constructs based on whether we're using EPOLL or NIO.\n  */\n public class NettyUtils {\n+\n+  /**\n+   * Specifies an upper bound on the number of Netty threads that Spark requires by default.\n+   * In practice, only 2-4 cores should be required to transfer roughly 10 Gb/s, and each core\n+   * that we use will have an initial overhead of roughly 32 MB of off-heap memory, which comes\n+   * at a premium.\n+   *\n+   * Thus, this value should still retain maximum throughput and reduce wasted off-heap memory\n+   * allocation. It can be overridden by setting the number of serverThreads and clientThreads\n+   * manually in Spark's configuration.\n+   */\n+  private static int MAX_DEFAULT_NETTY_THREADS = 8;\n+\n+  private static PooledByteBufAllocator[] _sharedPooledByteBufAllocator ="
+  }],
+  "prId": 23278
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Not sure it's a big deal, but after the allocator is cached, it won't matter what this argument is; it will be ignored.",
+    "commit": "d0d9486e5df72bc3cfc6bf569fd82c666c93b93a",
+    "createdAt": "2018-12-15T14:46:56Z",
+    "diffHunk": "@@ -95,6 +111,38 @@ public static String getRemoteAddress(Channel channel) {\n     return \"<unknown remote>\";\n   }\n \n+  /**\n+   * Returns the default number of threads for both the Netty client and server thread pools.\n+   * If numUsableCores is 0, we will use Runtime get an approximate number of available cores.\n+   */\n+  public static int defaultNumThreads(int numUsableCores) {\n+    final int availableCores;\n+    if (numUsableCores > 0) {\n+      availableCores = numUsableCores;\n+    } else {\n+      availableCores = Runtime.getRuntime().availableProcessors();\n+    }\n+    return Math.min(availableCores, MAX_DEFAULT_NETTY_THREADS);\n+  }\n+\n+  /**\n+   * Returns the lazily created shared pooled ByteBuf allocator for the specified allowCache\n+   * parameter value.\n+   */\n+  public static synchronized PooledByteBufAllocator getSharedPooledByteBufAllocator(\n+      boolean allowDirectBufs,",
+    "line": 46
+  }, {
+    "author": {
+      "login": "attilapiros"
+    },
+    "body": "It can be a problem as although it comes from a configuration (this is why are ignored it in the first place) its value can vary depending on the transport modules (like shuffle and rpc). \r\n\r\nAs I have seen it used by the community (there are some Jira issue and github comments where `preferDirectBufs=false` was used) so what about introducing a new configuration: `spark.network.sharedByteBufAllocators.io.preferDirectBufs`.\r\n\r\nAnd of course both parameters should be documented in `configuration.md` what I will fix, too.",
+    "commit": "d0d9486e5df72bc3cfc6bf569fd82c666c93b93a",
+    "createdAt": "2018-12-18T14:24:09Z",
+    "diffHunk": "@@ -95,6 +111,38 @@ public static String getRemoteAddress(Channel channel) {\n     return \"<unknown remote>\";\n   }\n \n+  /**\n+   * Returns the default number of threads for both the Netty client and server thread pools.\n+   * If numUsableCores is 0, we will use Runtime get an approximate number of available cores.\n+   */\n+  public static int defaultNumThreads(int numUsableCores) {\n+    final int availableCores;\n+    if (numUsableCores > 0) {\n+      availableCores = numUsableCores;\n+    } else {\n+      availableCores = Runtime.getRuntime().availableProcessors();\n+    }\n+    return Math.min(availableCores, MAX_DEFAULT_NETTY_THREADS);\n+  }\n+\n+  /**\n+   * Returns the lazily created shared pooled ByteBuf allocator for the specified allowCache\n+   * parameter value.\n+   */\n+  public static synchronized PooledByteBufAllocator getSharedPooledByteBufAllocator(\n+      boolean allowDirectBufs,",
+    "line": 46
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "That's not quite the issue here, it's that the cached instance that this returns may not reflect the value that was passed to the method. I don't know from the callers whether that's a real issue or not. By itself this doesn't require any new configs.",
+    "commit": "d0d9486e5df72bc3cfc6bf569fd82c666c93b93a",
+    "createdAt": "2018-12-18T15:08:26Z",
+    "diffHunk": "@@ -95,6 +111,38 @@ public static String getRemoteAddress(Channel channel) {\n     return \"<unknown remote>\";\n   }\n \n+  /**\n+   * Returns the default number of threads for both the Netty client and server thread pools.\n+   * If numUsableCores is 0, we will use Runtime get an approximate number of available cores.\n+   */\n+  public static int defaultNumThreads(int numUsableCores) {\n+    final int availableCores;\n+    if (numUsableCores > 0) {\n+      availableCores = numUsableCores;\n+    } else {\n+      availableCores = Runtime.getRuntime().availableProcessors();\n+    }\n+    return Math.min(availableCores, MAX_DEFAULT_NETTY_THREADS);\n+  }\n+\n+  /**\n+   * Returns the lazily created shared pooled ByteBuf allocator for the specified allowCache\n+   * parameter value.\n+   */\n+  public static synchronized PooledByteBufAllocator getSharedPooledByteBufAllocator(\n+      boolean allowDirectBufs,",
+    "line": 46
+  }, {
+    "author": {
+      "login": "attilapiros"
+    },
+    "body": "I still think a non-module based config would solve this issue.\r\n\r\nOtherwise we could end up 4 PooledByteBufAllocator's. Like\r\n- two (client and server) for rpc where `preferDirectBufs=false`\r\n- two for shuffle  where `preferDirectBufs=true`\r\n",
+    "commit": "d0d9486e5df72bc3cfc6bf569fd82c666c93b93a",
+    "createdAt": "2018-12-18T15:54:08Z",
+    "diffHunk": "@@ -95,6 +111,38 @@ public static String getRemoteAddress(Channel channel) {\n     return \"<unknown remote>\";\n   }\n \n+  /**\n+   * Returns the default number of threads for both the Netty client and server thread pools.\n+   * If numUsableCores is 0, we will use Runtime get an approximate number of available cores.\n+   */\n+  public static int defaultNumThreads(int numUsableCores) {\n+    final int availableCores;\n+    if (numUsableCores > 0) {\n+      availableCores = numUsableCores;\n+    } else {\n+      availableCores = Runtime.getRuntime().availableProcessors();\n+    }\n+    return Math.min(availableCores, MAX_DEFAULT_NETTY_THREADS);\n+  }\n+\n+  /**\n+   * Returns the lazily created shared pooled ByteBuf allocator for the specified allowCache\n+   * parameter value.\n+   */\n+  public static synchronized PooledByteBufAllocator getSharedPooledByteBufAllocator(\n+      boolean allowDirectBufs,",
+    "line": 46
+  }],
+  "prId": 23278
+}, {
+  "comments": [{
+    "author": {
+      "login": "kiszk"
+    },
+    "body": "nit: remove `final` ",
+    "commit": "d0d9486e5df72bc3cfc6bf569fd82c666c93b93a",
+    "createdAt": "2019-01-07T02:33:41Z",
+    "diffHunk": "@@ -95,6 +111,38 @@ public static String getRemoteAddress(Channel channel) {\n     return \"<unknown remote>\";\n   }\n \n+  /**\n+   * Returns the default number of threads for both the Netty client and server thread pools.\n+   * If numUsableCores is 0, we will use Runtime get an approximate number of available cores.\n+   */\n+  public static int defaultNumThreads(int numUsableCores) {\n+    final int availableCores;",
+    "line": 32
+  }, {
+    "author": {
+      "login": "attilapiros"
+    },
+    "body": "Why? \r\n\r\nThat final is correct there: it is basically a constant which can get once value and it enforces that before any reading of its value it must be initialised.",
+    "commit": "d0d9486e5df72bc3cfc6bf569fd82c666c93b93a",
+    "createdAt": "2019-01-07T10:02:23Z",
+    "diffHunk": "@@ -95,6 +111,38 @@ public static String getRemoteAddress(Channel channel) {\n     return \"<unknown remote>\";\n   }\n \n+  /**\n+   * Returns the default number of threads for both the Netty client and server thread pools.\n+   * If numUsableCores is 0, we will use Runtime get an approximate number of available cores.\n+   */\n+  public static int defaultNumThreads(int numUsableCores) {\n+    final int availableCores;",
+    "line": 32
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "I think `final` is fine and would use it more in Java code, as we of course use the equivalent `val` by default in Scala. For members, it's obviously best to use it where possible. However for locals we don't use it much just because in Java it's extra keywords to look at. I think it's OK here net net.",
+    "commit": "d0d9486e5df72bc3cfc6bf569fd82c666c93b93a",
+    "createdAt": "2019-01-07T13:15:47Z",
+    "diffHunk": "@@ -95,6 +111,38 @@ public static String getRemoteAddress(Channel channel) {\n     return \"<unknown remote>\";\n   }\n \n+  /**\n+   * Returns the default number of threads for both the Netty client and server thread pools.\n+   * If numUsableCores is 0, we will use Runtime get an approximate number of available cores.\n+   */\n+  public static int defaultNumThreads(int numUsableCores) {\n+    final int availableCores;",
+    "line": 32
+  }],
+  "prId": 23278
+}]

@@ -1,0 +1,24 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "squito"
+    },
+    "body": "I'd include some comments here explaining why this is setup this way (eg. we're exposing metrics that are a little expensive to check, so a couple of optimizations; (1) the procfs metrics are gathered all in one-go; (2) the values are not checked too often; (3) we re-use the cached values for spark internal stage-level metrics.",
+    "commit": "1a0a3e9439df7490f7fb3a1f3451a463ad67be5b",
+    "createdAt": "2019-11-22T18:18:01Z",
+    "diffHunk": "@@ -0,0 +1,52 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.executor\n+\n+import com.codahale.metrics.{Gauge, MetricRegistry}\n+\n+import org.apache.spark.metrics.ExecutorMetricType\n+import org.apache.spark.metrics.source.Source\n+\n+private[spark] class ExecutorMetricsSource extends Source {",
+    "line": 34
+  }],
+  "prId": 24132
+}, {
+  "comments": [{
+    "author": {
+      "login": "squito"
+    },
+    "body": "I know this was my comment originally, but I meant it more to compare against other approaches, I think its confusing for someone new to this trying to understand what is going on here.  I'd change to something like\r\n\r\nThis takes the values of the metrics we have already computed and stored in our snapshot, and exposes them as individual gauges for the metric system.  This means the value never gets updated when polled from the metric system, only when we decide the ExecutorMetricPoller updates the snapshot.",
+    "commit": "1a0a3e9439df7490f7fb3a1f3451a463ad67be5b",
+    "createdAt": "2019-11-22T18:27:58Z",
+    "diffHunk": "@@ -0,0 +1,52 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.executor\n+\n+import com.codahale.metrics.{Gauge, MetricRegistry}\n+\n+import org.apache.spark.metrics.ExecutorMetricType\n+import org.apache.spark.metrics.source.Source\n+\n+private[spark] class ExecutorMetricsSource extends Source {\n+\n+  override val metricRegistry = new MetricRegistry()\n+  override val sourceName = \"ExecutorMetrics\"\n+  @volatile var metricsSnapshot: Array[Long] = Array.fill(ExecutorMetricType.numMetrics)(0L)\n+\n+  // called by ExecutorMetricsPoller\n+  def updateMetricsSnapshot(metricsUpdates: Array[Long]): Unit = {\n+    metricsSnapshot = metricsUpdates\n+  }\n+\n+  class ExecutorMetricGauge(idx: Int) extends Gauge[Long] {\n+    def getValue: Long = metricsSnapshot(idx)\n+  }\n+\n+  def register: Unit = {\n+    // This looks like a bunch of independent gauges as far the metric system\n+    // is concerned, but actually they're all using one shared snapshot."
+  }],
+  "prId": 24132
+}]

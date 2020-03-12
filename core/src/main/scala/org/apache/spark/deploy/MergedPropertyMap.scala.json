@@ -1,0 +1,50 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Why this object and not a new method in Utils.scala?\n\nAt the very, very least this should be `private[spark]`.\n",
+    "commit": "7410f2c69f58aab6f74d04232d4255ba19891c23",
+    "createdAt": "2014-09-24T20:43:25Z",
+    "diffHunk": "@@ -0,0 +1,38 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+package org.apache.spark.deploy\n+\n+import scala.collection._\n+\n+\n+object MergedPropertyMap {"
+  }],
+  "prId": 2516
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Why use `Vector` and not a more generic type like `Seq`? Also, stray space after `(`.\n",
+    "commit": "7410f2c69f58aab6f74d04232d4255ba19891c23",
+    "createdAt": "2014-09-24T20:45:20Z",
+    "diffHunk": "@@ -0,0 +1,38 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+package org.apache.spark.deploy\n+\n+import scala.collection._\n+\n+\n+object MergedPropertyMap {\n+\n+  /**\n+   * Flatten a map of maps out into a single map, later maps in the propList\n+   * have priority over older ones\n+   * @param propList Vector of property maps[PropName->PropValue] to merge\n+   */\n+  def mergePropertyMaps( propList: Vector[Map[String, String]]): mutable.Map[String, String] = {"
+  }, {
+    "author": {
+      "login": "tigerquoll"
+    },
+    "body": "fixed\n",
+    "commit": "7410f2c69f58aab6f74d04232d4255ba19891c23",
+    "createdAt": "2014-09-25T00:21:20Z",
+    "diffHunk": "@@ -0,0 +1,38 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+package org.apache.spark.deploy\n+\n+import scala.collection._\n+\n+\n+object MergedPropertyMap {\n+\n+  /**\n+   * Flatten a map of maps out into a single map, later maps in the propList\n+   * have priority over older ones\n+   * @param propList Vector of property maps[PropName->PropValue] to merge\n+   */\n+  def mergePropertyMaps( propList: Vector[Map[String, String]]): mutable.Map[String, String] = {"
+  }],
+  "prId": 2516
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "This logic is weird. Two options:\n1.  Use immutable maps\n   \n   propList.reverse.reduce(_ ++ _)\n2. Use `propMap.contains()` instead of `propMap.getOrElse()`\n",
+    "commit": "7410f2c69f58aab6f74d04232d4255ba19891c23",
+    "createdAt": "2014-09-24T20:52:25Z",
+    "diffHunk": "@@ -0,0 +1,38 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+package org.apache.spark.deploy\n+\n+import scala.collection._\n+\n+\n+object MergedPropertyMap {\n+\n+  /**\n+   * Flatten a map of maps out into a single map, later maps in the propList\n+   * have priority over older ones\n+   * @param propList Vector of property maps[PropName->PropValue] to merge\n+   */\n+  def mergePropertyMaps( propList: Vector[Map[String, String]]): mutable.Map[String, String] = {\n+    val propMap = new mutable.HashMap[String, String]()\n+    // loop through each entry of each map in order of priority\n+    // and add it to our propMap\n+    propList.foreach {\n+      _.foreach{ case(k,v) => if (propMap.getOrElse(k,\"\").size == 0) propMap.put(k,v)}"
+  }, {
+    "author": {
+      "login": "tigerquoll"
+    },
+    "body": "Thanks, missed that cleaner implementation. Changed to immutable Map and moved to utils\n",
+    "commit": "7410f2c69f58aab6f74d04232d4255ba19891c23",
+    "createdAt": "2014-09-25T00:21:31Z",
+    "diffHunk": "@@ -0,0 +1,38 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+package org.apache.spark.deploy\n+\n+import scala.collection._\n+\n+\n+object MergedPropertyMap {\n+\n+  /**\n+   * Flatten a map of maps out into a single map, later maps in the propList\n+   * have priority over older ones\n+   * @param propList Vector of property maps[PropName->PropValue] to merge\n+   */\n+  def mergePropertyMaps( propList: Vector[Map[String, String]]): mutable.Map[String, String] = {\n+    val propMap = new mutable.HashMap[String, String]()\n+    // loop through each entry of each map in order of priority\n+    // and add it to our propMap\n+    propList.foreach {\n+      _.foreach{ case(k,v) => if (propMap.getOrElse(k,\"\").size == 0) propMap.put(k,v)}"
+  }],
+  "prId": 2516
+}]

@@ -1,0 +1,78 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "liancheng"
+    },
+    "body": "\"... task commitment failure ...\" => \"... job commitment failure ...\"\n",
+    "commit": "43544c40aa85e80e873d95bc9e07167c26da74b2",
+    "createdAt": "2015-06-23T23:29:08Z",
+    "diffHunk": "@@ -497,6 +503,79 @@ abstract class HadoopFsRelationTest extends QueryTest with SQLTestUtils {\n       }\n     }\n   }\n+\n+  test(\"SPARK-8578 specified custom output committer will not be used to append data\") {\n+    val clonedConf = new Configuration(configuration)\n+    try {\n+      val df = sqlContext.range(1, 10).toDF(\"i\")\n+      withTempPath { dir =>\n+        df.write.mode(\"append\").format(dataSourceName).save(dir.getCanonicalPath)\n+        configuration.set(\"spark.sql.sources.outputCommitterClass\",\n+          \"org.apache.spark.sql.sources.AlwaysFailOutputCommitter\")\n+        // Since Parquet has its own output committer setting, also set it\n+        // to AlwaysFailParquetOutputCommitter at here.\n+        configuration.set(\"spark.sql.parquet.output.committer.class\",\n+          \"org.apache.spark.sql.sources.AlwaysFailParquetOutputCommitter\")\n+        // Because there data already exists,\n+        // this append should success because we will use the output committer associated\n+        // with file format and AlwaysFailOutputCommitter will not be used.\n+        df.write.mode(\"append\").format(dataSourceName).save(dir.getCanonicalPath)\n+        checkAnswer(\n+          sqlContext.read\n+            .format(dataSourceName)\n+            .option(\"dataSchema\", df.schema.json)\n+            .load(dir.getCanonicalPath),\n+          df.unionAll(df))\n+\n+        // This will fail because AlwaysFailOutputCommitter is used when we do append.\n+        intercept[Exception] {\n+          df.write.mode(\"overwrite\").format(dataSourceName).save(dir.getCanonicalPath)\n+        }\n+      }\n+      withTempPath { dir =>\n+        configuration.set(\"spark.sql.sources.outputCommitterClass\",\n+          \"org.apache.spark.sql.sources.AlwaysFailOutputCommitter\")\n+        // Since Parquet has its own output committer setting, also set it\n+        // to AlwaysFailParquetOutputCommitter at here.\n+        configuration.set(\"spark.sql.parquet.output.committer.class\",\n+          \"org.apache.spark.sql.sources.AlwaysFailParquetOutputCommitter\")\n+        // Because there is no existing data,\n+        // this append will fail because AlwaysFailOutputCommitter is used when we do append\n+        // when there is no exsiting data.\n+        intercept[Exception] {\n+          df.write.mode(\"overwrite\").format(dataSourceName).save(dir.getCanonicalPath)\n+        }\n+      }\n+    } finally {\n+      // Hadoop 1 doesn't have `Configuration.unset`\n+      configuration.clear()\n+      clonedConf.foreach(entry => configuration.set(entry.getKey, entry.getValue))\n+    }\n+  }\n+}\n+\n+// This class is used to test SPARK-8578. We should not use any custom output committer when\n+// we actually append data to an existing dir.\n+class AlwaysFailOutputCommitter(\n+    outputPath: Path,\n+    context: TaskAttemptContext)\n+  extends FileOutputCommitter(outputPath, context) {\n+\n+  override def commitJob(context: JobContext): Unit = {\n+    sys.error(\"Intentional task commitment failure for testing purpose.\")"
+  }],
+  "prId": 6964
+}, {
+  "comments": [{
+    "author": {
+      "login": "liancheng"
+    },
+    "body": "Same as above.\n",
+    "commit": "43544c40aa85e80e873d95bc9e07167c26da74b2",
+    "createdAt": "2015-06-23T23:29:14Z",
+    "diffHunk": "@@ -497,6 +503,79 @@ abstract class HadoopFsRelationTest extends QueryTest with SQLTestUtils {\n       }\n     }\n   }\n+\n+  test(\"SPARK-8578 specified custom output committer will not be used to append data\") {\n+    val clonedConf = new Configuration(configuration)\n+    try {\n+      val df = sqlContext.range(1, 10).toDF(\"i\")\n+      withTempPath { dir =>\n+        df.write.mode(\"append\").format(dataSourceName).save(dir.getCanonicalPath)\n+        configuration.set(\"spark.sql.sources.outputCommitterClass\",\n+          \"org.apache.spark.sql.sources.AlwaysFailOutputCommitter\")\n+        // Since Parquet has its own output committer setting, also set it\n+        // to AlwaysFailParquetOutputCommitter at here.\n+        configuration.set(\"spark.sql.parquet.output.committer.class\",\n+          \"org.apache.spark.sql.sources.AlwaysFailParquetOutputCommitter\")\n+        // Because there data already exists,\n+        // this append should success because we will use the output committer associated\n+        // with file format and AlwaysFailOutputCommitter will not be used.\n+        df.write.mode(\"append\").format(dataSourceName).save(dir.getCanonicalPath)\n+        checkAnswer(\n+          sqlContext.read\n+            .format(dataSourceName)\n+            .option(\"dataSchema\", df.schema.json)\n+            .load(dir.getCanonicalPath),\n+          df.unionAll(df))\n+\n+        // This will fail because AlwaysFailOutputCommitter is used when we do append.\n+        intercept[Exception] {\n+          df.write.mode(\"overwrite\").format(dataSourceName).save(dir.getCanonicalPath)\n+        }\n+      }\n+      withTempPath { dir =>\n+        configuration.set(\"spark.sql.sources.outputCommitterClass\",\n+          \"org.apache.spark.sql.sources.AlwaysFailOutputCommitter\")\n+        // Since Parquet has its own output committer setting, also set it\n+        // to AlwaysFailParquetOutputCommitter at here.\n+        configuration.set(\"spark.sql.parquet.output.committer.class\",\n+          \"org.apache.spark.sql.sources.AlwaysFailParquetOutputCommitter\")\n+        // Because there is no existing data,\n+        // this append will fail because AlwaysFailOutputCommitter is used when we do append\n+        // when there is no exsiting data.\n+        intercept[Exception] {\n+          df.write.mode(\"overwrite\").format(dataSourceName).save(dir.getCanonicalPath)\n+        }\n+      }\n+    } finally {\n+      // Hadoop 1 doesn't have `Configuration.unset`\n+      configuration.clear()\n+      clonedConf.foreach(entry => configuration.set(entry.getKey, entry.getValue))\n+    }\n+  }\n+}\n+\n+// This class is used to test SPARK-8578. We should not use any custom output committer when\n+// we actually append data to an existing dir.\n+class AlwaysFailOutputCommitter(\n+    outputPath: Path,\n+    context: TaskAttemptContext)\n+  extends FileOutputCommitter(outputPath, context) {\n+\n+  override def commitJob(context: JobContext): Unit = {\n+    sys.error(\"Intentional task commitment failure for testing purpose.\")\n+  }\n+}\n+\n+// This class is used to test SPARK-8578. We should not use any custom output committer when\n+// we actually append data to an existing dir.\n+class AlwaysFailParquetOutputCommitter(\n+    outputPath: Path,\n+    context: TaskAttemptContext)\n+  extends ParquetOutputCommitter(outputPath, context) {\n+\n+  override def commitJob(context: JobContext): Unit = {\n+    sys.error(\"Intentional task commitment failure for testing purpose.\")"
+  }],
+  "prId": 6964
+}, {
+  "comments": [{
+    "author": {
+      "login": "liancheng"
+    },
+    "body": "This might be better:\n\n``` scala\nconfiguration.set(\n  SQLConf.OUTPUT_COMMITTER_CLASS.key,\n  classOf[AlwaysFailOutputCommitter].getName)\n```\n",
+    "commit": "43544c40aa85e80e873d95bc9e07167c26da74b2",
+    "createdAt": "2015-06-23T23:32:30Z",
+    "diffHunk": "@@ -497,6 +503,79 @@ abstract class HadoopFsRelationTest extends QueryTest with SQLTestUtils {\n       }\n     }\n   }\n+\n+  test(\"SPARK-8578 specified custom output committer will not be used to append data\") {\n+    val clonedConf = new Configuration(configuration)\n+    try {\n+      val df = sqlContext.range(1, 10).toDF(\"i\")\n+      withTempPath { dir =>\n+        df.write.mode(\"append\").format(dataSourceName).save(dir.getCanonicalPath)\n+        configuration.set(\"spark.sql.sources.outputCommitterClass\",\n+          \"org.apache.spark.sql.sources.AlwaysFailOutputCommitter\")"
+  }],
+  "prId": 6964
+}, {
+  "comments": [{
+    "author": {
+      "login": "liancheng"
+    },
+    "body": "Similar as above.\n",
+    "commit": "43544c40aa85e80e873d95bc9e07167c26da74b2",
+    "createdAt": "2015-06-23T23:32:39Z",
+    "diffHunk": "@@ -497,6 +503,79 @@ abstract class HadoopFsRelationTest extends QueryTest with SQLTestUtils {\n       }\n     }\n   }\n+\n+  test(\"SPARK-8578 specified custom output committer will not be used to append data\") {\n+    val clonedConf = new Configuration(configuration)\n+    try {\n+      val df = sqlContext.range(1, 10).toDF(\"i\")\n+      withTempPath { dir =>\n+        df.write.mode(\"append\").format(dataSourceName).save(dir.getCanonicalPath)\n+        configuration.set(\"spark.sql.sources.outputCommitterClass\",\n+          \"org.apache.spark.sql.sources.AlwaysFailOutputCommitter\")\n+        // Since Parquet has its own output committer setting, also set it\n+        // to AlwaysFailParquetOutputCommitter at here.\n+        configuration.set(\"spark.sql.parquet.output.committer.class\",\n+          \"org.apache.spark.sql.sources.AlwaysFailParquetOutputCommitter\")"
+  }],
+  "prId": 6964
+}, {
+  "comments": [{
+    "author": {
+      "login": "liancheng"
+    },
+    "body": "Similar as above.\n",
+    "commit": "43544c40aa85e80e873d95bc9e07167c26da74b2",
+    "createdAt": "2015-06-23T23:33:08Z",
+    "diffHunk": "@@ -497,6 +503,79 @@ abstract class HadoopFsRelationTest extends QueryTest with SQLTestUtils {\n       }\n     }\n   }\n+\n+  test(\"SPARK-8578 specified custom output committer will not be used to append data\") {\n+    val clonedConf = new Configuration(configuration)\n+    try {\n+      val df = sqlContext.range(1, 10).toDF(\"i\")\n+      withTempPath { dir =>\n+        df.write.mode(\"append\").format(dataSourceName).save(dir.getCanonicalPath)\n+        configuration.set(\"spark.sql.sources.outputCommitterClass\",\n+          \"org.apache.spark.sql.sources.AlwaysFailOutputCommitter\")\n+        // Since Parquet has its own output committer setting, also set it\n+        // to AlwaysFailParquetOutputCommitter at here.\n+        configuration.set(\"spark.sql.parquet.output.committer.class\",\n+          \"org.apache.spark.sql.sources.AlwaysFailParquetOutputCommitter\")\n+        // Because there data already exists,\n+        // this append should success because we will use the output committer associated\n+        // with file format and AlwaysFailOutputCommitter will not be used.\n+        df.write.mode(\"append\").format(dataSourceName).save(dir.getCanonicalPath)\n+        checkAnswer(\n+          sqlContext.read\n+            .format(dataSourceName)\n+            .option(\"dataSchema\", df.schema.json)\n+            .load(dir.getCanonicalPath),\n+          df.unionAll(df))\n+\n+        // This will fail because AlwaysFailOutputCommitter is used when we do append.\n+        intercept[Exception] {\n+          df.write.mode(\"overwrite\").format(dataSourceName).save(dir.getCanonicalPath)\n+        }\n+      }\n+      withTempPath { dir =>\n+        configuration.set(\"spark.sql.sources.outputCommitterClass\",\n+          \"org.apache.spark.sql.sources.AlwaysFailOutputCommitter\")"
+  }],
+  "prId": 6964
+}, {
+  "comments": [{
+    "author": {
+      "login": "liancheng"
+    },
+    "body": "Similar as above.\n",
+    "commit": "43544c40aa85e80e873d95bc9e07167c26da74b2",
+    "createdAt": "2015-06-23T23:33:09Z",
+    "diffHunk": "@@ -497,6 +503,79 @@ abstract class HadoopFsRelationTest extends QueryTest with SQLTestUtils {\n       }\n     }\n   }\n+\n+  test(\"SPARK-8578 specified custom output committer will not be used to append data\") {\n+    val clonedConf = new Configuration(configuration)\n+    try {\n+      val df = sqlContext.range(1, 10).toDF(\"i\")\n+      withTempPath { dir =>\n+        df.write.mode(\"append\").format(dataSourceName).save(dir.getCanonicalPath)\n+        configuration.set(\"spark.sql.sources.outputCommitterClass\",\n+          \"org.apache.spark.sql.sources.AlwaysFailOutputCommitter\")\n+        // Since Parquet has its own output committer setting, also set it\n+        // to AlwaysFailParquetOutputCommitter at here.\n+        configuration.set(\"spark.sql.parquet.output.committer.class\",\n+          \"org.apache.spark.sql.sources.AlwaysFailParquetOutputCommitter\")\n+        // Because there data already exists,\n+        // this append should success because we will use the output committer associated\n+        // with file format and AlwaysFailOutputCommitter will not be used.\n+        df.write.mode(\"append\").format(dataSourceName).save(dir.getCanonicalPath)\n+        checkAnswer(\n+          sqlContext.read\n+            .format(dataSourceName)\n+            .option(\"dataSchema\", df.schema.json)\n+            .load(dir.getCanonicalPath),\n+          df.unionAll(df))\n+\n+        // This will fail because AlwaysFailOutputCommitter is used when we do append.\n+        intercept[Exception] {\n+          df.write.mode(\"overwrite\").format(dataSourceName).save(dir.getCanonicalPath)\n+        }\n+      }\n+      withTempPath { dir =>\n+        configuration.set(\"spark.sql.sources.outputCommitterClass\",\n+          \"org.apache.spark.sql.sources.AlwaysFailOutputCommitter\")\n+        // Since Parquet has its own output committer setting, also set it\n+        // to AlwaysFailParquetOutputCommitter at here.\n+        configuration.set(\"spark.sql.parquet.output.committer.class\",\n+          \"org.apache.spark.sql.sources.AlwaysFailParquetOutputCommitter\")"
+  }],
+  "prId": 6964
+}, {
+  "comments": [{
+    "author": {
+      "login": "liancheng"
+    },
+    "body": "\"success\" => \"succeed\"\n",
+    "commit": "43544c40aa85e80e873d95bc9e07167c26da74b2",
+    "createdAt": "2015-06-23T23:34:31Z",
+    "diffHunk": "@@ -497,6 +503,79 @@ abstract class HadoopFsRelationTest extends QueryTest with SQLTestUtils {\n       }\n     }\n   }\n+\n+  test(\"SPARK-8578 specified custom output committer will not be used to append data\") {\n+    val clonedConf = new Configuration(configuration)\n+    try {\n+      val df = sqlContext.range(1, 10).toDF(\"i\")\n+      withTempPath { dir =>\n+        df.write.mode(\"append\").format(dataSourceName).save(dir.getCanonicalPath)\n+        configuration.set(\"spark.sql.sources.outputCommitterClass\",\n+          \"org.apache.spark.sql.sources.AlwaysFailOutputCommitter\")\n+        // Since Parquet has its own output committer setting, also set it\n+        // to AlwaysFailParquetOutputCommitter at here.\n+        configuration.set(\"spark.sql.parquet.output.committer.class\",\n+          \"org.apache.spark.sql.sources.AlwaysFailParquetOutputCommitter\")\n+        // Because there data already exists,\n+        // this append should success because we will use the output committer associated"
+  }],
+  "prId": 6964
+}]

@@ -1,0 +1,43 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "Is that possible the same key already exists?",
+    "commit": "f7a629906f1ba15b663eb8ab1c6b49daa48c34d2",
+    "createdAt": "2018-05-20T17:31:19Z",
+    "diffHunk": "@@ -90,13 +92,37 @@ object SQLExecution {\n    * thread from the original one, this method can be used to connect the Spark jobs in this action\n    * with the known executionId, e.g., `BroadcastExchangeExec.relationFuture`.\n    */\n-  def withExecutionId[T](sc: SparkContext, executionId: String)(body: => T): T = {\n+  def withExecutionId[T](sparkSession: SparkSession, executionId: String)(body: => T): T = {\n+    val sc = sparkSession.sparkContext\n     val oldExecutionId = sc.getLocalProperty(SQLExecution.EXECUTION_ID_KEY)\n+    withSQLConfPropagated(sparkSession) {\n+      try {\n+        sc.setLocalProperty(SQLExecution.EXECUTION_ID_KEY, executionId)\n+        body\n+      } finally {\n+        sc.setLocalProperty(SQLExecution.EXECUTION_ID_KEY, oldExecutionId)\n+      }\n+    }\n+  }\n+\n+  def withSQLConfPropagated[T](sparkSession: SparkSession)(body: => T): T = {\n+    val sc = sparkSession.sparkContext\n+    // Set all the specified SQL configs to local properties, so that they can be available at\n+    // the executor side.\n+    val allConfigs = sparkSession.sessionState.conf.getAllConfs\n+    val originalLocalProps = allConfigs.collect {\n+      case (key, value) if key.startsWith(\"spark\") =>\n+        val originalValue = sc.getLocalProperty(key)\n+        sc.setLocalProperty(key, value)",
+    "line": 58
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "If users happen to set the same key in the local properties and want to access them in tasks, we will break it. It's very unlikely to happen and I'd say SQL config keys should be reserved for internal usage only.",
+    "commit": "f7a629906f1ba15b663eb8ab1c6b49daa48c34d2",
+    "createdAt": "2018-05-21T07:29:27Z",
+    "diffHunk": "@@ -90,13 +92,37 @@ object SQLExecution {\n    * thread from the original one, this method can be used to connect the Spark jobs in this action\n    * with the known executionId, e.g., `BroadcastExchangeExec.relationFuture`.\n    */\n-  def withExecutionId[T](sc: SparkContext, executionId: String)(body: => T): T = {\n+  def withExecutionId[T](sparkSession: SparkSession, executionId: String)(body: => T): T = {\n+    val sc = sparkSession.sparkContext\n     val oldExecutionId = sc.getLocalProperty(SQLExecution.EXECUTION_ID_KEY)\n+    withSQLConfPropagated(sparkSession) {\n+      try {\n+        sc.setLocalProperty(SQLExecution.EXECUTION_ID_KEY, executionId)\n+        body\n+      } finally {\n+        sc.setLocalProperty(SQLExecution.EXECUTION_ID_KEY, oldExecutionId)\n+      }\n+    }\n+  }\n+\n+  def withSQLConfPropagated[T](sparkSession: SparkSession)(body: => T): T = {\n+    val sc = sparkSession.sparkContext\n+    // Set all the specified SQL configs to local properties, so that they can be available at\n+    // the executor side.\n+    val allConfigs = sparkSession.sessionState.conf.getAllConfs\n+    val originalLocalProps = allConfigs.collect {\n+      case (key, value) if key.startsWith(\"spark\") =>\n+        val originalValue = sc.getLocalProperty(key)\n+        sc.setLocalProperty(key, value)",
+    "line": 58
+  }],
+  "prId": 21376
+}, {
+  "comments": [{
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "before we set the original one, should we reset the new key with null values?\r\n\r\n```Scala\r\n  def setLocalProperty(key: String, value: String) {\r\n    if (value == null) {\r\n      localProperties.get.remove(key)\r\n    } else {\r\n      localProperties.get.setProperty(key, value)\r\n    }\r\n  }\r\n```",
+    "commit": "f7a629906f1ba15b663eb8ab1c6b49daa48c34d2",
+    "createdAt": "2018-05-20T17:33:56Z",
+    "diffHunk": "@@ -90,13 +92,37 @@ object SQLExecution {\n    * thread from the original one, this method can be used to connect the Spark jobs in this action\n    * with the known executionId, e.g., `BroadcastExchangeExec.relationFuture`.\n    */\n-  def withExecutionId[T](sc: SparkContext, executionId: String)(body: => T): T = {\n+  def withExecutionId[T](sparkSession: SparkSession, executionId: String)(body: => T): T = {\n+    val sc = sparkSession.sparkContext\n     val oldExecutionId = sc.getLocalProperty(SQLExecution.EXECUTION_ID_KEY)\n+    withSQLConfPropagated(sparkSession) {\n+      try {\n+        sc.setLocalProperty(SQLExecution.EXECUTION_ID_KEY, executionId)\n+        body\n+      } finally {\n+        sc.setLocalProperty(SQLExecution.EXECUTION_ID_KEY, oldExecutionId)\n+      }\n+    }\n+  }\n+\n+  def withSQLConfPropagated[T](sparkSession: SparkSession)(body: => T): T = {\n+    val sc = sparkSession.sparkContext\n+    // Set all the specified SQL configs to local properties, so that they can be available at\n+    // the executor side.\n+    val allConfigs = sparkSession.sessionState.conf.getAllConfs\n+    val originalLocalProps = allConfigs.collect {\n+      case (key, value) if key.startsWith(\"spark\") =>\n+        val originalValue = sc.getLocalProperty(key)\n+        sc.setLocalProperty(key, value)\n+        (key, originalValue)\n+    }\n+\n     try {\n-      sc.setLocalProperty(SQLExecution.EXECUTION_ID_KEY, executionId)\n       body\n     } finally {\n-      sc.setLocalProperty(SQLExecution.EXECUTION_ID_KEY, oldExecutionId)\n+      for ((key, value) <- originalLocalProps) {",
+    "line": 67
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "`originalLocalProps` already contains entries with null value.",
+    "commit": "f7a629906f1ba15b663eb8ab1c6b49daa48c34d2",
+    "createdAt": "2018-05-21T07:28:24Z",
+    "diffHunk": "@@ -90,13 +92,37 @@ object SQLExecution {\n    * thread from the original one, this method can be used to connect the Spark jobs in this action\n    * with the known executionId, e.g., `BroadcastExchangeExec.relationFuture`.\n    */\n-  def withExecutionId[T](sc: SparkContext, executionId: String)(body: => T): T = {\n+  def withExecutionId[T](sparkSession: SparkSession, executionId: String)(body: => T): T = {\n+    val sc = sparkSession.sparkContext\n     val oldExecutionId = sc.getLocalProperty(SQLExecution.EXECUTION_ID_KEY)\n+    withSQLConfPropagated(sparkSession) {\n+      try {\n+        sc.setLocalProperty(SQLExecution.EXECUTION_ID_KEY, executionId)\n+        body\n+      } finally {\n+        sc.setLocalProperty(SQLExecution.EXECUTION_ID_KEY, oldExecutionId)\n+      }\n+    }\n+  }\n+\n+  def withSQLConfPropagated[T](sparkSession: SparkSession)(body: => T): T = {\n+    val sc = sparkSession.sparkContext\n+    // Set all the specified SQL configs to local properties, so that they can be available at\n+    // the executor side.\n+    val allConfigs = sparkSession.sessionState.conf.getAllConfs\n+    val originalLocalProps = allConfigs.collect {\n+      case (key, value) if key.startsWith(\"spark\") =>\n+        val originalValue = sc.getLocalProperty(key)\n+        sc.setLocalProperty(key, value)\n+        (key, originalValue)\n+    }\n+\n     try {\n-      sc.setLocalProperty(SQLExecution.EXECUTION_ID_KEY, executionId)\n       body\n     } finally {\n-      sc.setLocalProperty(SQLExecution.EXECUTION_ID_KEY, oldExecutionId)\n+      for ((key, value) <- originalLocalProps) {",
+    "line": 67
+  }],
+  "prId": 21376
+}]

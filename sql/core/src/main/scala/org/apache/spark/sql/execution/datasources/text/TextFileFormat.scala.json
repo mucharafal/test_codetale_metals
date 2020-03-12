@@ -1,0 +1,47 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "Here too and for CSV as well.",
+    "commit": "27c102deb1701fe62f776fe4da61dac959270b73",
+    "createdAt": "2016-12-01T04:07:08Z",
+    "diffHunk": "@@ -132,39 +128,17 @@ class TextOutputWriter(\n     context: TaskAttemptContext)\n   extends OutputWriter {\n \n-  private[this] val buffer = new Text()\n-\n-  private val recordWriter: RecordWriter[NullWritable, Text] = {\n-    new TextOutputFormat[NullWritable, Text]() {\n-      override def getDefaultWorkFile(context: TaskAttemptContext, extension: String): Path = {\n-        new Path(path)\n-      }\n-    }.getRecordWriter(context)\n-  }\n+  private val writer = CodecStreams.getOutputStream(context, new Path(path))\n \n   override def write(row: Row): Unit = throw new UnsupportedOperationException(\"call writeInternal\")\n \n   override protected[sql] def writeInternal(row: InternalRow): Unit = {\n     val utf8string = row.getUTF8String(0)\n-    buffer.set(utf8string.getBytes)\n-    recordWriter.write(NullWritable.get(), buffer)\n+    writer.write(utf8string.getBytes)\n+    writer.write('\\n')"
+  }, {
+    "author": {
+      "login": "NathanHowell"
+    },
+    "body": "This mirrors what Hadoop code does, see https://github.com/apache/hadoop/blob/f67237cbe7bc48a1b9088e990800b37529f1db2a/hadoop-mapreduce-project/hadoop-mapreduce-client/hadoop-mapreduce-client-core/src/main/java/org/apache/hadoop/mapreduce/lib/output/TextOutputFormat.java#L48-L49",
+    "commit": "27c102deb1701fe62f776fe4da61dac959270b73",
+    "createdAt": "2016-12-01T04:11:44Z",
+    "diffHunk": "@@ -132,39 +128,17 @@ class TextOutputWriter(\n     context: TaskAttemptContext)\n   extends OutputWriter {\n \n-  private[this] val buffer = new Text()\n-\n-  private val recordWriter: RecordWriter[NullWritable, Text] = {\n-    new TextOutputFormat[NullWritable, Text]() {\n-      override def getDefaultWorkFile(context: TaskAttemptContext, extension: String): Path = {\n-        new Path(path)\n-      }\n-    }.getRecordWriter(context)\n-  }\n+  private val writer = CodecStreams.getOutputStream(context, new Path(path))\n \n   override def write(row: Row): Unit = throw new UnsupportedOperationException(\"call writeInternal\")\n \n   override protected[sql] def writeInternal(row: InternalRow): Unit = {\n     val utf8string = row.getUTF8String(0)\n-    buffer.set(utf8string.getBytes)\n-    recordWriter.write(NullWritable.get(), buffer)\n+    writer.write(utf8string.getBytes)\n+    writer.write('\\n')"
+  }],
+  "prId": 16089
+}, {
+  "comments": [{
+    "author": {
+      "login": "rxin"
+    },
+    "body": "can you check UTF8String's implementation to make sure we are not creating a new byte array for each row?",
+    "commit": "27c102deb1701fe62f776fe4da61dac959270b73",
+    "createdAt": "2016-12-01T09:28:34Z",
+    "diffHunk": "@@ -132,39 +128,17 @@ class TextOutputWriter(\n     context: TaskAttemptContext)\n   extends OutputWriter {\n \n-  private[this] val buffer = new Text()\n-\n-  private val recordWriter: RecordWriter[NullWritable, Text] = {\n-    new TextOutputFormat[NullWritable, Text]() {\n-      override def getDefaultWorkFile(context: TaskAttemptContext, extension: String): Path = {\n-        new Path(path)\n-      }\n-    }.getRecordWriter(context)\n-  }\n+  private val writer = CodecStreams.getOutputStream(context, new Path(path))\n \n   override def write(row: Row): Unit = throw new UnsupportedOperationException(\"call writeInternal\")\n \n   override protected[sql] def writeInternal(row: InternalRow): Unit = {\n     val utf8string = row.getUTF8String(0)\n-    buffer.set(utf8string.getBytes)\n-    recordWriter.write(NullWritable.get(), buffer)\n+    writer.write(utf8string.getBytes)"
+  }, {
+    "author": {
+      "login": "NathanHowell"
+    },
+    "body": "It is creating a new array, I'll pass the internal one through instead.",
+    "commit": "27c102deb1701fe62f776fe4da61dac959270b73",
+    "createdAt": "2016-12-01T15:27:34Z",
+    "diffHunk": "@@ -132,39 +128,17 @@ class TextOutputWriter(\n     context: TaskAttemptContext)\n   extends OutputWriter {\n \n-  private[this] val buffer = new Text()\n-\n-  private val recordWriter: RecordWriter[NullWritable, Text] = {\n-    new TextOutputFormat[NullWritable, Text]() {\n-      override def getDefaultWorkFile(context: TaskAttemptContext, extension: String): Path = {\n-        new Path(path)\n-      }\n-    }.getRecordWriter(context)\n-  }\n+  private val writer = CodecStreams.getOutputStream(context, new Path(path))\n \n   override def write(row: Row): Unit = throw new UnsupportedOperationException(\"call writeInternal\")\n \n   override protected[sql] def writeInternal(row: InternalRow): Unit = {\n     val utf8string = row.getUTF8String(0)\n-    buffer.set(utf8string.getBytes)\n-    recordWriter.write(NullWritable.get(), buffer)\n+    writer.write(utf8string.getBytes)"
+  }, {
+    "author": {
+      "login": "NathanHowell"
+    },
+    "body": "Done, but I'm not 100% sure about the implementation. Can you have someone more familiar with `UTF8String`'s internals double check it?",
+    "commit": "27c102deb1701fe62f776fe4da61dac959270b73",
+    "createdAt": "2016-12-01T16:51:21Z",
+    "diffHunk": "@@ -132,39 +128,17 @@ class TextOutputWriter(\n     context: TaskAttemptContext)\n   extends OutputWriter {\n \n-  private[this] val buffer = new Text()\n-\n-  private val recordWriter: RecordWriter[NullWritable, Text] = {\n-    new TextOutputFormat[NullWritable, Text]() {\n-      override def getDefaultWorkFile(context: TaskAttemptContext, extension: String): Path = {\n-        new Path(path)\n-      }\n-    }.getRecordWriter(context)\n-  }\n+  private val writer = CodecStreams.getOutputStream(context, new Path(path))\n \n   override def write(row: Row): Unit = throw new UnsupportedOperationException(\"call writeInternal\")\n \n   override protected[sql] def writeInternal(row: InternalRow): Unit = {\n     val utf8string = row.getUTF8String(0)\n-    buffer.set(utf8string.getBytes)\n-    recordWriter.write(NullWritable.get(), buffer)\n+    writer.write(utf8string.getBytes)"
+  }],
+  "prId": 16089
+}]

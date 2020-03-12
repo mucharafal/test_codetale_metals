@@ -1,0 +1,13 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "adrian-wang"
+    },
+    "body": "Shall we cast the result of `math.pow` back to `DecimalType` for these three cases?\n",
+    "commit": "08d64b1608bd50671f8d2d76b65e975a9072d95c",
+    "createdAt": "2016-02-16T04:46:51Z",
+    "diffHunk": "@@ -523,11 +523,45 @@ case class Atan2(left: Expression, right: Expression)\n \n case class Pow(left: Expression, right: Expression)\n   extends BinaryMathExpression(math.pow, \"POWER\") {\n-  override def genCode(ctx: CodegenContext, ev: ExprCode): String = {\n-    defineCodeGen(ctx, ev, (c1, c2) => s\"java.lang.Math.pow($c1, $c2)\")\n-  }\n-}\n+  override def inputTypes: Seq[AbstractDataType] = Seq(NumericType, NumericType)\n+\n+  override def dataType: DataType = (left.dataType, right.dataType) match {\n+    case (dt: DecimalType, ByteType | ShortType | IntegerType) => dt\n+    case _ => DoubleType\n+  }\n+\n+  protected override def nullSafeEval(input1: Any, input2: Any): Any =\n+    (left.dataType, right.dataType) match {\n+      case (dt: DecimalType, ByteType) =>\n+        input1.asInstanceOf[Decimal].pow(input2.asInstanceOf[Byte])\n+      case (dt: DecimalType, ShortType) =>\n+        input1.asInstanceOf[Decimal].pow(input2.asInstanceOf[Short])\n+      case (dt: DecimalType, IntegerType) =>\n+        input1.asInstanceOf[Decimal].pow(input2.asInstanceOf[Int])\n+      case (dt: DecimalType, FloatType) =>\n+        math.pow(input1.asInstanceOf[Decimal].toDouble, input2.asInstanceOf[Float])\n+      case (dt: DecimalType, DoubleType) =>\n+        math.pow(input1.asInstanceOf[Decimal].toDouble, input2.asInstanceOf[Double])\n+      case (dt1: DecimalType, dt2: DecimalType) =>\n+        math.pow(input1.asInstanceOf[Decimal].toDouble, input2.asInstanceOf[Decimal].toDouble)",
+    "line": 37
+  }],
+  "prId": 11212
+}]

@@ -1,0 +1,28 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "jose-torres"
+    },
+    "body": "Is \"lag\" here just the difference (at the time a batch ends) between the last offset Spark knows about and the last offset Spark has processed? I'm not sure this is super useful to know. If maxOffsets isn't set it's always going to be 0, no matter how far Spark gets behind the Kafka cluster.",
+    "commit": "01e8451503e84ad471cd93373d2f2d6eaf43251c",
+    "createdAt": "2018-07-06T02:53:11Z",
+    "diffHunk": "@@ -95,4 +95,25 @@ private object JsonUtils {\n     }\n     Serialization.write(result)\n   }\n+\n+  /**\n+   * Write per-topic partition lag as json string"
+  }, {
+    "author": {
+      "login": "arunmahadevan"
+    },
+    "body": "This is the difference between the latest offsets in Kafka the time the metrics is reported (just after a micro-batch completes) and the latest offset Spark has processed. It can be 0 if spark keeps up with the rate at which messages are ingested into Kafka topics (steady state).\r\n\r\nI would assume we would always want to set some reasonable micro batch sizes by setting `maxOffsetsPerTrigger`. Otherwise spark can end up processing entire data in the topics in one micro batch (e.g. if the starting offset is set to earliest or the streaming job is stopped for sometime and restarted). IMO, we should address this by setting some sane defaults which is currently missing.\r\n\r\nIf we want to handle the custom metrics for Kafka outside the scope of this PR I will raise a separate one for this, but this can be really useful to identify issues like data skews in some partitions or some other issues causing spark to not keep up with the ingestion rate.",
+    "commit": "01e8451503e84ad471cd93373d2f2d6eaf43251c",
+    "createdAt": "2018-07-06T18:06:48Z",
+    "diffHunk": "@@ -95,4 +95,25 @@ private object JsonUtils {\n     }\n     Serialization.write(result)\n   }\n+\n+  /**\n+   * Write per-topic partition lag as json string"
+  }, {
+    "author": {
+      "login": "jose-torres"
+    },
+    "body": "I'd suggest handling the custom metrics for Kafka outside the scope of this PR. Maybe we should have a default maxOffsets, but given that we don't I'm worried about adding a metric that's misleading in the default case.",
+    "commit": "01e8451503e84ad471cd93373d2f2d6eaf43251c",
+    "createdAt": "2018-07-10T16:06:20Z",
+    "diffHunk": "@@ -95,4 +95,25 @@ private object JsonUtils {\n     }\n     Serialization.write(result)\n   }\n+\n+  /**\n+   * Write per-topic partition lag as json string"
+  }],
+  "prId": 21721
+}]

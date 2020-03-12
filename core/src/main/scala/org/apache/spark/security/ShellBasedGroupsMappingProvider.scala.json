@@ -1,0 +1,23 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "tgravescs"
+    },
+    "body": "make this a debug message. \n",
+    "commit": "5da94b884ddfc63da41ce3e670e60006ae5c4e2e",
+    "createdAt": "2016-04-28T19:07:51Z",
+    "diffHunk": "@@ -0,0 +1,53 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.security\n+\n+import org.apache.spark.internal.Logging\n+import org.apache.spark.util.Utils\n+\n+/**\n+ * This class is responsible for getting the groups for a particular user in Unix based\n+ * environments. This implementation uses the Unix Shell based id command to fetch the user groups\n+ * for the specified user. It does not cache the user groups as the invocations are expected\n+ * to be infrequent.\n+*/\n+\n+private[spark] class ShellBasedGroupsMappingProvider extends GroupMappingServiceProvider\n+  with Logging {\n+\n+  override def getGroups(username: String): Set[String] = {\n+    val userGroups = getUnixGroups(username)\n+    logInfo(\"User: \" + username + \" Groups: \" + userGroups.mkString(\",\"))"
+  }],
+  "prId": 12760
+}, {
+  "comments": [{
+    "author": {
+      "login": "tgravescs"
+    },
+    "body": "with logError, instead of calling e.getMessage, use logError(\"msg\", e)\n",
+    "commit": "5da94b884ddfc63da41ce3e670e60006ae5c4e2e",
+    "createdAt": "2016-04-28T19:11:30Z",
+    "diffHunk": "@@ -0,0 +1,53 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.security\n+\n+import org.apache.spark.internal.Logging\n+import org.apache.spark.util.Utils\n+\n+/**\n+ * This class is responsible for getting the groups for a particular user in Unix based\n+ * environments. This implementation uses the Unix Shell based id command to fetch the user groups\n+ * for the specified user. It does not cache the user groups as the invocations are expected\n+ * to be infrequent.\n+*/\n+\n+private[spark] class ShellBasedGroupsMappingProvider extends GroupMappingServiceProvider\n+  with Logging {\n+\n+  override def getGroups(username: String): Set[String] = {\n+    val userGroups = getUnixGroups(username)\n+    logInfo(\"User: \" + username + \" Groups: \" + userGroups.mkString(\",\"))\n+    userGroups\n+  }\n+\n+  private def getUnixGroups(username: String): Set[String] = {\n+    logDebug(\"getUnixGroupsFromSparkUtil got username=\" + username)\n+    val cmdSeq = Seq(\"bash\", \"-c\", \"id -Gn \" + username)\n+    var result: String = null\n+    try {\n+      result = Utils.executeAndGetOutput(cmdSeq)\n+      // we need to get rid of the trailing \"\\n\" from the result of command execution\n+      result = result.stripLineEnd\n+      logDebug(\"Usergroups from executeAndGetOutput= \" + result)\n+    } catch {\n+      case e: Exception => logError(\"Unable to get groups for user=\" + username + e.getMessage)"
+  }],
+  "prId": 12760
+}]

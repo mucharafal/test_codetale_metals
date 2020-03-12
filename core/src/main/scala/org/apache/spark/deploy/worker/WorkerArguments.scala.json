@@ -1,0 +1,136 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "Wait, this changes the semantics of this property. `spark.worker.ui.port` is not an environment variable but a Spark property. Can you change this back?\n",
+    "commit": "4ef1cbd76a5a741fe1cad8fb0e707a60b067f7d9",
+    "createdAt": "2014-09-16T17:01:55Z",
+    "diffHunk": "@@ -47,14 +48,15 @@ private[spark] class WorkerArguments(args: Array[String], conf: SparkConf) {\n   if (System.getenv(\"SPARK_WORKER_WEBUI_PORT\") != null) {\n     webUiPort = System.getenv(\"SPARK_WORKER_WEBUI_PORT\").toInt\n   }\n-  if (conf.contains(\"spark.worker.ui.port\")) {\n-    webUiPort = conf.get(\"spark.worker.ui.port\").toInt\n+  if (System.getenv(\"spark.worker.ui.port\")!= null) {\n+    webUiPort = System.getenv(\"spark.worker.ui.port\").toInt"
+  }, {
+    "author": {
+      "login": "witgo"
+    },
+    "body": "If the spark-defaults.conf file contains `spark.worker.ui.port` configuration, how should we do?\n",
+    "commit": "4ef1cbd76a5a741fe1cad8fb0e707a60b067f7d9",
+    "createdAt": "2014-09-17T01:37:10Z",
+    "diffHunk": "@@ -47,14 +48,15 @@ private[spark] class WorkerArguments(args: Array[String], conf: SparkConf) {\n   if (System.getenv(\"SPARK_WORKER_WEBUI_PORT\") != null) {\n     webUiPort = System.getenv(\"SPARK_WORKER_WEBUI_PORT\").toInt\n   }\n-  if (conf.contains(\"spark.worker.ui.port\")) {\n-    webUiPort = conf.get(\"spark.worker.ui.port\").toInt\n+  if (System.getenv(\"spark.worker.ui.port\")!= null) {\n+    webUiPort = System.getenv(\"spark.worker.ui.port\").toInt"
+  }, {
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "We should do `conf.get` as before (this code doesn't need to change).\n",
+    "commit": "4ef1cbd76a5a741fe1cad8fb0e707a60b067f7d9",
+    "createdAt": "2014-09-17T04:41:47Z",
+    "diffHunk": "@@ -47,14 +48,15 @@ private[spark] class WorkerArguments(args: Array[String], conf: SparkConf) {\n   if (System.getenv(\"SPARK_WORKER_WEBUI_PORT\") != null) {\n     webUiPort = System.getenv(\"SPARK_WORKER_WEBUI_PORT\").toInt\n   }\n-  if (conf.contains(\"spark.worker.ui.port\")) {\n-    webUiPort = conf.get(\"spark.worker.ui.port\").toInt\n+  if (System.getenv(\"spark.worker.ui.port\")!= null) {\n+    webUiPort = System.getenv(\"spark.worker.ui.port\").toInt"
+  }, {
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "This means we need to add back `SparkConf` as an argument to `WorkerArguments`\n",
+    "commit": "4ef1cbd76a5a741fe1cad8fb0e707a60b067f7d9",
+    "createdAt": "2014-09-17T04:42:44Z",
+    "diffHunk": "@@ -47,14 +48,15 @@ private[spark] class WorkerArguments(args: Array[String], conf: SparkConf) {\n   if (System.getenv(\"SPARK_WORKER_WEBUI_PORT\") != null) {\n     webUiPort = System.getenv(\"SPARK_WORKER_WEBUI_PORT\").toInt\n   }\n-  if (conf.contains(\"spark.worker.ui.port\")) {\n-    webUiPort = conf.get(\"spark.worker.ui.port\").toInt\n+  if (System.getenv(\"spark.worker.ui.port\")!= null) {\n+    webUiPort = System.getenv(\"spark.worker.ui.port\").toInt"
+  }, {
+    "author": {
+      "login": "witgo"
+    },
+    "body": "是这样的:在spark的源码中有非常多这样的代码:`val conf = new SparkConf` 例如:\n[SparkHadoopUtil.scala#L38](https://github.com/apache/spark/blob/master/core/src/main/scala/org/apache/spark/deploy/SparkHadoopUtil.scala#L38) ,[EventLoggingListener.scala#L216](https://github.com/apache/spark/blob/master/core/src/main/scala/org/apache/spark/scheduler/EventLoggingListener.scala#L216),\n这要求我们必须要设置`system property`. \n\n这样的话如果不改变初始化顺序, 我们需要同时设置`conf` 和 `sys.props`. \n",
+    "commit": "4ef1cbd76a5a741fe1cad8fb0e707a60b067f7d9",
+    "createdAt": "2014-09-17T05:19:57Z",
+    "diffHunk": "@@ -47,14 +48,15 @@ private[spark] class WorkerArguments(args: Array[String], conf: SparkConf) {\n   if (System.getenv(\"SPARK_WORKER_WEBUI_PORT\") != null) {\n     webUiPort = System.getenv(\"SPARK_WORKER_WEBUI_PORT\").toInt\n   }\n-  if (conf.contains(\"spark.worker.ui.port\")) {\n-    webUiPort = conf.get(\"spark.worker.ui.port\").toInt\n+  if (System.getenv(\"spark.worker.ui.port\")!= null) {\n+    webUiPort = System.getenv(\"spark.worker.ui.port\").toInt"
+  }, {
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "對，这一点我明白。我的意思是说要是我们在`SparkConf`初始化以后调用`conf.setIfMissing`，我们就不需要在`SparkConf`初始化之前设置有关的`sys.props`。这样的话我们就可以保持现有的初始化顺序。同时，因为`spark-defaults.conf`也可以设置`spark.worker.ui.port`，我们要先读取`spark-defaults.conf`才可以调用`conf.get(\"spark.worker.ui.port\")`。这些逻辑全都可以在`WorkerArgument`以内实现，那`Worker`就不需要怎么改。你懂我意思吗？\n",
+    "commit": "4ef1cbd76a5a741fe1cad8fb0e707a60b067f7d9",
+    "createdAt": "2014-09-17T17:50:21Z",
+    "diffHunk": "@@ -47,14 +48,15 @@ private[spark] class WorkerArguments(args: Array[String], conf: SparkConf) {\n   if (System.getenv(\"SPARK_WORKER_WEBUI_PORT\") != null) {\n     webUiPort = System.getenv(\"SPARK_WORKER_WEBUI_PORT\").toInt\n   }\n-  if (conf.contains(\"spark.worker.ui.port\")) {\n-    webUiPort = conf.get(\"spark.worker.ui.port\").toInt\n+  if (System.getenv(\"spark.worker.ui.port\")!= null) {\n+    webUiPort = System.getenv(\"spark.worker.ui.port\").toInt"
+  }, {
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "I didn't quite get that last part, could you guys clarify that? :-p\n",
+    "commit": "4ef1cbd76a5a741fe1cad8fb0e707a60b067f7d9",
+    "createdAt": "2014-09-17T17:54:34Z",
+    "diffHunk": "@@ -47,14 +48,15 @@ private[spark] class WorkerArguments(args: Array[String], conf: SparkConf) {\n   if (System.getenv(\"SPARK_WORKER_WEBUI_PORT\") != null) {\n     webUiPort = System.getenv(\"SPARK_WORKER_WEBUI_PORT\").toInt\n   }\n-  if (conf.contains(\"spark.worker.ui.port\")) {\n-    webUiPort = conf.get(\"spark.worker.ui.port\").toInt\n+  if (System.getenv(\"spark.worker.ui.port\")!= null) {\n+    webUiPort = System.getenv(\"spark.worker.ui.port\").toInt"
+  }, {
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "Ha, sorry about that.\n\n=== TRANSLATION ===\n@witgo: In Spark, we do the following a lot: `val conf = new SparkConf`. For example, SparkHadoopUtil.scala#L38 ,EventLoggingListener.scala#L216. This requires us to set `system property`. This way, if we don't change the initialization order, we need to set both `conf` and `sys.props`.\n\n@andrewor14 Yes, I understand that part. What I mean is if we call `conf.setIfMissing` after initializing `SparkConf`, then we don't need to set the corresponding configs through `sys.props` _before_ we initialize it. This way we can preserve the existing initialization order. At the same time, because `spark-defaults.conf` can also set `spark.worker.ui.port`, we need to first load `spark-defaults.conf` before accessing `conf.get(\"spark.worker.ui.port\")`. All of this logic can be implemented in `WorkerArgument`, then `Worker` doesn't need to change much. Do you understand what I mean?\n=== END ===\n",
+    "commit": "4ef1cbd76a5a741fe1cad8fb0e707a60b067f7d9",
+    "createdAt": "2014-09-17T21:49:32Z",
+    "diffHunk": "@@ -47,14 +48,15 @@ private[spark] class WorkerArguments(args: Array[String], conf: SparkConf) {\n   if (System.getenv(\"SPARK_WORKER_WEBUI_PORT\") != null) {\n     webUiPort = System.getenv(\"SPARK_WORKER_WEBUI_PORT\").toInt\n   }\n-  if (conf.contains(\"spark.worker.ui.port\")) {\n-    webUiPort = conf.get(\"spark.worker.ui.port\").toInt\n+  if (System.getenv(\"spark.worker.ui.port\")!= null) {\n+    webUiPort = System.getenv(\"spark.worker.ui.port\").toInt"
+  }],
+  "prId": 2379
+}, {
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "As mentioned elsewhere, we shouldn't remove `SparkConf` as an argument.\n",
+    "commit": "4ef1cbd76a5a741fe1cad8fb0e707a60b067f7d9",
+    "createdAt": "2014-09-17T04:45:19Z",
+    "diffHunk": "@@ -25,7 +25,7 @@ import org.apache.spark.SparkConf\n /**\n  * Command-line parser for the worker.\n  */\n-private[spark] class WorkerArguments(args: Array[String], conf: SparkConf) {"
+  }],
+  "prId": 2379
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "This whole block (from L56) is repeated three times in your patch. Could you add a helper method for this instead?\n\nYou could have something like:\n\n```\ndef loadPropertiesFile(file: Option[String], conf: SparkConf): Map[String, String] = {\n  val path = file.getOrElse(getDefaultConfigFile()))\n  getPropertiesFromFile(file)\n    .filter { case (k, v) =>\n      k.startsWith(\"spark.\")\n    }\n    .foreach { case (k, v) =>\n      conf.setIfMissing(k, v)\n      sys.props.getOrElseUpdate(k, v)\n    }\n}\n```\n\nAnd this whole block becomes a single method call. If you're creative you could even come up with an API that could be used by the SparkSubmit code too.\n",
+    "commit": "4ef1cbd76a5a741fe1cad8fb0e707a60b067f7d9",
+    "createdAt": "2014-09-18T17:57:08Z",
+    "diffHunk": "@@ -47,14 +48,25 @@ private[spark] class WorkerArguments(args: Array[String], conf: SparkConf) {\n   if (System.getenv(\"SPARK_WORKER_WEBUI_PORT\") != null) {\n     webUiPort = System.getenv(\"SPARK_WORKER_WEBUI_PORT\").toInt\n   }\n-  if (conf.contains(\"spark.worker.ui.port\")) {\n-    webUiPort = conf.get(\"spark.worker.ui.port\").toInt\n-  }\n   if (System.getenv(\"SPARK_WORKER_DIR\") != null) {\n     workDir = System.getenv(\"SPARK_WORKER_DIR\")\n   }\n \n   parse(args.toList)\n+  propertiesFile = Option(propertiesFile).getOrElse(Utils.getDefaultConfigFile)\n+\n+  Option(propertiesFile).foreach { file =>\n+    Utils.getPropertiesFromFile(file).filter { case (k, v) =>\n+      k.startsWith(\"spark.\")\n+    }.foreach { case (k, v) =>\n+      conf.setIfMissing(k, v)\n+      sys.props.getOrElseUpdate(k, v)\n+    }\n+  }"
+  }, {
+    "author": {
+      "login": "witgo"
+    },
+    "body": "I don't want to put too many things in a Utils's method. The method should be kept simple.\nHow about this?\n\n``` scala\n  def loadSparkProperties(properties: Map[String, String],\n    conf: SparkConf): Unit = {\n    properties.filter { case (k, v) =>\n      k.startsWith(\"spark.\")\n    }.foreach { case (k, v) =>\n      conf.setIfMissing(k, v)\n      sys.props.getOrElseUpdate(k, v)\n    }\n  }\n```\n",
+    "commit": "4ef1cbd76a5a741fe1cad8fb0e707a60b067f7d9",
+    "createdAt": "2014-09-18T18:17:28Z",
+    "diffHunk": "@@ -47,14 +48,25 @@ private[spark] class WorkerArguments(args: Array[String], conf: SparkConf) {\n   if (System.getenv(\"SPARK_WORKER_WEBUI_PORT\") != null) {\n     webUiPort = System.getenv(\"SPARK_WORKER_WEBUI_PORT\").toInt\n   }\n-  if (conf.contains(\"spark.worker.ui.port\")) {\n-    webUiPort = conf.get(\"spark.worker.ui.port\").toInt\n-  }\n   if (System.getenv(\"SPARK_WORKER_DIR\") != null) {\n     workDir = System.getenv(\"SPARK_WORKER_DIR\")\n   }\n \n   parse(args.toList)\n+  propertiesFile = Option(propertiesFile).getOrElse(Utils.getDefaultConfigFile)\n+\n+  Option(propertiesFile).foreach { file =>\n+    Utils.getPropertiesFromFile(file).filter { case (k, v) =>\n+      k.startsWith(\"spark.\")\n+    }.foreach { case (k, v) =>\n+      conf.setIfMissing(k, v)\n+      sys.props.getOrElseUpdate(k, v)\n+    }\n+  }"
+  }, {
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "That makes the call sites too complicated for my taste (since all of them need to deal with \"what's the default config file\" and \"how to load properties into a map\"), but no strong opinion. \n\nSince this method is already so single-purpose (load properties into an existing SparkConf), I feel like my suggestion makes things cleaner.\n",
+    "commit": "4ef1cbd76a5a741fe1cad8fb0e707a60b067f7d9",
+    "createdAt": "2014-09-18T18:24:59Z",
+    "diffHunk": "@@ -47,14 +48,25 @@ private[spark] class WorkerArguments(args: Array[String], conf: SparkConf) {\n   if (System.getenv(\"SPARK_WORKER_WEBUI_PORT\") != null) {\n     webUiPort = System.getenv(\"SPARK_WORKER_WEBUI_PORT\").toInt\n   }\n-  if (conf.contains(\"spark.worker.ui.port\")) {\n-    webUiPort = conf.get(\"spark.worker.ui.port\").toInt\n-  }\n   if (System.getenv(\"SPARK_WORKER_DIR\") != null) {\n     workDir = System.getenv(\"SPARK_WORKER_DIR\")\n   }\n \n   parse(args.toList)\n+  propertiesFile = Option(propertiesFile).getOrElse(Utils.getDefaultConfigFile)\n+\n+  Option(propertiesFile).foreach { file =>\n+    Utils.getPropertiesFromFile(file).filter { case (k, v) =>\n+      k.startsWith(\"spark.\")\n+    }.foreach { case (k, v) =>\n+      conf.setIfMissing(k, v)\n+      sys.props.getOrElseUpdate(k, v)\n+    }\n+  }"
+  }, {
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "+1 on factoring it out into `Utils`. These few lines are identical especially across `Master` and `Worker`. Though maybe I would call it something else, like `loadDefaultSparkProperties` (the \"default\" here is important because we call `setIfMissing` instead of `set`, and `getOrElseUpdate` instead of just overriding the system property).\n",
+    "commit": "4ef1cbd76a5a741fe1cad8fb0e707a60b067f7d9",
+    "createdAt": "2014-09-18T18:33:50Z",
+    "diffHunk": "@@ -47,14 +48,25 @@ private[spark] class WorkerArguments(args: Array[String], conf: SparkConf) {\n   if (System.getenv(\"SPARK_WORKER_WEBUI_PORT\") != null) {\n     webUiPort = System.getenv(\"SPARK_WORKER_WEBUI_PORT\").toInt\n   }\n-  if (conf.contains(\"spark.worker.ui.port\")) {\n-    webUiPort = conf.get(\"spark.worker.ui.port\").toInt\n-  }\n   if (System.getenv(\"SPARK_WORKER_DIR\") != null) {\n     workDir = System.getenv(\"SPARK_WORKER_DIR\")\n   }\n \n   parse(args.toList)\n+  propertiesFile = Option(propertiesFile).getOrElse(Utils.getDefaultConfigFile)\n+\n+  Option(propertiesFile).foreach { file =>\n+    Utils.getPropertiesFromFile(file).filter { case (k, v) =>\n+      k.startsWith(\"spark.\")\n+    }.foreach { case (k, v) =>\n+      conf.setIfMissing(k, v)\n+      sys.props.getOrElseUpdate(k, v)\n+    }\n+  }"
+  }],
+  "prId": 2379
+}, {
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "Same here, add a comment to explain ordering as suggested elsewhere\n",
+    "commit": "4ef1cbd76a5a741fe1cad8fb0e707a60b067f7d9",
+    "createdAt": "2014-09-24T21:20:49Z",
+    "diffHunk": "@@ -47,15 +48,18 @@ private[spark] class WorkerArguments(args: Array[String], conf: SparkConf) {\n   if (System.getenv(\"SPARK_WORKER_WEBUI_PORT\") != null) {\n     webUiPort = System.getenv(\"SPARK_WORKER_WEBUI_PORT\").toInt\n   }\n-  if (conf.contains(\"spark.worker.ui.port\")) {\n-    webUiPort = conf.get(\"spark.worker.ui.port\").toInt\n-  }\n   if (System.getenv(\"SPARK_WORKER_DIR\") != null) {\n     workDir = System.getenv(\"SPARK_WORKER_DIR\")\n   }\n \n   parse(args.toList)\n \n+  propertiesFile = Utils.loadDefaultSparkProperties(conf, propertiesFile)"
+  }],
+  "prId": 2379
+}, {
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "Update wording\n",
+    "commit": "4ef1cbd76a5a741fe1cad8fb0e707a60b067f7d9",
+    "createdAt": "2014-09-24T21:23:51Z",
+    "diffHunk": "@@ -122,7 +130,9 @@ private[spark] class WorkerArguments(args: Array[String], conf: SparkConf) {\n       \"  -i HOST, --ip IP         Hostname to listen on (deprecated, please use --host or -h)\\n\" +\n       \"  -h HOST, --host HOST     Hostname to listen on\\n\" +\n       \"  -p PORT, --port PORT     Port to listen on (default: random)\\n\" +\n-      \"  --webui-port PORT        Port for web UI (default: 8081)\")\n+      \"  --webui-port PORT        Port for web UI (default: 8081)\\n\" +\n+      \"  --properties-file FILE   Path to a file from which to load extra properties. If not \\n\" +\n+      \"                           specified, this will look for conf/spark-defaults.conf.\")"
+  }],
+  "prId": 2379
+}]

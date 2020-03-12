@@ -1,0 +1,63 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "> for simple case like DELETE by filters in this pr, just pass the filter to datasource is more suitable, a 'spark job' is not needed.\r\n\r\nBTW, I don't know why this is needed but it won't work with the combinations of `AND` and `OR`. `a OR b AND C`",
+    "commit": "bbf515666495cbf5f12731b3cdab4a23960f3d77",
+    "createdAt": "2019-07-15T04:24:40Z",
+    "diffHunk": "@@ -163,6 +187,7 @@ case class IsNotNull(attribute: String) extends Filter {\n  */\n @Stable\n case class And(left: Filter, right: Filter) extends Filter {\n+  override def sql: String = s\"${left.sql} AND ${right.sql}\""
+  }, {
+    "author": {
+      "login": "xianyinxin"
+    },
+    "body": "Thanks @HyukjinKwon . \r\n1. Why this function is introduced:\r\nsources.Filter is used for datasource to filter data, but before that, datasource needs to understand the filters. Add 'sql' function here helps datasources like JDBC can rebuild the sql string to filter data.\r\n2. For case like `a OR b AND c`, the final expected filter should be `OR(a, AND(b,c))`. The logic here indeed not well considered, including constants and parentheses. Will submit a fix soon.",
+    "commit": "bbf515666495cbf5f12731b3cdab4a23960f3d77",
+    "createdAt": "2019-07-15T06:49:31Z",
+    "diffHunk": "@@ -163,6 +187,7 @@ case class IsNotNull(attribute: String) extends Filter {\n  */\n @Stable\n case class And(left: Filter, right: Filter) extends Filter {\n+  override def sql: String = s\"${left.sql} AND ${right.sql}\""
+  }, {
+    "author": {
+      "login": "xianyinxin"
+    },
+    "body": "@HyukjinKwon , I'm doubt if I understand you correctly. Can you explain more about \"it won't work with the combinations of `AND` and `OR`. `a OR b AND C`\"?",
+    "commit": "bbf515666495cbf5f12731b3cdab4a23960f3d77",
+    "createdAt": "2019-07-15T09:43:46Z",
+    "diffHunk": "@@ -163,6 +187,7 @@ case class IsNotNull(attribute: String) extends Filter {\n  */\n @Stable\n case class And(left: Filter, right: Filter) extends Filter {\n+  override def sql: String = s\"${left.sql} AND ${right.sql}\""
+  }, {
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "I meant the fix you just did https://github.com/apache/spark/pull/25115/commits/bc9daf9329868961bcd2d8cf71e882a26ddb5857\r\n",
+    "commit": "bbf515666495cbf5f12731b3cdab4a23960f3d77",
+    "createdAt": "2019-07-15T10:36:59Z",
+    "diffHunk": "@@ -163,6 +187,7 @@ case class IsNotNull(attribute: String) extends Filter {\n  */\n @Stable\n case class And(left: Filter, right: Filter) extends Filter {\n+  override def sql: String = s\"${left.sql} AND ${right.sql}\""
+  }, {
+    "author": {
+      "login": "xianyinxin"
+    },
+    "body": "Thanks @HyukjinKwon ",
+    "commit": "bbf515666495cbf5f12731b3cdab4a23960f3d77",
+    "createdAt": "2019-07-16T04:12:00Z",
+    "diffHunk": "@@ -163,6 +187,7 @@ case class IsNotNull(attribute: String) extends Filter {\n  */\n @Stable\n case class And(left: Filter, right: Filter) extends Filter {\n+  override def sql: String = s\"${left.sql} AND ${right.sql}\""
+  }],
+  "prId": 25115
+}, {
+  "comments": [{
+    "author": {
+      "login": "rdblue"
+    },
+    "body": "Why not use `CatalogV2Implicits` to get the `quoted` method?",
+    "commit": "bbf515666495cbf5f12731b3cdab4a23960f3d77",
+    "createdAt": "2019-07-29T16:51:44Z",
+    "diffHunk": "@@ -36,10 +36,18 @@ abstract class Filter {\n    */\n   def references: Array[String]\n \n+  def sql: String\n+\n   protected def findReferences(value: Any): Array[String] = value match {\n     case f: Filter => f.references\n     case _ => Array.empty\n   }\n+\n+  protected def quoteIdentifier(name: String): String = {"
+  }, {
+    "author": {
+      "login": "xianyinxin"
+    },
+    "body": "This code is borrowed from `org.apache.spark.sql.catalyst.util.quoteIdentifier` which is a package util, while `CatalogV2Implicits.quoted` is not a public util function. We'd better unify the two, I think.\r\nHowever, this code is introduced by the needs in the delete test case. Now the test code is updated according to your suggestion below, which left this function (sources.filter.sql) unused. I have removed this function in the latest code. If we need this function in future (like translating filters to sql string in jdbc), we then submit a new pr.",
+    "commit": "bbf515666495cbf5f12731b3cdab4a23960f3d77",
+    "createdAt": "2019-08-01T08:39:30Z",
+    "diffHunk": "@@ -36,10 +36,18 @@ abstract class Filter {\n    */\n   def references: Array[String]\n \n+  def sql: String\n+\n   protected def findReferences(value: Any): Array[String] = value match {\n     case f: Filter => f.references\n     case _ => Array.empty\n   }\n+\n+  protected def quoteIdentifier(name: String): String = {"
+  }],
+  "prId": 25115
+}]

@@ -1,0 +1,22 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "marmbrus"
+    },
+    "body": "I'm worried that this is `O(n^2)` in the number of elements.\n",
+    "commit": "5f5abc11e5c117194cce39e603de2b29d8a44baf",
+    "createdAt": "2015-11-05T23:52:19Z",
+    "diffHunk": "@@ -227,6 +227,38 @@ case class GetArrayItem(child: Expression, ordinal: Expression)\n }\n \n /**\n+ * Combines two Arrays into one Array.\n+ */\n+case class ArrayUnion(left: Expression, right: Expression) extends BinaryOperator {\n+\n+  override def inputType: AbstractDataType = ArrayType\n+\n+  override def symbol: String = \"++\"\n+\n+  private def inputArrType = left.dataType.asInstanceOf[ArrayType]\n+  override def dataType: DataType = inputArrType\n+\n+  override def genCode(ctx: CodeGenContext, ev: GeneratedExpressionCode): String = {\n+    val arrayClass = classOf[GenericArrayData].getName\n+    val elementType = inputArrType.elementType\n+    nullSafeCodeGen(ctx, ev, (eval1, eval2) => {\n+      s\"\"\"\n+        final int n1 = $eval1.numElements();\n+        final int n2 = $eval2.numElements();\n+        final Object[] unionValues = new Object[n1 + n2];\n+        for (int j = 0; j < n1; j++) {\n+          unionValues[j] = ${ctx.getValue(eval1, elementType, \"j\")};\n+        }\n+        for (int j = 0; j < n2; j++) {\n+          unionValues[n1 + j] = ${ctx.getValue(eval2, elementType, \"j\")};\n+        }\n+        ${ev.primitive} = new $arrayClass(unionValues);\n+      \"\"\"\n+    })\n+  }",
+    "line": 32
+  }, {
+    "author": {
+      "login": "nburoojy"
+    },
+    "body": "You're absolutely right; since inserting an element into an array requires copying the entire array, the running time is `O(n^2)` in the number of elements in the destination array. N.B.: `n` is not necessarily the number of elements in the source data; e.g. if the user groups by `id`. \n",
+    "commit": "5f5abc11e5c117194cce39e603de2b29d8a44baf",
+    "createdAt": "2015-11-06T19:24:30Z",
+    "diffHunk": "@@ -227,6 +227,38 @@ case class GetArrayItem(child: Expression, ordinal: Expression)\n }\n \n /**\n+ * Combines two Arrays into one Array.\n+ */\n+case class ArrayUnion(left: Expression, right: Expression) extends BinaryOperator {\n+\n+  override def inputType: AbstractDataType = ArrayType\n+\n+  override def symbol: String = \"++\"\n+\n+  private def inputArrType = left.dataType.asInstanceOf[ArrayType]\n+  override def dataType: DataType = inputArrType\n+\n+  override def genCode(ctx: CodeGenContext, ev: GeneratedExpressionCode): String = {\n+    val arrayClass = classOf[GenericArrayData].getName\n+    val elementType = inputArrType.elementType\n+    nullSafeCodeGen(ctx, ev, (eval1, eval2) => {\n+      s\"\"\"\n+        final int n1 = $eval1.numElements();\n+        final int n2 = $eval2.numElements();\n+        final Object[] unionValues = new Object[n1 + n2];\n+        for (int j = 0; j < n1; j++) {\n+          unionValues[j] = ${ctx.getValue(eval1, elementType, \"j\")};\n+        }\n+        for (int j = 0; j < n2; j++) {\n+          unionValues[n1 + j] = ${ctx.getValue(eval2, elementType, \"j\")};\n+        }\n+        ${ev.primitive} = new $arrayClass(unionValues);\n+      \"\"\"\n+    })\n+  }",
+    "line": 32
+  }],
+  "prId": 8592
+}]

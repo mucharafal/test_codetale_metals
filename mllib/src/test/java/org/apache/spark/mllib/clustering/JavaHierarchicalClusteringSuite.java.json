@@ -1,0 +1,36 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Looks like this is using 4-space indent but should be 2.\n",
+    "commit": "b0b061edc4c2ad42deda00bb664534e1334b50e5",
+    "createdAt": "2014-10-23T16:35:39Z",
+    "diffHunk": "@@ -0,0 +1,78 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.mllib.clustering;\n+\n+import com.google.common.collect.Lists;\n+import org.apache.spark.api.java.JavaRDD;\n+import org.apache.spark.api.java.JavaSparkContext;\n+import org.apache.spark.mllib.linalg.Vector;\n+import org.apache.spark.mllib.linalg.Vectors;\n+import org.junit.After;\n+import org.junit.Before;\n+import org.junit.Test;\n+\n+import java.io.Serializable;\n+import java.util.List;\n+\n+import static org.junit.Assert.assertEquals;\n+\n+public class JavaHierarchicalClusteringSuite implements Serializable {\n+    private transient JavaSparkContext sc;"
+  }],
+  "prId": 2906
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "This is not a comment on this PR per se, but this whole `implements Serializable` and `transient JavaSparkContext` thing is an anti-pattern I wish wasn't used in even the tests.\n",
+    "commit": "b0b061edc4c2ad42deda00bb664534e1334b50e5",
+    "createdAt": "2015-01-08T09:12:25Z",
+    "diffHunk": "@@ -0,0 +1,77 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.mllib.clustering;\n+\n+import com.google.common.collect.Lists;\n+import org.apache.spark.api.java.JavaRDD;\n+import org.apache.spark.api.java.JavaSparkContext;\n+import org.apache.spark.mllib.linalg.Vector;\n+import org.apache.spark.mllib.linalg.Vectors;\n+import org.junit.After;\n+import org.junit.Before;\n+import org.junit.Test;\n+\n+import java.io.Serializable;\n+import java.util.List;\n+\n+import static org.junit.Assert.assertEquals;\n+\n+public class JavaHierarchicalClusteringSuite implements Serializable {\n+  private transient JavaSparkContext sc;",
+    "line": 35
+  }],
+  "prId": 2906
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "assert what the first one is? or is it not stable enough to reliably test for?\n",
+    "commit": "b0b061edc4c2ad42deda00bb664534e1334b50e5",
+    "createdAt": "2015-01-08T09:14:03Z",
+    "diffHunk": "@@ -0,0 +1,77 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.mllib.clustering;\n+\n+import com.google.common.collect.Lists;\n+import org.apache.spark.api.java.JavaRDD;\n+import org.apache.spark.api.java.JavaSparkContext;\n+import org.apache.spark.mllib.linalg.Vector;\n+import org.apache.spark.mllib.linalg.Vectors;\n+import org.junit.After;\n+import org.junit.Before;\n+import org.junit.Test;\n+\n+import java.io.Serializable;\n+import java.util.List;\n+\n+import static org.junit.Assert.assertEquals;\n+\n+public class JavaHierarchicalClusteringSuite implements Serializable {\n+  private transient JavaSparkContext sc;\n+\n+  @Before\n+  public void setUp() {\n+    sc = new JavaSparkContext(\"local\", \"JavaHierarchicalClustering\");\n+  }\n+\n+  @After\n+  public void tearDown() {\n+    sc.stop();\n+    sc = null;\n+  }\n+\n+  @Test\n+  public void runHierarchicalClusteringConstructor() {\n+    List<Vector> points = Lists.newArrayList(\n+        Vectors.dense(1.0, 2.0, 6.0),\n+        Vectors.dense(1.0, 3.0, 0.0),\n+        Vectors.dense(1.0, 4.0, 6.0)\n+    );\n+    Vector expectedCenter = Vectors.dense(1.0, 3.0, 4.0);\n+\n+    JavaRDD<Vector> data = sc.parallelize(points, 2);\n+    HierarchicalClusteringModel model = HierarchicalClustering.train(data.rdd(), 1);\n+    assertEquals(1, model.getCenters().length);\n+    assertEquals(expectedCenter, model.getCenters()[0]);\n+  }\n+\n+  @Test\n+  public void predictJavaRDD() {\n+    List<Vector> points = Lists.newArrayList(\n+        Vectors.dense(1.0, 2.0, 6.0),\n+        Vectors.dense(1.0, 3.0, 0.0),\n+        Vectors.dense(1.0, 4.0, 6.0)\n+    );\n+    JavaRDD<Vector> data = sc.parallelize(points, 2);\n+    HierarchicalClustering algo = new HierarchicalClustering().setNumClusters(1);\n+    HierarchicalClusteringModel model = algo.run(data.rdd());\n+    JavaRDD<Integer> predictions = model.predict(data);\n+    // Should be able to get the first prediction.\n+    predictions.first();",
+    "line": 75
+  }],
+  "prId": 2906
+}]

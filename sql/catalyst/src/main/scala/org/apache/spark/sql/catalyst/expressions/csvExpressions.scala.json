@@ -1,0 +1,64 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "seems indentation mistake",
+    "commit": "1895cdc3540f67ad562e10488ac7ffe7012d9ccc",
+    "createdAt": "2018-11-01T09:21:27Z",
+    "diffHunk": "@@ -174,3 +176,66 @@ case class SchemaOfCsv(\n \n   override def prettyName: String = \"schema_of_csv\"\n }\n+\n+/**\n+ * Converts a [[StructType]] to a CSV output string.\n+ */\n+// scalastyle:off line.size.limit\n+@ExpressionDescription(\n+  usage = \"_FUNC_(expr[, options]) - Returns a CSV string with a given struct value\",\n+  examples = \"\"\"\n+    Examples:\n+      > SELECT _FUNC_(named_struct('a', 1, 'b', 2));\n+       1,2\n+      > SELECT _FUNC_(named_struct('time', to_timestamp('2015-08-26', 'yyyy-MM-dd')), map('timestampFormat', 'dd/MM/yyyy'));\n+       \"26/08/2015\"\n+  \"\"\",\n+  since = \"3.0.0\")\n+// scalastyle:on line.size.limit\n+case class StructsToCsv(\n+                         options: Map[String, String],\n+                         child: Expression,\n+                         timeZoneId: Option[String] = None)"
+  }, {
+    "author": {
+      "login": "MaxGekk"
+    },
+    "body": "Just hoped `scalastyle` should show the mistakes of IntelliJ IDEA.",
+    "commit": "1895cdc3540f67ad562e10488ac7ffe7012d9ccc",
+    "createdAt": "2018-11-01T12:39:50Z",
+    "diffHunk": "@@ -174,3 +176,66 @@ case class SchemaOfCsv(\n \n   override def prettyName: String = \"schema_of_csv\"\n }\n+\n+/**\n+ * Converts a [[StructType]] to a CSV output string.\n+ */\n+// scalastyle:off line.size.limit\n+@ExpressionDescription(\n+  usage = \"_FUNC_(expr[, options]) - Returns a CSV string with a given struct value\",\n+  examples = \"\"\"\n+    Examples:\n+      > SELECT _FUNC_(named_struct('a', 1, 'b', 2));\n+       1,2\n+      > SELECT _FUNC_(named_struct('time', to_timestamp('2015-08-26', 'yyyy-MM-dd')), map('timestampFormat', 'dd/MM/yyyy'));\n+       \"26/08/2015\"\n+  \"\"\",\n+  since = \"3.0.0\")\n+// scalastyle:on line.size.limit\n+case class StructsToCsv(\n+                         options: Map[String, String],\n+                         child: Expression,\n+                         timeZoneId: Option[String] = None)"
+  }],
+  "prId": 22626
+}, {
+  "comments": [{
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "@MaxGekk, can we use the data from `writer` like `writer.toString` and `writer.reset()` like `to_json`? Looks we are going to avoid header (which is fine). If we explicitly set `header` to `false` in this expression, looks we don't need to add `writeToString` in `UnivocityGenerator`.",
+    "commit": "1895cdc3540f67ad562e10488ac7ffe7012d9ccc",
+    "createdAt": "2018-11-03T04:19:18Z",
+    "diffHunk": "@@ -174,3 +176,66 @@ case class SchemaOfCsv(\n \n   override def prettyName: String = \"schema_of_csv\"\n }\n+\n+/**\n+ * Converts a [[StructType]] to a CSV output string.\n+ */\n+// scalastyle:off line.size.limit\n+@ExpressionDescription(\n+  usage = \"_FUNC_(expr[, options]) - Returns a CSV string with a given struct value\",\n+  examples = \"\"\"\n+    Examples:\n+      > SELECT _FUNC_(named_struct('a', 1, 'b', 2));\n+       1,2\n+      > SELECT _FUNC_(named_struct('time', to_timestamp('2015-08-26', 'yyyy-MM-dd')), map('timestampFormat', 'dd/MM/yyyy'));\n+       \"26/08/2015\"\n+  \"\"\",\n+  since = \"3.0.0\")\n+// scalastyle:on line.size.limit\n+case class StructsToCsv(\n+     options: Map[String, String],\n+     child: Expression,\n+     timeZoneId: Option[String] = None)\n+  extends UnaryExpression with TimeZoneAwareExpression with CodegenFallback with ExpectsInputTypes {\n+  override def nullable: Boolean = true\n+\n+  def this(options: Map[String, String], child: Expression) = this(options, child, None)\n+\n+  // Used in `FunctionRegistry`\n+  def this(child: Expression) = this(Map.empty, child, None)\n+\n+  def this(child: Expression, options: Expression) =\n+    this(\n+      options = ExprUtils.convertToMapData(options),\n+      child = child,\n+      timeZoneId = None)\n+\n+  @transient\n+  lazy val writer = new CharArrayWriter()\n+\n+  @transient\n+  lazy val inputSchema: StructType = child.dataType match {\n+    case st: StructType => st\n+    case other =>\n+      throw new IllegalArgumentException(s\"Unsupported input type ${other.catalogString}\")\n+  }\n+\n+  @transient\n+  lazy val gen = new UnivocityGenerator(\n+    inputSchema, writer, new CSVOptions(options, columnPruning = true, timeZoneId.get))\n+\n+  // This converts rows to the CSV output according to the given schema.\n+  @transient\n+  lazy val converter: Any => UTF8String = {\n+    (row: Any) => UTF8String.fromString(gen.writeToString(row.asInstanceOf[InternalRow]))",
+    "line": 64
+  }, {
+    "author": {
+      "login": "MaxGekk"
+    },
+    "body": "I tried to use the functions initially but had to add `writeToString` in the commit https://github.com/apache/spark/pull/22626/commits/19f58a403b248f936e30091fedd5eac17eb24f25 because `\\n` was added by `uniVocity` at the end of strings.",
+    "commit": "1895cdc3540f67ad562e10488ac7ffe7012d9ccc",
+    "createdAt": "2018-11-03T13:53:06Z",
+    "diffHunk": "@@ -174,3 +176,66 @@ case class SchemaOfCsv(\n \n   override def prettyName: String = \"schema_of_csv\"\n }\n+\n+/**\n+ * Converts a [[StructType]] to a CSV output string.\n+ */\n+// scalastyle:off line.size.limit\n+@ExpressionDescription(\n+  usage = \"_FUNC_(expr[, options]) - Returns a CSV string with a given struct value\",\n+  examples = \"\"\"\n+    Examples:\n+      > SELECT _FUNC_(named_struct('a', 1, 'b', 2));\n+       1,2\n+      > SELECT _FUNC_(named_struct('time', to_timestamp('2015-08-26', 'yyyy-MM-dd')), map('timestampFormat', 'dd/MM/yyyy'));\n+       \"26/08/2015\"\n+  \"\"\",\n+  since = \"3.0.0\")\n+// scalastyle:on line.size.limit\n+case class StructsToCsv(\n+     options: Map[String, String],\n+     child: Expression,\n+     timeZoneId: Option[String] = None)\n+  extends UnaryExpression with TimeZoneAwareExpression with CodegenFallback with ExpectsInputTypes {\n+  override def nullable: Boolean = true\n+\n+  def this(options: Map[String, String], child: Expression) = this(options, child, None)\n+\n+  // Used in `FunctionRegistry`\n+  def this(child: Expression) = this(Map.empty, child, None)\n+\n+  def this(child: Expression, options: Expression) =\n+    this(\n+      options = ExprUtils.convertToMapData(options),\n+      child = child,\n+      timeZoneId = None)\n+\n+  @transient\n+  lazy val writer = new CharArrayWriter()\n+\n+  @transient\n+  lazy val inputSchema: StructType = child.dataType match {\n+    case st: StructType => st\n+    case other =>\n+      throw new IllegalArgumentException(s\"Unsupported input type ${other.catalogString}\")\n+  }\n+\n+  @transient\n+  lazy val gen = new UnivocityGenerator(\n+    inputSchema, writer, new CSVOptions(options, columnPruning = true, timeZoneId.get))\n+\n+  // This converts rows to the CSV output according to the given schema.\n+  @transient\n+  lazy val converter: Any => UTF8String = {\n+    (row: Any) => UTF8String.fromString(gen.writeToString(row.asInstanceOf[InternalRow]))",
+    "line": 64
+  }],
+  "prId": 22626
+}, {
+  "comments": [{
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "I think we can `StructType :: Nil`",
+    "commit": "1895cdc3540f67ad562e10488ac7ffe7012d9ccc",
+    "createdAt": "2018-11-03T04:21:44Z",
+    "diffHunk": "@@ -174,3 +176,66 @@ case class SchemaOfCsv(\n \n   override def prettyName: String = \"schema_of_csv\"\n }\n+\n+/**\n+ * Converts a [[StructType]] to a CSV output string.\n+ */\n+// scalastyle:off line.size.limit\n+@ExpressionDescription(\n+  usage = \"_FUNC_(expr[, options]) - Returns a CSV string with a given struct value\",\n+  examples = \"\"\"\n+    Examples:\n+      > SELECT _FUNC_(named_struct('a', 1, 'b', 2));\n+       1,2\n+      > SELECT _FUNC_(named_struct('time', to_timestamp('2015-08-26', 'yyyy-MM-dd')), map('timestampFormat', 'dd/MM/yyyy'));\n+       \"26/08/2015\"\n+  \"\"\",\n+  since = \"3.0.0\")\n+// scalastyle:on line.size.limit\n+case class StructsToCsv(\n+     options: Map[String, String],\n+     child: Expression,\n+     timeZoneId: Option[String] = None)\n+  extends UnaryExpression with TimeZoneAwareExpression with CodegenFallback with ExpectsInputTypes {\n+  override def nullable: Boolean = true\n+\n+  def this(options: Map[String, String], child: Expression) = this(options, child, None)\n+\n+  // Used in `FunctionRegistry`\n+  def this(child: Expression) = this(Map.empty, child, None)\n+\n+  def this(child: Expression, options: Expression) =\n+    this(\n+      options = ExprUtils.convertToMapData(options),\n+      child = child,\n+      timeZoneId = None)\n+\n+  @transient\n+  lazy val writer = new CharArrayWriter()\n+\n+  @transient\n+  lazy val inputSchema: StructType = child.dataType match {\n+    case st: StructType => st\n+    case other =>\n+      throw new IllegalArgumentException(s\"Unsupported input type ${other.catalogString}\")\n+  }\n+\n+  @transient\n+  lazy val gen = new UnivocityGenerator(\n+    inputSchema, writer, new CSVOptions(options, columnPruning = true, timeZoneId.get))\n+\n+  // This converts rows to the CSV output according to the given schema.\n+  @transient\n+  lazy val converter: Any => UTF8String = {\n+    (row: Any) => UTF8String.fromString(gen.writeToString(row.asInstanceOf[InternalRow]))\n+  }\n+\n+  override def dataType: DataType = StringType\n+\n+  override def withTimeZone(timeZoneId: String): TimeZoneAwareExpression =\n+    copy(timeZoneId = Option(timeZoneId))\n+\n+  override def nullSafeEval(value: Any): Any = converter(value)\n+\n+  override def inputTypes: Seq[AbstractDataType] = TypeCollection(StructType) :: Nil"
+  }],
+  "prId": 22626
+}, {
+  "comments": [{
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "nit: We wouldn't need `lazy val writer` then but just `new CharArrayWriter()` here.",
+    "commit": "1895cdc3540f67ad562e10488ac7ffe7012d9ccc",
+    "createdAt": "2018-11-04T06:56:35Z",
+    "diffHunk": "@@ -174,3 +176,68 @@ case class SchemaOfCsv(\n \n   override def prettyName: String = \"schema_of_csv\"\n }\n+\n+/**\n+ * Converts a [[StructType]] to a CSV output string.\n+ */\n+// scalastyle:off line.size.limit\n+@ExpressionDescription(\n+  usage = \"_FUNC_(expr[, options]) - Returns a CSV string with a given struct value\",\n+  examples = \"\"\"\n+    Examples:\n+      > SELECT _FUNC_(named_struct('a', 1, 'b', 2));\n+       1,2\n+      > SELECT _FUNC_(named_struct('time', to_timestamp('2015-08-26', 'yyyy-MM-dd')), map('timestampFormat', 'dd/MM/yyyy'));\n+       \"26/08/2015\"\n+  \"\"\",\n+  since = \"3.0.0\")\n+// scalastyle:on line.size.limit\n+case class StructsToCsv(\n+     options: Map[String, String],\n+     child: Expression,\n+     timeZoneId: Option[String] = None)\n+  extends UnaryExpression with TimeZoneAwareExpression with CodegenFallback with ExpectsInputTypes {\n+  override def nullable: Boolean = true\n+\n+  def this(options: Map[String, String], child: Expression) = this(options, child, None)\n+\n+  // Used in `FunctionRegistry`\n+  def this(child: Expression) = this(Map.empty, child, None)\n+\n+  def this(child: Expression, options: Expression) =\n+    this(\n+      options = ExprUtils.convertToMapData(options),\n+      child = child,\n+      timeZoneId = None)\n+\n+  @transient\n+  lazy val writer = new CharArrayWriter()\n+\n+  @transient\n+  lazy val inputSchema: StructType = child.dataType match {\n+    case st: StructType => st\n+    case other =>\n+      throw new IllegalArgumentException(s\"Unsupported input type ${other.catalogString}\")\n+  }\n+\n+  @transient\n+  lazy val gen = new UnivocityGenerator(\n+    inputSchema, writer, new CSVOptions(options, columnPruning = true, timeZoneId.get))",
+    "line": 59
+  }],
+  "prId": 22626
+}]

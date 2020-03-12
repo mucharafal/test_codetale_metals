@@ -1,0 +1,71 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "rxin"
+    },
+    "body": "should data be long[], or an off-heap able long array? (i.e. it is fairly possible for the pointers to be as large as the records, for small records)\n",
+    "commit": "ef0a86e41e9b390e6c0d60a6ed2105dbc54431f7",
+    "createdAt": "2015-05-07T00:19:48Z",
+    "diffHunk": "@@ -0,0 +1,68 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.shuffle.unsafe;\n+\n+import org.apache.spark.util.collection.SortDataFormat;\n+\n+final class UnsafeShuffleSortDataFormat extends SortDataFormat<PackedRecordPointer, long[]> {",
+    "line": 22
+  }, {
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "One subtlety is that TimSort calls `allocate()` to create the data buffer but it doesn't call any corresponding cleanup method.  If it's okay to defer all cleanup until the end of the sort, then we can track our allocations and free them all at once.  If we want to clean up during the sort, though, I think we'll have to extend TimSort to perform this cleanup.\n",
+    "commit": "ef0a86e41e9b390e6c0d60a6ed2105dbc54431f7",
+    "createdAt": "2015-05-07T00:36:35Z",
+    "diffHunk": "@@ -0,0 +1,68 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.shuffle.unsafe;\n+\n+import org.apache.spark.util.collection.SortDataFormat;\n+\n+final class UnsafeShuffleSortDataFormat extends SortDataFormat<PackedRecordPointer, long[]> {",
+    "line": 22
+  }, {
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "I've filed https://issues.apache.org/jira/browse/SPARK-7542 so that we don't forget to follow up on this.\n",
+    "commit": "ef0a86e41e9b390e6c0d60a6ed2105dbc54431f7",
+    "createdAt": "2015-05-11T21:48:28Z",
+    "diffHunk": "@@ -0,0 +1,68 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.shuffle.unsafe;\n+\n+import org.apache.spark.util.collection.SortDataFormat;\n+\n+final class UnsafeShuffleSortDataFormat extends SortDataFormat<PackedRecordPointer, long[]> {",
+    "line": 22
+  }],
+  "prId": 5868
+}, {
+  "comments": [{
+    "author": {
+      "login": "rxin"
+    },
+    "body": "what's keeping us from using Integer.MAX_VALUE?\n",
+    "commit": "ef0a86e41e9b390e6c0d60a6ed2105dbc54431f7",
+    "createdAt": "2015-05-07T00:20:47Z",
+    "diffHunk": "@@ -0,0 +1,68 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.shuffle.unsafe;\n+\n+import org.apache.spark.util.collection.SortDataFormat;\n+\n+final class UnsafeShuffleSortDataFormat extends SortDataFormat<PackedRecordPointer, long[]> {\n+\n+  public static final UnsafeShuffleSortDataFormat INSTANCE = new UnsafeShuffleSortDataFormat();\n+\n+  private UnsafeShuffleSortDataFormat() { }\n+\n+  @Override\n+  public PackedRecordPointer getKey(long[] data, int pos) {\n+    // Since we re-use keys, this method shouldn't be called.\n+    throw new UnsupportedOperationException();\n+  }\n+\n+  @Override\n+  public PackedRecordPointer newKey() {\n+    return new PackedRecordPointer();\n+  }\n+\n+  @Override\n+  public PackedRecordPointer getKey(long[] data, int pos, PackedRecordPointer reuse) {\n+    reuse.packedRecordPointer = data[pos];\n+    return reuse;\n+  }\n+\n+  @Override\n+  public void swap(long[] data, int pos0, int pos1) {\n+    final long temp = data[pos0];\n+    data[pos0] = data[pos1];\n+    data[pos1] = temp;\n+  }\n+\n+  @Override\n+  public void copyElement(long[] src, int srcPos, long[] dst, int dstPos) {\n+    dst[dstPos] = src[srcPos];\n+  }\n+\n+  @Override\n+  public void copyRange(long[] src, int srcPos, long[] dst, int dstPos, int length) {\n+    System.arraycopy(src, srcPos, dst, dstPos, length);\n+  }\n+\n+  @Override\n+  public long[] allocate(int length) {\n+    assert (length < Integer.MAX_VALUE) : \"Length \" + length + \" is too large\";"
+  }, {
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "Nothing; this is an off-by-one error that was introduced during a refactoring.  Good catch.\n",
+    "commit": "ef0a86e41e9b390e6c0d60a6ed2105dbc54431f7",
+    "createdAt": "2015-05-07T00:22:18Z",
+    "diffHunk": "@@ -0,0 +1,68 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.shuffle.unsafe;\n+\n+import org.apache.spark.util.collection.SortDataFormat;\n+\n+final class UnsafeShuffleSortDataFormat extends SortDataFormat<PackedRecordPointer, long[]> {\n+\n+  public static final UnsafeShuffleSortDataFormat INSTANCE = new UnsafeShuffleSortDataFormat();\n+\n+  private UnsafeShuffleSortDataFormat() { }\n+\n+  @Override\n+  public PackedRecordPointer getKey(long[] data, int pos) {\n+    // Since we re-use keys, this method shouldn't be called.\n+    throw new UnsupportedOperationException();\n+  }\n+\n+  @Override\n+  public PackedRecordPointer newKey() {\n+    return new PackedRecordPointer();\n+  }\n+\n+  @Override\n+  public PackedRecordPointer getKey(long[] data, int pos, PackedRecordPointer reuse) {\n+    reuse.packedRecordPointer = data[pos];\n+    return reuse;\n+  }\n+\n+  @Override\n+  public void swap(long[] data, int pos0, int pos1) {\n+    final long temp = data[pos0];\n+    data[pos0] = data[pos1];\n+    data[pos1] = temp;\n+  }\n+\n+  @Override\n+  public void copyElement(long[] src, int srcPos, long[] dst, int dstPos) {\n+    dst[dstPos] = src[srcPos];\n+  }\n+\n+  @Override\n+  public void copyRange(long[] src, int srcPos, long[] dst, int dstPos, int length) {\n+    System.arraycopy(src, srcPos, dst, dstPos, length);\n+  }\n+\n+  @Override\n+  public long[] allocate(int length) {\n+    assert (length < Integer.MAX_VALUE) : \"Length \" + length + \" is too large\";"
+  }],
+  "prId": 5868
+}, {
+  "comments": [{
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "I ran our test suite through IntelliJ's code coverage metrics and it looks like this method is never called.  I'm going to see if I can concoct a test that causes TimSort to call it.\n",
+    "commit": "ef0a86e41e9b390e6c0d60a6ed2105dbc54431f7",
+    "createdAt": "2015-05-11T22:57:05Z",
+    "diffHunk": "@@ -0,0 +1,67 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.shuffle.unsafe;\n+\n+import org.apache.spark.util.collection.SortDataFormat;\n+\n+final class UnsafeShuffleSortDataFormat extends SortDataFormat<PackedRecordPointer, long[]> {\n+\n+  public static final UnsafeShuffleSortDataFormat INSTANCE = new UnsafeShuffleSortDataFormat();\n+\n+  private UnsafeShuffleSortDataFormat() { }\n+\n+  @Override\n+  public PackedRecordPointer getKey(long[] data, int pos) {\n+    // Since we re-use keys, this method shouldn't be called.\n+    throw new UnsupportedOperationException();\n+  }\n+\n+  @Override\n+  public PackedRecordPointer newKey() {\n+    return new PackedRecordPointer();\n+  }\n+\n+  @Override\n+  public PackedRecordPointer getKey(long[] data, int pos, PackedRecordPointer reuse) {\n+    reuse.set(data[pos]);\n+    return reuse;\n+  }\n+\n+  @Override\n+  public void swap(long[] data, int pos0, int pos1) {",
+    "line": 46
+  }, {
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "This is now covered.\n",
+    "commit": "ef0a86e41e9b390e6c0d60a6ed2105dbc54431f7",
+    "createdAt": "2015-05-11T23:58:44Z",
+    "diffHunk": "@@ -0,0 +1,67 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.shuffle.unsafe;\n+\n+import org.apache.spark.util.collection.SortDataFormat;\n+\n+final class UnsafeShuffleSortDataFormat extends SortDataFormat<PackedRecordPointer, long[]> {\n+\n+  public static final UnsafeShuffleSortDataFormat INSTANCE = new UnsafeShuffleSortDataFormat();\n+\n+  private UnsafeShuffleSortDataFormat() { }\n+\n+  @Override\n+  public PackedRecordPointer getKey(long[] data, int pos) {\n+    // Since we re-use keys, this method shouldn't be called.\n+    throw new UnsupportedOperationException();\n+  }\n+\n+  @Override\n+  public PackedRecordPointer newKey() {\n+    return new PackedRecordPointer();\n+  }\n+\n+  @Override\n+  public PackedRecordPointer getKey(long[] data, int pos, PackedRecordPointer reuse) {\n+    reuse.set(data[pos]);\n+    return reuse;\n+  }\n+\n+  @Override\n+  public void swap(long[] data, int pos0, int pos1) {",
+    "line": 46
+  }],
+  "prId": 5868
+}]

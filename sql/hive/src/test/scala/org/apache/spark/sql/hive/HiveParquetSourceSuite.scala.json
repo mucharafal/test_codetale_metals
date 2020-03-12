@@ -1,0 +1,60 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "@kevinyu98 . Is this testing exceptions for the above all three SQLs? We use `intercept[IOException]` to test expected `Exception`s.\r\n\r\nFor now, this looks like not a robust test case, because there is no `assert(false)` after `sql(sqlStmt)`. We need to check the individual query failure and success exactly for the specific configuration.",
+    "commit": "fef8c6845ccce792474a8c65ee6ebfd9624bb4b4",
+    "createdAt": "2018-12-06T08:36:28Z",
+    "diffHunk": "@@ -222,4 +223,66 @@ class HiveParquetSourceSuite extends ParquetPartitioningTest {\n       assert(df4.columns === Array(\"str\", \"max_int\"))\n     }\n   }\n+\n+  test(\"SPARK-25993 CREATE EXTERNAL TABLE with subdirectories\") {\n+    withTempPath { path =>\n+      withTable(\"tbl1\", \"tbl2\", \"tbl3\") {\n+        val someDF1 = Seq((1, 1, \"parq1\"), (2, 2, \"parq2\")).\n+          toDF(\"c1\", \"c2\", \"c3\").repartition(1)\n+        val dataDir = s\"${path.getCanonicalPath}/l3/l2/l1/\"\n+        val parentDir = s\"${path.getCanonicalPath}/l3/l2/\"\n+        val wildcardParentDir = new File(s\"${path}/l3/l2/*\").toURI\n+        val wildcardL3Dir = new File(s\"${path}/l3/*\").toURI\n+        someDF1.write.parquet(dataDir)\n+        val parentDirStatement =\n+          s\"\"\"\n+             |CREATE EXTERNAL TABLE tbl1(\n+             |  c1 int,\n+             |  c2 int,\n+             |  c3 string)\n+             |STORED AS parquet\n+             |LOCATION '${parentDir}'\"\"\".stripMargin\n+        sql(parentDirStatement)\n+        val wildcardStatement =\n+          s\"\"\"\n+             |CREATE EXTERNAL TABLE tbl2(\n+             |  c1 int,\n+             |  c2 int,\n+             |  c3 string)\n+             |STORED AS parquet\n+             |LOCATION '${wildcardParentDir}'\"\"\".stripMargin\n+        sql(wildcardStatement)\n+        val wildcardL3Statement =\n+          s\"\"\"\n+             |CREATE EXTERNAL TABLE tbl3(\n+             |  c1 int,\n+             |  c2 int,\n+             |  c3 string)\n+             |STORED AS parquet\n+             |LOCATION '${wildcardL3Dir}'\"\"\".stripMargin\n+        sql(wildcardL3Statement)\n+\n+        Seq(\"true\", \"false\").foreach { parquetConversion =>\n+          withSQLConf(HiveUtils.CONVERT_METASTORE_PARQUET.key -> parquetConversion) {\n+            if (parquetConversion == \"true\") {\n+              checkAnswer(sql(\"select * from tbl1\"), Nil)\n+              checkAnswer(sql(\"select * from tbl2\"),\n+                (1 to 2).map(i => Row(i, i, s\"parq$i\")))\n+              checkAnswer(sql(\"select * from tbl3\"), Nil)\n+            } else {\n+              Seq(\"select * from tbl1\", \"select * from tbl2\", \"select * from tbl3\").foreach {\n+                sqlStmt =>\n+                  try {\n+                    sql(sqlStmt)\n+                  } catch {\n+                    case e: IOException =>\n+                      assert(e.getMessage().contains(\"java.io.IOException: Not a file\"))\n+                  }"
+  }, {
+    "author": {
+      "login": "kevinyu98"
+    },
+    "body": "you are right, I will make changes. Thanks.",
+    "commit": "fef8c6845ccce792474a8c65ee6ebfd9624bb4b4",
+    "createdAt": "2018-12-07T00:32:40Z",
+    "diffHunk": "@@ -222,4 +223,66 @@ class HiveParquetSourceSuite extends ParquetPartitioningTest {\n       assert(df4.columns === Array(\"str\", \"max_int\"))\n     }\n   }\n+\n+  test(\"SPARK-25993 CREATE EXTERNAL TABLE with subdirectories\") {\n+    withTempPath { path =>\n+      withTable(\"tbl1\", \"tbl2\", \"tbl3\") {\n+        val someDF1 = Seq((1, 1, \"parq1\"), (2, 2, \"parq2\")).\n+          toDF(\"c1\", \"c2\", \"c3\").repartition(1)\n+        val dataDir = s\"${path.getCanonicalPath}/l3/l2/l1/\"\n+        val parentDir = s\"${path.getCanonicalPath}/l3/l2/\"\n+        val wildcardParentDir = new File(s\"${path}/l3/l2/*\").toURI\n+        val wildcardL3Dir = new File(s\"${path}/l3/*\").toURI\n+        someDF1.write.parquet(dataDir)\n+        val parentDirStatement =\n+          s\"\"\"\n+             |CREATE EXTERNAL TABLE tbl1(\n+             |  c1 int,\n+             |  c2 int,\n+             |  c3 string)\n+             |STORED AS parquet\n+             |LOCATION '${parentDir}'\"\"\".stripMargin\n+        sql(parentDirStatement)\n+        val wildcardStatement =\n+          s\"\"\"\n+             |CREATE EXTERNAL TABLE tbl2(\n+             |  c1 int,\n+             |  c2 int,\n+             |  c3 string)\n+             |STORED AS parquet\n+             |LOCATION '${wildcardParentDir}'\"\"\".stripMargin\n+        sql(wildcardStatement)\n+        val wildcardL3Statement =\n+          s\"\"\"\n+             |CREATE EXTERNAL TABLE tbl3(\n+             |  c1 int,\n+             |  c2 int,\n+             |  c3 string)\n+             |STORED AS parquet\n+             |LOCATION '${wildcardL3Dir}'\"\"\".stripMargin\n+        sql(wildcardL3Statement)\n+\n+        Seq(\"true\", \"false\").foreach { parquetConversion =>\n+          withSQLConf(HiveUtils.CONVERT_METASTORE_PARQUET.key -> parquetConversion) {\n+            if (parquetConversion == \"true\") {\n+              checkAnswer(sql(\"select * from tbl1\"), Nil)\n+              checkAnswer(sql(\"select * from tbl2\"),\n+                (1 to 2).map(i => Row(i, i, s\"parq$i\")))\n+              checkAnswer(sql(\"select * from tbl3\"), Nil)\n+            } else {\n+              Seq(\"select * from tbl1\", \"select * from tbl2\", \"select * from tbl3\").foreach {\n+                sqlStmt =>\n+                  try {\n+                    sql(sqlStmt)\n+                  } catch {\n+                    case e: IOException =>\n+                      assert(e.getMessage().contains(\"java.io.IOException: Not a file\"))\n+                  }"
+  }],
+  "prId": 23108
+}, {
+  "comments": [{
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "This had better go to line 20.",
+    "commit": "fef8c6845ccce792474a8c65ee6ebfd9624bb4b4",
+    "createdAt": "2018-12-06T08:40:31Z",
+    "diffHunk": "@@ -32,6 +32,7 @@ import org.apache.spark.util.Utils\n class HiveParquetSourceSuite extends ParquetPartitioningTest {\n   import testImplicits._\n   import spark._\n+  import java.io.IOException"
+  }, {
+    "author": {
+      "login": "kevinyu98"
+    },
+    "body": "ok",
+    "commit": "fef8c6845ccce792474a8c65ee6ebfd9624bb4b4",
+    "createdAt": "2018-12-06T19:22:18Z",
+    "diffHunk": "@@ -32,6 +32,7 @@ import org.apache.spark.util.Utils\n class HiveParquetSourceSuite extends ParquetPartitioningTest {\n   import testImplicits._\n   import spark._\n+  import java.io.IOException"
+  }],
+  "prId": 23108
+}, {
+  "comments": [{
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "Please fix this first for the first and second review comments.",
+    "commit": "fef8c6845ccce792474a8c65ee6ebfd9624bb4b4",
+    "createdAt": "2018-12-09T02:53:27Z",
+    "diffHunk": "@@ -222,4 +222,61 @@ class HiveParquetSourceSuite extends ParquetPartitioningTest {\n       assert(df4.columns === Array(\"str\", \"max_int\"))\n     }\n   }\n+\n+  test(\"SPARK-25993 CREATE EXTERNAL TABLE with subdirectories\") {",
+    "line": 20
+  }, {
+    "author": {
+      "login": "kevinyu98"
+    },
+    "body": "@dongjoon-hyun Thanks for the comments, I have tried to make the changes for the first and second review comments, I changed both suites to make it looks similar, also add more test cases. For the 3rd comments, I haven't found a common place to both suites, when you say the help function missing in the previous commit, can you help to point what kind of help function  I missed? Thanks.",
+    "commit": "fef8c6845ccce792474a8c65ee6ebfd9624bb4b4",
+    "createdAt": "2018-12-12T19:37:06Z",
+    "diffHunk": "@@ -222,4 +222,61 @@ class HiveParquetSourceSuite extends ParquetPartitioningTest {\n       assert(df4.columns === Array(\"str\", \"max_int\"))\n     }\n   }\n+\n+  test(\"SPARK-25993 CREATE EXTERNAL TABLE with subdirectories\") {",
+    "line": 20
+  }],
+  "prId": 23108
+}]

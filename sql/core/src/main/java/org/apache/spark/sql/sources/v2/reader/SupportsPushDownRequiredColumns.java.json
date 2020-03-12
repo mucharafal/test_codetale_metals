@@ -1,0 +1,23 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "gengliangwang"
+    },
+    "body": "As we have a new method `prunedSchema`, should we rename this to `pruneSchema`? As the parameter is also schema.",
+    "commit": "51cda76897353344427aaa666e29be408263eeb1",
+    "createdAt": "2018-08-07T06:42:15Z",
+    "diffHunk": "@@ -21,22 +21,25 @@\n import org.apache.spark.sql.types.StructType;\n \n /**\n- * A mix-in interface for {@link DataSourceReader}. Data source readers can implement this\n+ * A mix-in interface for {@link ScanConfigBuilder}. Data sources can implement this\n  * interface to push down required columns to the data source and only read these columns during\n  * scan to reduce the size of the data to be read.\n  */\n @InterfaceStability.Evolving\n-public interface SupportsPushDownRequiredColumns extends DataSourceReader {\n+public interface SupportsPushDownRequiredColumns extends ScanConfigBuilder {\n \n   /**\n    * Applies column pruning w.r.t. the given requiredSchema.\n    *\n    * Implementation should try its best to prune the unnecessary columns or nested fields, but it's\n    * also OK to do the pruning partially, e.g., a data source may not be able to prune nested\n    * fields, and only prune top-level columns.\n-   *\n-   * Note that, data source readers should update {@link DataSourceReader#readSchema()} after\n-   * applying column pruning.\n    */\n   void pruneColumns(StructType requiredSchema);"
+  }],
+  "prId": 22009
+}, {
+  "comments": [{
+    "author": {
+      "login": "rdblue"
+    },
+    "body": "I don't see a reason to add this. Why not get the final schema from the `ScanConfig`? Getting the schema from the `ScanConfig` is better because it is clear when the pruned schema will be accessed: after all pushdown methods are called.\r\n\r\nThat matters because filters may cause the source to require more columns and the source may choose to return those columns to Spark instead of adding a projection. Deferring the projection to Spark is more efficient if Spark was going to add one anyway.",
+    "commit": "51cda76897353344427aaa666e29be408263eeb1",
+    "createdAt": "2018-08-07T18:57:01Z",
+    "diffHunk": "@@ -21,22 +21,25 @@\n import org.apache.spark.sql.types.StructType;\n \n /**\n- * A mix-in interface for {@link DataSourceReader}. Data source readers can implement this\n+ * A mix-in interface for {@link ScanConfigBuilder}. Data sources can implement this\n  * interface to push down required columns to the data source and only read these columns during\n  * scan to reduce the size of the data to be read.\n  */\n @InterfaceStability.Evolving\n-public interface SupportsPushDownRequiredColumns extends DataSourceReader {\n+public interface SupportsPushDownRequiredColumns extends ScanConfigBuilder {\n \n   /**\n    * Applies column pruning w.r.t. the given requiredSchema.\n    *\n    * Implementation should try its best to prune the unnecessary columns or nested fields, but it's\n    * also OK to do the pruning partially, e.g., a data source may not be able to prune nested\n    * fields, and only prune top-level columns.\n-   *\n-   * Note that, data source readers should update {@link DataSourceReader#readSchema()} after\n-   * applying column pruning.\n    */\n   void pruneColumns(StructType requiredSchema);\n+\n+  /**\n+   * Returns the schema after the column pruning is applied, so that Spark can know if some\n+   * columns/nested fields are not pruned.\n+   */\n+  StructType prunedSchema();"
+  }],
+  "prId": 22009
+}]

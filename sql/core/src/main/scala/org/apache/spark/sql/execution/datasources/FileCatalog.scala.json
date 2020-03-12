@@ -1,0 +1,50 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "rxin"
+    },
+    "body": "what's \"root\" about this?\n",
+    "commit": "0d0954d93df90efbf442643691247dbfbdde6859",
+    "createdAt": "2016-10-17T21:26:02Z",
+    "diffHunk": "@@ -0,0 +1,66 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.execution.datasources\n+\n+import org.apache.hadoop.fs._\n+\n+import org.apache.spark.sql.catalyst.InternalRow\n+import org.apache.spark.sql.catalyst.expressions._\n+\n+/**\n+ * A collection of data files from a partitioned relation, along with the partition values in the\n+ * form of an [[InternalRow]].\n+ */\n+case class Partition(values: InternalRow, files: Seq[FileStatus])\n+\n+/**\n+ * An interface for objects capable of enumerating the root paths of a relation as well as the\n+ * partitions of a relation subject to some pruning expressions.\n+ */\n+trait FileCatalog {\n+\n+  /**\n+   * Returns the list of root input paths from which the catalog will get files. There may be a\n+   * single root path from which partitions are discovered, or individual partitions may be\n+   * specified by each path.\n+   */\n+  def rootPaths: Seq[Path]",
+    "line": 42
+  }, {
+    "author": {
+      "login": "mallman"
+    },
+    "body": "I would say \"pretty much nothing\" anymore.\n\nIn an earlier version, it was the \"root\" path of the table, excluding any partition dirs. The PR drifted away from that definition.\n\nNow I'd say it could be reverted to `paths`.\n",
+    "commit": "0d0954d93df90efbf442643691247dbfbdde6859",
+    "createdAt": "2016-10-17T21:32:10Z",
+    "diffHunk": "@@ -0,0 +1,66 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.execution.datasources\n+\n+import org.apache.hadoop.fs._\n+\n+import org.apache.spark.sql.catalyst.InternalRow\n+import org.apache.spark.sql.catalyst.expressions._\n+\n+/**\n+ * A collection of data files from a partitioned relation, along with the partition values in the\n+ * form of an [[InternalRow]].\n+ */\n+case class Partition(values: InternalRow, files: Seq[FileStatus])\n+\n+/**\n+ * An interface for objects capable of enumerating the root paths of a relation as well as the\n+ * partitions of a relation subject to some pruning expressions.\n+ */\n+trait FileCatalog {\n+\n+  /**\n+   * Returns the list of root input paths from which the catalog will get files. There may be a\n+   * single root path from which partitions are discovered, or individual partitions may be\n+   * specified by each path.\n+   */\n+  def rootPaths: Seq[Path]",
+    "line": 42
+  }, {
+    "author": {
+      "login": "ericl"
+    },
+    "body": "I think they are the roots of the recursive traversal to discover leaf files. I am inclined to keep `rootPaths` since it's easy to grep for, vs `paths` which is too common.\n",
+    "commit": "0d0954d93df90efbf442643691247dbfbdde6859",
+    "createdAt": "2016-10-17T22:21:59Z",
+    "diffHunk": "@@ -0,0 +1,66 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.execution.datasources\n+\n+import org.apache.hadoop.fs._\n+\n+import org.apache.spark.sql.catalyst.InternalRow\n+import org.apache.spark.sql.catalyst.expressions._\n+\n+/**\n+ * A collection of data files from a partitioned relation, along with the partition values in the\n+ * form of an [[InternalRow]].\n+ */\n+case class Partition(values: InternalRow, files: Seq[FileStatus])\n+\n+/**\n+ * An interface for objects capable of enumerating the root paths of a relation as well as the\n+ * partitions of a relation subject to some pruning expressions.\n+ */\n+trait FileCatalog {\n+\n+  /**\n+   * Returns the list of root input paths from which the catalog will get files. There may be a\n+   * single root path from which partitions are discovered, or individual partitions may be\n+   * specified by each path.\n+   */\n+  def rootPaths: Seq[Path]",
+    "line": 42
+  }],
+  "prId": 15518
+}, {
+  "comments": [{
+    "author": {
+      "login": "rxin"
+    },
+    "body": "while you are doing it, perhaps we can rename this TaskPartition? \n\nI always find \"Partition\" very confusing because it can mean 3 different things:\n1. A block in HDFS.\n2. A Hive partition.\n3. A Spark task partition (or split).\n",
+    "commit": "0d0954d93df90efbf442643691247dbfbdde6859",
+    "createdAt": "2016-10-17T21:31:45Z",
+    "diffHunk": "@@ -0,0 +1,66 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.execution.datasources\n+\n+import org.apache.hadoop.fs._\n+\n+import org.apache.spark.sql.catalyst.InternalRow\n+import org.apache.spark.sql.catalyst.expressions._\n+\n+/**\n+ * A collection of data files from a partitioned relation, along with the partition values in the\n+ * form of an [[InternalRow]].\n+ */\n+case class Partition(values: InternalRow, files: Seq[FileStatus])"
+  }, {
+    "author": {
+      "login": "ericl"
+    },
+    "body": "I don't think these are the partitions tasks see. Confusingly, those seem to be named `FilePartition`. How about `PartitionFiles`?\n",
+    "commit": "0d0954d93df90efbf442643691247dbfbdde6859",
+    "createdAt": "2016-10-17T22:22:01Z",
+    "diffHunk": "@@ -0,0 +1,66 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.execution.datasources\n+\n+import org.apache.hadoop.fs._\n+\n+import org.apache.spark.sql.catalyst.InternalRow\n+import org.apache.spark.sql.catalyst.expressions._\n+\n+/**\n+ * A collection of data files from a partitioned relation, along with the partition values in the\n+ * form of an [[InternalRow]].\n+ */\n+case class Partition(values: InternalRow, files: Seq[FileStatus])"
+  }],
+  "prId": 15518
+}]

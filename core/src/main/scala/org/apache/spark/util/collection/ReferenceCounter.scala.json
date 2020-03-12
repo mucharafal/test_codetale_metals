@@ -1,0 +1,20 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "nongli"
+    },
+    "body": "Is there any reason you did it this way instead of a counter per object? Not sure how many blocks we have but this seems contention prone.\n",
+    "commit": "9becde3d94ea41bba9e275b9108c61b91074f035",
+    "createdAt": "2016-01-14T22:47:15Z",
+    "diffHunk": "@@ -0,0 +1,122 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.util.collection\n+\n+import scala.collection.JavaConverters._\n+\n+import com.google.common.cache.{CacheBuilder, CacheLoader}\n+import com.google.common.collect.ConcurrentHashMultiset\n+\n+import org.apache.spark.TaskContext\n+\n+/**\n+ * Thread-safe collection for maintaining both global and per-task reference counts for objects.\n+ */\n+private[spark] class ReferenceCounter[T] {"
+  }, {
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "I need to maintain global counts per each object as well as counts for each task (in order to automatically decrement the global counts when tasks finish) (I'm working on adding the `releaseAllReferencesForTask()` call to the task completion cleanup code).\n\nIf I stored the global count per block inside of the `BlockInfo` class, then I'd still need a mechanism to count the references per task. If the counts for each task were stored in `BlockInfo` then I'd have to loop over the `BlockInfo` list on task completion in order to clear those counts, or would have to maintain the counts separately. As a result, it made sense to me to keep both types of counts in close proximity like this.\n",
+    "commit": "9becde3d94ea41bba9e275b9108c61b91074f035",
+    "createdAt": "2016-01-14T22:54:29Z",
+    "diffHunk": "@@ -0,0 +1,122 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.util.collection\n+\n+import scala.collection.JavaConverters._\n+\n+import com.google.common.cache.{CacheBuilder, CacheLoader}\n+import com.google.common.collect.ConcurrentHashMultiset\n+\n+import org.apache.spark.TaskContext\n+\n+/**\n+ * Thread-safe collection for maintaining both global and per-task reference counts for objects.\n+ */\n+private[spark] class ReferenceCounter[T] {"
+  }],
+  "prId": 10705
+}]

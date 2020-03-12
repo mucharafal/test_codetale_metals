@@ -1,0 +1,79 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "This rule was added long time ago, do you mean this is a long-standing bug?",
+    "commit": "97b9c56f3050609604c7b5c50563db571f84b190",
+    "createdAt": "2018-09-19T10:43:48Z",
+    "diffHunk": "@@ -129,16 +129,17 @@ object DecimalPrecision extends TypeCoercionRule {\n         resultType)\n \n     case Divide(e1 @ DecimalType.Expression(p1, s1), e2 @ DecimalType.Expression(p2, s2)) =>\n+      val adjP2 = if (s2 < 0) p2 - s2 else p2",
+    "line": 19
+  }, {
+    "author": {
+      "login": "mgaido91"
+    },
+    "body": "Yes, I think this is more clear in the related JIRA description and comments. The problem is that here we have never handled properly decimals with negative scale. The point is: before 2.3, this could happen only if someone was creating some specific literal from a BigDecimal, like `lit(BigDecimal(100e6))`; since 2.3, this can happen with every constant like 100e6 in the SQL code. So the problem has been there for a while, but we haven't seen it because it was less likely to happen.\r\n\r\nAnother solution would be avoiding having decimals with a negative scale. But this is quite a breaking change, so I'd avoid until a 3.0 release at least.",
+    "commit": "97b9c56f3050609604c7b5c50563db571f84b190",
+    "createdAt": "2018-09-19T10:58:28Z",
+    "diffHunk": "@@ -129,16 +129,17 @@ object DecimalPrecision extends TypeCoercionRule {\n         resultType)\n \n     case Divide(e1 @ DecimalType.Expression(p1, s1), e2 @ DecimalType.Expression(p2, s2)) =>\n+      val adjP2 = if (s2 < 0) p2 - s2 else p2",
+    "line": 19
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "ah i see. Can we add a test in `DataFrameSuite` with decimal literal?",
+    "commit": "97b9c56f3050609604c7b5c50563db571f84b190",
+    "createdAt": "2018-09-19T11:07:13Z",
+    "diffHunk": "@@ -129,16 +129,17 @@ object DecimalPrecision extends TypeCoercionRule {\n         resultType)\n \n     case Divide(e1 @ DecimalType.Expression(p1, s1), e2 @ DecimalType.Expression(p2, s2)) =>\n+      val adjP2 = if (s2 < 0) p2 - s2 else p2",
+    "line": 19
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "can we update the document of this rule to reflect this change?",
+    "commit": "97b9c56f3050609604c7b5c50563db571f84b190",
+    "createdAt": "2018-09-19T11:09:10Z",
+    "diffHunk": "@@ -129,16 +129,17 @@ object DecimalPrecision extends TypeCoercionRule {\n         resultType)\n \n     case Divide(e1 @ DecimalType.Expression(p1, s1), e2 @ DecimalType.Expression(p2, s2)) =>\n+      val adjP2 = if (s2 < 0) p2 - s2 else p2",
+    "line": 19
+  }, {
+    "author": {
+      "login": "mgaido91"
+    },
+    "body": "sure, but if you agree I'll try and find a better place than `DataFrameSuite`. I'd prefer adding the new tests to `ArithmeticExpressionSuite`. Is that ok for you?",
+    "commit": "97b9c56f3050609604c7b5c50563db571f84b190",
+    "createdAt": "2018-09-19T11:13:20Z",
+    "diffHunk": "@@ -129,16 +129,17 @@ object DecimalPrecision extends TypeCoercionRule {\n         resultType)\n \n     case Divide(e1 @ DecimalType.Expression(p1, s1), e2 @ DecimalType.Expression(p2, s2)) =>\n+      val adjP2 = if (s2 < 0) p2 - s2 else p2",
+    "line": 19
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "SGTM",
+    "commit": "97b9c56f3050609604c7b5c50563db571f84b190",
+    "createdAt": "2018-09-19T11:25:33Z",
+    "diffHunk": "@@ -129,16 +129,17 @@ object DecimalPrecision extends TypeCoercionRule {\n         resultType)\n \n     case Divide(e1 @ DecimalType.Expression(p1, s1), e2 @ DecimalType.Expression(p2, s2)) =>\n+      val adjP2 = if (s2 < 0) p2 - s2 else p2",
+    "line": 19
+  }],
+  "prId": 22450
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "This is very critical. Is there any other database using this formula?",
+    "commit": "97b9c56f3050609604c7b5c50563db571f84b190",
+    "createdAt": "2018-09-19T13:45:16Z",
+    "diffHunk": "@@ -40,10 +40,13 @@ import org.apache.spark.sql.types._\n  *   e1 + e2      max(s1, s2) + max(p1-s1, p2-s2) + 1     max(s1, s2)\n  *   e1 - e2      max(s1, s2) + max(p1-s1, p2-s2) + 1     max(s1, s2)\n  *   e1 * e2      p1 + p2 + 1                             s1 + s2\n- *   e1 / e2      p1 - s1 + s2 + max(6, s1 + p2 + 1)      max(6, s1 + p2 + 1)\n+ *   e1 / e2      max(p1-s1+s2, 0) + max(6, s1+adjP2+1)   max(6, s1+adjP2+1)",
+    "line": 5
+  }, {
+    "author": {
+      "login": "mgaido91"
+    },
+    "body": "I don't think as the other DBs I know the formula of are Hive and MS SQL which don't allow negative scales so they don't have this problem. The formula is not changed from before actually, it just handles a negative scale.",
+    "commit": "97b9c56f3050609604c7b5c50563db571f84b190",
+    "createdAt": "2018-09-19T13:58:43Z",
+    "diffHunk": "@@ -40,10 +40,13 @@ import org.apache.spark.sql.types._\n  *   e1 + e2      max(s1, s2) + max(p1-s1, p2-s2) + 1     max(s1, s2)\n  *   e1 - e2      max(s1, s2) + max(p1-s1, p2-s2) + 1     max(s1, s2)\n  *   e1 * e2      p1 + p2 + 1                             s1 + s2\n- *   e1 / e2      p1 - s1 + s2 + max(6, s1 + p2 + 1)      max(6, s1 + p2 + 1)\n+ *   e1 / e2      max(p1-s1+s2, 0) + max(6, s1+adjP2+1)   max(6, s1+adjP2+1)",
+    "line": 5
+  }],
+  "prId": 22450
+}]

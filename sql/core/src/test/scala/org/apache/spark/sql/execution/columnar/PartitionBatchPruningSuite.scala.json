@@ -1,0 +1,75 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "mgaido91"
+    },
+    "body": "nit: unneeded blank line",
+    "commit": "deb20eff74252a617790eb595592dd5f80eceb71",
+    "createdAt": "2018-07-26T15:37:46Z",
+    "diffHunk": "@@ -95,6 +103,12 @@ class PartitionBatchPruningSuite\n   checkBatchPruning(\"SELECT key FROM pruningData WHERE 11 >= key\", 1, 2)(1 to 11)\n   checkBatchPruning(\"SELECT key FROM pruningData WHERE 88 < key\", 1, 2)(89 to 100)\n   checkBatchPruning(\"SELECT key FROM pruningData WHERE 89 <= key\", 1, 2)(89 to 100)\n+  // Do not filter on array type\n+  checkBatchPruning(\"SELECT _1 FROM pruningArrayData WHERE _1 = array(1)\", 5, 10)(Seq(Array(1)))\n+  checkBatchPruning(\"SELECT _1 FROM pruningArrayData WHERE _1 <= array(1)\", 5, 10)(Seq(Array(1)))\n+  checkBatchPruning(\"SELECT _1 FROM pruningArrayData WHERE _1 >= array(1)\", 5, 10)(\n+    testArrayData.map(_._1))\n+"
+  }],
+  "prId": 21882
+}, {
+  "comments": [{
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "Before this change, `Expected Array(Array(1)), but got Array() Wrong query result`",
+    "commit": "deb20eff74252a617790eb595592dd5f80eceb71",
+    "createdAt": "2018-07-28T06:59:37Z",
+    "diffHunk": "@@ -95,6 +111,17 @@ class PartitionBatchPruningSuite\n   checkBatchPruning(\"SELECT key FROM pruningData WHERE 11 >= key\", 1, 2)(1 to 11)\n   checkBatchPruning(\"SELECT key FROM pruningData WHERE 88 < key\", 1, 2)(89 to 100)\n   checkBatchPruning(\"SELECT key FROM pruningData WHERE 89 <= key\", 1, 2)(89 to 100)\n+  // Do not filter on array type\n+  checkBatchPruning(\"SELECT _1 FROM pruningArrayData WHERE _1 = array(1)\", 5, 10)(Seq(Array(1)))\n+  checkBatchPruning(\"SELECT _1 FROM pruningArrayData WHERE _1 <= array(1)\", 5, 10)(Seq(Array(1)))\n+  checkBatchPruning(\"SELECT _1 FROM pruningArrayData WHERE _1 >= array(1)\", 5, 10)(\n+    testArrayData.map(_._1))\n+  // Do not filter on binary type\n+  checkBatchPruning(",
+    "line": 54
+  }],
+  "prId": 21882
+}, {
+  "comments": [{
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "```\r\nscala> spark.sparkContext.makeRDD((1 to 100).map { key => Tuple1(Array.fill(key)(key.toByte)) }, 5).toDF().printSchema()\r\nroot\r\n |-- _1: binary (nullable = true)\r\n```",
+    "commit": "deb20eff74252a617790eb595592dd5f80eceb71",
+    "createdAt": "2018-07-28T07:00:47Z",
+    "diffHunk": "@@ -71,12 +78,21 @@ class PartitionBatchPruningSuite\n     }, 5).toDF()\n     pruningStringData.createOrReplaceTempView(\"pruningStringData\")\n     spark.catalog.cacheTable(\"pruningStringData\")\n+\n+    val pruningArrayData = sparkContext.makeRDD(testArrayData, 5).toDF()\n+    pruningArrayData.createOrReplaceTempView(\"pruningArrayData\")\n+    spark.catalog.cacheTable(\"pruningArrayData\")\n+\n+    val pruningBinaryData = sparkContext.makeRDD(testBinaryData, 5).toDF()",
+    "line": 30
+  }],
+  "prId": 21882
+}, {
+  "comments": [{
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "The problem here is, there seems no SQL binary liternal. So, I had to use Scala API",
+    "commit": "deb20eff74252a617790eb595592dd5f80eceb71",
+    "createdAt": "2018-07-28T07:02:02Z",
+    "diffHunk": "@@ -95,6 +111,17 @@ class PartitionBatchPruningSuite\n   checkBatchPruning(\"SELECT key FROM pruningData WHERE 11 >= key\", 1, 2)(1 to 11)\n   checkBatchPruning(\"SELECT key FROM pruningData WHERE 88 < key\", 1, 2)(89 to 100)\n   checkBatchPruning(\"SELECT key FROM pruningData WHERE 89 <= key\", 1, 2)(89 to 100)\n+  // Do not filter on array type\n+  checkBatchPruning(\"SELECT _1 FROM pruningArrayData WHERE _1 = array(1)\", 5, 10)(Seq(Array(1)))\n+  checkBatchPruning(\"SELECT _1 FROM pruningArrayData WHERE _1 <= array(1)\", 5, 10)(Seq(Array(1)))\n+  checkBatchPruning(\"SELECT _1 FROM pruningArrayData WHERE _1 >= array(1)\", 5, 10)(\n+    testArrayData.map(_._1))\n+  // Do not filter on binary type\n+  checkBatchPruning(\n+    title = \"SELECT _1 FROM pruningBinaryData WHERE _1 == 0x01 (binary literal)\",\n+    actual = spark.table(\"pruningBinaryData\").filter($\"_1\".equalTo(Array[Byte](1.toByte))),"
+  }, {
+    "author": {
+      "login": "mgaido91"
+    },
+    "body": "not very elegant, but we can do `binary(chr(5))` in order to get a binary literal",
+    "commit": "deb20eff74252a617790eb595592dd5f80eceb71",
+    "createdAt": "2018-07-28T07:34:52Z",
+    "diffHunk": "@@ -95,6 +111,17 @@ class PartitionBatchPruningSuite\n   checkBatchPruning(\"SELECT key FROM pruningData WHERE 11 >= key\", 1, 2)(1 to 11)\n   checkBatchPruning(\"SELECT key FROM pruningData WHERE 88 < key\", 1, 2)(89 to 100)\n   checkBatchPruning(\"SELECT key FROM pruningData WHERE 89 <= key\", 1, 2)(89 to 100)\n+  // Do not filter on array type\n+  checkBatchPruning(\"SELECT _1 FROM pruningArrayData WHERE _1 = array(1)\", 5, 10)(Seq(Array(1)))\n+  checkBatchPruning(\"SELECT _1 FROM pruningArrayData WHERE _1 <= array(1)\", 5, 10)(Seq(Array(1)))\n+  checkBatchPruning(\"SELECT _1 FROM pruningArrayData WHERE _1 >= array(1)\", 5, 10)(\n+    testArrayData.map(_._1))\n+  // Do not filter on binary type\n+  checkBatchPruning(\n+    title = \"SELECT _1 FROM pruningBinaryData WHERE _1 == 0x01 (binary literal)\",\n+    actual = spark.table(\"pruningBinaryData\").filter($\"_1\".equalTo(Array[Byte](1.toByte))),"
+  }, {
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "Oops right.",
+    "commit": "deb20eff74252a617790eb595592dd5f80eceb71",
+    "createdAt": "2018-07-28T08:13:51Z",
+    "diffHunk": "@@ -95,6 +111,17 @@ class PartitionBatchPruningSuite\n   checkBatchPruning(\"SELECT key FROM pruningData WHERE 11 >= key\", 1, 2)(1 to 11)\n   checkBatchPruning(\"SELECT key FROM pruningData WHERE 88 < key\", 1, 2)(89 to 100)\n   checkBatchPruning(\"SELECT key FROM pruningData WHERE 89 <= key\", 1, 2)(89 to 100)\n+  // Do not filter on array type\n+  checkBatchPruning(\"SELECT _1 FROM pruningArrayData WHERE _1 = array(1)\", 5, 10)(Seq(Array(1)))\n+  checkBatchPruning(\"SELECT _1 FROM pruningArrayData WHERE _1 <= array(1)\", 5, 10)(Seq(Array(1)))\n+  checkBatchPruning(\"SELECT _1 FROM pruningArrayData WHERE _1 >= array(1)\", 5, 10)(\n+    testArrayData.map(_._1))\n+  // Do not filter on binary type\n+  checkBatchPruning(\n+    title = \"SELECT _1 FROM pruningBinaryData WHERE _1 == 0x01 (binary literal)\",\n+    actual = spark.table(\"pruningBinaryData\").filter($\"_1\".equalTo(Array[Byte](1.toByte))),"
+  }],
+  "prId": 21882
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "uncache the `pruningBinaryData` too",
+    "commit": "deb20eff74252a617790eb595592dd5f80eceb71",
+    "createdAt": "2018-07-28T14:08:54Z",
+    "diffHunk": "@@ -71,12 +78,21 @@ class PartitionBatchPruningSuite\n     }, 5).toDF()\n     pruningStringData.createOrReplaceTempView(\"pruningStringData\")\n     spark.catalog.cacheTable(\"pruningStringData\")\n+\n+    val pruningArrayData = sparkContext.makeRDD(testArrayData, 5).toDF()\n+    pruningArrayData.createOrReplaceTempView(\"pruningArrayData\")\n+    spark.catalog.cacheTable(\"pruningArrayData\")\n+\n+    val pruningBinaryData = sparkContext.makeRDD(testBinaryData, 5).toDF()\n+    pruningBinaryData.createOrReplaceTempView(\"pruningBinaryData\")\n+    spark.catalog.cacheTable(\"pruningBinaryData\")\n   }\n \n   override protected def afterEach(): Unit = {\n     try {\n       spark.catalog.uncacheTable(\"pruningData\")\n       spark.catalog.uncacheTable(\"pruningStringData\")\n+      spark.catalog.uncacheTable(\"pruningArrayData\")",
+    "line": 39
+  }],
+  "prId": 21882
+}]

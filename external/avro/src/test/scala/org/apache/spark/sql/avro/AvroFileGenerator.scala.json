@@ -1,0 +1,23 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "viirya"
+    },
+    "body": "Is this README located in original spark-avro project? Shall we copy it here?\r\n",
+    "commit": "3979bad51df55ffb24dcb28cf823c5c68b407337",
+    "createdAt": "2018-07-11T02:35:14Z",
+    "diffHunk": "@@ -0,0 +1,95 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.avro\n+\n+import java.io.File\n+\n+import scala.util.Random\n+\n+import org.apache.avro._\n+import org.apache.avro.file.DataFileWriter\n+import org.apache.avro.generic._\n+import org.apache.commons.io.FileUtils\n+\n+// scalastyle:off println\n+\n+/**\n+ * This object allows you to generate large avro files that can be used for speed benchmarking.\n+ * See README on how to use it."
+  }],
+  "prId": 21742
+}, {
+  "comments": [{
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "nit: can we put this in `finally`.",
+    "commit": "3979bad51df55ffb24dcb28cf823c5c68b407337",
+    "createdAt": "2018-07-11T02:54:55Z",
+    "diffHunk": "@@ -0,0 +1,95 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.avro\n+\n+import java.io.File\n+\n+import scala.util.Random\n+\n+import org.apache.avro._\n+import org.apache.avro.file.DataFileWriter\n+import org.apache.avro.generic._\n+import org.apache.commons.io.FileUtils\n+\n+// scalastyle:off println\n+\n+/**\n+ * This object allows you to generate large avro files that can be used for speed benchmarking.\n+ * See README on how to use it.\n+ */\n+object AvroFileGenerator {\n+\n+  val defaultNumberOfRecords = 1000000\n+  val defaultNumberOfFiles = 1\n+  val outputDir = \"target/avroForBenchmark/\"\n+  val schemaPath = \"src/test/resources/benchmarkSchema.avsc\"\n+  val objectSize = 100 // Maps, arrays and strings in our generated file have this size\n+\n+  private[avro] def generateAvroFile(numberOfRecords: Int, fileIdx: Int) = {\n+    val schema = new Schema.Parser().parse(new File(schemaPath))\n+    val outputFile = new File(outputDir + \"part\" + fileIdx + \".avro\")\n+    val datumWriter = new GenericDatumWriter[GenericRecord](schema)\n+    val dataFileWriter = new DataFileWriter[GenericRecord](datumWriter)\n+    dataFileWriter.create(schema, outputFile)\n+\n+    // Create data that we will put into the avro file\n+    val avroRec = new GenericData.Record(schema)\n+    val innerRec = new GenericData.Record(schema.getField(\"inner_record\").schema())\n+    innerRec.put(\"value_field\", \"Inner string\")\n+    val rand = new Random()\n+\n+    for (idx <- 0 until numberOfRecords) {\n+      avroRec.put(\"string\", rand.nextString(objectSize))\n+      avroRec.put(\"simple_map\", TestUtils.generateRandomMap(rand, objectSize))\n+      avroRec.put(\"union_int_long_null\", rand.nextInt())\n+      avroRec.put(\"union_float_double\", rand.nextDouble())\n+      avroRec.put(\"inner_record\", innerRec)\n+      avroRec.put(\"array_of_boolean\", TestUtils.generateRandomArray(rand, objectSize))\n+      avroRec.put(\"bytes\", TestUtils.generateRandomByteBuffer(rand, objectSize))\n+\n+      dataFileWriter.append(avroRec)\n+    }\n+\n+    dataFileWriter.close()"
+  }],
+  "prId": 21742
+}]

@@ -1,0 +1,140 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Please don't use `-1` in `System.exit`. See:\nhttp://www.gnu.org/software/libc/manual/html_node/Exit-Status.html\n",
+    "commit": "2de7bed8c501eda1491fb585cbc3771431385892",
+    "createdAt": "2015-04-07T22:32:20Z",
+    "diffHunk": "@@ -17,33 +17,38 @@\n \n package org.apache.spark.deploy\n \n-import scala.concurrent._\n+import scala.concurrent.ExecutionContext\n+import scala.util.{Failure, Success}\n \n-import akka.actor._\n-import akka.pattern.ask\n-import akka.remote.{AssociationErrorEvent, DisassociatedEvent, RemotingLifecycleEvent}\n import org.apache.log4j.{Level, Logger}\n \n+import org.apache.spark.rpc.{RpcEndpointRef, RpcAddress, RpcEnv, ThreadSafeRpcEndpoint}\n import org.apache.spark.{Logging, SecurityManager, SparkConf}\n import org.apache.spark.deploy.DeployMessages._\n import org.apache.spark.deploy.master.{DriverState, Master}\n-import org.apache.spark.util.{ActorLogReceive, AkkaUtils, Utils}\n+import org.apache.spark.util.Utils\n \n /**\n  * Proxy that relays messages to the driver.\n  */\n-private class ClientActor(driverArgs: ClientArguments, conf: SparkConf)\n-  extends Actor with ActorLogReceive with Logging {\n-\n-  var masterActor: ActorSelection = _\n-  val timeout = AkkaUtils.askTimeout(conf)\n-\n-  override def preStart(): Unit = {\n-    masterActor = context.actorSelection(\n-      Master.toAkkaUrl(driverArgs.master, AkkaUtils.protocol(context.system)))\n-\n-    context.system.eventStream.subscribe(self, classOf[RemotingLifecycleEvent])\n+private class ClientEndpoint(\n+    override val rpcEnv: RpcEnv,\n+    driverArgs: ClientArguments,\n+    masterEndpoint: RpcEndpointRef,\n+    conf: SparkConf)\n+  extends ThreadSafeRpcEndpoint with Logging {\n+\n+  private val forwardMessageThread = Utils.newDaemonFixedThreadPool(1, \"client-forward-message\")\n+  private implicit val forwardMessageExecutionContext =\n+    ExecutionContext.fromExecutor(forwardMessageThread,\n+      t => t match {\n+        case ie: InterruptedException => // Exit normally\n+        case e =>\n+          e.printStackTrace()\n+          System.exit(-1)"
+  }, {
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "I just followed other places in `Client` because `Client` is deprecated. However, I should have used correct ways in the new codes. Now I changed to use `SparkExitCode.UNCAUGHT_EXCEPTION`. Maybe I should also fix other `-1`s in this file?\n",
+    "commit": "2de7bed8c501eda1491fb585cbc3771431385892",
+    "createdAt": "2015-04-08T13:36:46Z",
+    "diffHunk": "@@ -17,33 +17,38 @@\n \n package org.apache.spark.deploy\n \n-import scala.concurrent._\n+import scala.concurrent.ExecutionContext\n+import scala.util.{Failure, Success}\n \n-import akka.actor._\n-import akka.pattern.ask\n-import akka.remote.{AssociationErrorEvent, DisassociatedEvent, RemotingLifecycleEvent}\n import org.apache.log4j.{Level, Logger}\n \n+import org.apache.spark.rpc.{RpcEndpointRef, RpcAddress, RpcEnv, ThreadSafeRpcEndpoint}\n import org.apache.spark.{Logging, SecurityManager, SparkConf}\n import org.apache.spark.deploy.DeployMessages._\n import org.apache.spark.deploy.master.{DriverState, Master}\n-import org.apache.spark.util.{ActorLogReceive, AkkaUtils, Utils}\n+import org.apache.spark.util.Utils\n \n /**\n  * Proxy that relays messages to the driver.\n  */\n-private class ClientActor(driverArgs: ClientArguments, conf: SparkConf)\n-  extends Actor with ActorLogReceive with Logging {\n-\n-  var masterActor: ActorSelection = _\n-  val timeout = AkkaUtils.askTimeout(conf)\n-\n-  override def preStart(): Unit = {\n-    masterActor = context.actorSelection(\n-      Master.toAkkaUrl(driverArgs.master, AkkaUtils.protocol(context.system)))\n-\n-    context.system.eventStream.subscribe(self, classOf[RemotingLifecycleEvent])\n+private class ClientEndpoint(\n+    override val rpcEnv: RpcEnv,\n+    driverArgs: ClientArguments,\n+    masterEndpoint: RpcEndpointRef,\n+    conf: SparkConf)\n+  extends ThreadSafeRpcEndpoint with Logging {\n+\n+  private val forwardMessageThread = Utils.newDaemonFixedThreadPool(1, \"client-forward-message\")\n+  private implicit val forwardMessageExecutionContext =\n+    ExecutionContext.fromExecutor(forwardMessageThread,\n+      t => t match {\n+        case ie: InterruptedException => // Exit normally\n+        case e =>\n+          e.printStackTrace()\n+          System.exit(-1)"
+  }],
+  "prId": 5392
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "nit: this is not a thread, but an executor.\n",
+    "commit": "2de7bed8c501eda1491fb585cbc3771431385892",
+    "createdAt": "2015-04-07T22:33:33Z",
+    "diffHunk": "@@ -17,33 +17,38 @@\n \n package org.apache.spark.deploy\n \n-import scala.concurrent._\n+import scala.concurrent.ExecutionContext\n+import scala.util.{Failure, Success}\n \n-import akka.actor._\n-import akka.pattern.ask\n-import akka.remote.{AssociationErrorEvent, DisassociatedEvent, RemotingLifecycleEvent}\n import org.apache.log4j.{Level, Logger}\n \n+import org.apache.spark.rpc.{RpcEndpointRef, RpcAddress, RpcEnv, ThreadSafeRpcEndpoint}\n import org.apache.spark.{Logging, SecurityManager, SparkConf}\n import org.apache.spark.deploy.DeployMessages._\n import org.apache.spark.deploy.master.{DriverState, Master}\n-import org.apache.spark.util.{ActorLogReceive, AkkaUtils, Utils}\n+import org.apache.spark.util.Utils\n \n /**\n  * Proxy that relays messages to the driver.\n  */\n-private class ClientActor(driverArgs: ClientArguments, conf: SparkConf)\n-  extends Actor with ActorLogReceive with Logging {\n-\n-  var masterActor: ActorSelection = _\n-  val timeout = AkkaUtils.askTimeout(conf)\n-\n-  override def preStart(): Unit = {\n-    masterActor = context.actorSelection(\n-      Master.toAkkaUrl(driverArgs.master, AkkaUtils.protocol(context.system)))\n-\n-    context.system.eventStream.subscribe(self, classOf[RemotingLifecycleEvent])\n+private class ClientEndpoint(\n+    override val rpcEnv: RpcEnv,\n+    driverArgs: ClientArguments,\n+    masterEndpoint: RpcEndpointRef,\n+    conf: SparkConf)\n+  extends ThreadSafeRpcEndpoint with Logging {\n+\n+  private val forwardMessageThread = Utils.newDaemonFixedThreadPool(1, \"client-forward-message\")"
+  }, {
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "Just my personal habit. I usually use `Thread` to highlight that it's a single thread executor.\n",
+    "commit": "2de7bed8c501eda1491fb585cbc3771431385892",
+    "createdAt": "2015-04-08T13:40:41Z",
+    "diffHunk": "@@ -17,33 +17,38 @@\n \n package org.apache.spark.deploy\n \n-import scala.concurrent._\n+import scala.concurrent.ExecutionContext\n+import scala.util.{Failure, Success}\n \n-import akka.actor._\n-import akka.pattern.ask\n-import akka.remote.{AssociationErrorEvent, DisassociatedEvent, RemotingLifecycleEvent}\n import org.apache.log4j.{Level, Logger}\n \n+import org.apache.spark.rpc.{RpcEndpointRef, RpcAddress, RpcEnv, ThreadSafeRpcEndpoint}\n import org.apache.spark.{Logging, SecurityManager, SparkConf}\n import org.apache.spark.deploy.DeployMessages._\n import org.apache.spark.deploy.master.{DriverState, Master}\n-import org.apache.spark.util.{ActorLogReceive, AkkaUtils, Utils}\n+import org.apache.spark.util.Utils\n \n /**\n  * Proxy that relays messages to the driver.\n  */\n-private class ClientActor(driverArgs: ClientArguments, conf: SparkConf)\n-  extends Actor with ActorLogReceive with Logging {\n-\n-  var masterActor: ActorSelection = _\n-  val timeout = AkkaUtils.askTimeout(conf)\n-\n-  override def preStart(): Unit = {\n-    masterActor = context.actorSelection(\n-      Master.toAkkaUrl(driverArgs.master, AkkaUtils.protocol(context.system)))\n-\n-    context.system.eventStream.subscribe(self, classOf[RemotingLifecycleEvent])\n+private class ClientEndpoint(\n+    override val rpcEnv: RpcEnv,\n+    driverArgs: ClientArguments,\n+    masterEndpoint: RpcEndpointRef,\n+    conf: SparkConf)\n+  extends ThreadSafeRpcEndpoint with Logging {\n+\n+  private val forwardMessageThread = Utils.newDaemonFixedThreadPool(1, \"client-forward-message\")"
+  }],
+  "prId": 5392
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Should this be `logError` instead? (Or additionally?)\n",
+    "commit": "2de7bed8c501eda1491fb585cbc3771431385892",
+    "createdAt": "2015-04-07T22:34:32Z",
+    "diffHunk": "@@ -17,33 +17,38 @@\n \n package org.apache.spark.deploy\n \n-import scala.concurrent._\n+import scala.concurrent.ExecutionContext\n+import scala.util.{Failure, Success}\n \n-import akka.actor._\n-import akka.pattern.ask\n-import akka.remote.{AssociationErrorEvent, DisassociatedEvent, RemotingLifecycleEvent}\n import org.apache.log4j.{Level, Logger}\n \n+import org.apache.spark.rpc.{RpcEndpointRef, RpcAddress, RpcEnv, ThreadSafeRpcEndpoint}\n import org.apache.spark.{Logging, SecurityManager, SparkConf}\n import org.apache.spark.deploy.DeployMessages._\n import org.apache.spark.deploy.master.{DriverState, Master}\n-import org.apache.spark.util.{ActorLogReceive, AkkaUtils, Utils}\n+import org.apache.spark.util.Utils\n \n /**\n  * Proxy that relays messages to the driver.\n  */\n-private class ClientActor(driverArgs: ClientArguments, conf: SparkConf)\n-  extends Actor with ActorLogReceive with Logging {\n-\n-  var masterActor: ActorSelection = _\n-  val timeout = AkkaUtils.askTimeout(conf)\n-\n-  override def preStart(): Unit = {\n-    masterActor = context.actorSelection(\n-      Master.toAkkaUrl(driverArgs.master, AkkaUtils.protocol(context.system)))\n-\n-    context.system.eventStream.subscribe(self, classOf[RemotingLifecycleEvent])\n+private class ClientEndpoint(\n+    override val rpcEnv: RpcEnv,\n+    driverArgs: ClientArguments,\n+    masterEndpoint: RpcEndpointRef,\n+    conf: SparkConf)\n+  extends ThreadSafeRpcEndpoint with Logging {\n+\n+  private val forwardMessageThread = Utils.newDaemonFixedThreadPool(1, \"client-forward-message\")\n+  private implicit val forwardMessageExecutionContext =\n+    ExecutionContext.fromExecutor(forwardMessageThread,\n+      t => t match {\n+        case ie: InterruptedException => // Exit normally\n+        case e =>\n+          e.printStackTrace()"
+  }],
+  "prId": 5392
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "`logError`? Feels wrong to print error messages to stdout. Especially since `e.printStackTrace()` will go to stderr, so you can end up with mixed output.\n",
+    "commit": "2de7bed8c501eda1491fb585cbc3771431385892",
+    "createdAt": "2015-04-07T22:36:34Z",
+    "diffHunk": "@@ -79,22 +84,36 @@ private class ClientActor(driverArgs: ClientArguments, conf: SparkConf)\n           driverArgs.supervise,\n           command)\n \n-        masterActor ! RequestSubmitDriver(driverDescription)\n+        masterEndpoint.sendWithReply[SubmitDriverResponse](RequestSubmitDriver(driverDescription)).\n+          onComplete {\n+            case Success(v) => self.send(v)\n+            case Failure(e) =>\n+              println(s\"Error sending messages to master ${driverArgs.master}, exiting.\")"
+  }],
+  "prId": 5392
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Please use a proper exit code; also in other places.\n",
+    "commit": "2de7bed8c501eda1491fb585cbc3771431385892",
+    "createdAt": "2015-04-07T22:36:53Z",
+    "diffHunk": "@@ -79,22 +84,36 @@ private class ClientActor(driverArgs: ClientArguments, conf: SparkConf)\n           driverArgs.supervise,\n           command)\n \n-        masterActor ! RequestSubmitDriver(driverDescription)\n+        masterEndpoint.sendWithReply[SubmitDriverResponse](RequestSubmitDriver(driverDescription)).\n+          onComplete {\n+            case Success(v) => self.send(v)\n+            case Failure(e) =>\n+              println(s\"Error sending messages to master ${driverArgs.master}, exiting.\")\n+              e.printStackTrace()\n+              System.exit(-1)"
+  }],
+  "prId": 5392
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Seems like you could have a helper method to do this error checking instead of copying the code in several places.\n",
+    "commit": "2de7bed8c501eda1491fb585cbc3771431385892",
+    "createdAt": "2015-04-07T22:37:36Z",
+    "diffHunk": "@@ -79,22 +84,36 @@ private class ClientActor(driverArgs: ClientArguments, conf: SparkConf)\n           driverArgs.supervise,\n           command)\n \n-        masterActor ! RequestSubmitDriver(driverDescription)\n+        masterEndpoint.sendWithReply[SubmitDriverResponse](RequestSubmitDriver(driverDescription)).\n+          onComplete {\n+            case Success(v) => self.send(v)\n+            case Failure(e) =>\n+              println(s\"Error sending messages to master ${driverArgs.master}, exiting.\")\n+              e.printStackTrace()\n+              System.exit(-1)\n+        }\n \n       case \"kill\" =>\n         val driverId = driverArgs.driverId\n-        masterActor ! RequestKillDriver(driverId)\n+        masterEndpoint.sendWithReply[KillDriverResponse](RequestKillDriver(driverId)).onComplete {\n+          case Success(v) => self.send(v)"
+  }, {
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "Added `ayncSendToMasterAndForwardReply` for it.\n",
+    "commit": "2de7bed8c501eda1491fb585cbc3771431385892",
+    "createdAt": "2015-04-08T13:43:46Z",
+    "diffHunk": "@@ -79,22 +84,36 @@ private class ClientActor(driverArgs: ClientArguments, conf: SparkConf)\n           driverArgs.supervise,\n           command)\n \n-        masterActor ! RequestSubmitDriver(driverDescription)\n+        masterEndpoint.sendWithReply[SubmitDriverResponse](RequestSubmitDriver(driverDescription)).\n+          onComplete {\n+            case Success(v) => self.send(v)\n+            case Failure(e) =>\n+              println(s\"Error sending messages to master ${driverArgs.master}, exiting.\")\n+              e.printStackTrace()\n+              System.exit(-1)\n+        }\n \n       case \"kill\" =>\n         val driverId = driverArgs.driverId\n-        masterActor ! RequestKillDriver(driverId)\n+        masterEndpoint.sendWithReply[KillDriverResponse](RequestKillDriver(driverId)).onComplete {\n+          case Success(v) => self.send(v)"
+  }],
+  "prId": 5392
+}, {
+  "comments": [{
+    "author": {
+      "login": "rxin"
+    },
+    "body": "who uses this? can we make it non-implicit instead and explicitly call this variable when we use it? Being implicit makes it fairly hard to review/change in the future.\n",
+    "commit": "2de7bed8c501eda1491fb585cbc3771431385892",
+    "createdAt": "2015-04-20T20:28:33Z",
+    "diffHunk": "@@ -17,33 +17,40 @@\n \n package org.apache.spark.deploy\n \n-import scala.concurrent._\n+import scala.concurrent.ExecutionContext\n+import scala.reflect.ClassTag\n+import scala.util.{Failure, Success}\n \n-import akka.actor._\n-import akka.pattern.ask\n-import akka.remote.{AssociationErrorEvent, DisassociatedEvent, RemotingLifecycleEvent}\n import org.apache.log4j.{Level, Logger}\n \n+import org.apache.spark.rpc.{RpcEndpointRef, RpcAddress, RpcEnv, ThreadSafeRpcEndpoint}\n import org.apache.spark.{Logging, SecurityManager, SparkConf}\n import org.apache.spark.deploy.DeployMessages._\n import org.apache.spark.deploy.master.{DriverState, Master}\n-import org.apache.spark.util.{ActorLogReceive, AkkaUtils, Utils}\n+import org.apache.spark.util.{SparkExitCode, Utils}\n \n /**\n  * Proxy that relays messages to the driver.\n  */\n-private class ClientActor(driverArgs: ClientArguments, conf: SparkConf)\n-  extends Actor with ActorLogReceive with Logging {\n-\n-  var masterActor: ActorSelection = _\n-  val timeout = AkkaUtils.askTimeout(conf)\n-\n-  override def preStart(): Unit = {\n-    masterActor = context.actorSelection(\n-      Master.toAkkaUrl(driverArgs.master, AkkaUtils.protocol(context.system)))\n-\n-    context.system.eventStream.subscribe(self, classOf[RemotingLifecycleEvent])\n-\n+private class ClientEndpoint(\n+    override val rpcEnv: RpcEnv,\n+    driverArgs: ClientArguments,\n+    masterEndpoint: RpcEndpointRef,\n+    conf: SparkConf)\n+  extends ThreadSafeRpcEndpoint with Logging {\n+\n+  private val forwardMessageThread =\n+    Utils.newDaemonSingleThreadScheduledExecutor(\"client-forward-message\")\n+  private implicit val forwardMessageExecutionContext ="
+  }],
+  "prId": 5392
+}, {
+  "comments": [{
+    "author": {
+      "login": "aarondav"
+    },
+    "body": "nit: `e: Throwable` explicitly\n",
+    "commit": "2de7bed8c501eda1491fb585cbc3771431385892",
+    "createdAt": "2015-06-29T21:04:17Z",
+    "diffHunk": "@@ -36,20 +36,30 @@ import org.apache.spark.util.{ActorLogReceive, AkkaUtils, RpcUtils, Utils}\n  * We currently don't support retry if submission fails. In HA mode, client will submit request to\n  * all masters and see which one could handle it.\n  */\n-private class ClientActor(driverArgs: ClientArguments, conf: SparkConf)\n-  extends Actor with ActorLogReceive with Logging {\n-\n-  private val masterActors = driverArgs.masters.map { m =>\n-    context.actorSelection(Master.toAkkaUrl(m, AkkaUtils.protocol(context.system)))\n-  }\n-  private val lostMasters = new HashSet[Address]\n-  private var activeMasterActor: ActorSelection = null\n-\n-  val timeout = RpcUtils.askTimeout(conf)\n-\n-  override def preStart(): Unit = {\n-    context.system.eventStream.subscribe(self, classOf[RemotingLifecycleEvent])\n-\n+private class ClientEndpoint(\n+    override val rpcEnv: RpcEnv,\n+    driverArgs: ClientArguments,\n+    masterEndpoints: Seq[RpcEndpointRef],\n+    conf: SparkConf)\n+  extends ThreadSafeRpcEndpoint with Logging {\n+\n+  // A scheduled executor used to send messages at the specified time.\n+  private val forwardMessageThread =\n+    ThreadUtils.newDaemonSingleThreadScheduledExecutor(\"client-forward-message\")\n+  // Used to provide the implicit parameter of `Future` methods.\n+  private val forwardMessageExecutionContext =\n+    ExecutionContext.fromExecutor(forwardMessageThread,\n+      t => t match {\n+        case ie: InterruptedException => // Exit normally\n+        case e =>"
+  }, {
+    "author": {
+      "login": "sujkh85"
+    },
+    "body": "## NAVER - http://www.naver.com/\n\nsujkh@naver.com 님께 보내신 메일 <Re: [spark] [SPARK-6602][Core] Update Master, Worker, Client, AppClient and related classes to use RpcEndpoint (#5392)> 이 다음과 같은 이유로 전송 실패했습니다.\n\n---\n\n받는 사람이 회원님의 메일을 수신차단 하였습니다. \n\n---\n",
+    "commit": "2de7bed8c501eda1491fb585cbc3771431385892",
+    "createdAt": "2015-06-29T21:04:58Z",
+    "diffHunk": "@@ -36,20 +36,30 @@ import org.apache.spark.util.{ActorLogReceive, AkkaUtils, RpcUtils, Utils}\n  * We currently don't support retry if submission fails. In HA mode, client will submit request to\n  * all masters and see which one could handle it.\n  */\n-private class ClientActor(driverArgs: ClientArguments, conf: SparkConf)\n-  extends Actor with ActorLogReceive with Logging {\n-\n-  private val masterActors = driverArgs.masters.map { m =>\n-    context.actorSelection(Master.toAkkaUrl(m, AkkaUtils.protocol(context.system)))\n-  }\n-  private val lostMasters = new HashSet[Address]\n-  private var activeMasterActor: ActorSelection = null\n-\n-  val timeout = RpcUtils.askTimeout(conf)\n-\n-  override def preStart(): Unit = {\n-    context.system.eventStream.subscribe(self, classOf[RemotingLifecycleEvent])\n-\n+private class ClientEndpoint(\n+    override val rpcEnv: RpcEnv,\n+    driverArgs: ClientArguments,\n+    masterEndpoints: Seq[RpcEndpointRef],\n+    conf: SparkConf)\n+  extends ThreadSafeRpcEndpoint with Logging {\n+\n+  // A scheduled executor used to send messages at the specified time.\n+  private val forwardMessageThread =\n+    ThreadUtils.newDaemonSingleThreadScheduledExecutor(\"client-forward-message\")\n+  // Used to provide the implicit parameter of `Future` methods.\n+  private val forwardMessageExecutionContext =\n+    ExecutionContext.fromExecutor(forwardMessageThread,\n+      t => t match {\n+        case ie: InterruptedException => // Exit normally\n+        case e =>"
+  }],
+  "prId": 5392
+}, {
+  "comments": [{
+    "author": {
+      "login": "aarondav"
+    },
+    "body": "exiting? I wouldn't expect this to be a failure condition given some masters may be dead, but maybe the text is just out of date.\n",
+    "commit": "2de7bed8c501eda1491fb585cbc3771431385892",
+    "createdAt": "2015-06-29T21:10:21Z",
+    "diffHunk": "@@ -82,29 +92,38 @@ private class ClientActor(driverArgs: ClientArguments, conf: SparkConf)\n           driverArgs.cores,\n           driverArgs.supervise,\n           command)\n-\n-        // This assumes only one Master is active at a time\n-        for (masterActor <- masterActors) {\n-          masterActor ! RequestSubmitDriver(driverDescription)\n-        }\n+        ayncSendToMasterAndForwardReply[SubmitDriverResponse](\n+          RequestSubmitDriver(driverDescription))\n \n       case \"kill\" =>\n         val driverId = driverArgs.driverId\n-        // This assumes only one Master is active at a time\n-        for (masterActor <- masterActors) {\n-          masterActor ! RequestKillDriver(driverId)\n-        }\n+        ayncSendToMasterAndForwardReply[KillDriverResponse](RequestKillDriver(driverId))\n+    }\n+  }\n+\n+  /**\n+   * Send the message to master and forward the reply to self asynchronously.\n+   */\n+  private def ayncSendToMasterAndForwardReply[T: ClassTag](message: Any): Unit = {\n+    for (masterEndpoint <- masterEndpoints) {\n+      masterEndpoint.ask[T](message).onComplete {\n+        case Success(v) => self.send(v)\n+        case Failure(e) =>\n+          println(s\"Error sending messages to master $masterEndpoint, exiting.\")"
+  }, {
+    "author": {
+      "login": "aarondav"
+    },
+    "body": "also let's make this the error message (should we be using println?)\n",
+    "commit": "2de7bed8c501eda1491fb585cbc3771431385892",
+    "createdAt": "2015-06-29T21:10:41Z",
+    "diffHunk": "@@ -82,29 +92,38 @@ private class ClientActor(driverArgs: ClientArguments, conf: SparkConf)\n           driverArgs.cores,\n           driverArgs.supervise,\n           command)\n-\n-        // This assumes only one Master is active at a time\n-        for (masterActor <- masterActors) {\n-          masterActor ! RequestSubmitDriver(driverDescription)\n-        }\n+        ayncSendToMasterAndForwardReply[SubmitDriverResponse](\n+          RequestSubmitDriver(driverDescription))\n \n       case \"kill\" =>\n         val driverId = driverArgs.driverId\n-        // This assumes only one Master is active at a time\n-        for (masterActor <- masterActors) {\n-          masterActor ! RequestKillDriver(driverId)\n-        }\n+        ayncSendToMasterAndForwardReply[KillDriverResponse](RequestKillDriver(driverId))\n+    }\n+  }\n+\n+  /**\n+   * Send the message to master and forward the reply to self asynchronously.\n+   */\n+  private def ayncSendToMasterAndForwardReply[T: ClassTag](message: Any): Unit = {\n+    for (masterEndpoint <- masterEndpoints) {\n+      masterEndpoint.ask[T](message).onComplete {\n+        case Success(v) => self.send(v)\n+        case Failure(e) =>\n+          println(s\"Error sending messages to master $masterEndpoint, exiting.\")"
+  }],
+  "prId": 5392
+}]

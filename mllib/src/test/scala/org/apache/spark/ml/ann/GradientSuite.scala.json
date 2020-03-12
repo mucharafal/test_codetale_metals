@@ -1,0 +1,67 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "Embed layer information in the error message.\n",
+    "commit": "94dcec08b5bf7cb1af054e7e27b258ab0ce870a9",
+    "createdAt": "2016-03-01T18:42:42Z",
+    "diffHunk": "@@ -0,0 +1,69 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.ml.ann\n+\n+import breeze.linalg.{DenseMatrix => BDM}\n+\n+import org.apache.spark.SparkFunSuite\n+import org.apache.spark.mllib.linalg.Vectors\n+import org.apache.spark.mllib.util.MLlibTestSparkContext\n+\n+class GradientSuite extends SparkFunSuite with MLlibTestSparkContext {\n+\n+  test(\"Gradient test\") {\n+    val input = new BDM[Double](3, 1, Array(1.0, 1.0, 1.0))\n+    // output must contain zeros and one 1 for SoftMax\n+    val target = new BDM[Double](2, 1, Array(0.0, 1.0))\n+    val topology = FeedForwardTopology.multiLayerPerceptron(Array(3, 4, 2), false)\n+    val layersWithErrors = Seq(\n+      new SigmoidLayerWithSquaredError(),\n+      new SoftmaxLayerWithCrossEntropyLoss()\n+    )\n+    for (layerWithError <- layersWithErrors) {\n+      topology.layers(topology.layers.length - 1) = layerWithError\n+      val model = topology.model(12L)\n+      val weights = model.weights.toArray\n+      val numWeights = weights.size\n+      val gradient = Vectors.dense(Array.fill[Double](numWeights)(0.0))\n+      val loss = model.computeGradient(input, target, gradient, 1)\n+      val eps = 1e-4\n+      var i = 0\n+      val tol = 1e-4\n+      while (i < numWeights) {\n+        val originalValue = weights(i)\n+        weights(i) += eps\n+        val newModel = topology.model(Vectors.dense(weights))\n+        val newLoss = computeLoss(input, target, newModel)\n+        val derivativeEstimate = (newLoss - loss) / eps\n+        assert((gradient(i) - derivativeEstimate) < tol)\n+        weights(i) = originalValue\n+        i += 1\n+      }\n+    }\n+  }\n+\n+  private def computeLoss(input: BDM[Double], target: BDM[Double], model: TopologyModel): Double = {\n+    val outputs = model.forward(input)\n+    model.layerModels.last match {\n+      case layerWithLoss: LossFunction =>\n+        layerWithLoss.loss(outputs.last, target, new BDM[Double](target.rows, target.cols))\n+      case _ =>\n+        throw new UnsupportedOperationException(\"Top layer is required to have loss.\")"
+  }],
+  "prId": 9229
+}, {
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "- should add `math.abs`\n- include the layer info in the error message. Otherwise, we don't know which one failed.\n",
+    "commit": "94dcec08b5bf7cb1af054e7e27b258ab0ce870a9",
+    "createdAt": "2016-03-01T18:42:44Z",
+    "diffHunk": "@@ -0,0 +1,69 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.ml.ann\n+\n+import breeze.linalg.{DenseMatrix => BDM}\n+\n+import org.apache.spark.SparkFunSuite\n+import org.apache.spark.mllib.linalg.Vectors\n+import org.apache.spark.mllib.util.MLlibTestSparkContext\n+\n+class GradientSuite extends SparkFunSuite with MLlibTestSparkContext {\n+\n+  test(\"Gradient test\") {\n+    val input = new BDM[Double](3, 1, Array(1.0, 1.0, 1.0))\n+    // output must contain zeros and one 1 for SoftMax\n+    val target = new BDM[Double](2, 1, Array(0.0, 1.0))\n+    val topology = FeedForwardTopology.multiLayerPerceptron(Array(3, 4, 2), false)\n+    val layersWithErrors = Seq(\n+      new SigmoidLayerWithSquaredError(),\n+      new SoftmaxLayerWithCrossEntropyLoss()\n+    )\n+    for (layerWithError <- layersWithErrors) {\n+      topology.layers(topology.layers.length - 1) = layerWithError\n+      val model = topology.model(12L)\n+      val weights = model.weights.toArray\n+      val numWeights = weights.size\n+      val gradient = Vectors.dense(Array.fill[Double](numWeights)(0.0))\n+      val loss = model.computeGradient(input, target, gradient, 1)\n+      val eps = 1e-4\n+      var i = 0\n+      val tol = 1e-4\n+      while (i < numWeights) {\n+        val originalValue = weights(i)\n+        weights(i) += eps\n+        val newModel = topology.model(Vectors.dense(weights))\n+        val newLoss = computeLoss(input, target, newModel)\n+        val derivativeEstimate = (newLoss - loss) / eps\n+        assert((gradient(i) - derivativeEstimate) < tol)"
+  }],
+  "prId": 9229
+}, {
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "`seed = 12L`\n",
+    "commit": "94dcec08b5bf7cb1af054e7e27b258ab0ce870a9",
+    "createdAt": "2016-03-01T18:42:46Z",
+    "diffHunk": "@@ -0,0 +1,69 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.ml.ann\n+\n+import breeze.linalg.{DenseMatrix => BDM}\n+\n+import org.apache.spark.SparkFunSuite\n+import org.apache.spark.mllib.linalg.Vectors\n+import org.apache.spark.mllib.util.MLlibTestSparkContext\n+\n+class GradientSuite extends SparkFunSuite with MLlibTestSparkContext {\n+\n+  test(\"Gradient test\") {\n+    val input = new BDM[Double](3, 1, Array(1.0, 1.0, 1.0))\n+    // output must contain zeros and one 1 for SoftMax\n+    val target = new BDM[Double](2, 1, Array(0.0, 1.0))\n+    val topology = FeedForwardTopology.multiLayerPerceptron(Array(3, 4, 2), false)\n+    val layersWithErrors = Seq(\n+      new SigmoidLayerWithSquaredError(),\n+      new SoftmaxLayerWithCrossEntropyLoss()\n+    )\n+    for (layerWithError <- layersWithErrors) {\n+      topology.layers(topology.layers.length - 1) = layerWithError\n+      val model = topology.model(12L)"
+  }],
+  "prId": 9229
+}, {
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "It would be useful to comment the test method here.\n",
+    "commit": "94dcec08b5bf7cb1af054e7e27b258ab0ce870a9",
+    "createdAt": "2016-03-01T18:42:47Z",
+    "diffHunk": "@@ -0,0 +1,69 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.ml.ann\n+\n+import breeze.linalg.{DenseMatrix => BDM}\n+\n+import org.apache.spark.SparkFunSuite\n+import org.apache.spark.mllib.linalg.Vectors\n+import org.apache.spark.mllib.util.MLlibTestSparkContext\n+\n+class GradientSuite extends SparkFunSuite with MLlibTestSparkContext {\n+\n+  test(\"Gradient test\") {\n+    val input = new BDM[Double](3, 1, Array(1.0, 1.0, 1.0))\n+    // output must contain zeros and one 1 for SoftMax\n+    val target = new BDM[Double](2, 1, Array(0.0, 1.0))\n+    val topology = FeedForwardTopology.multiLayerPerceptron(Array(3, 4, 2), false)\n+    val layersWithErrors = Seq(\n+      new SigmoidLayerWithSquaredError(),\n+      new SoftmaxLayerWithCrossEntropyLoss()\n+    )\n+    for (layerWithError <- layersWithErrors) {"
+  }],
+  "prId": 9229
+}, {
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "use named arguments on boolean variables\n",
+    "commit": "94dcec08b5bf7cb1af054e7e27b258ab0ce870a9",
+    "createdAt": "2016-03-01T18:42:48Z",
+    "diffHunk": "@@ -0,0 +1,69 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.ml.ann\n+\n+import breeze.linalg.{DenseMatrix => BDM}\n+\n+import org.apache.spark.SparkFunSuite\n+import org.apache.spark.mllib.linalg.Vectors\n+import org.apache.spark.mllib.util.MLlibTestSparkContext\n+\n+class GradientSuite extends SparkFunSuite with MLlibTestSparkContext {\n+\n+  test(\"Gradient test\") {\n+    val input = new BDM[Double](3, 1, Array(1.0, 1.0, 1.0))\n+    // output must contain zeros and one 1 for SoftMax\n+    val target = new BDM[Double](2, 1, Array(0.0, 1.0))\n+    val topology = FeedForwardTopology.multiLayerPerceptron(Array(3, 4, 2), false)"
+  }],
+  "prId": 9229
+}, {
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "`test(\"gradient computation on 1-dimensional data against numerical differentiation\")` (it reads better because we already have `test(...)`)\n",
+    "commit": "94dcec08b5bf7cb1af054e7e27b258ab0ce870a9",
+    "createdAt": "2016-03-01T18:42:50Z",
+    "diffHunk": "@@ -0,0 +1,69 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.ml.ann\n+\n+import breeze.linalg.{DenseMatrix => BDM}\n+\n+import org.apache.spark.SparkFunSuite\n+import org.apache.spark.mllib.linalg.Vectors\n+import org.apache.spark.mllib.util.MLlibTestSparkContext\n+\n+class GradientSuite extends SparkFunSuite with MLlibTestSparkContext {\n+\n+  test(\"Gradient test\") {"
+  }],
+  "prId": 9229
+}]

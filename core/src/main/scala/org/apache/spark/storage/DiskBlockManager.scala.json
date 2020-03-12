@@ -1,0 +1,42 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "It seems that the changes here caused this to be out of sync, right? Do we want to make the same changes in `StandaloneShuffleBlockManager` too?\n",
+    "commit": "6c5c1d4d143e4806edd6cf747b84c56f992f14a9",
+    "createdAt": "2015-03-25T19:36:29Z",
+    "diffHunk": "@@ -81,7 +89,38 @@ private[spark] class DiskBlockManager(blockManager: BlockManager, conf: SparkCon\n     new File(subDir, filename)\n   }\n \n-  def getFile(blockId: BlockId): File = getFile(blockId.name)\n+  /** Looks up a file by blockManagerId */\n+  // This method should be kept in sync with\n+  // org.apache.spark.network.shuffle.StandaloneShuffleBlockManager#getFile()."
+  }],
+  "prId": 5178
+}, {
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "style:\n\n```\nif (...) {\n  getFile(...)\n} else {\n  getFile(...)\n}\n```\n",
+    "commit": "6c5c1d4d143e4806edd6cf747b84c56f992f14a9",
+    "createdAt": "2015-03-25T19:54:43Z",
+    "diffHunk": "@@ -81,7 +89,38 @@ private[spark] class DiskBlockManager(blockManager: BlockManager, conf: SparkCon\n     new File(subDir, filename)\n   }\n \n-  def getFile(blockId: BlockId): File = getFile(blockId.name)\n+  /** Looks up a file by blockManagerId */\n+  // This method should be kept in sync with\n+  // org.apache.spark.network.shuffle.StandaloneShuffleBlockManager#getFile().\n+  def getFile(filename: String,  blockManagerId: BlockManagerId): File = {\n+    // Figure out which local directory it hashes to, and which subdirectory in that\n+    val hash = Utils.nonNegativeHash(filename)\n+\n+    var localDirsPath = localDirsByBlkMgr.get(blockManagerId)\n+    if(!localDirsPath.isDefined) {\n+      localDirsPath = localDirsByBlkMgr.synchronized {\n+        val old = localDirsByBlkMgr.get(blockManagerId)\n+        if(old.isDefined) {\n+          old\n+        } else {\n+          localDirsByBlkMgr ++= blockManager.master.getLocalDirsPath(blockManager.blockManagerId)\n+          localDirsByBlkMgr.get(blockManagerId)\n+        }\n+      }\n+    }\n+\n+    val dirId = hash % localDirsPath.get.length\n+    val subDirId = (hash / localDirsPath.get.length) % subDirsPerLocalDir\n+\n+    new File(localDirsPath.get(dirId) + \"/\" + \"%02x\".format(subDirId), filename)\n+  }\n+\n+  def getFile(blockId: BlockId, blockManagerId: BlockManagerId = blockManager.blockManagerId): File = {\n+    if(blockManagerId == blockManager.blockManagerId)\n+      getFile(blockId.name)\n+    else\n+      getFile(blockId.name, blockManagerId)"
+  }],
+  "prId": 5178
+}, {
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "should this be called `getLocalFile`? Also the javadoc should explicitly say that the given `blockManagerId` is expected to refer to an executor started on this particular machine (i.e. it should be local).\n",
+    "commit": "6c5c1d4d143e4806edd6cf747b84c56f992f14a9",
+    "createdAt": "2015-03-25T19:56:32Z",
+    "diffHunk": "@@ -81,7 +89,38 @@ private[spark] class DiskBlockManager(blockManager: BlockManager, conf: SparkCon\n     new File(subDir, filename)\n   }\n \n-  def getFile(blockId: BlockId): File = getFile(blockId.name)\n+  /** Looks up a file by blockManagerId */\n+  // This method should be kept in sync with\n+  // org.apache.spark.network.shuffle.StandaloneShuffleBlockManager#getFile().\n+  def getFile(filename: String,  blockManagerId: BlockManagerId): File = {"
+  }, {
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "actually, to reduce duplicate code, I think it would make more sense to refactor this and the `getFile` in L65 to take the form:\n\n```\ndef getLocalFile(\n    filename: String,\n    localDirs: Seq[String],\n    createDirIfAbsent: Boolean = false): File = {\n  ...\n}\n```\n\nIf the block manager is the one that belongs to this executor, then `createDirIfAbsent` will be true. Otherwise it's false. Then the `getFile` in L118 might look like:\n\n```\ndef getLocalFile(\n    blockId: BlockId,\n    blockManagerId: BlockManagerId = blockManager.blockManagerId): File = {\n  val getFromThisExecutor = blockManagerId == blockManager.blockManagerId\n  val dirs = if (getFromThisExecutor) localDirs else getLocalDirs(blockManagerId)\n  getLocalFile(blockId.name, dirs, createDirIfAbsent = getFromThisExecutor)\n}\n```\n",
+    "commit": "6c5c1d4d143e4806edd6cf747b84c56f992f14a9",
+    "createdAt": "2015-03-25T20:04:26Z",
+    "diffHunk": "@@ -81,7 +89,38 @@ private[spark] class DiskBlockManager(blockManager: BlockManager, conf: SparkCon\n     new File(subDir, filename)\n   }\n \n-  def getFile(blockId: BlockId): File = getFile(blockId.name)\n+  /** Looks up a file by blockManagerId */\n+  // This method should be kept in sync with\n+  // org.apache.spark.network.shuffle.StandaloneShuffleBlockManager#getFile().\n+  def getFile(filename: String,  blockManagerId: BlockManagerId): File = {"
+  }],
+  "prId": 5178
+}]

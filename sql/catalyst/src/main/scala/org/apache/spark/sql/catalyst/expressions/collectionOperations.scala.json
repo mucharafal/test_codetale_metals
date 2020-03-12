@@ -1,0 +1,67 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "ssimeonov"
+    },
+    "body": "Nullability information should come from `fieldValue`.\r\n\r\nAlso, I would suggest extending the constructor to allow for `Metadata` associated with the `fieldValue` expression, which can be added to the schema. It is not reasonable to assume that (a) any existing metadata should be preserved or (b) that there will be no need to associate new metadata.",
+    "commit": "098828befd8e5a3401e767aaaf0d1d6bc2a2a362",
+    "createdAt": "2018-07-22T15:15:19Z",
+    "diffHunk": "@@ -3858,3 +3858,29 @@ object ArrayUnion {\n     new GenericArrayData(arrayBuffer)\n   }\n }\n+\n+case class StructCopy(\n+    struct: Expression,\n+    fieldName: String,\n+    fieldValue: Expression) extends Expression with CodegenFallback {\n+\n+  override def children: Seq[Expression] = Seq(struct, fieldValue)\n+  override def nullable: Boolean = struct.nullable\n+\n+  lazy val fieldIndex = struct.dataType.asInstanceOf[StructType].fieldIndex(fieldName)\n+\n+  override def dataType: DataType = {\n+    val structType = struct.dataType.asInstanceOf[StructType]\n+    val field = structType.fields(fieldIndex).copy(dataType = fieldValue.dataType)",
+    "line": 17
+  }],
+  "prId": 21840
+}, {
+  "comments": [{
+    "author": {
+      "login": "ssimeonov"
+    },
+    "body": "Can refactor `struct.dataType.asInstanceOf[StructType]` into a method and add a meaningful error message if the cast fails.",
+    "commit": "098828befd8e5a3401e767aaaf0d1d6bc2a2a362",
+    "createdAt": "2018-07-22T15:22:02Z",
+    "diffHunk": "@@ -3858,3 +3858,29 @@ object ArrayUnion {\n     new GenericArrayData(arrayBuffer)\n   }\n }\n+\n+case class StructCopy(\n+    struct: Expression,\n+    fieldName: String,\n+    fieldValue: Expression) extends Expression with CodegenFallback {\n+\n+  override def children: Seq[Expression] = Seq(struct, fieldValue)\n+  override def nullable: Boolean = struct.nullable\n+\n+  lazy val fieldIndex = struct.dataType.asInstanceOf[StructType].fieldIndex(fieldName)\n+\n+  override def dataType: DataType = {\n+    val structType = struct.dataType.asInstanceOf[StructType]",
+    "line": 16
+  }, {
+    "author": {
+      "login": "MaxGekk"
+    },
+    "body": "Sure, I will do that. This is just a proof of concept.",
+    "commit": "098828befd8e5a3401e767aaaf0d1d6bc2a2a362",
+    "createdAt": "2018-07-22T18:23:36Z",
+    "diffHunk": "@@ -3858,3 +3858,29 @@ object ArrayUnion {\n     new GenericArrayData(arrayBuffer)\n   }\n }\n+\n+case class StructCopy(\n+    struct: Expression,\n+    fieldName: String,\n+    fieldValue: Expression) extends Expression with CodegenFallback {\n+\n+  override def children: Seq[Expression] = Seq(struct, fieldValue)\n+  override def nullable: Boolean = struct.nullable\n+\n+  lazy val fieldIndex = struct.dataType.asInstanceOf[StructType].fieldIndex(fieldName)\n+\n+  override def dataType: DataType = {\n+    val structType = struct.dataType.asInstanceOf[StructType]",
+    "line": 16
+  }],
+  "prId": 21840
+}, {
+  "comments": [{
+    "author": {
+      "login": "ssimeonov"
+    },
+    "body": "If the semantics are \"copy\", i.e., only existing fields must be used, it would be nice to add a user-friendly error message here.",
+    "commit": "098828befd8e5a3401e767aaaf0d1d6bc2a2a362",
+    "createdAt": "2018-07-22T15:29:29Z",
+    "diffHunk": "@@ -3858,3 +3858,29 @@ object ArrayUnion {\n     new GenericArrayData(arrayBuffer)\n   }\n }\n+\n+case class StructCopy(\n+    struct: Expression,\n+    fieldName: String,\n+    fieldValue: Expression) extends Expression with CodegenFallback {\n+\n+  override def children: Seq[Expression] = Seq(struct, fieldValue)\n+  override def nullable: Boolean = struct.nullable\n+\n+  lazy val fieldIndex = struct.dataType.asInstanceOf[StructType].fieldIndex(fieldName)",
+    "line": 13
+  }, {
+    "author": {
+      "login": "MaxGekk"
+    },
+    "body": "I think it makes sense to add new field if it doesn't exist. Similar to withColumn which updates an existing column or adds new one if the column name doesn't exist",
+    "commit": "098828befd8e5a3401e767aaaf0d1d6bc2a2a362",
+    "createdAt": "2018-07-22T18:25:50Z",
+    "diffHunk": "@@ -3858,3 +3858,29 @@ object ArrayUnion {\n     new GenericArrayData(arrayBuffer)\n   }\n }\n+\n+case class StructCopy(\n+    struct: Expression,\n+    fieldName: String,\n+    fieldValue: Expression) extends Expression with CodegenFallback {\n+\n+  override def children: Seq[Expression] = Seq(struct, fieldValue)\n+  override def nullable: Boolean = struct.nullable\n+\n+  lazy val fieldIndex = struct.dataType.asInstanceOf[StructType].fieldIndex(fieldName)",
+    "line": 13
+  }],
+  "prId": 21840
+}, {
+  "comments": [{
+    "author": {
+      "login": "hvanhovell"
+    },
+    "body": "You cannot assume this and you also cannot update the row in-place. You will need to copy the row I am affraid.",
+    "commit": "098828befd8e5a3401e767aaaf0d1d6bc2a2a362",
+    "createdAt": "2018-07-23T16:45:43Z",
+    "diffHunk": "@@ -3858,3 +3858,29 @@ object ArrayUnion {\n     new GenericArrayData(arrayBuffer)\n   }\n }\n+\n+case class StructCopy(\n+    struct: Expression,\n+    fieldName: String,\n+    fieldValue: Expression) extends Expression with CodegenFallback {\n+\n+  override def children: Seq[Expression] = Seq(struct, fieldValue)\n+  override def nullable: Boolean = struct.nullable\n+\n+  lazy val fieldIndex = struct.dataType.asInstanceOf[StructType].fieldIndex(fieldName)\n+\n+  override def dataType: DataType = {\n+    val structType = struct.dataType.asInstanceOf[StructType]\n+    val field = structType.fields(fieldIndex).copy(dataType = fieldValue.dataType)\n+\n+    structType.copy(fields = structType.fields.updated(fieldIndex, field))\n+  }\n+\n+  override def eval(input: InternalRow): Any = {\n+    val newFieldValue = fieldValue.eval(input)\n+    val structValue = struct.eval(input).asInstanceOf[GenericInternalRow]",
+    "line": 24
+  }],
+  "prId": 21840
+}]

@@ -1,0 +1,34 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "can you\n1. kill the spaces between the `var`s, and\n2. move them before the `def`s?\n",
+    "commit": "a3270b0e8470e09cafffcc18579e8b0febdc0ef6",
+    "createdAt": "2015-09-10T21:01:03Z",
+    "diffHunk": "@@ -0,0 +1,70 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.execution.local\n+\n+import org.apache.spark.sql.catalyst.InternalRow\n+import org.apache.spark.sql.catalyst.expressions._\n+import org.apache.spark.util.BoundedPriorityQueue\n+\n+case class TakeOrderedAndProjectNode(\n+    limit: Int,\n+    sortOrder: Seq[SortOrder],\n+    projectList: Option[Seq[NamedExpression]],\n+    child: LocalNode) extends UnaryLocalNode {\n+\n+  override def output: Seq[Attribute] = {\n+    val projectOutput = projectList.map(_.map(_.toAttribute))\n+    projectOutput.getOrElse(child.output)\n+  }\n+\n+  private[this] var projection: Option[Projection] = _\n+\n+  private[this] var ord: InterpretedOrdering = _\n+\n+  private[this] var iterator: Iterator[InternalRow] = _\n+\n+  private[this] var currentRow: InternalRow = _"
+  }],
+  "prId": 8573
+}, {
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "need to copy the comment here too:\n\n```\n// Priority keeps the largest elements, so let's reverse the ordering.\n```\n",
+    "commit": "a3270b0e8470e09cafffcc18579e8b0febdc0ef6",
+    "createdAt": "2015-09-10T21:02:20Z",
+    "diffHunk": "@@ -0,0 +1,70 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.execution.local\n+\n+import org.apache.spark.sql.catalyst.InternalRow\n+import org.apache.spark.sql.catalyst.expressions._\n+import org.apache.spark.util.BoundedPriorityQueue\n+\n+case class TakeOrderedAndProjectNode(\n+    limit: Int,\n+    sortOrder: Seq[SortOrder],\n+    projectList: Option[Seq[NamedExpression]],\n+    child: LocalNode) extends UnaryLocalNode {\n+\n+  override def output: Seq[Attribute] = {\n+    val projectOutput = projectList.map(_.map(_.toAttribute))\n+    projectOutput.getOrElse(child.output)\n+  }\n+\n+  private[this] var projection: Option[Projection] = _\n+\n+  private[this] var ord: InterpretedOrdering = _\n+\n+  private[this] var iterator: Iterator[InternalRow] = _\n+\n+  private[this] var currentRow: InternalRow = _\n+\n+  override def open(): Unit = {\n+    child.open()\n+    projection = projectList.map(new InterpretedProjection(_, child.output))\n+    ord = new InterpretedOrdering(sortOrder, child.output)\n+    val queue = new BoundedPriorityQueue[InternalRow](limit)(ord.reverse)"
+  }],
+  "prId": 8573
+}, {
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "might be easier to read if you just expand this:\n\n```\ncurrentRow = projection match {\n  case Some(p) => p(_currentRow)\n  case None => _currentRow\n}\n```\n",
+    "commit": "a3270b0e8470e09cafffcc18579e8b0febdc0ef6",
+    "createdAt": "2015-09-10T21:04:32Z",
+    "diffHunk": "@@ -0,0 +1,70 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.execution.local\n+\n+import org.apache.spark.sql.catalyst.InternalRow\n+import org.apache.spark.sql.catalyst.expressions._\n+import org.apache.spark.util.BoundedPriorityQueue\n+\n+case class TakeOrderedAndProjectNode(\n+    limit: Int,\n+    sortOrder: Seq[SortOrder],\n+    projectList: Option[Seq[NamedExpression]],\n+    child: LocalNode) extends UnaryLocalNode {\n+\n+  override def output: Seq[Attribute] = {\n+    val projectOutput = projectList.map(_.map(_.toAttribute))\n+    projectOutput.getOrElse(child.output)\n+  }\n+\n+  private[this] var projection: Option[Projection] = _\n+\n+  private[this] var ord: InterpretedOrdering = _\n+\n+  private[this] var iterator: Iterator[InternalRow] = _\n+\n+  private[this] var currentRow: InternalRow = _\n+\n+  override def open(): Unit = {\n+    child.open()\n+    projection = projectList.map(new InterpretedProjection(_, child.output))\n+    ord = new InterpretedOrdering(sortOrder, child.output)\n+    val queue = new BoundedPriorityQueue[InternalRow](limit)(ord.reverse)\n+    while (child.next()) {\n+      queue += child.fetch()\n+    }\n+    // Close it eagerly since we don't need it.\n+    child.close()\n+    iterator = queue.iterator\n+  }\n+\n+  override def next(): Boolean = {\n+    if (iterator.hasNext) {\n+      val _currentRow = iterator.next()\n+      currentRow = projection.map(p => p(_currentRow)).getOrElse(_currentRow)"
+  }],
+  "prId": 8573
+}]

@@ -1,0 +1,96 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "felixcheung"
+    },
+    "body": "nit: `bytes :: Nil` ==> `Seq(bytes)`?\n",
+    "commit": "3efe9f5f067bf66d35c1c8243d00f2f1fdb4e6f9",
+    "createdAt": "2016-04-19T21:03:43Z",
+    "diffHunk": "@@ -0,0 +1,62 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.execution.r\n+\n+import org.apache.spark.api.r.RRunner\n+import org.apache.spark.api.r.SerializationFormats\n+import org.apache.spark.broadcast.Broadcast\n+import org.apache.spark.sql.api.r.SQLUtils._\n+import org.apache.spark.sql.types.StructType\n+import org.apache.spark.sql.Row\n+\n+/**\n+ * A function wrapper that applies the given R function to each partition.\n+ */\n+private[sql] case class MapPartitionsRWrapper(\n+   func: Array[Byte],\n+   packageNames: Array[Byte],\n+   broadcastVars: Array[Broadcast[Object]],\n+   schema: StructType,\n+   isSerializedRData: Boolean) extends (Iterator[Any] => Iterator[Any]) {\n+  def apply(iter: Iterator[Any]): Iterator[Any] = {\n+    val (newIter, deserializer) =\n+      if (!isSerializedRData) {\n+        // Serialize each row into an byte array that can be deserialized in the R worker\n+        (iter.asInstanceOf[Iterator[Row]].map { row => rowToRBytes(row)}, SerializationFormats.ROW)\n+      } else {\n+        (iter.asInstanceOf[Iterator[Row]].map { row => row(0) }, SerializationFormats.BYTE)\n+      }\n+\n+    val serializer = if (schema != SERIALIZED_R_DATA_SCHEMA) {\n+      SerializationFormats.ROW\n+    } else {\n+      SerializationFormats.BYTE\n+    }\n+\n+    val runner = new RRunner[Array[Byte]](\n+      func, deserializer, serializer, packageNames, broadcastVars, isDataFrame = true)\n+    // Partition index is ignored. Dataset has no support for mapPartitionsWithIndex.\n+    val outputIter = runner.compute(newIter, -1)\n+\n+    if (serializer == SerializationFormats.ROW) {\n+      outputIter.map { bytes => bytesToRow(bytes, schema) }\n+    } else {\n+      outputIter.map { bytes => Row.fromSeq(bytes :: Nil) }"
+  }, {
+    "author": {
+      "login": "sun-rui"
+    },
+    "body": "done\n",
+    "commit": "3efe9f5f067bf66d35c1c8243d00f2f1fdb4e6f9",
+    "createdAt": "2016-04-20T04:43:08Z",
+    "diffHunk": "@@ -0,0 +1,62 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.execution.r\n+\n+import org.apache.spark.api.r.RRunner\n+import org.apache.spark.api.r.SerializationFormats\n+import org.apache.spark.broadcast.Broadcast\n+import org.apache.spark.sql.api.r.SQLUtils._\n+import org.apache.spark.sql.types.StructType\n+import org.apache.spark.sql.Row\n+\n+/**\n+ * A function wrapper that applies the given R function to each partition.\n+ */\n+private[sql] case class MapPartitionsRWrapper(\n+   func: Array[Byte],\n+   packageNames: Array[Byte],\n+   broadcastVars: Array[Broadcast[Object]],\n+   schema: StructType,\n+   isSerializedRData: Boolean) extends (Iterator[Any] => Iterator[Any]) {\n+  def apply(iter: Iterator[Any]): Iterator[Any] = {\n+    val (newIter, deserializer) =\n+      if (!isSerializedRData) {\n+        // Serialize each row into an byte array that can be deserialized in the R worker\n+        (iter.asInstanceOf[Iterator[Row]].map { row => rowToRBytes(row)}, SerializationFormats.ROW)\n+      } else {\n+        (iter.asInstanceOf[Iterator[Row]].map { row => row(0) }, SerializationFormats.BYTE)\n+      }\n+\n+    val serializer = if (schema != SERIALIZED_R_DATA_SCHEMA) {\n+      SerializationFormats.ROW\n+    } else {\n+      SerializationFormats.BYTE\n+    }\n+\n+    val runner = new RRunner[Array[Byte]](\n+      func, deserializer, serializer, packageNames, broadcastVars, isDataFrame = true)\n+    // Partition index is ignored. Dataset has no support for mapPartitionsWithIndex.\n+    val outputIter = runner.compute(newIter, -1)\n+\n+    if (serializer == SerializationFormats.ROW) {\n+      outputIter.map { bytes => bytesToRow(bytes, schema) }\n+    } else {\n+      outputIter.map { bytes => Row.fromSeq(bytes :: Nil) }"
+  }],
+  "prId": 12493
+}, {
+  "comments": [{
+    "author": {
+      "login": "felixcheung"
+    },
+    "body": "should there be a Scala test for MapPartitionsRWrapper or mapPartitionsInR?\n",
+    "commit": "3efe9f5f067bf66d35c1c8243d00f2f1fdb4e6f9",
+    "createdAt": "2016-04-19T21:08:02Z",
+    "diffHunk": "@@ -0,0 +1,62 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.execution.r\n+\n+import org.apache.spark.api.r.RRunner\n+import org.apache.spark.api.r.SerializationFormats\n+import org.apache.spark.broadcast.Broadcast\n+import org.apache.spark.sql.api.r.SQLUtils._\n+import org.apache.spark.sql.types.StructType\n+import org.apache.spark.sql.Row\n+\n+/**\n+ * A function wrapper that applies the given R function to each partition.\n+ */\n+private[sql] case class MapPartitionsRWrapper(",
+    "line": 30
+  }, {
+    "author": {
+      "login": "sun-rui"
+    },
+    "body": "No. Because you can't have a serialized R function on Scala side.\nBut interestingly, there actually is a desired scenario mentioned several times in the Spark mailing list that users are writing Scala/Java Spark applications (not SparkR) but want to use R functions in some transformations. typically this can be achieved by calling Pipe() in RDD. However, there are limitations on pipe(). So I think in the future we can support apply a R function in source code format to a Dataset/DataFrame (Thus SparkR is not needed for serializing an R function.)  In that case, we can have a Scala test for it.\n",
+    "commit": "3efe9f5f067bf66d35c1c8243d00f2f1fdb4e6f9",
+    "createdAt": "2016-04-20T03:13:03Z",
+    "diffHunk": "@@ -0,0 +1,62 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.execution.r\n+\n+import org.apache.spark.api.r.RRunner\n+import org.apache.spark.api.r.SerializationFormats\n+import org.apache.spark.broadcast.Broadcast\n+import org.apache.spark.sql.api.r.SQLUtils._\n+import org.apache.spark.sql.types.StructType\n+import org.apache.spark.sql.Row\n+\n+/**\n+ * A function wrapper that applies the given R function to each partition.\n+ */\n+private[sql] case class MapPartitionsRWrapper(",
+    "line": 30
+  }, {
+    "author": {
+      "login": "NarineK"
+    },
+    "body": "Interesting, I was thinking maybe for the test case we could serialize R function and write it into a file. On scala side we could read it as a byte array. \n",
+    "commit": "3efe9f5f067bf66d35c1c8243d00f2f1fdb4e6f9",
+    "createdAt": "2016-04-20T07:48:09Z",
+    "diffHunk": "@@ -0,0 +1,62 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.execution.r\n+\n+import org.apache.spark.api.r.RRunner\n+import org.apache.spark.api.r.SerializationFormats\n+import org.apache.spark.broadcast.Broadcast\n+import org.apache.spark.sql.api.r.SQLUtils._\n+import org.apache.spark.sql.types.StructType\n+import org.apache.spark.sql.Row\n+\n+/**\n+ * A function wrapper that applies the given R function to each partition.\n+ */\n+private[sql] case class MapPartitionsRWrapper(",
+    "line": 30
+  }, {
+    "author": {
+      "login": "sun-rui"
+    },
+    "body": "I think this is a little bit complex. The binary format of serialized R function is internal to R and may vary across R versions. And also the functionality of MapPartitionsRWrapper is already covered by tests cases for dapply().\n",
+    "commit": "3efe9f5f067bf66d35c1c8243d00f2f1fdb4e6f9",
+    "createdAt": "2016-04-21T03:25:01Z",
+    "diffHunk": "@@ -0,0 +1,62 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.execution.r\n+\n+import org.apache.spark.api.r.RRunner\n+import org.apache.spark.api.r.SerializationFormats\n+import org.apache.spark.broadcast.Broadcast\n+import org.apache.spark.sql.api.r.SQLUtils._\n+import org.apache.spark.sql.types.StructType\n+import org.apache.spark.sql.Row\n+\n+/**\n+ * A function wrapper that applies the given R function to each partition.\n+ */\n+private[sql] case class MapPartitionsRWrapper(",
+    "line": 30
+  }, {
+    "author": {
+      "login": "felixcheung"
+    },
+    "body": "Should there be more detailed tests in R then to verify the DataFrame is properly partitioned when passed to the R function then? \n",
+    "commit": "3efe9f5f067bf66d35c1c8243d00f2f1fdb4e6f9",
+    "createdAt": "2016-04-22T00:54:07Z",
+    "diffHunk": "@@ -0,0 +1,62 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.execution.r\n+\n+import org.apache.spark.api.r.RRunner\n+import org.apache.spark.api.r.SerializationFormats\n+import org.apache.spark.broadcast.Broadcast\n+import org.apache.spark.sql.api.r.SQLUtils._\n+import org.apache.spark.sql.types.StructType\n+import org.apache.spark.sql.Row\n+\n+/**\n+ * A function wrapper that applies the given R function to each partition.\n+ */\n+private[sql] case class MapPartitionsRWrapper(",
+    "line": 30
+  }, {
+    "author": {
+      "login": "sun-rui"
+    },
+    "body": "interesting. But I think the correct results of test cases of dapply() also cover this.\n",
+    "commit": "3efe9f5f067bf66d35c1c8243d00f2f1fdb4e6f9",
+    "createdAt": "2016-04-22T07:28:12Z",
+    "diffHunk": "@@ -0,0 +1,62 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.execution.r\n+\n+import org.apache.spark.api.r.RRunner\n+import org.apache.spark.api.r.SerializationFormats\n+import org.apache.spark.broadcast.Broadcast\n+import org.apache.spark.sql.api.r.SQLUtils._\n+import org.apache.spark.sql.types.StructType\n+import org.apache.spark.sql.Row\n+\n+/**\n+ * A function wrapper that applies the given R function to each partition.\n+ */\n+private[sql] case class MapPartitionsRWrapper(",
+    "line": 30
+  }],
+  "prId": 12493
+}, {
+  "comments": [{
+    "author": {
+      "login": "davies"
+    },
+    "body": "indent\n",
+    "commit": "3efe9f5f067bf66d35c1c8243d00f2f1fdb4e6f9",
+    "createdAt": "2016-04-20T07:07:24Z",
+    "diffHunk": "@@ -0,0 +1,62 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.execution.r\n+\n+import org.apache.spark.api.r.RRunner\n+import org.apache.spark.api.r.SerializationFormats\n+import org.apache.spark.broadcast.Broadcast\n+import org.apache.spark.sql.api.r.SQLUtils._\n+import org.apache.spark.sql.types.StructType\n+import org.apache.spark.sql.Row\n+\n+/**\n+ * A function wrapper that applies the given R function to each partition.\n+ */\n+private[sql] case class MapPartitionsRWrapper(\n+   func: Array[Byte],"
+  }, {
+    "author": {
+      "login": "sun-rui"
+    },
+    "body": "done\n",
+    "commit": "3efe9f5f067bf66d35c1c8243d00f2f1fdb4e6f9",
+    "createdAt": "2016-04-22T06:22:43Z",
+    "diffHunk": "@@ -0,0 +1,62 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.execution.r\n+\n+import org.apache.spark.api.r.RRunner\n+import org.apache.spark.api.r.SerializationFormats\n+import org.apache.spark.broadcast.Broadcast\n+import org.apache.spark.sql.api.r.SQLUtils._\n+import org.apache.spark.sql.types.StructType\n+import org.apache.spark.sql.Row\n+\n+/**\n+ * A function wrapper that applies the given R function to each partition.\n+ */\n+private[sql] case class MapPartitionsRWrapper(\n+   func: Array[Byte],"
+  }],
+  "prId": 12493
+}]

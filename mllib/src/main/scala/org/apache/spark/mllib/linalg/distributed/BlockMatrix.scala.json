@@ -1,0 +1,112 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "feynmanliang"
+    },
+    "body": "organize imports\n",
+    "commit": "45dda4949716f76dd36f8af8d1adb83ac8adab25",
+    "createdAt": "2015-08-31T22:44:21Z",
+    "diffHunk": "@@ -17,15 +17,15 @@\n \n package org.apache.spark.mllib.linalg.distributed\n \n-import scala.collection.mutable.ArrayBuffer\n-\n import breeze.linalg.{DenseMatrix => BDM}\n \n import org.apache.spark.{Logging, Partitioner}\n-import org.apache.spark.mllib.linalg.{SparseMatrix, DenseMatrix, Matrix}\n+import org.apache.spark.mllib.linalg.{SparseMatrix, DenseMatrix, Matrices, Matrix}\n import org.apache.spark.rdd.RDD\n import org.apache.spark.storage.StorageLevel\n \n+import scala.collection.mutable.ArrayBuffer",
+    "line": 14
+  }],
+  "prId": 4286
+}, {
+  "comments": [{
+    "author": {
+      "login": "feynmanliang"
+    },
+    "body": "`MatrixBlock` is a private type alias so we shouldn't be generating API doc links to it\n",
+    "commit": "45dda4949716f76dd36f8af8d1adb83ac8adab25",
+    "createdAt": "2015-08-31T22:46:52Z",
+    "diffHunk": "@@ -246,4 +246,135 @@ class BlockMatrix(\n     val localMat = toLocalMatrix()\n     new BDM[Double](localMat.numRows, localMat.numCols, localMat.toArray)\n   }\n+\n+  /**\n+   * Forms [[MatrixBlock]]s using `rowsPerBlock` and `colsPerBlock`, which were provided in",
+    "line": 36
+  }, {
+    "author": {
+      "login": "feynmanliang"
+    },
+    "body": "nit: I don't think we need to mention that the params were provided in constructor since that's documented by constructor's scaladoc\n",
+    "commit": "45dda4949716f76dd36f8af8d1adb83ac8adab25",
+    "createdAt": "2015-08-31T22:47:36Z",
+    "diffHunk": "@@ -246,4 +246,135 @@ class BlockMatrix(\n     val localMat = toLocalMatrix()\n     new BDM[Double](localMat.numRows, localMat.numCols, localMat.toArray)\n   }\n+\n+  /**\n+   * Forms [[MatrixBlock]]s using `rowsPerBlock` and `colsPerBlock`, which were provided in",
+    "line": 36
+  }],
+  "prId": 4286
+}, {
+  "comments": [{
+    "author": {
+      "login": "feynmanliang"
+    },
+    "body": "nit: \"Even if... be returned\" -> \"A new BlockMatrix will always be constructed.\"\n",
+    "commit": "45dda4949716f76dd36f8af8d1adb83ac8adab25",
+    "createdAt": "2015-08-31T22:48:39Z",
+    "diffHunk": "@@ -246,4 +246,135 @@ class BlockMatrix(\n     val localMat = toLocalMatrix()\n     new BDM[Double](localMat.numRows, localMat.numCols, localMat.toArray)\n   }\n+\n+  /**\n+   * Forms [[MatrixBlock]]s using `rowsPerBlock` and `colsPerBlock`, which were provided in\n+   * the constructor. Even if all [[MatrixBlock]]s (except the ones on the right and bottom edge)\n+   * have dimensions `rowsPerBlock`x`colsPerBlock`, a new [[BlockMatrix]] will be returned.",
+    "line": 38
+  }],
+  "prId": 4286
+}, {
+  "comments": [{
+    "author": {
+      "login": "feynmanliang"
+    },
+    "body": "Same nit\n",
+    "commit": "45dda4949716f76dd36f8af8d1adb83ac8adab25",
+    "createdAt": "2015-08-31T22:48:52Z",
+    "diffHunk": "@@ -246,4 +246,135 @@ class BlockMatrix(\n     val localMat = toLocalMatrix()\n     new BDM[Double](localMat.numRows, localMat.numCols, localMat.toArray)\n   }\n+\n+  /**\n+   * Forms [[MatrixBlock]]s using `rowsPerBlock` and `colsPerBlock`, which were provided in\n+   * the constructor. Even if all [[MatrixBlock]]s (except the ones on the right and bottom edge)\n+   * have dimensions `rowsPerBlock`x`colsPerBlock`, a new [[BlockMatrix]] will be returned.\n+   */\n+  def repartition(): BlockMatrix = {\n+    repartition(rowsPerBlock, colsPerBlock)\n+  }\n+\n+  /**\n+   * Forms [[MatrixBlock]]s using the provided dimensions `newRowsPerBlock`x`newColsPerBlock`\n+   * Even if all [[MatrixBlock]]s (except the ones on the right and bottom edge)",
+    "line": 46
+  }],
+  "prId": 4286
+}, {
+  "comments": [{
+    "author": {
+      "login": "feynmanliang"
+    },
+    "body": "Instead of repeating the docs, I think it would suffice to just specify they delegate to `repartition` with certain arguments set. Alternatively, instead of providing overloads we could just provide default argumetns.\n",
+    "commit": "45dda4949716f76dd36f8af8d1adb83ac8adab25",
+    "createdAt": "2015-08-31T22:50:36Z",
+    "diffHunk": "@@ -246,4 +246,135 @@ class BlockMatrix(\n     val localMat = toLocalMatrix()\n     new BDM[Double](localMat.numRows, localMat.numCols, localMat.toArray)\n   }\n+\n+  /**\n+   * Forms [[MatrixBlock]]s using `rowsPerBlock` and `colsPerBlock`, which were provided in\n+   * the constructor. Even if all [[MatrixBlock]]s (except the ones on the right and bottom edge)\n+   * have dimensions `rowsPerBlock`x`colsPerBlock`, a new [[BlockMatrix]] will be returned.\n+   */\n+  def repartition(): BlockMatrix = {\n+    repartition(rowsPerBlock, colsPerBlock)\n+  }\n+\n+  /**\n+   * Forms [[MatrixBlock]]s using the provided dimensions `newRowsPerBlock`x`newColsPerBlock`\n+   * Even if all [[MatrixBlock]]s (except the ones on the right and bottom edge)\n+   * have dimensions `newRowsPerBlock`x`newColsPerBlock`, a new [[BlockMatrix]] will be returned.\n+   * The resulting number of partitions may be different than the current number of partitions.\n+   *\n+   * @param newRowsPerBlock Number of rows that make up each MatrixBlock.\n+   * @param newColsPerBlock Number of columns that make up each MatrixBlock.\n+   * @return The repartitioned BlockMatrix\n+   */\n+  def repartition(newRowsPerBlock: Int, newColsPerBlock: Int): BlockMatrix = {\n+    repartition(newRowsPerBlock, newColsPerBlock, blocks.partitions.length)\n+  }\n+\n+  /**\n+   * Forms [[MatrixBlock]]s using the provided dimensions `newRowsPerBlock`x`newColsPerBlock`\n+   * Even if all [[MatrixBlock]]s (except the ones on the right and bottom edge)\n+   * have dimensions `newRowsPerBlock`x`newColsPerBlock`, a new [[BlockMatrix]] will be returned.\n+   * The resulting number of partitions may be different than `suggestedNumPartitions`. Assumes\n+   * that the offsets of each block is\n+   * (`blockRowIndex`x`rowsPerBlock`, `blockColIndex`x`colsPerBlock`).",
+    "line": 64
+  }, {
+    "author": {
+      "login": "brkyvz"
+    },
+    "body": "I don't think we provide default arguments for Java Compatibility.\n",
+    "commit": "45dda4949716f76dd36f8af8d1adb83ac8adab25",
+    "createdAt": "2015-08-31T22:55:50Z",
+    "diffHunk": "@@ -246,4 +246,135 @@ class BlockMatrix(\n     val localMat = toLocalMatrix()\n     new BDM[Double](localMat.numRows, localMat.numCols, localMat.toArray)\n   }\n+\n+  /**\n+   * Forms [[MatrixBlock]]s using `rowsPerBlock` and `colsPerBlock`, which were provided in\n+   * the constructor. Even if all [[MatrixBlock]]s (except the ones on the right and bottom edge)\n+   * have dimensions `rowsPerBlock`x`colsPerBlock`, a new [[BlockMatrix]] will be returned.\n+   */\n+  def repartition(): BlockMatrix = {\n+    repartition(rowsPerBlock, colsPerBlock)\n+  }\n+\n+  /**\n+   * Forms [[MatrixBlock]]s using the provided dimensions `newRowsPerBlock`x`newColsPerBlock`\n+   * Even if all [[MatrixBlock]]s (except the ones on the right and bottom edge)\n+   * have dimensions `newRowsPerBlock`x`newColsPerBlock`, a new [[BlockMatrix]] will be returned.\n+   * The resulting number of partitions may be different than the current number of partitions.\n+   *\n+   * @param newRowsPerBlock Number of rows that make up each MatrixBlock.\n+   * @param newColsPerBlock Number of columns that make up each MatrixBlock.\n+   * @return The repartitioned BlockMatrix\n+   */\n+  def repartition(newRowsPerBlock: Int, newColsPerBlock: Int): BlockMatrix = {\n+    repartition(newRowsPerBlock, newColsPerBlock, blocks.partitions.length)\n+  }\n+\n+  /**\n+   * Forms [[MatrixBlock]]s using the provided dimensions `newRowsPerBlock`x`newColsPerBlock`\n+   * Even if all [[MatrixBlock]]s (except the ones on the right and bottom edge)\n+   * have dimensions `newRowsPerBlock`x`newColsPerBlock`, a new [[BlockMatrix]] will be returned.\n+   * The resulting number of partitions may be different than `suggestedNumPartitions`. Assumes\n+   * that the offsets of each block is\n+   * (`blockRowIndex`x`rowsPerBlock`, `blockColIndex`x`colsPerBlock`).",
+    "line": 64
+  }],
+  "prId": 4286
+}, {
+  "comments": [{
+    "author": {
+      "login": "feynmanliang"
+    },
+    "body": "Please clean up commented code in final version\n",
+    "commit": "45dda4949716f76dd36f8af8d1adb83ac8adab25",
+    "createdAt": "2015-08-31T22:51:29Z",
+    "diffHunk": "@@ -246,4 +246,135 @@ class BlockMatrix(\n     val localMat = toLocalMatrix()\n     new BDM[Double](localMat.numRows, localMat.numCols, localMat.toArray)\n   }\n+\n+  /**\n+   * Forms [[MatrixBlock]]s using `rowsPerBlock` and `colsPerBlock`, which were provided in\n+   * the constructor. Even if all [[MatrixBlock]]s (except the ones on the right and bottom edge)\n+   * have dimensions `rowsPerBlock`x`colsPerBlock`, a new [[BlockMatrix]] will be returned.\n+   */\n+  def repartition(): BlockMatrix = {\n+    repartition(rowsPerBlock, colsPerBlock)\n+  }\n+\n+  /**\n+   * Forms [[MatrixBlock]]s using the provided dimensions `newRowsPerBlock`x`newColsPerBlock`\n+   * Even if all [[MatrixBlock]]s (except the ones on the right and bottom edge)\n+   * have dimensions `newRowsPerBlock`x`newColsPerBlock`, a new [[BlockMatrix]] will be returned.\n+   * The resulting number of partitions may be different than the current number of partitions.\n+   *\n+   * @param newRowsPerBlock Number of rows that make up each MatrixBlock.\n+   * @param newColsPerBlock Number of columns that make up each MatrixBlock.\n+   * @return The repartitioned BlockMatrix\n+   */\n+  def repartition(newRowsPerBlock: Int, newColsPerBlock: Int): BlockMatrix = {\n+    repartition(newRowsPerBlock, newColsPerBlock, blocks.partitions.length)\n+  }\n+\n+  /**\n+   * Forms [[MatrixBlock]]s using the provided dimensions `newRowsPerBlock`x`newColsPerBlock`\n+   * Even if all [[MatrixBlock]]s (except the ones on the right and bottom edge)\n+   * have dimensions `newRowsPerBlock`x`newColsPerBlock`, a new [[BlockMatrix]] will be returned.\n+   * The resulting number of partitions may be different than `suggestedNumPartitions`. Assumes\n+   * that the offsets of each block is\n+   * (`blockRowIndex`x`rowsPerBlock`, `blockColIndex`x`colsPerBlock`).\n+   *\n+   * If there are any [[MatrixBlock]]s with dimensions greater than `rowsPerBlock`x`colsPerBlock`,\n+   * the data outside this scope will be added on to the data of the neighboring [[MatrixBlock]]s.\n+   *\n+   * @param newRowsPerBlock Number of rows that make up each block.\n+   * @param newColsPerBlock Number of columns that make up each block.\n+   * @param suggestedNumPartitions Number of partitions to partition the underlying RDD in. The\n+   *                               final number of partitions may not equal this number.\n+   * @return The repartitioned BlockMatrix\n+   */\n+  def repartition(\n+      newRowsPerBlock: Int,\n+      newColsPerBlock: Int,\n+      suggestedNumPartitions: Int): BlockMatrix = {\n+    require(newRowsPerBlock > 0,\n+      s\"newRowsPerBlock must be greater than 0. newRowsPerBlock: $newRowsPerBlock\")\n+    require(newColsPerBlock > 0,\n+      s\"newColsPerBlock must be greater than 0. newColsPerBlock: $newColsPerBlock\")\n+    require(suggestedNumPartitions > 0, s\"suggestedNumPartitions must be greater than 0. \" +\n+      s\"suggestedNumPartitions: $suggestedNumPartitions\")\n+    val m = numRows()\n+    val n = numCols()\n+    val newNumRowBlocks = math.ceil(m * 1.0 / newRowsPerBlock).toInt\n+    val newNumColBlocks = math.ceil(n * 1.0 / newColsPerBlock).toInt\n+    val slicedBlocks = blocks.flatMap { case ((blockRowIndex, blockColIndex), mat) =>\n+      val rowStartOffset = blockRowIndex * rowsPerBlock\n+      // val rowEndOffset = rowStartOffset + mat.numRows\n+      val colStartOffset = blockColIndex * colsPerBlock\n+      // val colEndOffset = colStartOffset + mat.numCols\n+\n+      /*",
+    "line": 95
+  }, {
+    "author": {
+      "login": "brkyvz"
+    },
+    "body": "I left it there to discuss which version would be more efficient. The commented version is super ugly, but should be more efficient.\nWe just never got to discussing it :/\n",
+    "commit": "45dda4949716f76dd36f8af8d1adb83ac8adab25",
+    "createdAt": "2015-08-31T22:55:22Z",
+    "diffHunk": "@@ -246,4 +246,135 @@ class BlockMatrix(\n     val localMat = toLocalMatrix()\n     new BDM[Double](localMat.numRows, localMat.numCols, localMat.toArray)\n   }\n+\n+  /**\n+   * Forms [[MatrixBlock]]s using `rowsPerBlock` and `colsPerBlock`, which were provided in\n+   * the constructor. Even if all [[MatrixBlock]]s (except the ones on the right and bottom edge)\n+   * have dimensions `rowsPerBlock`x`colsPerBlock`, a new [[BlockMatrix]] will be returned.\n+   */\n+  def repartition(): BlockMatrix = {\n+    repartition(rowsPerBlock, colsPerBlock)\n+  }\n+\n+  /**\n+   * Forms [[MatrixBlock]]s using the provided dimensions `newRowsPerBlock`x`newColsPerBlock`\n+   * Even if all [[MatrixBlock]]s (except the ones on the right and bottom edge)\n+   * have dimensions `newRowsPerBlock`x`newColsPerBlock`, a new [[BlockMatrix]] will be returned.\n+   * The resulting number of partitions may be different than the current number of partitions.\n+   *\n+   * @param newRowsPerBlock Number of rows that make up each MatrixBlock.\n+   * @param newColsPerBlock Number of columns that make up each MatrixBlock.\n+   * @return The repartitioned BlockMatrix\n+   */\n+  def repartition(newRowsPerBlock: Int, newColsPerBlock: Int): BlockMatrix = {\n+    repartition(newRowsPerBlock, newColsPerBlock, blocks.partitions.length)\n+  }\n+\n+  /**\n+   * Forms [[MatrixBlock]]s using the provided dimensions `newRowsPerBlock`x`newColsPerBlock`\n+   * Even if all [[MatrixBlock]]s (except the ones on the right and bottom edge)\n+   * have dimensions `newRowsPerBlock`x`newColsPerBlock`, a new [[BlockMatrix]] will be returned.\n+   * The resulting number of partitions may be different than `suggestedNumPartitions`. Assumes\n+   * that the offsets of each block is\n+   * (`blockRowIndex`x`rowsPerBlock`, `blockColIndex`x`colsPerBlock`).\n+   *\n+   * If there are any [[MatrixBlock]]s with dimensions greater than `rowsPerBlock`x`colsPerBlock`,\n+   * the data outside this scope will be added on to the data of the neighboring [[MatrixBlock]]s.\n+   *\n+   * @param newRowsPerBlock Number of rows that make up each block.\n+   * @param newColsPerBlock Number of columns that make up each block.\n+   * @param suggestedNumPartitions Number of partitions to partition the underlying RDD in. The\n+   *                               final number of partitions may not equal this number.\n+   * @return The repartitioned BlockMatrix\n+   */\n+  def repartition(\n+      newRowsPerBlock: Int,\n+      newColsPerBlock: Int,\n+      suggestedNumPartitions: Int): BlockMatrix = {\n+    require(newRowsPerBlock > 0,\n+      s\"newRowsPerBlock must be greater than 0. newRowsPerBlock: $newRowsPerBlock\")\n+    require(newColsPerBlock > 0,\n+      s\"newColsPerBlock must be greater than 0. newColsPerBlock: $newColsPerBlock\")\n+    require(suggestedNumPartitions > 0, s\"suggestedNumPartitions must be greater than 0. \" +\n+      s\"suggestedNumPartitions: $suggestedNumPartitions\")\n+    val m = numRows()\n+    val n = numCols()\n+    val newNumRowBlocks = math.ceil(m * 1.0 / newRowsPerBlock).toInt\n+    val newNumColBlocks = math.ceil(n * 1.0 / newColsPerBlock).toInt\n+    val slicedBlocks = blocks.flatMap { case ((blockRowIndex, blockColIndex), mat) =>\n+      val rowStartOffset = blockRowIndex * rowsPerBlock\n+      // val rowEndOffset = rowStartOffset + mat.numRows\n+      val colStartOffset = blockColIndex * colsPerBlock\n+      // val colEndOffset = colStartOffset + mat.numCols\n+\n+      /*",
+    "line": 95
+  }],
+  "prId": 4286
+}, {
+  "comments": [{
+    "author": {
+      "login": "feynmanliang"
+    },
+    "body": "line break before \".\"\n",
+    "commit": "45dda4949716f76dd36f8af8d1adb83ac8adab25",
+    "createdAt": "2015-08-31T22:53:15Z",
+    "diffHunk": "@@ -246,4 +246,135 @@ class BlockMatrix(\n     val localMat = toLocalMatrix()\n     new BDM[Double](localMat.numRows, localMat.numCols, localMat.toArray)\n   }\n+\n+  /**\n+   * Forms [[MatrixBlock]]s using `rowsPerBlock` and `colsPerBlock`, which were provided in\n+   * the constructor. Even if all [[MatrixBlock]]s (except the ones on the right and bottom edge)\n+   * have dimensions `rowsPerBlock`x`colsPerBlock`, a new [[BlockMatrix]] will be returned.\n+   */\n+  def repartition(): BlockMatrix = {\n+    repartition(rowsPerBlock, colsPerBlock)\n+  }\n+\n+  /**\n+   * Forms [[MatrixBlock]]s using the provided dimensions `newRowsPerBlock`x`newColsPerBlock`\n+   * Even if all [[MatrixBlock]]s (except the ones on the right and bottom edge)\n+   * have dimensions `newRowsPerBlock`x`newColsPerBlock`, a new [[BlockMatrix]] will be returned.\n+   * The resulting number of partitions may be different than the current number of partitions.\n+   *\n+   * @param newRowsPerBlock Number of rows that make up each MatrixBlock.\n+   * @param newColsPerBlock Number of columns that make up each MatrixBlock.\n+   * @return The repartitioned BlockMatrix\n+   */\n+  def repartition(newRowsPerBlock: Int, newColsPerBlock: Int): BlockMatrix = {\n+    repartition(newRowsPerBlock, newColsPerBlock, blocks.partitions.length)\n+  }\n+\n+  /**\n+   * Forms [[MatrixBlock]]s using the provided dimensions `newRowsPerBlock`x`newColsPerBlock`\n+   * Even if all [[MatrixBlock]]s (except the ones on the right and bottom edge)\n+   * have dimensions `newRowsPerBlock`x`newColsPerBlock`, a new [[BlockMatrix]] will be returned.\n+   * The resulting number of partitions may be different than `suggestedNumPartitions`. Assumes\n+   * that the offsets of each block is\n+   * (`blockRowIndex`x`rowsPerBlock`, `blockColIndex`x`colsPerBlock`).\n+   *\n+   * If there are any [[MatrixBlock]]s with dimensions greater than `rowsPerBlock`x`colsPerBlock`,\n+   * the data outside this scope will be added on to the data of the neighboring [[MatrixBlock]]s.\n+   *\n+   * @param newRowsPerBlock Number of rows that make up each block.\n+   * @param newColsPerBlock Number of columns that make up each block.\n+   * @param suggestedNumPartitions Number of partitions to partition the underlying RDD in. The\n+   *                               final number of partitions may not equal this number.\n+   * @return The repartitioned BlockMatrix\n+   */\n+  def repartition(\n+      newRowsPerBlock: Int,\n+      newColsPerBlock: Int,\n+      suggestedNumPartitions: Int): BlockMatrix = {\n+    require(newRowsPerBlock > 0,\n+      s\"newRowsPerBlock must be greater than 0. newRowsPerBlock: $newRowsPerBlock\")\n+    require(newColsPerBlock > 0,\n+      s\"newColsPerBlock must be greater than 0. newColsPerBlock: $newColsPerBlock\")\n+    require(suggestedNumPartitions > 0, s\"suggestedNumPartitions must be greater than 0. \" +\n+      s\"suggestedNumPartitions: $suggestedNumPartitions\")\n+    val m = numRows()\n+    val n = numCols()\n+    val newNumRowBlocks = math.ceil(m * 1.0 / newRowsPerBlock).toInt\n+    val newNumColBlocks = math.ceil(n * 1.0 / newColsPerBlock).toInt\n+    val slicedBlocks = blocks.flatMap { case ((blockRowIndex, blockColIndex), mat) =>\n+      val rowStartOffset = blockRowIndex * rowsPerBlock\n+      // val rowEndOffset = rowStartOffset + mat.numRows\n+      val colStartOffset = blockColIndex * colsPerBlock\n+      // val colEndOffset = colStartOffset + mat.numCols\n+\n+      /*\n+      // The range of indices that the parts of this block are going to be mapped to\n+      val rowIndex = rowStartOffset / newRowsPerBlock\n+      val endRowIndex = math.ceil(rowEndOffset * 1.0 / newRowsPerBlock).toInt\n+      val colIndex = colStartOffset / newColsPerBlock\n+      val endColIndex = math.ceil(colEndOffset * 1.0 / newColsPerBlock).toInt\n+\n+      // The (Int, Int) key correspond to the index in the grid that this block now belongs to\n+      // In (Int, Int, Matrix), the first Int is the row offset that the subBlock will have\n+      // in the new block it's going to be a part of. The second Int is the column offset.\n+\n+\n+      val subBlocks = new ArrayBuffer[((Int, Int), (Int, Int, Matrix))](\n+      (endRowIndex - rowIndex) * (endColIndex - colIndex))\n+\n+      var colIdx = colIndex\n+      while (colIdx < endColIndex) {\n+        var rowIdx = rowIndex\n+        while (rowIdx < endRowIndex) {\n+          // The indices to slice from the matrix\n+          val sliceRowStart =\n+           math.max(rowStartOffset, rowIdx * newRowsPerBlock) - rowStartOffset\n+          val sliceRowEnd =\n+           math.min(rowEndOffset, (rowIdx + 1) * newRowsPerBlock) - rowStartOffset\n+          val sliceColStart =\n+           math.max(colStartOffset, colIdx * newColsPerBlock) - colStartOffset\n+          val sliceColEnd =\n+           math.min(colEndOffset, (colIdx + 1) * newColsPerBlock) - colStartOffset\n+          // slice matrix\n+          val slicedMat = mat.toBreeze(sliceRowStart until sliceRowEnd,\n+            sliceColStart until sliceColEnd).toDenseMatrix\n+\n+          subBlocks.append(((rowIdx, colIdx), (\n+            sliceRowStart + rowStartOffset - rowIdx * newRowsPerBlock,\n+            sliceColStart + colStartOffset - colIdx * newColsPerBlock,\n+            Matrices.fromBreeze(slicedMat))))\n+          rowIdx += 1\n+        }\n+        colIdx += 1\n+      }\n+      subBlocks\n+      */\n+      val values = new ArrayBuffer[((Int, Int), (Int, Int, Double))]()\n+      mat.foreachActive { (i, j, v) =>\n+        val targetBlockRowIndex = (rowStartOffset + i) / newRowsPerBlock\n+        val targetBlockColIndex = (colStartOffset + j) / newColsPerBlock\n+        val targetRowOffset = (rowStartOffset + i) - newRowsPerBlock * targetBlockRowIndex\n+        val targetColOffset = (colStartOffset + j) - newColsPerBlock * targetBlockColIndex\n+        values.append(\n+          ((targetBlockRowIndex, targetBlockColIndex), (targetRowOffset, targetColOffset, v)))\n+      }\n+      values\n+    }\n+    val newPartitioner = GridPartitioner(newNumRowBlocks, newNumColBlocks, suggestedNumPartitions)\n+    val newMatrixBlocksRDD: RDD[MatrixBlock] = slicedBlocks.groupByKey(newPartitioner).",
+    "line": 149
+  }],
+  "prId": 4286
+}]

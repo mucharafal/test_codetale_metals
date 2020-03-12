@@ -1,0 +1,12 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "~~Does it work if we use `LocalSparkContext`?~~ nvm, I was thinking `MLlibTestSparkContext` ...",
+    "commit": "0796f760c60da9bb8b5cadeee2e751dd898cf8cf",
+    "createdAt": "2018-07-31T17:32:51Z",
+    "diffHunk": "@@ -0,0 +1,78 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark\n+\n+import scala.concurrent.duration._\n+import scala.language.postfixOps\n+\n+import org.apache.spark.rdd.RDD\n+import org.apache.spark.util.ThreadUtils\n+\n+/**\n+ * This test suite covers all the cases that shall fail fast on job submitted that contains one\n+ * of more barrier stages.\n+ */\n+class BarrierStageOnSubmittedSuite extends SparkFunSuite with LocalSparkContext {\n+\n+  private def testSubmitJob(sc: SparkContext, rdd: RDD[Int], message: String): Unit = {\n+    val futureAction = sc.submitJob(\n+      rdd,\n+      (iter: Iterator[Int]) => iter.toArray,\n+      0 until rdd.partitions.length,\n+      { case (_, _) => return }: (Int, Array[Int]) => Unit,\n+      { return }\n+    )\n+\n+    val error = intercept[SparkException] {\n+      ThreadUtils.awaitResult(futureAction, 1 seconds)\n+    }.getCause.getMessage\n+    assert(error.contains(message))\n+  }\n+\n+  test(\"submit a barrier ResultStage with dynamic resource allocation enabled\") {\n+    val conf = new SparkConf()\n+      .set(\"spark.dynamicAllocation.enabled\", \"true\")"
+  }],
+  "prId": 21915
+}]

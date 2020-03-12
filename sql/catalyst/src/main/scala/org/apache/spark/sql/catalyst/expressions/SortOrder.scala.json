@@ -1,0 +1,44 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "It seems `dt` is not used here. Maybe this could be as below:\n\n``` scala\ncase _: DecimalType =>\n  DoublePrefixComparator.computePrefix(Double.NegativeInfinity)\n```\n",
+    "commit": "fc4a151b0d2c6e8e609d28b452b66c2298afe545",
+    "createdAt": "2016-05-18T02:29:52Z",
+    "diffHunk": "@@ -64,49 +64,57 @@ case class SortOrder(child: Expression, direction: SortDirection)\n }\n \n /**\n- * An expression to generate a 64-bit long prefix used in sorting.\n+ * An expression to generate a 64-bit long prefix used in sorting. If the sort must operate over\n+ * null keys as well, this.nullValue can be used in place of emitted null prefixes in the sort.\n  */\n case class SortPrefix(child: SortOrder) extends UnaryExpression {\n \n+  val nullValue = child.child.dataType match {\n+    case BooleanType | DateType | TimestampType | _: IntegralType =>\n+      Long.MinValue\n+    case dt: DecimalType if dt.precision - dt.scale <= Decimal.MAX_LONG_DIGITS =>\n+      Long.MinValue\n+    case dt: DecimalType =>\n+      DoublePrefixComparator.computePrefix(Double.NegativeInfinity)"
+  }, {
+    "author": {
+      "login": "ericl"
+    },
+    "body": "Done\n",
+    "commit": "fc4a151b0d2c6e8e609d28b452b66c2298afe545",
+    "createdAt": "2016-05-18T02:36:23Z",
+    "diffHunk": "@@ -64,49 +64,57 @@ case class SortOrder(child: Expression, direction: SortDirection)\n }\n \n /**\n- * An expression to generate a 64-bit long prefix used in sorting.\n+ * An expression to generate a 64-bit long prefix used in sorting. If the sort must operate over\n+ * null keys as well, this.nullValue can be used in place of emitted null prefixes in the sort.\n  */\n case class SortPrefix(child: SortOrder) extends UnaryExpression {\n \n+  val nullValue = child.child.dataType match {\n+    case BooleanType | DateType | TimestampType | _: IntegralType =>\n+      Long.MinValue\n+    case dt: DecimalType if dt.precision - dt.scale <= Decimal.MAX_LONG_DIGITS =>\n+      Long.MinValue\n+    case dt: DecimalType =>\n+      DoublePrefixComparator.computePrefix(Double.NegativeInfinity)"
+  }],
+  "prId": 13161
+}, {
+  "comments": [{
+    "author": {
+      "login": "sameeragarwal"
+    },
+    "body": "These changes make sense to me but it'd great for @davies to take a second look too\n",
+    "commit": "fc4a151b0d2c6e8e609d28b452b66c2298afe545",
+    "createdAt": "2016-06-10T17:44:35Z",
+    "diffHunk": "@@ -64,49 +64,57 @@ case class SortOrder(child: Expression, direction: SortDirection)\n }\n \n /**\n- * An expression to generate a 64-bit long prefix used in sorting.\n+ * An expression to generate a 64-bit long prefix used in sorting. If the sort must operate over\n+ * null keys as well, this.nullValue can be used in place of emitted null prefixes in the sort.\n  */\n case class SortPrefix(child: SortOrder) extends UnaryExpression {\n \n+  val nullValue = child.child.dataType match {\n+    case BooleanType | DateType | TimestampType | _: IntegralType =>\n+      Long.MinValue\n+    case dt: DecimalType if dt.precision - dt.scale <= Decimal.MAX_LONG_DIGITS =>\n+      Long.MinValue\n+    case _: DecimalType =>\n+      DoublePrefixComparator.computePrefix(Double.NegativeInfinity)\n+    case _ => 0L\n+  }\n+\n   override def eval(input: InternalRow): Any = throw new UnsupportedOperationException\n \n   override def doGenCode(ctx: CodegenContext, ev: ExprCode): ExprCode = {",
+    "line": 22
+  }],
+  "prId": 13161
+}, {
+  "comments": [{
+    "author": {
+      "login": "davies"
+    },
+    "body": "Do we still need this?\n",
+    "commit": "fc4a151b0d2c6e8e609d28b452b66c2298afe545",
+    "createdAt": "2016-06-10T22:14:43Z",
+    "diffHunk": "@@ -64,49 +64,57 @@ case class SortOrder(child: Expression, direction: SortDirection)\n }\n \n /**\n- * An expression to generate a 64-bit long prefix used in sorting.\n+ * An expression to generate a 64-bit long prefix used in sorting. If the sort must operate over\n+ * null keys as well, this.nullValue can be used in place of emitted null prefixes in the sort.\n  */\n case class SortPrefix(child: SortOrder) extends UnaryExpression {\n \n+  val nullValue = child.child.dataType match {",
+    "line": 10
+  }],
+  "prId": 13161
+}]

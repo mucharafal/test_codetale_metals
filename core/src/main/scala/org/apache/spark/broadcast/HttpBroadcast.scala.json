@@ -1,0 +1,23 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "mateiz"
+    },
+    "body": "A code style thing throughput this PR: put the `finally` on the same line as the `}` above\n",
+    "commit": "c431095b05a84ca26e532e63c4b54f08f29abc78",
+    "createdAt": "2014-05-05T22:33:06Z",
+    "diffHunk": "@@ -159,18 +159,24 @@ private[spark] object HttpBroadcast extends Logging {\n \n   def write(id: Long, value: Any) {\n     val file = getFile(id)\n-    val out: OutputStream = {\n-      if (compress) {\n-        compressionCodec.compressedOutputStream(new FileOutputStream(file))\n-      } else {\n-        new BufferedOutputStream(new FileOutputStream(file), bufferSize)\n+    val fileOutputStream = new FileOutputStream(file)\n+    try {\n+      val out: OutputStream = {\n+        if (compress) {\n+          compressionCodec.compressedOutputStream(fileOutputStream)\n+        } else {\n+          new BufferedOutputStream(fileOutputStream, bufferSize)\n+        }\n       }\n+      val ser = SparkEnv.get.serializer.newInstance()\n+      val serOut = ser.serializeStream(out)\n+      serOut.writeObject(value)\n+      serOut.close()\n+      files += file.getAbsolutePath\n+    }"
+  }],
+  "prId": 577
+}, {
+  "comments": [{
+    "author": {
+      "login": "mateiz"
+    },
+    "body": "Also, add parentheses to close: `close()`. The convention is that things with side effects have parentheses, while things that are just field getters or conversions (e.g. toString) can skip them.\n",
+    "commit": "c431095b05a84ca26e532e63c4b54f08f29abc78",
+    "createdAt": "2014-05-05T22:33:44Z",
+    "diffHunk": "@@ -159,18 +159,24 @@ private[spark] object HttpBroadcast extends Logging {\n \n   def write(id: Long, value: Any) {\n     val file = getFile(id)\n-    val out: OutputStream = {\n-      if (compress) {\n-        compressionCodec.compressedOutputStream(new FileOutputStream(file))\n-      } else {\n-        new BufferedOutputStream(new FileOutputStream(file), bufferSize)\n+    val fileOutputStream = new FileOutputStream(file)\n+    try {\n+      val out: OutputStream = {\n+        if (compress) {\n+          compressionCodec.compressedOutputStream(fileOutputStream)\n+        } else {\n+          new BufferedOutputStream(fileOutputStream, bufferSize)\n+        }\n       }\n+      val ser = SparkEnv.get.serializer.newInstance()\n+      val serOut = ser.serializeStream(out)\n+      serOut.writeObject(value)\n+      serOut.close()\n+      files += file.getAbsolutePath\n+    }\n+    finally {\n+      fileOutputStream.close"
+  }],
+  "prId": 577
+}]

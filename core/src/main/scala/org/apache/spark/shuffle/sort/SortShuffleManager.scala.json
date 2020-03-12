@@ -1,0 +1,61 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "TODO: update these comments.\n",
+    "commit": "db0cd28015a2c790911fc7bbdf81cd65b973d2fc",
+    "createdAt": "2015-09-21T22:11:46Z",
+    "diffHunk": "@@ -19,10 +19,97 @@ package org.apache.spark.shuffle.sort\n \n import java.util.concurrent.ConcurrentHashMap\n \n-import org.apache.spark.{Logging, SparkConf, TaskContext, ShuffleDependency}\n+import org.apache.spark._\n+import org.apache.spark.serializer.Serializer\n import org.apache.spark.shuffle._\n-import org.apache.spark.shuffle.hash.HashShuffleReader\n \n+/**\n+ * Subclass of [[BaseShuffleHandle]], used to identify when we've chosen to use the new shuffle.\n+ */\n+private[spark] class UnsafeShuffleHandle[K, V](\n+    shuffleId: Int,\n+    numMaps: Int,\n+    dependency: ShuffleDependency[K, V, V])\n+  extends BaseShuffleHandle(shuffleId, numMaps, dependency) {\n+}\n+\n+private[spark] object SortShuffleManager extends Logging {\n+\n+  /**\n+   * The maximum number of shuffle output partitions that UnsafeShuffleManager supports.\n+   */\n+  val MAX_SHUFFLE_OUTPUT_PARTITIONS = PackedRecordPointer.MAXIMUM_PARTITION_ID + 1\n+\n+  /**\n+   * Helper method for determining whether a shuffle should use the optimized unsafe shuffle\n+   * path or whether it should fall back to the original sort-based shuffle.\n+   */\n+  def canUseUnsafeShuffle[K, V, C](dependency: ShuffleDependency[K, V, C]): Boolean = {\n+    val shufId = dependency.shuffleId\n+    val serializer = Serializer.getSerializer(dependency.serializer)\n+    if (!serializer.supportsRelocationOfSerializedObjects) {\n+      log.debug(s\"Can't use UnsafeShuffle for shuffle $shufId because the serializer, \" +\n+        s\"${serializer.getClass.getName}, does not support object relocation\")\n+      false\n+    } else if (dependency.aggregator.isDefined) {\n+      log.debug(s\"Can't use UnsafeShuffle for shuffle $shufId because an aggregator is defined\")\n+      false\n+    } else if (dependency.partitioner.numPartitions > MAX_SHUFFLE_OUTPUT_PARTITIONS) {\n+      log.debug(s\"Can't use UnsafeShuffle for shuffle $shufId because it has more than \" +\n+        s\"$MAX_SHUFFLE_OUTPUT_PARTITIONS partitions\")\n+      false\n+    } else {\n+      log.debug(s\"Can use UnsafeShuffle for shuffle $shufId\")\n+      true\n+    }\n+  }\n+}\n+\n+/**\n+ * A shuffle implementation that uses directly-managed memory to implement several performance"
+  }],
+  "prId": 8829
+}, {
+  "comments": [{
+    "author": {
+      "login": "rxin"
+    },
+    "body": "add comment explaining what the mapping is (shuffle id -> num mappers?)\n",
+    "commit": "db0cd28015a2c790911fc7bbdf81cd65b973d2fc",
+    "createdAt": "2015-10-19T22:36:29Z",
+    "diffHunk": "@@ -30,8 +74,8 @@ private[spark] class SortShuffleManager(conf: SparkConf) extends ShuffleManager\n         \" Shuffle will continue to spill to disk when necessary.\")\n   }\n \n-  private val indexShuffleBlockResolver = new IndexShuffleBlockResolver(conf)\n-  private val shuffleMapNumber = new ConcurrentHashMap[Int, Int]()\n+  private[this] val numMapsForShuffle = new ConcurrentHashMap[Int, Int]()"
+  }],
+  "prId": 8829
+}, {
+  "comments": [{
+    "author": {
+      "login": "rxin"
+    },
+    "body": "Can you add some comment explaining why this only works when aggregator & mapsidecombine is off?\n",
+    "commit": "db0cd28015a2c790911fc7bbdf81cd65b973d2fc",
+    "createdAt": "2015-10-19T22:36:34Z",
+    "diffHunk": "@@ -40,7 +84,24 @@ private[spark] class SortShuffleManager(conf: SparkConf) extends ShuffleManager\n       shuffleId: Int,\n       numMaps: Int,\n       dependency: ShuffleDependency[K, V, C]): ShuffleHandle = {\n-    new BaseShuffleHandle(shuffleId, numMaps, dependency)\n+    if (!dependency.mapSideCombine && SortShuffleWriter.shouldBypassMergeSort("
+  }, {
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "Fixed via a larger refactoring / cleanup of this logic.\n",
+    "commit": "db0cd28015a2c790911fc7bbdf81cd65b973d2fc",
+    "createdAt": "2015-10-20T22:40:44Z",
+    "diffHunk": "@@ -40,7 +84,24 @@ private[spark] class SortShuffleManager(conf: SparkConf) extends ShuffleManager\n       shuffleId: Int,\n       numMaps: Int,\n       dependency: ShuffleDependency[K, V, C]): ShuffleHandle = {\n-    new BaseShuffleHandle(shuffleId, numMaps, dependency)\n+    if (!dependency.mapSideCombine && SortShuffleWriter.shouldBypassMergeSort("
+  }],
+  "prId": 8829
+}, {
+  "comments": [{
+    "author": {
+      "login": "rxin"
+    },
+    "body": "this comment is incomplete? Also might be good to say this is an extreme defensive measure since it's extremely unlikely to be hit\n",
+    "commit": "db0cd28015a2c790911fc7bbdf81cd65b973d2fc",
+    "createdAt": "2015-10-19T22:36:47Z",
+    "diffHunk": "@@ -52,38 +113,113 @@ private[spark] class SortShuffleManager(conf: SparkConf) extends ShuffleManager\n       startPartition: Int,\n       endPartition: Int,\n       context: TaskContext): ShuffleReader[K, C] = {\n-    // We currently use the same block store shuffle fetcher as the hash-based shuffle.\n     new BlockStoreShuffleReader(\n       handle.asInstanceOf[BaseShuffleHandle[K, _, C]], startPartition, endPartition, context)\n   }\n \n   /** Get a writer for a given partition. Called on executors by map tasks. */\n-  override def getWriter[K, V](handle: ShuffleHandle, mapId: Int, context: TaskContext)\n-      : ShuffleWriter[K, V] = {\n-    val baseShuffleHandle = handle.asInstanceOf[BaseShuffleHandle[K, V, _]]\n-    shuffleMapNumber.putIfAbsent(baseShuffleHandle.shuffleId, baseShuffleHandle.numMaps)\n-    new SortShuffleWriter(\n-      shuffleBlockResolver, baseShuffleHandle, mapId, context)\n+  override def getWriter[K, V](\n+      handle: ShuffleHandle,\n+      mapId: Int,\n+      context: TaskContext): ShuffleWriter[K, V] = {\n+    numMapsForShuffle.putIfAbsent(\n+      handle.shuffleId, handle.asInstanceOf[BaseShuffleHandle[_, _, _]].numMaps)\n+    val env = SparkEnv.get\n+    handle match {\n+      case unsafeShuffleHandle: SerializedShuffleHandle[K @unchecked, V @unchecked] =>\n+        new UnsafeShuffleWriter(\n+          env.blockManager,\n+          shuffleBlockResolver.asInstanceOf[IndexShuffleBlockResolver],\n+          context.taskMemoryManager(),\n+          env.shuffleMemoryManager,\n+          unsafeShuffleHandle,\n+          mapId,\n+          context,\n+          env.conf)\n+      case bypassMergeSortHandle: BypassMergeSortShuffleHandle[K @unchecked, V @unchecked] =>\n+        new BypassMergeSortShuffleWriter(\n+          env.blockManager,\n+          shuffleBlockResolver.asInstanceOf[IndexShuffleBlockResolver],\n+          bypassMergeSortHandle,\n+          mapId,\n+          context,\n+          env.conf)\n+      case other: BaseShuffleHandle[K @unchecked, V @unchecked, _] =>\n+        new SortShuffleWriter(shuffleBlockResolver, other, mapId, context)\n+    }\n   }\n \n   /** Remove a shuffle's metadata from the ShuffleManager. */\n   override def unregisterShuffle(shuffleId: Int): Boolean = {\n-    if (shuffleMapNumber.containsKey(shuffleId)) {\n-      val numMaps = shuffleMapNumber.remove(shuffleId)\n-      (0 until numMaps).map{ mapId =>\n+    Option(numMapsForShuffle.remove(shuffleId)).foreach { numMaps =>\n+      (0 until numMaps).foreach { mapId =>\n         shuffleBlockResolver.removeDataByMap(shuffleId, mapId)\n       }\n     }\n     true\n   }\n \n-  override val shuffleBlockResolver: IndexShuffleBlockResolver = {\n-    indexShuffleBlockResolver\n-  }\n-\n   /** Shut down this ShuffleManager. */\n   override def stop(): Unit = {\n     shuffleBlockResolver.stop()\n   }\n }\n \n+\n+private[spark] object SortShuffleManager extends Logging {\n+\n+  /**\n+   * The maximum number of shuffle output partitions that SortShuffleManager supports when\n+   *"
+  }, {
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "Updated.\n",
+    "commit": "db0cd28015a2c790911fc7bbdf81cd65b973d2fc",
+    "createdAt": "2015-10-20T22:40:32Z",
+    "diffHunk": "@@ -52,38 +113,113 @@ private[spark] class SortShuffleManager(conf: SparkConf) extends ShuffleManager\n       startPartition: Int,\n       endPartition: Int,\n       context: TaskContext): ShuffleReader[K, C] = {\n-    // We currently use the same block store shuffle fetcher as the hash-based shuffle.\n     new BlockStoreShuffleReader(\n       handle.asInstanceOf[BaseShuffleHandle[K, _, C]], startPartition, endPartition, context)\n   }\n \n   /** Get a writer for a given partition. Called on executors by map tasks. */\n-  override def getWriter[K, V](handle: ShuffleHandle, mapId: Int, context: TaskContext)\n-      : ShuffleWriter[K, V] = {\n-    val baseShuffleHandle = handle.asInstanceOf[BaseShuffleHandle[K, V, _]]\n-    shuffleMapNumber.putIfAbsent(baseShuffleHandle.shuffleId, baseShuffleHandle.numMaps)\n-    new SortShuffleWriter(\n-      shuffleBlockResolver, baseShuffleHandle, mapId, context)\n+  override def getWriter[K, V](\n+      handle: ShuffleHandle,\n+      mapId: Int,\n+      context: TaskContext): ShuffleWriter[K, V] = {\n+    numMapsForShuffle.putIfAbsent(\n+      handle.shuffleId, handle.asInstanceOf[BaseShuffleHandle[_, _, _]].numMaps)\n+    val env = SparkEnv.get\n+    handle match {\n+      case unsafeShuffleHandle: SerializedShuffleHandle[K @unchecked, V @unchecked] =>\n+        new UnsafeShuffleWriter(\n+          env.blockManager,\n+          shuffleBlockResolver.asInstanceOf[IndexShuffleBlockResolver],\n+          context.taskMemoryManager(),\n+          env.shuffleMemoryManager,\n+          unsafeShuffleHandle,\n+          mapId,\n+          context,\n+          env.conf)\n+      case bypassMergeSortHandle: BypassMergeSortShuffleHandle[K @unchecked, V @unchecked] =>\n+        new BypassMergeSortShuffleWriter(\n+          env.blockManager,\n+          shuffleBlockResolver.asInstanceOf[IndexShuffleBlockResolver],\n+          bypassMergeSortHandle,\n+          mapId,\n+          context,\n+          env.conf)\n+      case other: BaseShuffleHandle[K @unchecked, V @unchecked, _] =>\n+        new SortShuffleWriter(shuffleBlockResolver, other, mapId, context)\n+    }\n   }\n \n   /** Remove a shuffle's metadata from the ShuffleManager. */\n   override def unregisterShuffle(shuffleId: Int): Boolean = {\n-    if (shuffleMapNumber.containsKey(shuffleId)) {\n-      val numMaps = shuffleMapNumber.remove(shuffleId)\n-      (0 until numMaps).map{ mapId =>\n+    Option(numMapsForShuffle.remove(shuffleId)).foreach { numMaps =>\n+      (0 until numMaps).foreach { mapId =>\n         shuffleBlockResolver.removeDataByMap(shuffleId, mapId)\n       }\n     }\n     true\n   }\n \n-  override val shuffleBlockResolver: IndexShuffleBlockResolver = {\n-    indexShuffleBlockResolver\n-  }\n-\n   /** Shut down this ShuffleManager. */\n   override def stop(): Unit = {\n     shuffleBlockResolver.stop()\n   }\n }\n \n+\n+private[spark] object SortShuffleManager extends Logging {\n+\n+  /**\n+   * The maximum number of shuffle output partitions that SortShuffleManager supports when\n+   *"
+  }],
+  "prId": 8829
+}]

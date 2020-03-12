@@ -1,0 +1,41 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "squito"
+    },
+    "body": "I am a little confused by the comments -- I thought that the `nodes` in the request will be null when you are requesting new containers, but there is absolutely no preference for which node the container ends up on?  The comment makes me think this is a request which is somehow related to the existing container1 on host1.\n\n(but again I'm kinda new to this code ... so this might just show my general level of confusion ...)\n",
+    "commit": "d45fecb50aecff0c0bfeb627ec1ac8a4fc9e9644",
+    "createdAt": "2015-06-11T17:08:33Z",
+    "diffHunk": "@@ -242,4 +245,154 @@ class YarnAllocatorSuite extends SparkFunSuite with Matchers with BeforeAndAfter\n     assert(pmemMsg.contains(\"2.1 MB of 2 GB physical memory used.\"))\n   }\n \n+  test(\"allocate locality preferred containers with enough resource and no matched existed \" +\n+    \"containers\") {\n+    // 1. All the locations of current containers cannot satisfy the new requirements\n+    // 2. Current requested container number can fully satisfy the pending tasks.\n+\n+    val handler = createAllocator(2)\n+    handler.updateResourceRequests()\n+    handler.handleAllocatedContainers(Array(\n+      createContainer(\"host1\"),\n+      createContainer(\"host2\")))\n+\n+    handler.requestTotalExecutorsWithPreferredLocalities(\n+      5, 15, Map(\"host3\" -> 15, \"host4\" -> 15, \"host5\" -> 10))\n+    handler.updateResourceRequests()\n+    val nodesOfRequests = handler.containerRequests.toArray.map { request =>\n+      if (request.getNodes == null) {\n+        null\n+      } else {\n+        request.getNodes.toArray(new Array[String](request.getNodes.size))\n+      }\n+    }\n+\n+    assert(nodesOfRequests === Array(\n+      null, // container1 request\n+      null, // container2 request"
+  }, {
+    "author": {
+      "login": "jerryshao"
+    },
+    "body": "Hi @squito , sorry for it, the first and second `null` is the node list of `ContainerRequest` here:\n\n```\n val handler = createAllocator(2)\n    handler.updateResourceRequests()\n    handler.handleAllocatedContainers(Array(\n      createContainer(\"host1\"),\n      createContainer(\"host2\")))\n```\n\nHere at start, I created two `ContainerRequest` with preferred node list `null`, but actually allocated on \"host1\" and \"host2\", so the preferred node list of these two `ContainerRequest` are `null`, I'm not sure if I explained clearly, I will add more comments.\n",
+    "commit": "d45fecb50aecff0c0bfeb627ec1ac8a4fc9e9644",
+    "createdAt": "2015-06-12T01:14:23Z",
+    "diffHunk": "@@ -242,4 +245,154 @@ class YarnAllocatorSuite extends SparkFunSuite with Matchers with BeforeAndAfter\n     assert(pmemMsg.contains(\"2.1 MB of 2 GB physical memory used.\"))\n   }\n \n+  test(\"allocate locality preferred containers with enough resource and no matched existed \" +\n+    \"containers\") {\n+    // 1. All the locations of current containers cannot satisfy the new requirements\n+    // 2. Current requested container number can fully satisfy the pending tasks.\n+\n+    val handler = createAllocator(2)\n+    handler.updateResourceRequests()\n+    handler.handleAllocatedContainers(Array(\n+      createContainer(\"host1\"),\n+      createContainer(\"host2\")))\n+\n+    handler.requestTotalExecutorsWithPreferredLocalities(\n+      5, 15, Map(\"host3\" -> 15, \"host4\" -> 15, \"host5\" -> 10))\n+    handler.updateResourceRequests()\n+    val nodesOfRequests = handler.containerRequests.toArray.map { request =>\n+      if (request.getNodes == null) {\n+        null\n+      } else {\n+        request.getNodes.toArray(new Array[String](request.getNodes.size))\n+      }\n+    }\n+\n+    assert(nodesOfRequests === Array(\n+      null, // container1 request\n+      null, // container2 request"
+  }],
+  "prId": 6394
+}, {
+  "comments": [{
+    "author": {
+      "login": "sryza"
+    },
+    "body": "Any reason for moving these imports?\n",
+    "commit": "d45fecb50aecff0c0bfeb627ec1ac8a4fc9e9644",
+    "createdAt": "2015-06-24T20:52:27Z",
+    "diffHunk": "@@ -25,6 +25,7 @@ import org.apache.hadoop.net.DNSToSwitchMapping\n import org.apache.hadoop.yarn.api.records._\n import org.apache.hadoop.yarn.client.api.AMRMClient\n import org.apache.hadoop.yarn.client.api.AMRMClient.ContainerRequest\n+import org.scalatest.{BeforeAndAfterEach, Matchers}",
+    "line": 4
+  }, {
+    "author": {
+      "login": "jerryshao"
+    },
+    "body": "Just change the import ordering.\n",
+    "commit": "d45fecb50aecff0c0bfeb627ec1ac8a4fc9e9644",
+    "createdAt": "2015-06-25T03:15:41Z",
+    "diffHunk": "@@ -25,6 +25,7 @@ import org.apache.hadoop.net.DNSToSwitchMapping\n import org.apache.hadoop.yarn.api.records._\n import org.apache.hadoop.yarn.client.api.AMRMClient\n import org.apache.hadoop.yarn.client.api.AMRMClient.ContainerRequest\n+import org.scalatest.{BeforeAndAfterEach, Matchers}",
+    "line": 4
+  }],
+  "prId": 6394
+}]

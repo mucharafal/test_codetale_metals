@@ -1,0 +1,35 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "The test doesn't really test filter push down because without it the test still passes. I think we should unit test the buildReader function alone.",
+    "commit": "71db855468691b18f9365f70ca376225fc046989",
+    "createdAt": "2019-04-18T04:12:13Z",
+    "diffHunk": "@@ -51,52 +59,76 @@ class BinaryFileFormatSuite extends QueryTest with SharedSQLContext with SQLTest\n     val year2015Dir = new File(testDir, \"year=2015\")\n     year2015Dir.mkdir()\n \n+    val file1 = new File(year2014Dir, \"data.txt\")\n     Files.write(\n-      new File(year2014Dir, \"data.txt\").toPath,\n-      Seq(\"2014-test\").asJava,\n+      file1.toPath,\n+      Seq(\"2014-test\").asJava, // file length = 10\n       StandardOpenOption.CREATE, StandardOpenOption.WRITE\n     )\n+    file1Status = fs.getFileStatus(new Path(file1.getAbsolutePath))\n+\n+    val file2 = new File(year2014Dir, \"data2.bin\")\n     Files.write(\n-      new File(year2014Dir, \"data2.bin\").toPath,\n-      \"2014-test-bin\".getBytes,\n+      file2.toPath,\n+      \"2014-test-bin\".getBytes, // file length = 13\n       StandardOpenOption.CREATE, StandardOpenOption.WRITE\n     )\n+    file2Status = fs.getFileStatus(new Path(file2.getAbsolutePath))\n \n+    // sleep 1s to make the gen file modificationTime different,\n+    // for unit-test for push down filters on modificationTime column.\n+    Thread.sleep(1000)\n+\n+    val file3 = new File(year2015Dir, \"bool.csv\")\n     Files.write(\n-      new File(year2015Dir, \"bool.csv\").toPath,\n-      Seq(\"bool\", \"True\", \"False\", \"true\").asJava,\n+      file3.toPath,\n+      Seq(\"bool\", \"True\", \"False\", \"true\").asJava, // file length = 21\n       StandardOpenOption.CREATE, StandardOpenOption.WRITE\n     )\n+    file3Status = fs.getFileStatus(new Path(file3.getAbsolutePath))\n+\n+    val file4 = new File(year2015Dir, \"data.bin\")\n     Files.write(\n-      new File(year2015Dir, \"data.txt\").toPath,\n-      \"2015-test\".getBytes,\n+      file4.toPath,\n+      \"2015-test\".getBytes, // file length = 9\n       StandardOpenOption.CREATE, StandardOpenOption.WRITE\n     )\n+    file4Status = fs.getFileStatus(new Path(file4.getAbsolutePath))\n+\n+    fileStatusSet = Set(file1Status, file2Status, file3Status, file4Status)\n   }\n \n-  def testBinaryFileDataSource(pathGlobFilter: String): Unit = {\n-    val resultDF = spark.read.format(\"binaryFile\")\n-      .option(\"pathGlobFilter\", pathGlobFilter)\n-      .load(testDir)\n-      .select(\n-        col(\"status.path\"),\n-        col(\"status.modificationTime\"),\n-        col(\"status.length\"),\n+  def testBinaryFileDataSource(\n+      pathGlobFilter: String,\n+      sqlFilter: Column,\n+      expectedFilter: FileStatus => Boolean): Unit = {\n+    val dfReader = spark.read.format(\"binaryFile\")\n+    if (pathGlobFilter != null) {\n+      dfReader.option(\"pathGlobFilter\", pathGlobFilter)\n+    }\n+    var resultDF = dfReader.load(testDir).select(\n+        col(\"path\"),\n+        col(\"modificationTime\"),\n+        col(\"length\"),\n         col(\"content\"),\n         col(\"year\") // this is a partition column\n       )\n+    if (sqlFilter != null) {\n+      resultDF = resultDF.filter(sqlFilter)"
+  }],
+  "prId": 24387
+}, {
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "See comment above. We can just unit test the `buildReader` func, which would look similar to your test here.",
+    "commit": "71db855468691b18f9365f70ca376225fc046989",
+    "createdAt": "2019-04-18T04:13:28Z",
+    "diffHunk": "@@ -140,4 +195,45 @@ class BinaryFileFormatSuite extends QueryTest with SharedSQLContext with SQLTest\n     }\n   }\n \n+\n+  def testCreateFilterFunctions("
+  }],
+  "prId": 24387
+}, {
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "If we only unit test `buildReader`, we don't need to share those objects across tests.",
+    "commit": "71db855468691b18f9365f70ca376225fc046989",
+    "createdAt": "2019-04-18T04:14:47Z",
+    "diffHunk": "@@ -39,6 +41,12 @@ class BinaryFileFormatSuite extends QueryTest with SharedSQLContext with SQLTest\n \n   private var fs: FileSystem = _\n \n+  private var file1Status: FileStatus = _",
+    "line": 25
+  }],
+  "prId": 24387
+}]

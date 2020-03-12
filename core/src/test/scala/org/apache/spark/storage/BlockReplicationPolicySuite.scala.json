@@ -1,0 +1,54 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "The previous indention was right.",
+    "commit": "c465aaf044c73228bbd60aa4b717def734f338c8",
+    "createdAt": "2017-03-24T04:35:28Z",
+    "diffHunk": "@@ -18,34 +18,34 @@\n package org.apache.spark.storage\n \n import scala.collection.mutable\n+import scala.util.Random\n \n import org.scalatest.{BeforeAndAfter, Matchers}\n \n import org.apache.spark.{LocalSparkContext, SparkFunSuite}\n \n-class BlockReplicationPolicySuite extends SparkFunSuite\n-  with Matchers\n-  with BeforeAndAfter\n-  with LocalSparkContext {\n+class RandomBlockReplicationPolicyBehavior extends SparkFunSuite\n+    with Matchers\n+    with BeforeAndAfter\n+    with LocalSparkContext {"
+  }],
+  "prId": 13932
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "shall we test more explicitly that the first candidate is within rack and the second candidate is outside rack?",
+    "commit": "c465aaf044c73228bbd60aa4b717def734f338c8",
+    "createdAt": "2017-03-24T04:38:53Z",
+    "diffHunk": "@@ -68,7 +68,60 @@ class BlockReplicationPolicySuite extends SparkFunSuite\n       logDebug(s\"Random peers : ${secondPass.mkString(\", \")}\")\n       assert(secondPass.toSet.size === numReplicas)\n     }\n+  }\n+\n+  protected def generateBlockManagerIds(count: Int, racks: Seq[String]): Seq[BlockManagerId] = {\n+    (1 to count).map{i =>\n+      BlockManagerId(s\"Exec-$i\", s\"Host-$i\", 10000 + i, Some(racks(Random.nextInt(racks.size))))\n+    }\n+  }\n+}\n+\n+class TopologyAwareBlockReplicationPolicyBehavior extends RandomBlockReplicationPolicyBehavior {\n+  override val replicationPolicy = new BasicBlockReplicationPolicy\n+\n+  test(\"All peers in the same rack\") {\n+    val racks = Seq(\"/default-rack\")\n+    val numBlockManager = 10\n+    (1 to 10).foreach {numReplicas =>\n+      val peers = generateBlockManagerIds(numBlockManager, racks)\n+      val blockManager = BlockManagerId(\"Driver\", \"Host-driver\", 10001, Some(racks.head))\n+\n+      val prioritizedPeers = replicationPolicy.prioritize(\n+        blockManager,\n+        peers,\n+        mutable.HashSet.empty,\n+        blockId,\n+        numReplicas\n+      )\n \n+      assert(prioritizedPeers.toSet.size == numReplicas)\n+      assert(prioritizedPeers.forall(p => p.host != blockManager.host))\n+    }\n   }\n \n+  test(\"Peers in 2 racks\") {\n+    val racks = Seq(\"/Rack-1\", \"/Rack-2\")\n+    (1 to 10).foreach {numReplicas =>\n+      val peers = generateBlockManagerIds(10, racks)\n+      val blockManager = BlockManagerId(\"Driver\", \"Host-driver\", 9001, Some(racks.head))\n+\n+      val prioritizedPeers = replicationPolicy.prioritize(\n+        blockManager,\n+        peers,\n+        mutable.HashSet.empty,\n+        blockId,\n+        numReplicas\n+      )\n+\n+      assert(prioritizedPeers.toSet.size == numReplicas)\n+      val priorityPeers = prioritizedPeers.take(2)\n+      assert(priorityPeers.forall(p => p.host != blockManager.host))\n+      if(numReplicas > 1) {\n+        // both these conditions should be satisfied when numReplicas > 1\n+        assert(priorityPeers.exists(p => p.topologyInfo == blockManager.topologyInfo))\n+        assert(priorityPeers.exists(p => p.topologyInfo != blockManager.topologyInfo))",
+    "line": 101
+  }, {
+    "author": {
+      "login": "shubhamchopra"
+    },
+    "body": "The intended behavior is to ensure one is within rack and one outside, not necessarily the first or the second.",
+    "commit": "c465aaf044c73228bbd60aa4b717def734f338c8",
+    "createdAt": "2017-03-27T15:38:18Z",
+    "diffHunk": "@@ -68,7 +68,60 @@ class BlockReplicationPolicySuite extends SparkFunSuite\n       logDebug(s\"Random peers : ${secondPass.mkString(\", \")}\")\n       assert(secondPass.toSet.size === numReplicas)\n     }\n+  }\n+\n+  protected def generateBlockManagerIds(count: Int, racks: Seq[String]): Seq[BlockManagerId] = {\n+    (1 to count).map{i =>\n+      BlockManagerId(s\"Exec-$i\", s\"Host-$i\", 10000 + i, Some(racks(Random.nextInt(racks.size))))\n+    }\n+  }\n+}\n+\n+class TopologyAwareBlockReplicationPolicyBehavior extends RandomBlockReplicationPolicyBehavior {\n+  override val replicationPolicy = new BasicBlockReplicationPolicy\n+\n+  test(\"All peers in the same rack\") {\n+    val racks = Seq(\"/default-rack\")\n+    val numBlockManager = 10\n+    (1 to 10).foreach {numReplicas =>\n+      val peers = generateBlockManagerIds(numBlockManager, racks)\n+      val blockManager = BlockManagerId(\"Driver\", \"Host-driver\", 10001, Some(racks.head))\n+\n+      val prioritizedPeers = replicationPolicy.prioritize(\n+        blockManager,\n+        peers,\n+        mutable.HashSet.empty,\n+        blockId,\n+        numReplicas\n+      )\n \n+      assert(prioritizedPeers.toSet.size == numReplicas)\n+      assert(prioritizedPeers.forall(p => p.host != blockManager.host))\n+    }\n   }\n \n+  test(\"Peers in 2 racks\") {\n+    val racks = Seq(\"/Rack-1\", \"/Rack-2\")\n+    (1 to 10).foreach {numReplicas =>\n+      val peers = generateBlockManagerIds(10, racks)\n+      val blockManager = BlockManagerId(\"Driver\", \"Host-driver\", 9001, Some(racks.head))\n+\n+      val prioritizedPeers = replicationPolicy.prioritize(\n+        blockManager,\n+        peers,\n+        mutable.HashSet.empty,\n+        blockId,\n+        numReplicas\n+      )\n+\n+      assert(prioritizedPeers.toSet.size == numReplicas)\n+      val priorityPeers = prioritizedPeers.take(2)\n+      assert(priorityPeers.forall(p => p.host != blockManager.host))\n+      if(numReplicas > 1) {\n+        // both these conditions should be satisfied when numReplicas > 1\n+        assert(priorityPeers.exists(p => p.topologyInfo == blockManager.topologyInfo))\n+        assert(priorityPeers.exists(p => p.topologyInfo != blockManager.topologyInfo))",
+    "line": 101
+  }],
+  "prId": 13932
+}, {
+  "comments": [{
+    "author": {
+      "login": "sameeragarwal"
+    },
+    "body": "@shubhamchopra this test seems to be failing occasionally: https://spark-tests.appspot.com/test-details?suite_name=org.apache.spark.storage.TopologyAwareBlockReplicationPolicyBehavior&test_name=Peers+in+2+racks. Can you please take a look? Thanks! ",
+    "commit": "c465aaf044c73228bbd60aa4b717def734f338c8",
+    "createdAt": "2017-04-11T21:15:16Z",
+    "diffHunk": "@@ -68,7 +68,60 @@ class BlockReplicationPolicySuite extends SparkFunSuite\n       logDebug(s\"Random peers : ${secondPass.mkString(\", \")}\")\n       assert(secondPass.toSet.size === numReplicas)\n     }\n+  }\n+\n+  protected def generateBlockManagerIds(count: Int, racks: Seq[String]): Seq[BlockManagerId] = {\n+    (1 to count).map{i =>\n+      BlockManagerId(s\"Exec-$i\", s\"Host-$i\", 10000 + i, Some(racks(Random.nextInt(racks.size))))\n+    }\n+  }\n+}\n+\n+class TopologyAwareBlockReplicationPolicyBehavior extends RandomBlockReplicationPolicyBehavior {\n+  override val replicationPolicy = new BasicBlockReplicationPolicy\n+\n+  test(\"All peers in the same rack\") {\n+    val racks = Seq(\"/default-rack\")\n+    val numBlockManager = 10\n+    (1 to 10).foreach {numReplicas =>\n+      val peers = generateBlockManagerIds(numBlockManager, racks)\n+      val blockManager = BlockManagerId(\"Driver\", \"Host-driver\", 10001, Some(racks.head))\n+\n+      val prioritizedPeers = replicationPolicy.prioritize(\n+        blockManager,\n+        peers,\n+        mutable.HashSet.empty,\n+        blockId,\n+        numReplicas\n+      )\n \n+      assert(prioritizedPeers.toSet.size == numReplicas)\n+      assert(prioritizedPeers.forall(p => p.host != blockManager.host))\n+    }\n   }\n \n+  test(\"Peers in 2 racks\") {",
+    "line": 81
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "fixed by https://github.com/apache/spark/pull/17624",
+    "commit": "c465aaf044c73228bbd60aa4b717def734f338c8",
+    "createdAt": "2017-04-12T16:53:38Z",
+    "diffHunk": "@@ -68,7 +68,60 @@ class BlockReplicationPolicySuite extends SparkFunSuite\n       logDebug(s\"Random peers : ${secondPass.mkString(\", \")}\")\n       assert(secondPass.toSet.size === numReplicas)\n     }\n+  }\n+\n+  protected def generateBlockManagerIds(count: Int, racks: Seq[String]): Seq[BlockManagerId] = {\n+    (1 to count).map{i =>\n+      BlockManagerId(s\"Exec-$i\", s\"Host-$i\", 10000 + i, Some(racks(Random.nextInt(racks.size))))\n+    }\n+  }\n+}\n+\n+class TopologyAwareBlockReplicationPolicyBehavior extends RandomBlockReplicationPolicyBehavior {\n+  override val replicationPolicy = new BasicBlockReplicationPolicy\n+\n+  test(\"All peers in the same rack\") {\n+    val racks = Seq(\"/default-rack\")\n+    val numBlockManager = 10\n+    (1 to 10).foreach {numReplicas =>\n+      val peers = generateBlockManagerIds(numBlockManager, racks)\n+      val blockManager = BlockManagerId(\"Driver\", \"Host-driver\", 10001, Some(racks.head))\n+\n+      val prioritizedPeers = replicationPolicy.prioritize(\n+        blockManager,\n+        peers,\n+        mutable.HashSet.empty,\n+        blockId,\n+        numReplicas\n+      )\n \n+      assert(prioritizedPeers.toSet.size == numReplicas)\n+      assert(prioritizedPeers.forall(p => p.host != blockManager.host))\n+    }\n   }\n \n+  test(\"Peers in 2 racks\") {",
+    "line": 81
+  }],
+  "prId": 13932
+}]

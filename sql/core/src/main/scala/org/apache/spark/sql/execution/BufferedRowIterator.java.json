@@ -1,0 +1,100 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "davies"
+    },
+    "body": "Could you move this into generated code? (to save one API)\n",
+    "commit": "12e1b37e076ca7161bae66ecec99938f1cd6e813",
+    "createdAt": "2016-03-31T07:10:29Z",
+    "diffHunk": "@@ -61,6 +63,14 @@ public long durationMs() {\n   public abstract void init(Iterator<InternalRow> iters[]);\n \n   /**\n+   * Initializes from array of iterators of InternalRow.\n+   */\n+  public void init(int index, Iterator<InternalRow> iters[]) {\n+    partitionIndex = index;"
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "The problem is the case of two RDDs. Under this case, we will use the original API.\n",
+    "commit": "12e1b37e076ca7161bae66ecec99938f1cd6e813",
+    "createdAt": "2016-03-31T10:12:39Z",
+    "diffHunk": "@@ -61,6 +63,14 @@ public long durationMs() {\n   public abstract void init(Iterator<InternalRow> iters[]);\n \n   /**\n+   * Initializes from array of iterators of InternalRow.\n+   */\n+  public void init(int index, Iterator<InternalRow> iters[]) {\n+    partitionIndex = index;"
+  }, {
+    "author": {
+      "login": "davies"
+    },
+    "body": "Then you should also pass that in, thinking of a Sample after SMJ, could you also add a test  for that (it will fail now, not good results)\n",
+    "commit": "12e1b37e076ca7161bae66ecec99938f1cd6e813",
+    "createdAt": "2016-03-31T17:11:58Z",
+    "diffHunk": "@@ -61,6 +63,14 @@ public long durationMs() {\n   public abstract void init(Iterator<InternalRow> iters[]);\n \n   /**\n+   * Initializes from array of iterators of InternalRow.\n+   */\n+  public void init(int index, Iterator<InternalRow> iters[]) {\n+    partitionIndex = index;"
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "Not sure about this. I just ran test like:\n\n```\ntest(\"sort merge join/sample\") {\n  val N = 2 << 20\n  runBenchmark(\"sort merge join\", N) {\n    val df1 = sqlContext.range(N)\n      .selectExpr(s\"(id * 15485863) % ${N*10} as k1\")\n    val df2 = sqlContext.range(N)\n      .selectExpr(s\"(id * 15485867) % ${N*10} as k2\")\n    df1.join(df2, col(\"k1\") === col(\"k2\")).sample(true, 0.2).count()\n  }\n```\n\nI didn't see failure happened.\n",
+    "commit": "12e1b37e076ca7161bae66ecec99938f1cd6e813",
+    "createdAt": "2016-04-01T03:00:46Z",
+    "diffHunk": "@@ -61,6 +63,14 @@ public long durationMs() {\n   public abstract void init(Iterator<InternalRow> iters[]);\n \n   /**\n+   * Initializes from array of iterators of InternalRow.\n+   */\n+  public void init(int index, Iterator<InternalRow> iters[]) {\n+    partitionIndex = index;"
+  }, {
+    "author": {
+      "login": "davies"
+    },
+    "body": "No failure, but the seed is not setup as expected.\n",
+    "commit": "12e1b37e076ca7161bae66ecec99938f1cd6e813",
+    "createdAt": "2016-04-01T03:18:26Z",
+    "diffHunk": "@@ -61,6 +63,14 @@ public long durationMs() {\n   public abstract void init(Iterator<InternalRow> iters[]);\n \n   /**\n+   * Initializes from array of iterators of InternalRow.\n+   */\n+  public void init(int index, Iterator<InternalRow> iters[]) {\n+    partitionIndex = index;"
+  }, {
+    "author": {
+      "login": "davies"
+    },
+    "body": "partttion id is always -1\n",
+    "commit": "12e1b37e076ca7161bae66ecec99938f1cd6e813",
+    "createdAt": "2016-04-01T03:18:55Z",
+    "diffHunk": "@@ -61,6 +63,14 @@ public long durationMs() {\n   public abstract void init(Iterator<InternalRow> iters[]);\n \n   /**\n+   * Initializes from array of iterators of InternalRow.\n+   */\n+  public void init(int index, Iterator<InternalRow> iters[]) {\n+    partitionIndex = index;"
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "I got your point.\n",
+    "commit": "12e1b37e076ca7161bae66ecec99938f1cd6e813",
+    "createdAt": "2016-04-01T03:36:58Z",
+    "diffHunk": "@@ -61,6 +63,14 @@ public long durationMs() {\n   public abstract void init(Iterator<InternalRow> iters[]);\n \n   /**\n+   * Initializes from array of iterators of InternalRow.\n+   */\n+  public void init(int index, Iterator<InternalRow> iters[]) {\n+    partitionIndex = index;"
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "One problem is, as we consume two RDDs with the codes like:\n\n```\nrdds.head.zipPartitions(rdds(1)) { (leftIter, rightIter) =>\n  ...\n}\n```\n\nWe can't obtain and pass partition index as 1 RDD case.\n",
+    "commit": "12e1b37e076ca7161bae66ecec99938f1cd6e813",
+    "createdAt": "2016-04-01T03:47:16Z",
+    "diffHunk": "@@ -61,6 +63,14 @@ public long durationMs() {\n   public abstract void init(Iterator<InternalRow> iters[]);\n \n   /**\n+   * Initializes from array of iterators of InternalRow.\n+   */\n+  public void init(int index, Iterator<InternalRow> iters[]) {\n+    partitionIndex = index;"
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "We can slightly change `ZippedPartitionsRDD2` etc. to pass partition index into the given closure. As:\n\n```\nrdds.head.zipPartitions(rdds(1)) { (index, leftIter, rightIter) =>\n  ...\n}\n```\n\nDo you think it is doable and makes sense?\n",
+    "commit": "12e1b37e076ca7161bae66ecec99938f1cd6e813",
+    "createdAt": "2016-04-01T03:49:36Z",
+    "diffHunk": "@@ -61,6 +63,14 @@ public long durationMs() {\n   public abstract void init(Iterator<InternalRow> iters[]);\n \n   /**\n+   * Initializes from array of iterators of InternalRow.\n+   */\n+  public void init(int index, Iterator<InternalRow> iters[]) {\n+    partitionIndex = index;"
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "That said, we add new API called `zipPartitionsWithIndex`.\n",
+    "commit": "12e1b37e076ca7161bae66ecec99938f1cd6e813",
+    "createdAt": "2016-04-01T03:54:58Z",
+    "diffHunk": "@@ -61,6 +63,14 @@ public long durationMs() {\n   public abstract void init(Iterator<InternalRow> iters[]);\n \n   /**\n+   * Initializes from array of iterators of InternalRow.\n+   */\n+  public void init(int index, Iterator<InternalRow> iters[]) {\n+    partitionIndex = index;"
+  }, {
+    "author": {
+      "login": "davies"
+    },
+    "body": "You can get the partition id via TaskContext.partitionId\n",
+    "commit": "12e1b37e076ca7161bae66ecec99938f1cd6e813",
+    "createdAt": "2016-04-01T04:03:15Z",
+    "diffHunk": "@@ -61,6 +63,14 @@ public long durationMs() {\n   public abstract void init(Iterator<InternalRow> iters[]);\n \n   /**\n+   * Initializes from array of iterators of InternalRow.\n+   */\n+  public void init(int index, Iterator<InternalRow> iters[]) {\n+    partitionIndex = index;"
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "ah. ok. Thanks! Not aware of that.\n",
+    "commit": "12e1b37e076ca7161bae66ecec99938f1cd6e813",
+    "createdAt": "2016-04-01T04:34:48Z",
+    "diffHunk": "@@ -61,6 +63,14 @@ public long durationMs() {\n   public abstract void init(Iterator<InternalRow> iters[]);\n \n   /**\n+   * Initializes from array of iterators of InternalRow.\n+   */\n+  public void init(int index, Iterator<InternalRow> iters[]) {\n+    partitionIndex = index;"
+  }],
+  "prId": 11517
+}]

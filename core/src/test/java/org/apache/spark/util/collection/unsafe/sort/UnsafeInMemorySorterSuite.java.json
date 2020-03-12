@@ -1,0 +1,67 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "juliuszsompolski"
+    },
+    "body": "nit: tense: \"this currently fails\" -> \"[SPARK-21907] this failed ...\"\r\nAt the point when anyone reads it, it will hopefully not fail :-)",
+    "commit": "6b901eea4dd7aace3e6a47b333c0dfa815b031db",
+    "createdAt": "2017-09-29T11:07:56Z",
+    "diffHunk": "@@ -139,4 +139,44 @@ public int compare(\n     }\n     assertEquals(dataToSort.length, iterLength);\n   }\n+\n+  @Test\n+  public void freeAfterOOM() {\n+    final TestMemoryManager testMemoryManager = new TestMemoryManager(new SparkConf().set(\"spark.memory.offHeap.enabled\", \"false\"));\n+    final TaskMemoryManager memoryManager = new TaskMemoryManager(\n+            testMemoryManager, 0);\n+    final TestMemoryConsumer consumer = new TestMemoryConsumer(memoryManager);\n+    final MemoryBlock dataPage = memoryManager.allocatePage(2048, consumer);\n+    final Object baseObject = dataPage.getBaseObject();\n+    // Write the records into the data page:\n+    long position = dataPage.getBaseOffset();\n+\n+    final HashPartitioner hashPartitioner = new HashPartitioner(4);\n+    // Use integer comparison for comparing prefixes (which are partition ids, in this case)\n+    final PrefixComparator prefixComparator = PrefixComparators.LONG;\n+    final RecordComparator recordComparator = new RecordComparator() {\n+      @Override\n+      public int compare(\n+              Object leftBaseObject,\n+              long leftBaseOffset,\n+              Object rightBaseObject,\n+              long rightBaseOffset) {\n+        return 0;\n+      }\n+    };\n+    UnsafeInMemorySorter sorter = new UnsafeInMemorySorter(consumer, memoryManager,\n+            recordComparator, prefixComparator, 100, shouldUseRadixSort());\n+\n+    testMemoryManager.markExecutionAsOutOfMemoryOnce();\n+    try {\n+      sorter.reset();\n+    } catch( OutOfMemoryError oom ) {\n+      //as expected\n+    }\n+    // this currently fails on NPE at org.apache.spark.memory.MemoryConsumer.freeArray(MemoryConsumer.java:108)"
+  }],
+  "prId": 19181
+}, {
+  "comments": [{
+    "author": {
+      "login": "juliuszsompolski"
+    },
+    "body": "nit: ws: `// as expected`",
+    "commit": "6b901eea4dd7aace3e6a47b333c0dfa815b031db",
+    "createdAt": "2017-09-29T11:08:09Z",
+    "diffHunk": "@@ -139,4 +139,44 @@ public int compare(\n     }\n     assertEquals(dataToSort.length, iterLength);\n   }\n+\n+  @Test\n+  public void freeAfterOOM() {\n+    final TestMemoryManager testMemoryManager = new TestMemoryManager(new SparkConf().set(\"spark.memory.offHeap.enabled\", \"false\"));\n+    final TaskMemoryManager memoryManager = new TaskMemoryManager(\n+            testMemoryManager, 0);\n+    final TestMemoryConsumer consumer = new TestMemoryConsumer(memoryManager);\n+    final MemoryBlock dataPage = memoryManager.allocatePage(2048, consumer);\n+    final Object baseObject = dataPage.getBaseObject();\n+    // Write the records into the data page:\n+    long position = dataPage.getBaseOffset();\n+\n+    final HashPartitioner hashPartitioner = new HashPartitioner(4);\n+    // Use integer comparison for comparing prefixes (which are partition ids, in this case)\n+    final PrefixComparator prefixComparator = PrefixComparators.LONG;\n+    final RecordComparator recordComparator = new RecordComparator() {\n+      @Override\n+      public int compare(\n+              Object leftBaseObject,\n+              long leftBaseOffset,\n+              Object rightBaseObject,\n+              long rightBaseOffset) {\n+        return 0;\n+      }\n+    };\n+    UnsafeInMemorySorter sorter = new UnsafeInMemorySorter(consumer, memoryManager,\n+            recordComparator, prefixComparator, 100, shouldUseRadixSort());\n+\n+    testMemoryManager.markExecutionAsOutOfMemoryOnce();\n+    try {\n+      sorter.reset();\n+    } catch( OutOfMemoryError oom ) {\n+      //as expected"
+  }],
+  "prId": 19181
+}, {
+  "comments": [{
+    "author": {
+      "login": "juliuszsompolski"
+    },
+    "body": "nit: ws: `// simulate ...`",
+    "commit": "6b901eea4dd7aace3e6a47b333c0dfa815b031db",
+    "createdAt": "2017-09-29T11:08:30Z",
+    "diffHunk": "@@ -139,4 +139,44 @@ public int compare(\n     }\n     assertEquals(dataToSort.length, iterLength);\n   }\n+\n+  @Test\n+  public void freeAfterOOM() {\n+    final TestMemoryManager testMemoryManager = new TestMemoryManager(new SparkConf().set(\"spark.memory.offHeap.enabled\", \"false\"));\n+    final TaskMemoryManager memoryManager = new TaskMemoryManager(\n+            testMemoryManager, 0);\n+    final TestMemoryConsumer consumer = new TestMemoryConsumer(memoryManager);\n+    final MemoryBlock dataPage = memoryManager.allocatePage(2048, consumer);\n+    final Object baseObject = dataPage.getBaseObject();\n+    // Write the records into the data page:\n+    long position = dataPage.getBaseOffset();\n+\n+    final HashPartitioner hashPartitioner = new HashPartitioner(4);\n+    // Use integer comparison for comparing prefixes (which are partition ids, in this case)\n+    final PrefixComparator prefixComparator = PrefixComparators.LONG;\n+    final RecordComparator recordComparator = new RecordComparator() {\n+      @Override\n+      public int compare(\n+              Object leftBaseObject,\n+              long leftBaseOffset,\n+              Object rightBaseObject,\n+              long rightBaseOffset) {\n+        return 0;\n+      }\n+    };\n+    UnsafeInMemorySorter sorter = new UnsafeInMemorySorter(consumer, memoryManager,\n+            recordComparator, prefixComparator, 100, shouldUseRadixSort());\n+\n+    testMemoryManager.markExecutionAsOutOfMemoryOnce();\n+    try {\n+      sorter.reset();\n+    } catch( OutOfMemoryError oom ) {\n+      //as expected\n+    }\n+    // this currently fails on NPE at org.apache.spark.memory.MemoryConsumer.freeArray(MemoryConsumer.java:108)\n+    sorter.free();\n+    //simulate a 'back to back' free."
+  }],
+  "prId": 19181
+}, {
+  "comments": [{
+    "author": {
+      "login": "kiszk"
+    },
+    "body": "nit: Is it better to wrap this line since this is too long.",
+    "commit": "6b901eea4dd7aace3e6a47b333c0dfa815b031db",
+    "createdAt": "2017-09-29T15:07:45Z",
+    "diffHunk": "@@ -139,4 +139,44 @@ public int compare(\n     }\n     assertEquals(dataToSort.length, iterLength);\n   }\n+\n+  @Test\n+  public void freeAfterOOM() {\n+    final TestMemoryManager testMemoryManager = new TestMemoryManager(new SparkConf().set(\"spark.memory.offHeap.enabled\", \"false\"));"
+  }],
+  "prId": 19181
+}, {
+  "comments": [{
+    "author": {
+      "login": "hvanhovell"
+    },
+    "body": "Make sure you fail on an unexpected success",
+    "commit": "6b901eea4dd7aace3e6a47b333c0dfa815b031db",
+    "createdAt": "2017-10-10T15:50:23Z",
+    "diffHunk": "@@ -139,4 +139,49 @@ public int compare(\n     }\n     assertEquals(dataToSort.length, iterLength);\n   }\n+\n+  @Test\n+  public void freeAfterOOM() {\n+    final SparkConf sparkConf =\n+            new SparkConf()\n+                    .set(\"spark.memory.offHeap.enabled\",\n+                         \"false\");\n+    final TestMemoryManager testMemoryManager =\n+            new TestMemoryManager(sparkConf);\n+    final TaskMemoryManager memoryManager = new TaskMemoryManager(\n+            testMemoryManager, 0);\n+    final TestMemoryConsumer consumer = new TestMemoryConsumer(memoryManager);\n+    final MemoryBlock dataPage = memoryManager.allocatePage(2048, consumer);\n+    final Object baseObject = dataPage.getBaseObject();\n+    // Write the records into the data page:\n+    long position = dataPage.getBaseOffset();\n+\n+    final HashPartitioner hashPartitioner = new HashPartitioner(4);\n+    // Use integer comparison for comparing prefixes (which are partition ids, in this case)\n+    final PrefixComparator prefixComparator = PrefixComparators.LONG;\n+    final RecordComparator recordComparator = new RecordComparator() {\n+      @Override\n+      public int compare(\n+              Object leftBaseObject,\n+              long leftBaseOffset,\n+              Object rightBaseObject,\n+              long rightBaseOffset) {\n+        return 0;\n+      }\n+    };\n+    UnsafeInMemorySorter sorter = new UnsafeInMemorySorter(consumer, memoryManager,\n+            recordComparator, prefixComparator, 100, shouldUseRadixSort());\n+\n+    testMemoryManager.markExecutionAsOutOfMemoryOnce();\n+    try {\n+      sorter.reset();\n+    } catch (OutOfMemoryError oom) {\n+      // as expected"
+  }],
+  "prId": 19181
+}, {
+  "comments": [{
+    "author": {
+      "login": "hvanhovell"
+    },
+    "body": "NIT style",
+    "commit": "6b901eea4dd7aace3e6a47b333c0dfa815b031db",
+    "createdAt": "2017-10-10T15:51:02Z",
+    "diffHunk": "@@ -139,4 +139,49 @@ public int compare(\n     }\n     assertEquals(dataToSort.length, iterLength);\n   }\n+\n+  @Test\n+  public void freeAfterOOM() {\n+    final SparkConf sparkConf =\n+            new SparkConf()"
+  }],
+  "prId": 19181
+}]

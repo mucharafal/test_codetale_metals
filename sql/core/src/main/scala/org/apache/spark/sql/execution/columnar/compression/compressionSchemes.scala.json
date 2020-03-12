@@ -1,0 +1,58 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "can we delay the decompression and set the dictionary to `ColumnVector`?",
+    "commit": "c16230d34472e0337b87ce858289fec9a1d88ab4",
+    "createdAt": "2017-08-24T15:13:11Z",
+    "diffHunk": "@@ -278,6 +555,46 @@ private[columnar] case object DictionaryEncoding extends CompressionScheme {\n     }\n \n     override def hasNext: Boolean = buffer.hasRemaining\n+\n+    override def decompress(columnVector: ColumnVector, capacity: Int): Unit = {\n+      val nullsBuffer = buffer.duplicate().order(ByteOrder.nativeOrder())\n+      nullsBuffer.rewind()\n+      val nullCount = ByteBufferHelper.getInt(nullsBuffer)\n+      var nextNullIndex = if (nullCount > 0) ByteBufferHelper.getInt(nullsBuffer) else -1\n+      var pos = 0\n+      var seenNulls = 0\n+      columnType.dataType match {\n+        case _: IntegerType =>\n+          while (pos < capacity) {\n+            if (pos != nextNullIndex) {\n+              val value = dictionary(buffer.getShort()).asInstanceOf[Int]\n+              columnVector.putInt(pos, value)"
+  }, {
+    "author": {
+      "login": "kiszk"
+    },
+    "body": "Sure, I will do that.",
+    "commit": "c16230d34472e0337b87ce858289fec9a1d88ab4",
+    "createdAt": "2017-08-24T15:55:20Z",
+    "diffHunk": "@@ -278,6 +555,46 @@ private[columnar] case object DictionaryEncoding extends CompressionScheme {\n     }\n \n     override def hasNext: Boolean = buffer.hasRemaining\n+\n+    override def decompress(columnVector: ColumnVector, capacity: Int): Unit = {\n+      val nullsBuffer = buffer.duplicate().order(ByteOrder.nativeOrder())\n+      nullsBuffer.rewind()\n+      val nullCount = ByteBufferHelper.getInt(nullsBuffer)\n+      var nextNullIndex = if (nullCount > 0) ByteBufferHelper.getInt(nullsBuffer) else -1\n+      var pos = 0\n+      var seenNulls = 0\n+      columnType.dataType match {\n+        case _: IntegerType =>\n+          while (pos < capacity) {\n+            if (pos != nextNullIndex) {\n+              val value = dictionary(buffer.getShort()).asInstanceOf[Int]\n+              columnVector.putInt(pos, value)"
+  }, {
+    "author": {
+      "login": "kiszk"
+    },
+    "body": "done",
+    "commit": "c16230d34472e0337b87ce858289fec9a1d88ab4",
+    "createdAt": "2017-08-24T16:33:20Z",
+    "diffHunk": "@@ -278,6 +555,46 @@ private[columnar] case object DictionaryEncoding extends CompressionScheme {\n     }\n \n     override def hasNext: Boolean = buffer.hasRemaining\n+\n+    override def decompress(columnVector: ColumnVector, capacity: Int): Unit = {\n+      val nullsBuffer = buffer.duplicate().order(ByteOrder.nativeOrder())\n+      nullsBuffer.rewind()\n+      val nullCount = ByteBufferHelper.getInt(nullsBuffer)\n+      var nextNullIndex = if (nullCount > 0) ByteBufferHelper.getInt(nullsBuffer) else -1\n+      var pos = 0\n+      var seenNulls = 0\n+      columnType.dataType match {\n+        case _: IntegerType =>\n+          while (pos < capacity) {\n+            if (pos != nextNullIndex) {\n+              val value = dictionary(buffer.getShort()).asInstanceOf[Int]\n+              columnVector.putInt(pos, value)"
+  }],
+  "prId": 18704
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "hmmm, is there any way to reduce the code duplication? maybe codegen?",
+    "commit": "c16230d34472e0337b87ce858289fec9a1d88ab4",
+    "createdAt": "2017-09-12T14:34:04Z",
+    "diffHunk": "@@ -61,6 +63,162 @@ private[columnar] case object PassThrough extends CompressionScheme {\n     }\n \n     override def hasNext: Boolean = buffer.hasRemaining\n+\n+    override def decompress(columnVector: WritableColumnVector, capacity: Int): Unit = {\n+      val nullsBuffer = buffer.duplicate().order(ByteOrder.nativeOrder())\n+      nullsBuffer.rewind()\n+      val nullCount = ByteBufferHelper.getInt(nullsBuffer)\n+      var nextNullIndex = if (nullCount > 0) ByteBufferHelper.getInt(nullsBuffer) else capacity\n+      var pos = 0\n+      var seenNulls = 0\n+      val srcArray = buffer.array\n+      var bufferPos = buffer.position\n+      columnType.dataType match {\n+        case _: BooleanType =>\n+          val unitSize = 1\n+          while (pos < capacity) {\n+            if (pos != nextNullIndex) {\n+              val len = nextNullIndex - pos\n+              assert(len * unitSize < Int.MaxValue)\n+              for (i <- 0 until len) {\n+                val value = buffer.get(bufferPos + i) != 0\n+                columnVector.putBoolean(pos + i, value)\n+              }\n+              bufferPos += len\n+              pos += len\n+            } else {\n+              seenNulls += 1\n+              nextNullIndex = if (seenNulls < nullCount) {\n+                ByteBufferHelper.getInt(nullsBuffer)\n+              } else {\n+                capacity\n+              }\n+              columnVector.putNull(pos)\n+              pos += 1\n+            }\n+          }\n+        case _: ByteType =>"
+  }, {
+    "author": {
+      "login": "kiszk"
+    },
+    "body": "Removed code duplication by using a function object. How about this?",
+    "commit": "c16230d34472e0337b87ce858289fec9a1d88ab4",
+    "createdAt": "2017-09-14T09:16:20Z",
+    "diffHunk": "@@ -61,6 +63,162 @@ private[columnar] case object PassThrough extends CompressionScheme {\n     }\n \n     override def hasNext: Boolean = buffer.hasRemaining\n+\n+    override def decompress(columnVector: WritableColumnVector, capacity: Int): Unit = {\n+      val nullsBuffer = buffer.duplicate().order(ByteOrder.nativeOrder())\n+      nullsBuffer.rewind()\n+      val nullCount = ByteBufferHelper.getInt(nullsBuffer)\n+      var nextNullIndex = if (nullCount > 0) ByteBufferHelper.getInt(nullsBuffer) else capacity\n+      var pos = 0\n+      var seenNulls = 0\n+      val srcArray = buffer.array\n+      var bufferPos = buffer.position\n+      columnType.dataType match {\n+        case _: BooleanType =>\n+          val unitSize = 1\n+          while (pos < capacity) {\n+            if (pos != nextNullIndex) {\n+              val len = nextNullIndex - pos\n+              assert(len * unitSize < Int.MaxValue)\n+              for (i <- 0 until len) {\n+                val value = buffer.get(bufferPos + i) != 0\n+                columnVector.putBoolean(pos + i, value)\n+              }\n+              bufferPos += len\n+              pos += len\n+            } else {\n+              seenNulls += 1\n+              nextNullIndex = if (seenNulls < nullCount) {\n+                ByteBufferHelper.getInt(nullsBuffer)\n+              } else {\n+                capacity\n+              }\n+              columnVector.putNull(pos)\n+              pos += 1\n+            }\n+          }\n+        case _: ByteType =>"
+  }],
+  "prId": 18704
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "same here, can we reduce code duplication?",
+    "commit": "c16230d34472e0337b87ce858289fec9a1d88ab4",
+    "createdAt": "2017-09-18T08:45:15Z",
+    "diffHunk": "@@ -169,6 +267,125 @@ private[columnar] case object RunLengthEncoding extends CompressionScheme {\n     }\n \n     override def hasNext: Boolean = valueCount < run || buffer.hasRemaining\n+\n+    override def decompress(columnVector: WritableColumnVector, capacity: Int): Unit = {\n+      val nullsBuffer = buffer.duplicate().order(ByteOrder.nativeOrder())\n+      nullsBuffer.rewind()\n+      val nullCount = ByteBufferHelper.getInt(nullsBuffer)\n+      var nextNullIndex = if (nullCount > 0) ByteBufferHelper.getInt(nullsBuffer) else -1\n+      var pos = 0\n+      var seenNulls = 0\n+      var runLocal = 0\n+      var valueCountLocal = 0\n+      columnType.dataType match {\n+        case _: BooleanType =>"
+  }],
+  "prId": 18704
+}]

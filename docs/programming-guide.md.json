@@ -1,0 +1,45 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "CodingCat"
+    },
+    "body": "@sryza Actually this is not true....\n\nscala> val acc = sc.accumulator(0)\n\nscala> val data = sc.parallelize(List(1, 2, 3))\ndata: org.apache.spark.rdd.RDD[Int] = ParallelCollectionRDD[0] at parallelize at <console>:12\n\nscala> val a = data.map(x => acc += 1)\n\nscala> a.count\n\nscala> acc.value\nres5: Int = 3\n\nscala> a.count\nscala> acc.value\nres7: Int = 6\n\nI will resubmit https://github.com/apache/spark/pull/228 tonight or tomorrow, \n",
+    "commit": "aae33403f82f4e88ec14894dd2f00244297f2ca3",
+    "createdAt": "2014-09-24T01:24:59Z",
+    "diffHunk": "@@ -1183,6 +1188,10 @@ running on the cluster can then add to it using the `add` method or the `+=` ope\n However, they cannot read its value.\n Only the driver program can read the accumulator's value, using its `value` method.\n \n+The same task may run multiple times, either when its output data becomes lost or when multiple\n+actions make use of the same stage. In these cases, only the additions reported by the first\n+successful task contribute to the accumulator's value."
+  }],
+  "prId": 2490
+}, {
+  "comments": [{
+    "author": {
+      "login": "Ishiihara"
+    },
+    "body": "The concept of stage is mentioned only in the two added paragraphs. Users new to Spark may not know the internals and the execution mechanism. It would be nice to if some background is introduced here. \n",
+    "commit": "aae33403f82f4e88ec14894dd2f00244297f2ca3",
+    "createdAt": "2014-09-24T08:29:45Z",
+    "diffHunk": "@@ -1121,6 +1121,11 @@ than shipping a copy of it with tasks. They can be used, for example, to give ev\n large input dataset in an efficient manner. Spark also attempts to distribute broadcast variables\n using efficient broadcast algorithms to reduce communication cost.\n \n+Spark automatically broadcasts the common data needed by tasks within each stage. The data\n+broadcasted this way is cached in serialized form and deserialized before running each task. This\n+means that explicitly creating broadcast variables is only useful when tasks across multiple stages"
+  }],
+  "prId": 2490
+}, {
+  "comments": [{
+    "author": {
+      "login": "Ishiihara"
+    },
+    "body": "\u001d\u001dThe same task can mean the same task id or the same computation in a stage. Two tasks that have the some computation may have different task id. It would be nice if some backgrounds is introduced here, eg like the relationship between stage and task sets. \n",
+    "commit": "aae33403f82f4e88ec14894dd2f00244297f2ca3",
+    "createdAt": "2014-09-24T08:39:23Z",
+    "diffHunk": "@@ -1183,6 +1188,10 @@ running on the cluster can then add to it using the `add` method or the `+=` ope\n However, they cannot read its value.\n Only the driver program can read the accumulator's value, using its `value` method.\n \n+The same task may run multiple times, either when its output data becomes lost or when multiple"
+  }],
+  "prId": 2490
+}, {
+  "comments": [{
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "I was going to suggest that this might not be true, but it looks like this is partially-true now that #2524 has been merged.  That PR added a paragraph to the programming guide which clarifies that we guard against duplicate updates only for updates performed inside of actions and _not_ for ones performed in transformations: https://github.com/apache/spark/commit/66cc2431462a5354bb50c196a59da0ffc258c466?diff=unified#diff-3\n\nIn light of this, do we still need this paragraph?\n",
+    "commit": "aae33403f82f4e88ec14894dd2f00244297f2ca3",
+    "createdAt": "2014-12-24T02:31:35Z",
+    "diffHunk": "@@ -1183,6 +1189,10 @@ running on the cluster can then add to it using the `add` method or the `+=` ope\n However, they cannot read its value.\n Only the driver program can read the accumulator's value, using its `value` method.\n \n+An operation referencing an accumulator may run multiple times, either when parts of its output\n+data become lost or when multiple actions make use of the RDD it produces. In these cases, only the\n+additions reported by the first successful execution contribute to the accumulator's value."
+  }],
+  "prId": 2490
+}]

@@ -1,0 +1,68 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "yanboliang"
+    },
+    "body": "Please update the doc, beta is only the regression coefficients after your change. I also vote to rename `beta` to `coefficients`? Because `beta` represents the combination of `coefficients` and `intercept` in most cases. \n",
+    "commit": "f2fbe342b7302fbf5c80f94b775365baeff9c5fb",
+    "createdAt": "2016-02-15T08:12:35Z",
+    "diffHunk": "@@ -438,13 +438,15 @@ private class AFTAggregator(parameters: BDV[Double], fitIntercept: Boolean)\n   extends Serializable {\n \n   // beta is the intercept and regression coefficients to the covariates"
+  }],
+  "prId": 11179
+}, {
+  "comments": [{
+    "author": {
+      "login": "yanboliang"
+    },
+    "body": "Use `BDV.vertcat(BDV(Array(gradientLogSigmaSum / totalCnt.toDouble)), BDV(Array(gradientInterceptSum/totalCnt.toDouble)), gradientBetaSum/totalCnt.toDouble)` to combine three parts directly.\n",
+    "commit": "f2fbe342b7302fbf5c80f94b775365baeff9c5fb",
+    "createdAt": "2016-02-15T08:24:33Z",
+    "diffHunk": "@@ -453,7 +455,8 @@ private class AFTAggregator(parameters: BDV[Double], fitIntercept: Boolean)\n \n   // Here we optimize loss function over beta and log(sigma)\n   def gradient: BDV[Double] = BDV.vertcat(BDV(Array(gradientLogSigmaSum / totalCnt.toDouble)),\n-    gradientBetaSum/totalCnt.toDouble)\n+    BDV.vertcat(BDV(Array(gradientInterceptSum/totalCnt.toDouble)),\n+                gradientBetaSum/totalCnt.toDouble))"
+  }],
+  "prId": 11179
+}, {
+  "comments": [{
+    "author": {
+      "login": "yanboliang"
+    },
+    "body": "`fitInterceptFlag` -> `interceptFlag`. `fitInterceptFlag` is more like a name of boolean variable.\n",
+    "commit": "f2fbe342b7302fbf5c80f94b775365baeff9c5fb",
+    "createdAt": "2016-02-15T08:28:40Z",
+    "diffHunk": "@@ -464,15 +467,12 @@ private class AFTAggregator(parameters: BDV[Double], fitIntercept: Boolean)\n    */\n   def add(data: AFTPoint): this.type = {\n \n-    // TODO: Don't create a new xi vector each time.\n-    val xi = if (fitIntercept) {\n-      Vectors.dense(Array(1.0) ++ data.features.toArray).toBreeze\n-    } else {\n-      Vectors.dense(Array(0.0) ++ data.features.toArray).toBreeze\n-    }\n+    val fitInterceptFlag = if (fitIntercept) 1.0 else 0.0"
+  }],
+  "prId": 11179
+}, {
+  "comments": [{
+    "author": {
+      "login": "yanboliang"
+    },
+    "body": "`delta_expeps` -> `deltaMinusExpEps`, we use the camel case convention.\n",
+    "commit": "f2fbe342b7302fbf5c80f94b775365baeff9c5fb",
+    "createdAt": "2016-02-15T08:35:39Z",
+    "diffHunk": "@@ -481,8 +481,10 @@ private class AFTAggregator(parameters: BDV[Double], fitIntercept: Boolean)\n     assert(!lossSum.isInfinity,\n       s\"AFTAggregator loss sum is infinity. Error for unknown reason.\")\n \n-    gradientBetaSum += xi * (delta - math.exp(epsilon)) / sigma\n-    gradientLogSigmaSum += delta + (delta - math.exp(epsilon)) * epsilon\n+    val delta_expeps = delta - math.exp(epsilon)"
+  }],
+  "prId": 11179
+}, {
+  "comments": [{
+    "author": {
+      "login": "yanboliang"
+    },
+    "body": "`beta` means `coefficients and intercept`, so here should be `coefficients, intercept and log(sigma)` in the annotation.\n",
+    "commit": "f2fbe342b7302fbf5c80f94b775365baeff9c5fb",
+    "createdAt": "2016-02-17T08:15:48Z",
+    "diffHunk": "@@ -437,23 +437,25 @@ object AFTSurvivalRegressionModel extends MLReadable[AFTSurvivalRegressionModel]\n private class AFTAggregator(parameters: BDV[Double], fitIntercept: Boolean)\n   extends Serializable {\n \n-  // beta is the intercept and regression coefficients to the covariates\n-  private val beta = parameters.slice(1, parameters.length)\n+  // the regression coefficients to the covariates\n+  private val coefficients = parameters.slice(2, parameters.length)\n+  private val intercept = parameters.valueAt(1)\n   // sigma is the scale parameter of the AFT model\n   private val sigma = math.exp(parameters(0))\n \n   private var totalCnt: Long = 0L\n   private var lossSum = 0.0\n-  private var gradientBetaSum = BDV.zeros[Double](beta.length)\n+  private var gradientCoefficientSum = BDV.zeros[Double](coefficients.length)\n+  private var gradientInterceptSum = 0.0\n   private var gradientLogSigmaSum = 0.0\n \n   def count: Long = totalCnt\n \n   def loss: Double = if (totalCnt == 0) 1.0 else lossSum / totalCnt\n \n-  // Here we optimize loss function over beta and log(sigma)\n+  // Here we optimize loss function over coefficients and log(sigma)"
+  }],
+  "prId": 11179
+}, {
+  "comments": [{
+    "author": {
+      "login": "yanboliang"
+    },
+    "body": "Vector `vertcat` may be time-consuming, we can fix this issue use pre-assigned array. But it also involves other changes which are beyond the scope of this PR. I can fix it when solving [SPARK-13322](https://issues.apache.org/jira/browse/SPARK-13322), this PR is ready to merge, thanks.\n",
+    "commit": "f2fbe342b7302fbf5c80f94b775365baeff9c5fb",
+    "createdAt": "2016-02-18T10:22:26Z",
+    "diffHunk": "@@ -437,23 +437,25 @@ object AFTSurvivalRegressionModel extends MLReadable[AFTSurvivalRegressionModel]\n private class AFTAggregator(parameters: BDV[Double], fitIntercept: Boolean)\n   extends Serializable {\n \n-  // beta is the intercept and regression coefficients to the covariates\n-  private val beta = parameters.slice(1, parameters.length)\n+  // the regression coefficients to the covariates\n+  private val coefficients = parameters.slice(2, parameters.length)\n+  private val intercept = parameters.valueAt(1)\n   // sigma is the scale parameter of the AFT model\n   private val sigma = math.exp(parameters(0))\n \n   private var totalCnt: Long = 0L\n   private var lossSum = 0.0\n-  private var gradientBetaSum = BDV.zeros[Double](beta.length)\n+  private var gradientCoefficientSum = BDV.zeros[Double](coefficients.length)\n+  private var gradientInterceptSum = 0.0\n   private var gradientLogSigmaSum = 0.0\n \n   def count: Long = totalCnt\n \n   def loss: Double = if (totalCnt == 0) 1.0 else lossSum / totalCnt\n \n-  // Here we optimize loss function over beta and log(sigma)\n+  // Here we optimize loss function over coefficients, intercept and log(sigma)\n   def gradient: BDV[Double] = BDV.vertcat(BDV(Array(gradientLogSigmaSum / totalCnt.toDouble)),\n-    gradientBetaSum/totalCnt.toDouble)\n+    BDV(Array(gradientInterceptSum/totalCnt.toDouble)), gradientCoefficientSum/totalCnt.toDouble)",
+    "line": 27
+  }],
+  "prId": 11179
+}]

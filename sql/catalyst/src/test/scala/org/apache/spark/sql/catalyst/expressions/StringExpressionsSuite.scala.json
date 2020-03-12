@@ -1,0 +1,67 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "gengliangwang"
+    },
+    "body": "Nit: Also test corner case, e.g. position is negative, or position is larger than 9",
+    "commit": "6201a3725036ee860f0d5c6d8b3053b79dbb1a62",
+    "createdAt": "2019-07-22T15:33:25Z",
+    "diffHunk": "@@ -452,6 +452,45 @@ class StringExpressionsSuite extends SparkFunSuite with ExpressionEvalHelper {\n     // scalastyle:on\n   }\n \n+  test(\"overlay for byte array\") {\n+    val input = Literal(Array[Byte](1, 2, 3, 4, 5, 6, 7, 8, 9))\n+    checkEvaluation(new Overlay(input, Literal(Array[Byte](-1)),\n+      Literal.create(6, IntegerType)), Array[Byte](1, 2, 3, 4, 5, -1, 7, 8, 9))",
+    "line": 41
+  }, {
+    "author": {
+      "login": "beliefer"
+    },
+    "body": "Thanks for your reminder. but the negative is illegal in `Postgresql`.\r\n```\r\norg.postgresql.util.PSQLException: ERROR: negative substring length not allowed\r\n  在位置：SQL function \"overlay\" statement 1\r\n```\r\nOracle's description:\r\n`If pos is specified, it must be greater than or equal to 1.`\r\nDB2's description:\r\n`If you specify n, it must be a positive whole number.`\r\nVertical's description:\r\n`(INTEGER) is the character or octet position (counting from one) at which to begin the overlay`\r\nI will check position is larger than 9.\r\nPostgresql's behavior is:\r\n`select OVERLAY('abcdef' PLACING '45' FROM 7);      // abcdef45`\r\nOracle and DB2 expanded the Overlay function, but not follow ANSI standard.",
+    "commit": "6201a3725036ee860f0d5c6d8b3053b79dbb1a62",
+    "createdAt": "2019-07-23T07:07:13Z",
+    "diffHunk": "@@ -452,6 +452,45 @@ class StringExpressionsSuite extends SparkFunSuite with ExpressionEvalHelper {\n     // scalastyle:on\n   }\n \n+  test(\"overlay for byte array\") {\n+    val input = Literal(Array[Byte](1, 2, 3, 4, 5, 6, 7, 8, 9))\n+    checkEvaluation(new Overlay(input, Literal(Array[Byte](-1)),\n+      Literal.create(6, IntegerType)), Array[Byte](1, 2, 3, 4, 5, -1, 7, 8, 9))",
+    "line": 41
+  }, {
+    "author": {
+      "login": "beliefer"
+    },
+    "body": "I will add tests about your suggestion in `StringExpressionsSuite`.",
+    "commit": "6201a3725036ee860f0d5c6d8b3053b79dbb1a62",
+    "createdAt": "2019-07-23T08:04:08Z",
+    "diffHunk": "@@ -452,6 +452,45 @@ class StringExpressionsSuite extends SparkFunSuite with ExpressionEvalHelper {\n     // scalastyle:on\n   }\n \n+  test(\"overlay for byte array\") {\n+    val input = Literal(Array[Byte](1, 2, 3, 4, 5, 6, 7, 8, 9))\n+    checkEvaluation(new Overlay(input, Literal(Array[Byte](-1)),\n+      Literal.create(6, IntegerType)), Array[Byte](1, 2, 3, 4, 5, -1, 7, 8, 9))",
+    "line": 41
+  }, {
+    "author": {
+      "login": "maropu"
+    },
+    "body": "I think Spark basically avoids runtime exceptions. Could you follow the behaivour for string cases?\r\n```\r\nscala> sql(\"\"\"select overlay(\"aaaaaa\", \"bb\", 0)\"\"\").show\r\n+--------------------------+                                                    \r\n|overlay(aaaaaa, bb, 0, -1)|\r\n+--------------------------+\r\n|                   bbaaaaa|\r\n+--------------------------+\r\n\r\n\r\nscala> sql(\"\"\"select overlay(\"aaaaaa\", \"bb\", -10)\"\"\").show\r\n+----------------------------+\r\n|overlay(aaaaaa, bb, -10, -1)|\r\n+----------------------------+\r\n|                    bbaaaaaa|\r\n+----------------------------+\r\n```",
+    "commit": "6201a3725036ee860f0d5c6d8b3053b79dbb1a62",
+    "createdAt": "2019-07-24T01:57:58Z",
+    "diffHunk": "@@ -452,6 +452,45 @@ class StringExpressionsSuite extends SparkFunSuite with ExpressionEvalHelper {\n     // scalastyle:on\n   }\n \n+  test(\"overlay for byte array\") {\n+    val input = Literal(Array[Byte](1, 2, 3, 4, 5, 6, 7, 8, 9))\n+    checkEvaluation(new Overlay(input, Literal(Array[Byte](-1)),\n+      Literal.create(6, IntegerType)), Array[Byte](1, 2, 3, 4, 5, -1, 7, 8, 9))",
+    "line": 41
+  }, {
+    "author": {
+      "login": "beliefer"
+    },
+    "body": "I have added tests for negative and zero. I think this behavior is very different from ANSI SQL and other databases.",
+    "commit": "6201a3725036ee860f0d5c6d8b3053b79dbb1a62",
+    "createdAt": "2019-07-24T04:18:11Z",
+    "diffHunk": "@@ -452,6 +452,45 @@ class StringExpressionsSuite extends SparkFunSuite with ExpressionEvalHelper {\n     // scalastyle:on\n   }\n \n+  test(\"overlay for byte array\") {\n+    val input = Literal(Array[Byte](1, 2, 3, 4, 5, 6, 7, 8, 9))\n+    checkEvaluation(new Overlay(input, Literal(Array[Byte](-1)),\n+      Literal.create(6, IntegerType)), Array[Byte](1, 2, 3, 4, 5, -1, 7, 8, 9))",
+    "line": 41
+  }, {
+    "author": {
+      "login": "maropu"
+    },
+    "body": "In this pr, plz follow the current behaivour of overlay(string, string). If you wanna to change this behaivour, you can make an another pr for that.",
+    "commit": "6201a3725036ee860f0d5c6d8b3053b79dbb1a62",
+    "createdAt": "2019-07-30T05:21:02Z",
+    "diffHunk": "@@ -452,6 +452,45 @@ class StringExpressionsSuite extends SparkFunSuite with ExpressionEvalHelper {\n     // scalastyle:on\n   }\n \n+  test(\"overlay for byte array\") {\n+    val input = Literal(Array[Byte](1, 2, 3, 4, 5, 6, 7, 8, 9))\n+    checkEvaluation(new Overlay(input, Literal(Array[Byte](-1)),\n+      Literal.create(6, IntegerType)), Array[Byte](1, 2, 3, 4, 5, -1, 7, 8, 9))",
+    "line": 41
+  }, {
+    "author": {
+      "login": "beliefer"
+    },
+    "body": "@maropu OK. I will follow the current behaivour of overlay(string, string).",
+    "commit": "6201a3725036ee860f0d5c6d8b3053b79dbb1a62",
+    "createdAt": "2019-07-31T02:40:35Z",
+    "diffHunk": "@@ -452,6 +452,45 @@ class StringExpressionsSuite extends SparkFunSuite with ExpressionEvalHelper {\n     // scalastyle:on\n   }\n \n+  test(\"overlay for byte array\") {\n+    val input = Literal(Array[Byte](1, 2, 3, 4, 5, 6, 7, 8, 9))\n+    checkEvaluation(new Overlay(input, Literal(Array[Byte](-1)),\n+      Literal.create(6, IntegerType)), Array[Byte](1, 2, 3, 4, 5, -1, 7, 8, 9))",
+    "line": 41
+  }],
+  "prId": 25172
+}]

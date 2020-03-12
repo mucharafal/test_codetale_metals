@@ -1,0 +1,132 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "rxin"
+    },
+    "body": "can't we pass in the code to initialize the variables, rather than using an object array?\n",
+    "commit": "eb3a221d95839ff57b7579f87cbceaaf9ff19653",
+    "createdAt": "2015-07-14T06:59:06Z",
+    "diffHunk": "@@ -70,17 +70,27 @@ object GenerateOrdering extends CodeGenerator[Seq[SortOrder], Ordering[InternalR\n       \"\"\"\n     }.mkString(\"\\n\")\n \n+    val mutableStates = ctx.mutableStates.map {\n+      case (jt, name, _) => s\"private $jt $name;\"\n+    }.mkString(\"\\n      \")\n+\n+    val initStates = ctx.mutableStates.zipWithIndex.map {\n+      case ((jt, name, _), index) => s\"$name = (${ctx.boxedType(jt)}) states[$index];\"\n+    }.mkString(\"\\n        \")\n+\n     val code = s\"\"\"\n-      public SpecificOrdering generate($exprType[] expr) {\n-        return new SpecificOrdering(expr);\n+      public SpecificOrdering generate($exprType[] expr, Object[] states) {"
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "It will be hard to define the [`generate` interface](https://github.com/apache/spark/blob/master/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/expressions/codegen/CodeGenerator.scala#L208), as this interface is not codegened.\n",
+    "commit": "eb3a221d95839ff57b7579f87cbceaaf9ff19653",
+    "createdAt": "2015-07-14T07:06:40Z",
+    "diffHunk": "@@ -70,17 +70,27 @@ object GenerateOrdering extends CodeGenerator[Seq[SortOrder], Ordering[InternalR\n       \"\"\"\n     }.mkString(\"\\n\")\n \n+    val mutableStates = ctx.mutableStates.map {\n+      case (jt, name, _) => s\"private $jt $name;\"\n+    }.mkString(\"\\n      \")\n+\n+    val initStates = ctx.mutableStates.zipWithIndex.map {\n+      case ((jt, name, _), index) => s\"$name = (${ctx.boxedType(jt)}) states[$index];\"\n+    }.mkString(\"\\n        \")\n+\n     val code = s\"\"\"\n-      public SpecificOrdering generate($exprType[] expr) {\n-        return new SpecificOrdering(expr);\n+      public SpecificOrdering generate($exprType[] expr, Object[] states) {"
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "And this initialization will happen only once, and the member variables can be primitive type, so boxing is not a problem here, like `int i = (Integer) states[3]`, we will use i after that.\n",
+    "commit": "eb3a221d95839ff57b7579f87cbceaaf9ff19653",
+    "createdAt": "2015-07-14T07:08:19Z",
+    "diffHunk": "@@ -70,17 +70,27 @@ object GenerateOrdering extends CodeGenerator[Seq[SortOrder], Ordering[InternalR\n       \"\"\"\n     }.mkString(\"\\n\")\n \n+    val mutableStates = ctx.mutableStates.map {\n+      case (jt, name, _) => s\"private $jt $name;\"\n+    }.mkString(\"\\n      \")\n+\n+    val initStates = ctx.mutableStates.zipWithIndex.map {\n+      case ((jt, name, _), index) => s\"$name = (${ctx.boxedType(jt)}) states[$index];\"\n+    }.mkString(\"\\n        \")\n+\n     val code = s\"\"\"\n-      public SpecificOrdering generate($exprType[] expr) {\n-        return new SpecificOrdering(expr);\n+      public SpecificOrdering generate($exprType[] expr, Object[] states) {"
+  }, {
+    "author": {
+      "login": "rxin"
+    },
+    "body": "maybe i'm missing something. what i'm saying is that the generated code can look something like\n\n``` java\nclass GenerateProjection456 {\n  private long nextId123;\n\n  public GenerateProjection456() {\n    nextId123 = 50L;\n  }\n\n  ...\n}\n```\n\ndoes this not work?\n",
+    "commit": "eb3a221d95839ff57b7579f87cbceaaf9ff19653",
+    "createdAt": "2015-07-14T07:10:22Z",
+    "diffHunk": "@@ -70,17 +70,27 @@ object GenerateOrdering extends CodeGenerator[Seq[SortOrder], Ordering[InternalR\n       \"\"\"\n     }.mkString(\"\\n\")\n \n+    val mutableStates = ctx.mutableStates.map {\n+      case (jt, name, _) => s\"private $jt $name;\"\n+    }.mkString(\"\\n      \")\n+\n+    val initStates = ctx.mutableStates.zipWithIndex.map {\n+      case ((jt, name, _), index) => s\"$name = (${ctx.boxedType(jt)}) states[$index];\"\n+    }.mkString(\"\\n        \")\n+\n     val code = s\"\"\"\n-      public SpecificOrdering generate($exprType[] expr) {\n-        return new SpecificOrdering(expr);\n+      public SpecificOrdering generate($exprType[] expr, Object[] states) {"
+  }, {
+    "author": {
+      "login": "rxin"
+    },
+    "body": "i'm not worried about performance -- i just think it's ugly and unnecessary to pass the state around.\n",
+    "commit": "eb3a221d95839ff57b7579f87cbceaaf9ff19653",
+    "createdAt": "2015-07-14T07:10:51Z",
+    "diffHunk": "@@ -70,17 +70,27 @@ object GenerateOrdering extends CodeGenerator[Seq[SortOrder], Ordering[InternalR\n       \"\"\"\n     }.mkString(\"\\n\")\n \n+    val mutableStates = ctx.mutableStates.map {\n+      case (jt, name, _) => s\"private $jt $name;\"\n+    }.mkString(\"\\n      \")\n+\n+    val initStates = ctx.mutableStates.zipWithIndex.map {\n+      case ((jt, name, _), index) => s\"$name = (${ctx.boxedType(jt)}) states[$index];\"\n+    }.mkString(\"\\n        \")\n+\n     val code = s\"\"\"\n-      public SpecificOrdering generate($exprType[] expr) {\n-        return new SpecificOrdering(expr);\n+      public SpecificOrdering generate($exprType[] expr, Object[] states) {"
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "This works for literals, but how about objects? That's also the reason why we pass expressions this way...\n",
+    "commit": "eb3a221d95839ff57b7579f87cbceaaf9ff19653",
+    "createdAt": "2015-07-14T07:15:20Z",
+    "diffHunk": "@@ -70,17 +70,27 @@ object GenerateOrdering extends CodeGenerator[Seq[SortOrder], Ordering[InternalR\n       \"\"\"\n     }.mkString(\"\\n\")\n \n+    val mutableStates = ctx.mutableStates.map {\n+      case (jt, name, _) => s\"private $jt $name;\"\n+    }.mkString(\"\\n      \")\n+\n+    val initStates = ctx.mutableStates.zipWithIndex.map {\n+      case ((jt, name, _), index) => s\"$name = (${ctx.boxedType(jt)}) states[$index];\"\n+    }.mkString(\"\\n        \")\n+\n     val code = s\"\"\"\n-      public SpecificOrdering generate($exprType[] expr) {\n-        return new SpecificOrdering(expr);\n+      public SpecificOrdering generate($exprType[] expr, Object[] states) {"
+  }, {
+    "author": {
+      "login": "rxin"
+    },
+    "body": "do we have any expressions that require objects for now? if not, it's better to start with a simpler solution. if yes, then yes let's do this.\n",
+    "commit": "eb3a221d95839ff57b7579f87cbceaaf9ff19653",
+    "createdAt": "2015-07-14T07:20:28Z",
+    "diffHunk": "@@ -70,17 +70,27 @@ object GenerateOrdering extends CodeGenerator[Seq[SortOrder], Ordering[InternalR\n       \"\"\"\n     }.mkString(\"\\n\")\n \n+    val mutableStates = ctx.mutableStates.map {\n+      case (jt, name, _) => s\"private $jt $name;\"\n+    }.mkString(\"\\n      \")\n+\n+    val initStates = ctx.mutableStates.zipWithIndex.map {\n+      case ((jt, name, _), index) => s\"$name = (${ctx.boxedType(jt)}) states[$index];\"\n+    }.mkString(\"\\n        \")\n+\n     val code = s\"\"\"\n-      public SpecificOrdering generate($exprType[] expr) {\n-        return new SpecificOrdering(expr);\n+      public SpecificOrdering generate($exprType[] expr, Object[] states) {"
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "We need `XORShiftRandom` in `Rand`. One solution is we only regard the partition id as mutable  state, but then we need to create a new `XORShiftRandom` every time we evaluate `Rand`, which is not good I think.\n",
+    "commit": "eb3a221d95839ff57b7579f87cbceaaf9ff19653",
+    "createdAt": "2015-07-14T07:33:41Z",
+    "diffHunk": "@@ -70,17 +70,27 @@ object GenerateOrdering extends CodeGenerator[Seq[SortOrder], Ordering[InternalR\n       \"\"\"\n     }.mkString(\"\\n\")\n \n+    val mutableStates = ctx.mutableStates.map {\n+      case (jt, name, _) => s\"private $jt $name;\"\n+    }.mkString(\"\\n      \")\n+\n+    val initStates = ctx.mutableStates.zipWithIndex.map {\n+      case ((jt, name, _), index) => s\"$name = (${ctx.boxedType(jt)}) states[$index];\"\n+    }.mkString(\"\\n        \")\n+\n     val code = s\"\"\"\n-      public SpecificOrdering generate($exprType[] expr) {\n-        return new SpecificOrdering(expr);\n+      public SpecificOrdering generate($exprType[] expr, Object[] states) {"
+  }, {
+    "author": {
+      "login": "rxin"
+    },
+    "body": "can't we just pass the code to create XORShiftRandom in the constructor?\n",
+    "commit": "eb3a221d95839ff57b7579f87cbceaaf9ff19653",
+    "createdAt": "2015-07-14T07:42:16Z",
+    "diffHunk": "@@ -70,17 +70,27 @@ object GenerateOrdering extends CodeGenerator[Seq[SortOrder], Ordering[InternalR\n       \"\"\"\n     }.mkString(\"\\n\")\n \n+    val mutableStates = ctx.mutableStates.map {\n+      case (jt, name, _) => s\"private $jt $name;\"\n+    }.mkString(\"\\n      \")\n+\n+    val initStates = ctx.mutableStates.zipWithIndex.map {\n+      case ((jt, name, _), index) => s\"$name = (${ctx.boxedType(jt)}) states[$index];\"\n+    }.mkString(\"\\n        \")\n+\n     val code = s\"\"\"\n-      public SpecificOrdering generate($exprType[] expr) {\n-        return new SpecificOrdering(expr);\n+      public SpecificOrdering generate($exprType[] expr, Object[] states) {"
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "I just realized that... \nI'll change type of `mutableStates` to `Array[(String, String, String)]`, contains java type, variable name, code to initialize it, then we can avoid passing that ugly `Object[] states`.\n",
+    "commit": "eb3a221d95839ff57b7579f87cbceaaf9ff19653",
+    "createdAt": "2015-07-14T07:45:26Z",
+    "diffHunk": "@@ -70,17 +70,27 @@ object GenerateOrdering extends CodeGenerator[Seq[SortOrder], Ordering[InternalR\n       \"\"\"\n     }.mkString(\"\\n\")\n \n+    val mutableStates = ctx.mutableStates.map {\n+      case (jt, name, _) => s\"private $jt $name;\"\n+    }.mkString(\"\\n      \")\n+\n+    val initStates = ctx.mutableStates.zipWithIndex.map {\n+      case ((jt, name, _), index) => s\"$name = (${ctx.boxedType(jt)}) states[$index];\"\n+    }.mkString(\"\\n        \")\n+\n     val code = s\"\"\"\n-      public SpecificOrdering generate($exprType[] expr) {\n-        return new SpecificOrdering(expr);\n+      public SpecificOrdering generate($exprType[] expr, Object[] states) {"
+  }],
+  "prId": 7392
+}, {
+  "comments": [{
+    "author": {
+      "login": "davies"
+    },
+    "body": "Should ordering be stateless?\n",
+    "commit": "eb3a221d95839ff57b7579f87cbceaaf9ff19653",
+    "createdAt": "2015-07-15T03:35:10Z",
+    "diffHunk": "@@ -69,7 +69,9 @@ object GenerateOrdering extends CodeGenerator[Seq[SortOrder], Ordering[InternalR\n           }\n       \"\"\"\n     }.mkString(\"\\n\")\n-\n+    val mutableStates = ctx.mutableStates.map { case (jt, name, init) =>"
+  }, {
+    "author": {
+      "login": "rxin"
+    },
+    "body": "jt -> javaType\n",
+    "commit": "eb3a221d95839ff57b7579f87cbceaaf9ff19653",
+    "createdAt": "2015-07-15T05:40:36Z",
+    "diffHunk": "@@ -69,7 +69,9 @@ object GenerateOrdering extends CodeGenerator[Seq[SortOrder], Ordering[InternalR\n           }\n       \"\"\"\n     }.mkString(\"\\n\")\n-\n+    val mutableStates = ctx.mutableStates.map { case (jt, name, init) =>"
+  }, {
+    "author": {
+      "login": "rxin"
+    },
+    "body": "@davies just saw your comment - what did you mean by ordering should be stateless?\n",
+    "commit": "eb3a221d95839ff57b7579f87cbceaaf9ff19653",
+    "createdAt": "2015-07-15T07:34:45Z",
+    "diffHunk": "@@ -69,7 +69,9 @@ object GenerateOrdering extends CodeGenerator[Seq[SortOrder], Ordering[InternalR\n           }\n       \"\"\"\n     }.mkString(\"\\n\")\n-\n+    val mutableStates = ctx.mutableStates.map { case (jt, name, init) =>"
+  }],
+  "prId": 7392
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "In interpreted mode, we use the same expression to eval 2 [rows](https://github.com/apache/spark/blob/master/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/expressions/rows.scala#L164-L165), which means we only keep one copy of mutable states for that expression. However, in `GenerateOrdering`, we call `order.child.gen(ctx)` twice and thus keep 2 copy of mutable states for that expression. This is inconsistent, and may return different compare result, so I fixed it here.\n\nHowever, should we allow stateful expressions in order by?\ncc @davies @rxin \n",
+    "commit": "eb3a221d95839ff57b7579f87cbceaaf9ff19653",
+    "createdAt": "2015-07-15T09:35:50Z",
+    "diffHunk": "@@ -46,30 +46,47 @@ object GenerateOrdering extends CodeGenerator[Seq[SortOrder], Ordering[InternalR\n   protected def create(ordering: Seq[SortOrder]): Ordering[InternalRow] = {\n     val ctx = newCodeGenContext()\n \n-    val comparisons = ordering.zipWithIndex.map { case (order, i) =>",
+    "line": 4
+  }, {
+    "author": {
+      "login": "davies"
+    },
+    "body": "I have not figured out a case that need a stateful ordering, could we delay it until we really need it?\n",
+    "commit": "eb3a221d95839ff57b7579f87cbceaaf9ff19653",
+    "createdAt": "2015-07-15T16:55:24Z",
+    "diffHunk": "@@ -46,30 +46,47 @@ object GenerateOrdering extends CodeGenerator[Seq[SortOrder], Ordering[InternalR\n   protected def create(ordering: Seq[SortOrder]): Ordering[InternalRow] = {\n     val ctx = newCodeGenContext()\n \n-    val comparisons = ordering.zipWithIndex.map { case (order, i) =>",
+    "line": 4
+  }],
+  "prId": 7392
+}]

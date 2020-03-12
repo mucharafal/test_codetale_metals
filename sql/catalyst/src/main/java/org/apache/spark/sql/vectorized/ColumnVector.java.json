@@ -1,0 +1,12 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "kiszk"
+    },
+    "body": "Can we use more self-declarative name? This is because `columnVector` is public API for developers who want to support their storage.",
+    "commit": "7f1753db2d15186399e5ef9d7ef88b2bc7eedf67",
+    "createdAt": "2019-06-06T15:09:33Z",
+    "diffHunk": "@@ -50,19 +50,44 @@\n @Evolving\n public abstract class ColumnVector implements AutoCloseable {\n \n+  private int refCount = 1;\n+\n   /**\n    * Returns the data type of this column vector.\n    */\n   public final DataType dataType() { return type; }\n \n+  /**\n+   * Increment the reference count for this vector. This is an implementation detail and\n+   * only BoundReference should call this directly.\n+   * @return this for easy chaining.\n+   */\n+  public final ColumnVector incRefCount() {\n+    refCount++;\n+    return this;\n+  }\n+\n   /**\n    * Cleans up memory for this column vector. The column vector is not usable after this.\n+   * In reality it decrements the reference count and if it reaches 0 the resources are released\n+   * but this is an implementation detail that most code should just ignore.\n    *\n    * This overwrites `AutoCloseable.close` to remove the `throws` clause, as column vector is\n    * in-memory and we don't expect any exception to happen during closing.\n    */\n   @Override\n-  public abstract void close();\n+  public final void close() {\n+    refCount--;\n+    if (refCount == 0) {\n+      doClose();\n+    }\n+  }\n+\n+  /**\n+   * Actually cleans up memory for this column vector. The column vector is really not usable after\n+   * this.\n+   */\n+  protected abstract void doClose();"
+  }],
+  "prId": 24795
+}]

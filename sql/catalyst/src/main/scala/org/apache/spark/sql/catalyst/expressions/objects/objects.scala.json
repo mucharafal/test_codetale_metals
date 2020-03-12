@@ -1,0 +1,117 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "nit: `ctx.addMutableState(ctx.javaType(e.dataType), argValue, \"\")`, then we don't need to define `argTypes`.\n",
+    "commit": "b92ab8cb8fd4d9aabda7486cf9d2d5dd7b98f0bf",
+    "createdAt": "2016-05-22T17:19:20Z",
+    "diffHunk": "@@ -232,27 +232,55 @@ case class NewInstance(\n \n   override def doGenCode(ctx: CodegenContext, ev: ExprCode): ExprCode = {\n     val javaType = ctx.javaType(dataType)\n-    val argGen = arguments.map(_.genCode(ctx))\n-    val argString = argGen.map(_.value).mkString(\", \")\n+    val argIsNulls = ctx.freshName(\"argIsNulls\")\n+    ctx.addMutableState(\"boolean[]\", argIsNulls, \"\")\n+    val argTypes = arguments.map(e => ctx.javaType(e.dataType))\n+    val argValues = arguments.zipWithIndex.map { case (e, i) =>\n+      val argValue = ctx.freshName(\"argValue\")\n+      ctx.addMutableState(argTypes(i), argValue, \"\")"
+  }, {
+    "author": {
+      "login": "kiszk"
+    },
+    "body": "Sure, I did.\n",
+    "commit": "b92ab8cb8fd4d9aabda7486cf9d2d5dd7b98f0bf",
+    "createdAt": "2016-05-23T02:34:53Z",
+    "diffHunk": "@@ -232,27 +232,55 @@ case class NewInstance(\n \n   override def doGenCode(ctx: CodegenContext, ev: ExprCode): ExprCode = {\n     val javaType = ctx.javaType(dataType)\n-    val argGen = arguments.map(_.genCode(ctx))\n-    val argString = argGen.map(_.value).mkString(\", \")\n+    val argIsNulls = ctx.freshName(\"argIsNulls\")\n+    ctx.addMutableState(\"boolean[]\", argIsNulls, \"\")\n+    val argTypes = arguments.map(e => ctx.javaType(e.dataType))\n+    val argValues = arguments.zipWithIndex.map { case (e, i) =>\n+      val argValue = ctx.freshName(\"argValue\")\n+      ctx.addMutableState(argTypes(i), argValue, \"\")"
+  }],
+  "prId": 13243
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "any particular reason to pick `10`?\n",
+    "commit": "b92ab8cb8fd4d9aabda7486cf9d2d5dd7b98f0bf",
+    "createdAt": "2016-05-22T17:23:21Z",
+    "diffHunk": "@@ -232,27 +232,55 @@ case class NewInstance(\n \n   override def doGenCode(ctx: CodegenContext, ev: ExprCode): ExprCode = {\n     val javaType = ctx.javaType(dataType)\n-    val argGen = arguments.map(_.genCode(ctx))\n-    val argString = argGen.map(_.value).mkString(\", \")\n+    val argIsNulls = ctx.freshName(\"argIsNulls\")\n+    ctx.addMutableState(\"boolean[]\", argIsNulls, \"\")\n+    val argTypes = arguments.map(e => ctx.javaType(e.dataType))\n+    val argValues = arguments.zipWithIndex.map { case (e, i) =>\n+      val argValue = ctx.freshName(\"argValue\")\n+      ctx.addMutableState(argTypes(i), argValue, \"\")\n+      argValue\n+    }\n+\n+    val argCodes = arguments.zipWithIndex.map { case (e, i) =>\n+      val expr = e.genCode(ctx)\n+      expr.code + s\"\"\"\n+       $argIsNulls[$i] = ${expr.isNull};\n+       ${argValues(i)} = ${expr.value};\n+     \"\"\"\n+    }\n+    val argCode = ctx.splitExpressions(ctx.INPUT_ROW, argCodes)\n \n     val outer = outerPointer.map(func => Literal.fromObject(func()).genCode(ctx))\n \n     var isNull = ev.isNull\n     val setIsNull = if (propagateNull && arguments.nonEmpty) {\n-      s\"final boolean $isNull = ${argGen.map(_.isNull).mkString(\" || \")};\"\n+      if (arguments.length <= 10) {"
+  }, {
+    "author": {
+      "login": "kiszk"
+    },
+    "body": "I have no particular reason for pick `10`. `100` seems to be too long.\nDo you have any suggestion to pick the value?\n",
+    "commit": "b92ab8cb8fd4d9aabda7486cf9d2d5dd7b98f0bf",
+    "createdAt": "2016-05-23T02:01:34Z",
+    "diffHunk": "@@ -232,27 +232,55 @@ case class NewInstance(\n \n   override def doGenCode(ctx: CodegenContext, ev: ExprCode): ExprCode = {\n     val javaType = ctx.javaType(dataType)\n-    val argGen = arguments.map(_.genCode(ctx))\n-    val argString = argGen.map(_.value).mkString(\", \")\n+    val argIsNulls = ctx.freshName(\"argIsNulls\")\n+    ctx.addMutableState(\"boolean[]\", argIsNulls, \"\")\n+    val argTypes = arguments.map(e => ctx.javaType(e.dataType))\n+    val argValues = arguments.zipWithIndex.map { case (e, i) =>\n+      val argValue = ctx.freshName(\"argValue\")\n+      ctx.addMutableState(argTypes(i), argValue, \"\")\n+      argValue\n+    }\n+\n+    val argCodes = arguments.zipWithIndex.map { case (e, i) =>\n+      val expr = e.genCode(ctx)\n+      expr.code + s\"\"\"\n+       $argIsNulls[$i] = ${expr.isNull};\n+       ${argValues(i)} = ${expr.value};\n+     \"\"\"\n+    }\n+    val argCode = ctx.splitExpressions(ctx.INPUT_ROW, argCodes)\n \n     val outer = outerPointer.map(func => Literal.fromObject(func()).genCode(ctx))\n \n     var isNull = ev.isNull\n     val setIsNull = if (propagateNull && arguments.nonEmpty) {\n-      s\"final boolean $isNull = ${argGen.map(_.isNull).mkString(\" || \")};\"\n+      if (arguments.length <= 10) {"
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "BTW how useful is this optimization? What if we always use the for-loop version? It will be better if we can have a small benchmark here.\n",
+    "commit": "b92ab8cb8fd4d9aabda7486cf9d2d5dd7b98f0bf",
+    "createdAt": "2016-05-23T02:17:11Z",
+    "diffHunk": "@@ -232,27 +232,55 @@ case class NewInstance(\n \n   override def doGenCode(ctx: CodegenContext, ev: ExprCode): ExprCode = {\n     val javaType = ctx.javaType(dataType)\n-    val argGen = arguments.map(_.genCode(ctx))\n-    val argString = argGen.map(_.value).mkString(\", \")\n+    val argIsNulls = ctx.freshName(\"argIsNulls\")\n+    ctx.addMutableState(\"boolean[]\", argIsNulls, \"\")\n+    val argTypes = arguments.map(e => ctx.javaType(e.dataType))\n+    val argValues = arguments.zipWithIndex.map { case (e, i) =>\n+      val argValue = ctx.freshName(\"argValue\")\n+      ctx.addMutableState(argTypes(i), argValue, \"\")\n+      argValue\n+    }\n+\n+    val argCodes = arguments.zipWithIndex.map { case (e, i) =>\n+      val expr = e.genCode(ctx)\n+      expr.code + s\"\"\"\n+       $argIsNulls[$i] = ${expr.isNull};\n+       ${argValues(i)} = ${expr.value};\n+     \"\"\"\n+    }\n+    val argCode = ctx.splitExpressions(ctx.INPUT_ROW, argCodes)\n \n     val outer = outerPointer.map(func => Literal.fromObject(func()).genCode(ctx))\n \n     var isNull = ev.isNull\n     val setIsNull = if (propagateNull && arguments.nonEmpty) {\n-      s\"final boolean $isNull = ${argGen.map(_.isNull).mkString(\" || \")};\"\n+      if (arguments.length <= 10) {"
+  }, {
+    "author": {
+      "login": "kiszk"
+    },
+    "body": "Sure. But, do we use the for-loop version for 1 or 2? For 1, clearly, we do not need a loop. For 2, we always exit a loop only for executing one iteration.\n",
+    "commit": "b92ab8cb8fd4d9aabda7486cf9d2d5dd7b98f0bf",
+    "createdAt": "2016-05-23T02:41:03Z",
+    "diffHunk": "@@ -232,27 +232,55 @@ case class NewInstance(\n \n   override def doGenCode(ctx: CodegenContext, ev: ExprCode): ExprCode = {\n     val javaType = ctx.javaType(dataType)\n-    val argGen = arguments.map(_.genCode(ctx))\n-    val argString = argGen.map(_.value).mkString(\", \")\n+    val argIsNulls = ctx.freshName(\"argIsNulls\")\n+    ctx.addMutableState(\"boolean[]\", argIsNulls, \"\")\n+    val argTypes = arguments.map(e => ctx.javaType(e.dataType))\n+    val argValues = arguments.zipWithIndex.map { case (e, i) =>\n+      val argValue = ctx.freshName(\"argValue\")\n+      ctx.addMutableState(argTypes(i), argValue, \"\")\n+      argValue\n+    }\n+\n+    val argCodes = arguments.zipWithIndex.map { case (e, i) =>\n+      val expr = e.genCode(ctx)\n+      expr.code + s\"\"\"\n+       $argIsNulls[$i] = ${expr.isNull};\n+       ${argValues(i)} = ${expr.value};\n+     \"\"\"\n+    }\n+    val argCode = ctx.splitExpressions(ctx.INPUT_ROW, argCodes)\n \n     val outer = outerPointer.map(func => Literal.fromObject(func()).genCode(ctx))\n \n     var isNull = ev.isNull\n     val setIsNull = if (propagateNull && arguments.nonEmpty) {\n-      s\"final boolean $isNull = ${argGen.map(_.isNull).mkString(\" || \")};\"\n+      if (arguments.length <= 10) {"
+  }],
+  "prId": 13243
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "do we need to create a new boolean array every round?\n",
+    "commit": "b92ab8cb8fd4d9aabda7486cf9d2d5dd7b98f0bf",
+    "createdAt": "2016-05-22T17:24:30Z",
+    "diffHunk": "@@ -232,27 +232,55 @@ case class NewInstance(\n \n   override def doGenCode(ctx: CodegenContext, ev: ExprCode): ExprCode = {\n     val javaType = ctx.javaType(dataType)\n-    val argGen = arguments.map(_.genCode(ctx))\n-    val argString = argGen.map(_.value).mkString(\", \")\n+    val argIsNulls = ctx.freshName(\"argIsNulls\")\n+    ctx.addMutableState(\"boolean[]\", argIsNulls, \"\")\n+    val argTypes = arguments.map(e => ctx.javaType(e.dataType))\n+    val argValues = arguments.zipWithIndex.map { case (e, i) =>\n+      val argValue = ctx.freshName(\"argValue\")\n+      ctx.addMutableState(argTypes(i), argValue, \"\")\n+      argValue\n+    }\n+\n+    val argCodes = arguments.zipWithIndex.map { case (e, i) =>\n+      val expr = e.genCode(ctx)\n+      expr.code + s\"\"\"\n+       $argIsNulls[$i] = ${expr.isNull};\n+       ${argValues(i)} = ${expr.value};\n+     \"\"\"\n+    }\n+    val argCode = ctx.splitExpressions(ctx.INPUT_ROW, argCodes)\n \n     val outer = outerPointer.map(func => Literal.fromObject(func()).genCode(ctx))\n \n     var isNull = ev.isNull\n     val setIsNull = if (propagateNull && arguments.nonEmpty) {\n-      s\"final boolean $isNull = ${argGen.map(_.isNull).mkString(\" || \")};\"\n+      if (arguments.length <= 10) {\n+        val argIsNull = arguments.zipWithIndex.map { case (e, i) =>\n+          s\"$argIsNulls[$i]\"\n+        }\n+        s\"final boolean $isNull = ${argIsNull.mkString(\" || \")};\"\n+      } else {\n+        s\"\"\"\n+         boolean $isNull = false;\n+         for (int idx = 0; idx < ${arguments.length}; idx++) {\n+           if ($argIsNulls[idx]) { $isNull = true; break; }\n+         }\n+       \"\"\"\n+      }\n     } else {\n       isNull = \"false\"\n       \"\"\n     }\n \n     val constructorCall = outer.map { gen =>\n-      s\"\"\"${gen.value}.new ${cls.getSimpleName}($argString)\"\"\"\n+      s\"\"\"${gen.value}.new ${cls.getSimpleName}(${argValues.mkString(\", \")})\"\"\"\n     }.getOrElse {\n-      s\"new $className($argString)\"\n+      s\"new $className(${argValues.mkString(\", \")})\"\n     }\n \n     val code = s\"\"\"\n-      ${argGen.map(_.code).mkString(\"\\n\")}\n+      $argIsNulls = new boolean[${arguments.size}];"
+  }],
+  "prId": 13243
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "Isn't `argCode` already a string?\n",
+    "commit": "b92ab8cb8fd4d9aabda7486cf9d2d5dd7b98f0bf",
+    "createdAt": "2016-05-23T03:35:59Z",
+    "diffHunk": "@@ -232,27 +232,54 @@ case class NewInstance(\n \n   override def doGenCode(ctx: CodegenContext, ev: ExprCode): ExprCode = {\n     val javaType = ctx.javaType(dataType)\n-    val argGen = arguments.map(_.genCode(ctx))\n-    val argString = argGen.map(_.value).mkString(\", \")\n+    val argIsNulls = ctx.freshName(\"argIsNulls\")\n+    ctx.addMutableState(\"boolean[]\", argIsNulls,\n+      s\"$argIsNulls = new boolean[${arguments.size}];\")\n+    val argValues = arguments.zipWithIndex.map { case (e, i) =>\n+      val argValue = ctx.freshName(\"argValue\")\n+      ctx.addMutableState(ctx.javaType(e.dataType), argValue, \"\")\n+      argValue\n+    }\n+\n+    val argCodes = arguments.zipWithIndex.map { case (e, i) =>\n+      val expr = e.genCode(ctx)\n+      expr.code + s\"\"\"\n+       $argIsNulls[$i] = ${expr.isNull};\n+       ${argValues(i)} = ${expr.value};\n+     \"\"\"\n+    }\n+    val argCode = ctx.splitExpressions(ctx.INPUT_ROW, argCodes)\n \n     val outer = outerPointer.map(func => Literal.fromObject(func()).genCode(ctx))\n \n     var isNull = ev.isNull\n     val setIsNull = if (propagateNull && arguments.nonEmpty) {\n-      s\"final boolean $isNull = ${argGen.map(_.isNull).mkString(\" || \")};\"\n+      if (arguments.length <= 10) {\n+        val argIsNull = arguments.zipWithIndex.map { case (e, i) =>\n+          s\"$argIsNulls[$i]\"\n+        }\n+        s\"final boolean $isNull = ${argIsNull.mkString(\" || \")};\"\n+      } else {\n+        s\"\"\"\n+         boolean $isNull = false;\n+         for (int idx = 0; idx < ${arguments.length}; idx++) {\n+           if ($argIsNulls[idx]) { $isNull = true; break; }\n+         }\n+       \"\"\"\n+      }\n     } else {\n       isNull = \"false\"\n       \"\"\n     }\n \n     val constructorCall = outer.map { gen =>\n-      s\"\"\"${gen.value}.new ${cls.getSimpleName}($argString)\"\"\"\n+      s\"\"\"${gen.value}.new ${cls.getSimpleName}(${argValues.mkString(\", \")})\"\"\"\n     }.getOrElse {\n-      s\"new $className($argString)\"\n+      s\"new $className(${argValues.mkString(\", \")})\"\n     }\n \n     val code = s\"\"\"\n-      ${argGen.map(_.code).mkString(\"\\n\")}\n+      ${argCode.mkString(\"\")}"
+  }],
+  "prId": 13243
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "Do you have some benchmark number for it? Especially for 1 or 2 arguments. If there is a lot of improvement, we can specialize the code when there are 1 or 2 arguments. \n",
+    "commit": "b92ab8cb8fd4d9aabda7486cf9d2d5dd7b98f0bf",
+    "createdAt": "2016-05-23T06:14:06Z",
+    "diffHunk": "@@ -232,27 +232,47 @@ case class NewInstance(\n \n   override def doGenCode(ctx: CodegenContext, ev: ExprCode): ExprCode = {\n     val javaType = ctx.javaType(dataType)\n-    val argGen = arguments.map(_.genCode(ctx))\n-    val argString = argGen.map(_.value).mkString(\", \")\n+    val argIsNulls = ctx.freshName(\"argIsNulls\")\n+    ctx.addMutableState(\"boolean[]\", argIsNulls,\n+      s\"$argIsNulls = new boolean[${arguments.size}];\")\n+    val argValues = arguments.zipWithIndex.map { case (e, i) =>\n+      val argValue = ctx.freshName(\"argValue\")\n+      ctx.addMutableState(ctx.javaType(e.dataType), argValue, \"\")\n+      argValue\n+    }\n+\n+    val argCodes = arguments.zipWithIndex.map { case (e, i) =>\n+      val expr = e.genCode(ctx)\n+      expr.code + s\"\"\"\n+       $argIsNulls[$i] = ${expr.isNull};\n+       ${argValues(i)} = ${expr.value};\n+     \"\"\"\n+    }\n+    val argCode = ctx.splitExpressions(ctx.INPUT_ROW, argCodes)\n \n     val outer = outerPointer.map(func => Literal.fromObject(func()).genCode(ctx))\n \n     var isNull = ev.isNull\n     val setIsNull = if (propagateNull && arguments.nonEmpty) {\n-      s\"final boolean $isNull = ${argGen.map(_.isNull).mkString(\" || \")};\"\n+      s\"\"\"\n+       boolean $isNull = false;\n+       for (int idx = 0; idx < ${arguments.length}; idx++) {",
+    "line": 31
+  }, {
+    "author": {
+      "login": "kiszk"
+    },
+    "body": "I was afraid of increasing code size. However, in the case of 1 or 2 arguments, the code size of generating argument value are relatively small than the cases with large number of arguments. As a result, code size here would not be an issue.\nThus, the latest version always uses for-loop.\n",
+    "commit": "b92ab8cb8fd4d9aabda7486cf9d2d5dd7b98f0bf",
+    "createdAt": "2016-05-23T09:58:16Z",
+    "diffHunk": "@@ -232,27 +232,47 @@ case class NewInstance(\n \n   override def doGenCode(ctx: CodegenContext, ev: ExprCode): ExprCode = {\n     val javaType = ctx.javaType(dataType)\n-    val argGen = arguments.map(_.genCode(ctx))\n-    val argString = argGen.map(_.value).mkString(\", \")\n+    val argIsNulls = ctx.freshName(\"argIsNulls\")\n+    ctx.addMutableState(\"boolean[]\", argIsNulls,\n+      s\"$argIsNulls = new boolean[${arguments.size}];\")\n+    val argValues = arguments.zipWithIndex.map { case (e, i) =>\n+      val argValue = ctx.freshName(\"argValue\")\n+      ctx.addMutableState(ctx.javaType(e.dataType), argValue, \"\")\n+      argValue\n+    }\n+\n+    val argCodes = arguments.zipWithIndex.map { case (e, i) =>\n+      val expr = e.genCode(ctx)\n+      expr.code + s\"\"\"\n+       $argIsNulls[$i] = ${expr.isNull};\n+       ${argValues(i)} = ${expr.value};\n+     \"\"\"\n+    }\n+    val argCode = ctx.splitExpressions(ctx.INPUT_ROW, argCodes)\n \n     val outer = outerPointer.map(func => Literal.fromObject(func()).genCode(ctx))\n \n     var isNull = ev.isNull\n     val setIsNull = if (propagateNull && arguments.nonEmpty) {\n-      s\"final boolean $isNull = ${argGen.map(_.isNull).mkString(\" || \")};\"\n+      s\"\"\"\n+       boolean $isNull = false;\n+       for (int idx = 0; idx < ${arguments.length}; idx++) {",
+    "line": 31
+  }],
+  "prId": 13243
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "nit: `$argCode`, no need of brace. \n",
+    "commit": "b92ab8cb8fd4d9aabda7486cf9d2d5dd7b98f0bf",
+    "createdAt": "2016-05-23T06:14:51Z",
+    "diffHunk": "@@ -232,27 +232,47 @@ case class NewInstance(\n \n   override def doGenCode(ctx: CodegenContext, ev: ExprCode): ExprCode = {\n     val javaType = ctx.javaType(dataType)\n-    val argGen = arguments.map(_.genCode(ctx))\n-    val argString = argGen.map(_.value).mkString(\", \")\n+    val argIsNulls = ctx.freshName(\"argIsNulls\")\n+    ctx.addMutableState(\"boolean[]\", argIsNulls,\n+      s\"$argIsNulls = new boolean[${arguments.size}];\")\n+    val argValues = arguments.zipWithIndex.map { case (e, i) =>\n+      val argValue = ctx.freshName(\"argValue\")\n+      ctx.addMutableState(ctx.javaType(e.dataType), argValue, \"\")\n+      argValue\n+    }\n+\n+    val argCodes = arguments.zipWithIndex.map { case (e, i) =>\n+      val expr = e.genCode(ctx)\n+      expr.code + s\"\"\"\n+       $argIsNulls[$i] = ${expr.isNull};\n+       ${argValues(i)} = ${expr.value};\n+     \"\"\"\n+    }\n+    val argCode = ctx.splitExpressions(ctx.INPUT_ROW, argCodes)\n \n     val outer = outerPointer.map(func => Literal.fromObject(func()).genCode(ctx))\n \n     var isNull = ev.isNull\n     val setIsNull = if (propagateNull && arguments.nonEmpty) {\n-      s\"final boolean $isNull = ${argGen.map(_.isNull).mkString(\" || \")};\"\n+      s\"\"\"\n+       boolean $isNull = false;\n+       for (int idx = 0; idx < ${arguments.length}; idx++) {\n+         if ($argIsNulls[idx]) { $isNull = true; break; }\n+       }\n+      \"\"\"\n     } else {\n       isNull = \"false\"\n       \"\"\n     }\n \n     val constructorCall = outer.map { gen =>\n-      s\"\"\"${gen.value}.new ${cls.getSimpleName}($argString)\"\"\"\n+      s\"\"\"${gen.value}.new ${cls.getSimpleName}(${argValues.mkString(\", \")})\"\"\"\n     }.getOrElse {\n-      s\"new $className($argString)\"\n+      s\"new $className(${argValues.mkString(\", \")})\"\n     }\n \n     val code = s\"\"\"\n-      ${argGen.map(_.code).mkString(\"\\n\")}\n+      ${argCode}"
+  }, {
+    "author": {
+      "login": "kiszk"
+    },
+    "body": "Good catch, thanks.\n",
+    "commit": "b92ab8cb8fd4d9aabda7486cf9d2d5dd7b98f0bf",
+    "createdAt": "2016-05-23T09:56:10Z",
+    "diffHunk": "@@ -232,27 +232,47 @@ case class NewInstance(\n \n   override def doGenCode(ctx: CodegenContext, ev: ExprCode): ExprCode = {\n     val javaType = ctx.javaType(dataType)\n-    val argGen = arguments.map(_.genCode(ctx))\n-    val argString = argGen.map(_.value).mkString(\", \")\n+    val argIsNulls = ctx.freshName(\"argIsNulls\")\n+    ctx.addMutableState(\"boolean[]\", argIsNulls,\n+      s\"$argIsNulls = new boolean[${arguments.size}];\")\n+    val argValues = arguments.zipWithIndex.map { case (e, i) =>\n+      val argValue = ctx.freshName(\"argValue\")\n+      ctx.addMutableState(ctx.javaType(e.dataType), argValue, \"\")\n+      argValue\n+    }\n+\n+    val argCodes = arguments.zipWithIndex.map { case (e, i) =>\n+      val expr = e.genCode(ctx)\n+      expr.code + s\"\"\"\n+       $argIsNulls[$i] = ${expr.isNull};\n+       ${argValues(i)} = ${expr.value};\n+     \"\"\"\n+    }\n+    val argCode = ctx.splitExpressions(ctx.INPUT_ROW, argCodes)\n \n     val outer = outerPointer.map(func => Literal.fromObject(func()).genCode(ctx))\n \n     var isNull = ev.isNull\n     val setIsNull = if (propagateNull && arguments.nonEmpty) {\n-      s\"final boolean $isNull = ${argGen.map(_.isNull).mkString(\" || \")};\"\n+      s\"\"\"\n+       boolean $isNull = false;\n+       for (int idx = 0; idx < ${arguments.length}; idx++) {\n+         if ($argIsNulls[idx]) { $isNull = true; break; }\n+       }\n+      \"\"\"\n     } else {\n       isNull = \"false\"\n       \"\"\n     }\n \n     val constructorCall = outer.map { gen =>\n-      s\"\"\"${gen.value}.new ${cls.getSimpleName}($argString)\"\"\"\n+      s\"\"\"${gen.value}.new ${cls.getSimpleName}(${argValues.mkString(\", \")})\"\"\"\n     }.getOrElse {\n-      s\"new $className($argString)\"\n+      s\"new $className(${argValues.mkString(\", \")})\"\n     }\n \n     val code = s\"\"\"\n-      ${argGen.map(_.code).mkString(\"\\n\")}\n+      ${argCode}"
+  }],
+  "prId": 13243
+}]

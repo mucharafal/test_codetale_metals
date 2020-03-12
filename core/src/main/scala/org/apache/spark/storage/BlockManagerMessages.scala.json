@@ -1,0 +1,24 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "squito"
+    },
+    "body": "the meaning of `localDirs` is a bit confusing, so its worth a comment.  IIUC, if it is persisted-to-disk on the same host as the original request, then it will be Some, and the cached data will be in a file in one of those dirs (which perhaps corresponds to dirs of a different executor); else, it will be None.",
+    "commit": "261fc767a23061844e32b1a7ec0e8fd58c42e12c",
+    "createdAt": "2019-05-10T02:24:40Z",
+    "diffHunk": "@@ -93,11 +94,15 @@ private[spark] object BlockManagerMessages {\n \n   case class GetLocations(blockId: BlockId) extends ToBlockManagerMaster\n \n-  case class GetLocationsAndStatus(blockId: BlockId) extends ToBlockManagerMaster\n+  case class GetLocationsAndStatus(blockId: BlockId, requesterHost: String)\n+    extends ToBlockManagerMaster\n \n   // The response message of `GetLocationsAndStatus` request.\n-  case class BlockLocationsAndStatus(locations: Seq[BlockManagerId], status: BlockStatus) {\n-    assert(locations.nonEmpty)\n+  case class BlockLocationsAndStatus(\n+      locations: Seq[BlockManagerId],\n+      status: BlockStatus,\n+      localDirs: Option[Array[String]]) {",
+    "line": 28
+  }],
+  "prId": 24554
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "The assert can be reverted to the old one, right?",
+    "commit": "261fc767a23061844e32b1a7ec0e8fd58c42e12c",
+    "createdAt": "2019-05-28T23:54:11Z",
+    "diffHunk": "@@ -93,11 +94,21 @@ private[spark] object BlockManagerMessages {\n \n   case class GetLocations(blockId: BlockId) extends ToBlockManagerMaster\n \n-  case class GetLocationsAndStatus(blockId: BlockId) extends ToBlockManagerMaster\n+  case class GetLocationsAndStatus(blockId: BlockId, requesterHost: String)\n+    extends ToBlockManagerMaster\n \n-  // The response message of `GetLocationsAndStatus` request.\n-  case class BlockLocationsAndStatus(locations: Seq[BlockManagerId], status: BlockStatus) {\n-    assert(locations.nonEmpty)\n+  /**\n+   * The response message of `GetLocationsAndStatus` request.\n+   *\n+   * @param localDirs if it is persisted-to-disk on the same host as the requester executor is\n+   *                  running on then localDirs will be Some and the cached data will be in a file\n+   *                  in one of those dirs, otherwise it is None.\n+   */\n+  case class BlockLocationsAndStatus(\n+      locations: Seq[BlockManagerId],\n+      status: BlockStatus,\n+      localDirs: Option[Array[String]]) {\n+    assert(locations.nonEmpty || localDirs.isDefined)"
+  }],
+  "prId": 24554
+}]

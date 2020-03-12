@@ -1,0 +1,20 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "marmbrus"
+    },
+    "body": "Probably should not be info.  Also, why do all the data types have to be primitive for us to use mutable rows?\n",
+    "commit": "30708c864b656f04d046a1d3be4e9751960a1cb7",
+    "createdAt": "2014-04-24T01:27:28Z",
+    "diffHunk": "@@ -153,9 +153,15 @@ case class InsertIntoParquetTable(\n \n     val job = new Job(sc.hadoopConfiguration)\n \n-    ParquetOutputFormat.setWriteSupportClass(\n-      job,\n-      classOf[org.apache.spark.sql.parquet.RowWriteSupport])\n+    val writeSupport =\n+      if (child.output.map(_.dataType).forall(_.isPrimitive())) {\n+        logger.info(\"Initializing MutableRowWriteSupport\")"
+  }, {
+    "author": {
+      "login": "AndreSchumacher"
+    },
+    "body": "@marmbrus Good question. I'm not yet totally sure myself. But consider the following example: You have an array of structs, which have another array as field. So something like:\n\n`ArrayType(StructType(Seq(ArrayType(IntegerType))))`\n\nLets call the inner array `inner` and the outer array `outer`. Note that `outer` is itself just a field in a higher-level record (let's call that `higher`).\n\nNow whenever Parquet is done passing the data for the current `inner` it will let you know by calling `end` on the converter for that field, in this case an array converter. Now the current struct has been processed completely, so its converter's `end` will be called, too. The current `higher` record, however, may or not may be completed. If it's not completed, that means if there is a new struct for `outer` still missing, then the current `inner` needs to be stored somewhere and you cannot use a mutable row because it is not yet safe to reuse that chunk of memory whenever the next `inner` comes along.\n\nDoes this make any sense at all? I'm happy to discuss other solutions, too.\n",
+    "commit": "30708c864b656f04d046a1d3be4e9751960a1cb7",
+    "createdAt": "2014-04-25T09:53:15Z",
+    "diffHunk": "@@ -153,9 +153,15 @@ case class InsertIntoParquetTable(\n \n     val job = new Job(sc.hadoopConfiguration)\n \n-    ParquetOutputFormat.setWriteSupportClass(\n-      job,\n-      classOf[org.apache.spark.sql.parquet.RowWriteSupport])\n+    val writeSupport =\n+      if (child.output.map(_.dataType).forall(_.isPrimitive())) {\n+        logger.info(\"Initializing MutableRowWriteSupport\")"
+  }],
+  "prId": 360
+}]

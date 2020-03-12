@@ -1,0 +1,12 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "felixcheung"
+    },
+    "body": "why still try/catch to stop the query? since this is a test of this specific behavior, if the query isn't stopped, or throws, the test actually is failing?\r\n\r\nmore importantly, why ignore NonFatal exception thrown?",
+    "commit": "005472ed10fad3d1bc8feff12fc55c5682724a0e",
+    "createdAt": "2017-06-15T05:33:48Z",
+    "diffHunk": "@@ -239,6 +237,40 @@ class StreamingQueryManagerSuite extends StreamTest with BeforeAndAfter {\n     }\n   }\n \n+  test(\"stopAllQueries\") {\n+    val datasets = Seq.fill(5)(makeDataset._2)\n+    withQueriesOn(datasets: _*) { queries =>\n+      assert(queries.forall(_.isActive))\n+      spark.streams.stopAllQueries()\n+      assert(queries.forall(_.isActive == false), \"Queries are still running\")\n+    }\n+  }\n+\n+  test(\"stop session stops all queries\") {\n+    val inputData = MemoryStream[Int]\n+    val mapped = inputData.toDS.map(6 / _)\n+    var query: StreamingQuery = null\n+    try {\n+      query = mapped.toDF.writeStream\n+        .format(\"memory\")\n+        .queryName(s\"queryInNewSession\")\n+        .outputMode(\"append\")\n+        .start()\n+      assert(query.isActive)\n+      spark.stop()\n+      assert(spark.sparkContext.isStopped)\n+      assert(query.isActive == false, \"Query is still running\")\n+    } catch {\n+      case NonFatal(e) =>\n+        if (query != null) query.stop()\n+        throw e"
+  }],
+  "prId": 18306
+}]

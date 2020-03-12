@@ -1,0 +1,58 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "ksakellis"
+    },
+    "body": "Can you push this logic down to the SparkHadoopUtil so that we don't duplicate it in two places (HadoopRDD and NewHadoopRDD). \n",
+    "commit": "864514b7b4688ea650b845c89e3b39c214d086f5",
+    "createdAt": "2015-01-14T21:32:00Z",
+    "diffHunk": "@@ -219,6 +220,9 @@ class HadoopRDD[K, V](\n       val bytesReadCallback = if (split.inputSplit.value.isInstanceOf[FileSplit]) {\n         SparkHadoopUtil.get.getFSBytesReadOnThreadCallback(\n           split.inputSplit.value.asInstanceOf[FileSplit].getPath, jobConf)\n+      } else if (split.inputSplit.value.isInstanceOf[CombineFileSplit]) {\n+        SparkHadoopUtil.get.getFSBytesReadOnThreadCallback(\n+          split.inputSplit.value.asInstanceOf[CombineFileSplit].getPath(0), jobConf)"
+  }, {
+    "author": {
+      "login": "sryza"
+    },
+    "body": "The issue is that those are actually two different classes.  There's a `CombineFileSplit` for the old MR API (used by `HadoopRDD`) and a `CombineFileSplit` for the new one (used by `NewHadoopRDD`).\n",
+    "commit": "864514b7b4688ea650b845c89e3b39c214d086f5",
+    "createdAt": "2015-01-14T21:35:02Z",
+    "diffHunk": "@@ -219,6 +220,9 @@ class HadoopRDD[K, V](\n       val bytesReadCallback = if (split.inputSplit.value.isInstanceOf[FileSplit]) {\n         SparkHadoopUtil.get.getFSBytesReadOnThreadCallback(\n           split.inputSplit.value.asInstanceOf[FileSplit].getPath, jobConf)\n+      } else if (split.inputSplit.value.isInstanceOf[CombineFileSplit]) {\n+        SparkHadoopUtil.get.getFSBytesReadOnThreadCallback(\n+          split.inputSplit.value.asInstanceOf[CombineFileSplit].getPath(0), jobConf)"
+  }, {
+    "author": {
+      "login": "ksakellis"
+    },
+    "body": "Yes, SparkHadoopUtil) can check for those classes. It can have a matcher on the 4 classes (2 new and 2 old). So the call from hadoopRdd would be something like:\nSparkHadoopUtil.get.getFSBytesReadOnThreadCallback(split.inputSplit, jobConf)\nNot a big deal i guess since in SparkHadoopUtil you'll have four cases but at least that logic is centralized.\n",
+    "commit": "864514b7b4688ea650b845c89e3b39c214d086f5",
+    "createdAt": "2015-01-15T01:24:32Z",
+    "diffHunk": "@@ -219,6 +220,9 @@ class HadoopRDD[K, V](\n       val bytesReadCallback = if (split.inputSplit.value.isInstanceOf[FileSplit]) {\n         SparkHadoopUtil.get.getFSBytesReadOnThreadCallback(\n           split.inputSplit.value.asInstanceOf[FileSplit].getPath, jobConf)\n+      } else if (split.inputSplit.value.isInstanceOf[CombineFileSplit]) {\n+        SparkHadoopUtil.get.getFSBytesReadOnThreadCallback(\n+          split.inputSplit.value.asInstanceOf[CombineFileSplit].getPath(0), jobConf)"
+  }],
+  "prId": 4050
+}, {
+  "comments": [{
+    "author": {
+      "login": "pwendell"
+    },
+    "body": "Is it guaranteed that all paths in the `CombineFileSplit` have the same filesystem?\n\nAlso one related question after I dug around a bit more. Hadoops `FileSystem.getAllStatistics()` returns a list where you can only distinguish one file system from another via the scheme. What happens if two different `hdfs://` filesystems are being read from within the same thread (for instance if two Hadoop RDD's are coalesced)? Is the assumption that this will never happen?\n",
+    "commit": "864514b7b4688ea650b845c89e3b39c214d086f5",
+    "createdAt": "2015-01-18T07:50:07Z",
+    "diffHunk": "@@ -219,6 +220,9 @@ class HadoopRDD[K, V](\n       val bytesReadCallback = if (split.inputSplit.value.isInstanceOf[FileSplit]) {\n         SparkHadoopUtil.get.getFSBytesReadOnThreadCallback(\n           split.inputSplit.value.asInstanceOf[FileSplit].getPath, jobConf)\n+      } else if (split.inputSplit.value.isInstanceOf[CombineFileSplit]) {\n+        SparkHadoopUtil.get.getFSBytesReadOnThreadCallback("
+  }],
+  "prId": 4050
+}, {
+  "comments": [{
+    "author": {
+      "login": "squito"
+    },
+    "body": "this is fine as is, but fyi you can do the same thing in a pattern match:\n\n```\nsplit.inputSplit.value match {\n   case _: FileSplit | _: CombineFileSplit => SparkHadoopUtil.get.getFSBytesReadOnThreadCallback(jobConf)\n   case _ => None\n}\n```\n",
+    "commit": "864514b7b4688ea650b845c89e3b39c214d086f5",
+    "createdAt": "2015-01-26T19:12:36Z",
+    "diffHunk": "@@ -218,13 +219,14 @@ class HadoopRDD[K, V](\n \n       // Find a function that will return the FileSystem bytes read by this thread. Do this before\n       // creating RecordReader, because RecordReader's constructor might read some bytes\n-      val bytesReadCallback = inputMetrics.bytesReadCallback.orElse(\n-        split.inputSplit.value match {\n-          case split: FileSplit =>\n-            SparkHadoopUtil.get.getFSBytesReadOnThreadCallback(split.getPath, jobConf)\n-          case _ => None\n+      val bytesReadCallback = inputMetrics.bytesReadCallback.orElse {\n+        val inputSplit = split.inputSplit.value\n+        if (inputSplit.isInstanceOf[FileSplit] || inputSplit.isInstanceOf[CombineFileSplit]) {"
+  }, {
+    "author": {
+      "login": "sryza"
+    },
+    "body": "Ah, yours looks prettier, will switch it.\n",
+    "commit": "864514b7b4688ea650b845c89e3b39c214d086f5",
+    "createdAt": "2015-01-26T20:57:04Z",
+    "diffHunk": "@@ -218,13 +219,14 @@ class HadoopRDD[K, V](\n \n       // Find a function that will return the FileSystem bytes read by this thread. Do this before\n       // creating RecordReader, because RecordReader's constructor might read some bytes\n-      val bytesReadCallback = inputMetrics.bytesReadCallback.orElse(\n-        split.inputSplit.value match {\n-          case split: FileSplit =>\n-            SparkHadoopUtil.get.getFSBytesReadOnThreadCallback(split.getPath, jobConf)\n-          case _ => None\n+      val bytesReadCallback = inputMetrics.bytesReadCallback.orElse {\n+        val inputSplit = split.inputSplit.value\n+        if (inputSplit.isInstanceOf[FileSplit] || inputSplit.isInstanceOf[CombineFileSplit]) {"
+  }],
+  "prId": 4050
+}]

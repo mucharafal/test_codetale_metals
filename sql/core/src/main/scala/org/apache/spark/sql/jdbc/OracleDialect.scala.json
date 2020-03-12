@@ -1,0 +1,24 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "@wangyum I can merge this, since it looks reasonable, even though I'm not an Oracle expert. Can we streamline this a bit by only computing `md.build().getLong(\"scale\")` once? The repeated matching of `Types.NUMERIC` could be done once in an `if` statement and be clearer.\n",
+    "commit": "bfadf774b52d696be73ec69b771e651ed365a3aa",
+    "createdAt": "2016-08-02T16:30:21Z",
+    "diffHunk": "@@ -26,30 +26,38 @@ private case object OracleDialect extends JdbcDialect {\n \n   override def canHandle(url: String): Boolean = url.startsWith(\"jdbc:oracle\")\n \n-  override def getCatalystType(\n-      sqlType: Int, typeName: String, size: Int, md: MetadataBuilder): Option[DataType] = {\n+  override def getCatalystType(sqlType: Int, typeName: String, size: Int, md: MetadataBuilder):\n+  Option[DataType] = sqlType match {\n     // Handle NUMBER fields that have no precision/scale in special way\n     // because JDBC ResultSetMetaData converts this to 0 precision and -127 scale\n     // For more details, please see\n     // https://github.com/apache/spark/pull/8780#issuecomment-145598968\n     // and\n     // https://github.com/apache/spark/pull/8780#issuecomment-144541760\n-    if (sqlType == Types.NUMERIC && size == 0) {\n-      // This is sub-optimal as we have to pick a precision/scale in advance whereas the data\n-      //  in Oracle is allowed to have different precision/scale for each value.\n+    case Types.NUMERIC if size == 0 => Option(DecimalType(DecimalType.MAX_PRECISION, 10))\n+    // Handle FLOAT fields in a special way because JDBC ResultSetMetaData converts\n+    // this to NUMERIC with -127 scale\n+    // Not sure if there is a more robust way to identify the field as a float (or other\n+    // numeric types that do not specify a scale.\n+    case Types.NUMERIC if md.build().getLong(\"scale\") == -127 =>"
+  }],
+  "prId": 14377
+}, {
+  "comments": [{
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "We should not change the read path. The bug we need to resolve is just the write path. ",
+    "commit": "bfadf774b52d696be73ec69b771e651ed365a3aa",
+    "createdAt": "2017-06-12T22:49:07Z",
+    "diffHunk": "@@ -28,28 +28,42 @@ private case object OracleDialect extends JdbcDialect {\n \n   override def getCatalystType(\n       sqlType: Int, typeName: String, size: Int, md: MetadataBuilder): Option[DataType] = {\n-    // Handle NUMBER fields that have no precision/scale in special way\n-    // because JDBC ResultSetMetaData converts this to 0 precision and -127 scale\n-    // For more details, please see\n-    // https://github.com/apache/spark/pull/8780#issuecomment-145598968\n-    // and\n-    // https://github.com/apache/spark/pull/8780#issuecomment-144541760\n-    if (sqlType == Types.NUMERIC && size == 0) {\n-      // This is sub-optimal as we have to pick a precision/scale in advance whereas the data\n-      //  in Oracle is allowed to have different precision/scale for each value.\n-      Option(DecimalType(DecimalType.MAX_PRECISION, 10))\n-    } else if (sqlType == Types.NUMERIC && md.build().getLong(\"scale\") == -127) {\n-      // Handle FLOAT fields in a special way because JDBC ResultSetMetaData converts\n-      // this to NUMERIC with -127 scale\n-      // Not sure if there is a more robust way to identify the field as a float (or other\n-      // numeric types that do not specify a scale.\n-      Option(DecimalType(DecimalType.MAX_PRECISION, 10))\n+    if (sqlType == Types.NUMERIC) {\n+      val scale = if (null != md) md.build().getLong(\"scale\") else 0L\n+      size match {\n+        // Handle NUMBER fields that have no precision/scale in special way\n+        // because JDBC ResultSetMetaData converts this to 0 precision and -127 scale\n+        // For more details, please see\n+        // https://github.com/apache/spark/pull/8780#issuecomment-145598968\n+        // and\n+        // https://github.com/apache/spark/pull/8780#issuecomment-144541760\n+        case 0 => Option(DecimalType(DecimalType.MAX_PRECISION, 10))\n+        // Handle FLOAT fields in a special way because JDBC ResultSetMetaData converts\n+        // this to NUMERIC with -127 scale\n+        // Not sure if there is a more robust way to identify the field as a float (or other\n+        // numeric types that do not specify a scale.\n+        case _ if scale == -127L => Option(DecimalType(DecimalType.MAX_PRECISION, 10))\n+        case 1 => Option(BooleanType)\n+        case 3 | 5 | 10 => Option(IntegerType)\n+        case 19 if scale == 0L => Option(LongType)\n+        case 19 if scale == 4L => Option(FloatType)",
+    "line": 38
+  }],
+  "prId": 14377
+}]

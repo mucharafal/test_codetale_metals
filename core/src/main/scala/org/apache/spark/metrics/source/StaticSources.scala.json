@@ -1,0 +1,55 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "ericl"
+    },
+    "body": "Could we use one of the other metrics, rather than add a new one?",
+    "commit": "5beccaa6996475fe1bd5f4e5416a2c1c61e83998",
+    "createdAt": "2016-12-10T04:07:20Z",
+    "diffHunk": "@@ -97,6 +97,12 @@ object HiveCatalogMetrics extends Source {\n     MetricRegistry.name(\"parallelListingJobCount\"))\n \n   /**\n+   * Tracks the total number of cachedDataSourceTables hits.\n+   */\n+  val METRIC_DATASOUCE_TABLE_CACHE_HITS = metricRegistry.counter(\n+    MetricRegistry.name(\"dataSourceTableCacheHits\"))"
+  }, {
+    "author": {
+      "login": "xuanyuanking"
+    },
+    "body": "May be we can't, only the cache hits can help us check the number.\r\nI do the test below:\r\nI add a `Thread.sleep(1000)` before `cachedDataSourceTables.put(tableIdentifier, created)` in HiveMetastoreCatalog.scala +265 to make the build table relation slow. And print all the metrics with and without lock\r\n```\r\nprintln(HiveCatalogMetrics.METRIC_DATASOUCE_TABLE_CACHE_HITS.getCount())\r\nprintln(HiveCatalogMetrics.METRIC_FILE_CACHE_HITS.getCount())\r\nprintln(HiveCatalogMetrics.METRIC_FILES_DISCOVERED.getCount())\r\nprintln(HiveCatalogMetrics.METRIC_HIVE_CLIENT_CALLS.getCount())\r\nprintln(HiveCatalogMetrics.METRIC_PARALLEL_LISTING_JOB_COUNT.getCount())\r\nprintln(HiveCatalogMetrics.METRIC_PARTITIONS_FETCHED.getCount())\r\n```\r\nThe result of without lock:\r\n```\r\n0\r\n0\r\n5\r\n70\r\n0\r\n0\r\n```\r\nand the result of with lock:\r\n```\r\n9\r\n0\r\n5\r\n70\r\n0\r\n0\r\n```",
+    "commit": "5beccaa6996475fe1bd5f4e5416a2c1c61e83998",
+    "createdAt": "2016-12-11T07:09:08Z",
+    "diffHunk": "@@ -97,6 +97,12 @@ object HiveCatalogMetrics extends Source {\n     MetricRegistry.name(\"parallelListingJobCount\"))\n \n   /**\n+   * Tracks the total number of cachedDataSourceTables hits.\n+   */\n+  val METRIC_DATASOUCE_TABLE_CACHE_HITS = metricRegistry.counter(\n+    MetricRegistry.name(\"dataSourceTableCacheHits\"))"
+  }, {
+    "author": {
+      "login": "ericl"
+    },
+    "body": "That's kind of odd, I'd expect the duplicate table building to cause more file accesses or at least cache hits since we are scanning the filesystem multiple times. Is that not the case?",
+    "commit": "5beccaa6996475fe1bd5f4e5416a2c1c61e83998",
+    "createdAt": "2016-12-11T07:22:43Z",
+    "diffHunk": "@@ -97,6 +97,12 @@ object HiveCatalogMetrics extends Source {\n     MetricRegistry.name(\"parallelListingJobCount\"))\n \n   /**\n+   * Tracks the total number of cachedDataSourceTables hits.\n+   */\n+  val METRIC_DATASOUCE_TABLE_CACHE_HITS = metricRegistry.counter(\n+    MetricRegistry.name(\"dataSourceTableCacheHits\"))"
+  }, {
+    "author": {
+      "login": "xuanyuanking"
+    },
+    "body": "I may find the reason of the odd scenario, please check my conclusion:\r\nIn 2.0 add a new config lazyPruningEnabled, it's default value is true and while multi-thread do the building same time, it will not do listLeafFile.\r\nSo I set the `HIVE_MANAGE_FILESOURCE_PARTITIONS`=false and set the partition larger than `PARALLEL_PARTITION_DISCOVERY_THRESHOLD`(this will cause METRIC_PARALLEL_LISTING_JOB_COUNT +1), test results list below:\r\nwithout lock:\r\n```\r\n0\r\n0\r\n550   (50 file * 11, 1 is cache.load() and the other 10 is 10 threads)\r\n90\r\n11      (also 1 * 11)\r\n1000\r\n```\r\nand with lock:\r\n```\r\n9\r\n0\r\n100  (2 * 50, 1 is cache.load() and the other 1 is the first threads)\r\n54\r\n2     (also 1 * 2)\r\n550\r\n```\r\nso I can delete the added `dataSourceTableCacheHits` metrics and use `parallelListingJobCount` and `filesDiscovered` instead. Do this in next patch.\r\n",
+    "commit": "5beccaa6996475fe1bd5f4e5416a2c1c61e83998",
+    "createdAt": "2016-12-12T03:36:12Z",
+    "diffHunk": "@@ -97,6 +97,12 @@ object HiveCatalogMetrics extends Source {\n     MetricRegistry.name(\"parallelListingJobCount\"))\n \n   /**\n+   * Tracks the total number of cachedDataSourceTables hits.\n+   */\n+  val METRIC_DATASOUCE_TABLE_CACHE_HITS = metricRegistry.counter(\n+    MetricRegistry.name(\"dataSourceTableCacheHits\"))"
+  }],
+  "prId": 16135
+}, {
+  "comments": [{
+    "author": {
+      "login": "ericl"
+    },
+    "body": "s/souce/source",
+    "commit": "5beccaa6996475fe1bd5f4e5416a2c1c61e83998",
+    "createdAt": "2016-12-11T07:21:49Z",
+    "diffHunk": "@@ -105,6 +111,7 @@ object HiveCatalogMetrics extends Source {\n     METRIC_FILE_CACHE_HITS.dec(METRIC_FILE_CACHE_HITS.getCount())\n     METRIC_HIVE_CLIENT_CALLS.dec(METRIC_HIVE_CLIENT_CALLS.getCount())\n     METRIC_PARALLEL_LISTING_JOB_COUNT.dec(METRIC_PARALLEL_LISTING_JOB_COUNT.getCount())\n+    METRIC_DATASOUCE_TABLE_CACHE_HITS.dec(METRIC_DATASOUCE_TABLE_CACHE_HITS.getCount())"
+  }, {
+    "author": {
+      "login": "xuanyuanking"
+    },
+    "body": "e...sorry, this new added metric will delete next patch like before comment",
+    "commit": "5beccaa6996475fe1bd5f4e5416a2c1c61e83998",
+    "createdAt": "2016-12-12T03:36:43Z",
+    "diffHunk": "@@ -105,6 +111,7 @@ object HiveCatalogMetrics extends Source {\n     METRIC_FILE_CACHE_HITS.dec(METRIC_FILE_CACHE_HITS.getCount())\n     METRIC_HIVE_CLIENT_CALLS.dec(METRIC_HIVE_CLIENT_CALLS.getCount())\n     METRIC_PARALLEL_LISTING_JOB_COUNT.dec(METRIC_PARALLEL_LISTING_JOB_COUNT.getCount())\n+    METRIC_DATASOUCE_TABLE_CACHE_HITS.dec(METRIC_DATASOUCE_TABLE_CACHE_HITS.getCount())"
+  }],
+  "prId": 16135
+}]

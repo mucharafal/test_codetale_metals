@@ -1,0 +1,157 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "felixcheung"
+    },
+    "body": "gmm is already defined above? L40",
+    "commit": "a2aa6ce0c25d1ca0e8f42e52459a62c7c09c9a46",
+    "createdAt": "2017-01-19T17:18:41Z",
+    "diffHunk": "@@ -91,7 +92,10 @@ private[r] object GaussianMixtureWrapper extends MLReadable[GaussianMixtureWrapp\n       .setStages(Array(rFormulaModel, gm))\n       .fit(data)\n \n-    new GaussianMixtureWrapper(pipeline, dim)\n+    val gmm: GaussianMixtureModel = pipeline.stages(1).asInstanceOf[GaussianMixtureModel]",
+    "line": 13
+  }, {
+    "author": {
+      "login": "yanboliang"
+    },
+    "body": "We need here to explicitly get ```logLikelihood``` and make it a member of the wrapper, since ```summary``` was not saved in the pipeline model so we can't get it (at near L40) from a persistent R gaussian mixture model.",
+    "commit": "a2aa6ce0c25d1ca0e8f42e52459a62c7c09c9a46",
+    "createdAt": "2017-01-20T03:42:44Z",
+    "diffHunk": "@@ -91,7 +92,10 @@ private[r] object GaussianMixtureWrapper extends MLReadable[GaussianMixtureWrapp\n       .setStages(Array(rFormulaModel, gm))\n       .fit(data)\n \n-    new GaussianMixtureWrapper(pipeline, dim)\n+    val gmm: GaussianMixtureModel = pipeline.stages(1).asInstanceOf[GaussianMixtureModel]",
+    "line": 13
+  }, {
+    "author": {
+      "login": "felixcheung"
+    },
+    "body": "hmm, I see what you are saying",
+    "commit": "a2aa6ce0c25d1ca0e8f42e52459a62c7c09c9a46",
+    "createdAt": "2017-01-20T05:09:26Z",
+    "diffHunk": "@@ -91,7 +92,10 @@ private[r] object GaussianMixtureWrapper extends MLReadable[GaussianMixtureWrapp\n       .setStages(Array(rFormulaModel, gm))\n       .fit(data)\n \n-    new GaussianMixtureWrapper(pipeline, dim)\n+    val gmm: GaussianMixtureModel = pipeline.stages(1).asInstanceOf[GaussianMixtureModel]",
+    "line": 13
+  }, {
+    "author": {
+      "login": "wangmiao1981"
+    },
+    "body": "I have a question: I saw in some wrappers,, it uses `pipeline.stages.last` and some uses `pipeline.stages(1)`. What is the difference of the two use case? I tried using them interchangably and the tests are still passed. ",
+    "commit": "a2aa6ce0c25d1ca0e8f42e52459a62c7c09c9a46",
+    "createdAt": "2017-01-20T06:19:19Z",
+    "diffHunk": "@@ -91,7 +92,10 @@ private[r] object GaussianMixtureWrapper extends MLReadable[GaussianMixtureWrapp\n       .setStages(Array(rFormulaModel, gm))\n       .fit(data)\n \n-    new GaussianMixtureWrapper(pipeline, dim)\n+    val gmm: GaussianMixtureModel = pipeline.stages(1).asInstanceOf[GaussianMixtureModel]",
+    "line": 13
+  }, {
+    "author": {
+      "login": "felixcheung"
+    },
+    "body": "they are the same when the pipeline has 1 stage.\r\nI prefer `stages.last` because if we later add a pre-stage to transform the input data it will break `stages(1)`\r\n\r\nand it might not always be `last` or `(1)` - see examples in https://github.com/apache/spark/blob/master/mllib/src/main/scala/org/apache/spark/ml/r/LDAWrapper.scala",
+    "commit": "a2aa6ce0c25d1ca0e8f42e52459a62c7c09c9a46",
+    "createdAt": "2017-01-20T06:30:39Z",
+    "diffHunk": "@@ -91,7 +92,10 @@ private[r] object GaussianMixtureWrapper extends MLReadable[GaussianMixtureWrapp\n       .setStages(Array(rFormulaModel, gm))\n       .fit(data)\n \n-    new GaussianMixtureWrapper(pipeline, dim)\n+    val gmm: GaussianMixtureModel = pipeline.stages(1).asInstanceOf[GaussianMixtureModel]",
+    "line": 13
+  }, {
+    "author": {
+      "login": "yanboliang"
+    },
+    "body": "Yeah, it depends on which stage you want to get.",
+    "commit": "a2aa6ce0c25d1ca0e8f42e52459a62c7c09c9a46",
+    "createdAt": "2017-01-20T08:28:41Z",
+    "diffHunk": "@@ -91,7 +92,10 @@ private[r] object GaussianMixtureWrapper extends MLReadable[GaussianMixtureWrapp\n       .setStages(Array(rFormulaModel, gm))\n       .fit(data)\n \n-    new GaussianMixtureWrapper(pipeline, dim)\n+    val gmm: GaussianMixtureModel = pipeline.stages(1).asInstanceOf[GaussianMixtureModel]",
+    "line": 13
+  }],
+  "prId": 16646
+}, {
+  "comments": [{
+    "author": {
+      "login": "felixcheung"
+    },
+    "body": "consider not saving this into the wrapper (and reader/writer) and instead access the model?",
+    "commit": "a2aa6ce0c25d1ca0e8f42e52459a62c7c09c9a46",
+    "createdAt": "2017-01-19T17:20:07Z",
+    "diffHunk": "@@ -91,7 +92,10 @@ private[r] object GaussianMixtureWrapper extends MLReadable[GaussianMixtureWrapp\n       .setStages(Array(rFormulaModel, gm))\n       .fit(data)\n \n-    new GaussianMixtureWrapper(pipeline, dim)\n+    val gmm: GaussianMixtureModel = pipeline.stages(1).asInstanceOf[GaussianMixtureModel]\n+    val logLikelihood: Double = gmm.summary.logLikelihood\n+\n+    new GaussianMixtureWrapper(pipeline, dim, logLikelihood)",
+    "line": 16
+  }, {
+    "author": {
+      "login": "yanboliang"
+    },
+    "body": "We can't, since ```summary``` was not saved in the pipeline model, so we need to save it into the wrapper explicitly.",
+    "commit": "a2aa6ce0c25d1ca0e8f42e52459a62c7c09c9a46",
+    "createdAt": "2017-01-20T03:38:27Z",
+    "diffHunk": "@@ -91,7 +92,10 @@ private[r] object GaussianMixtureWrapper extends MLReadable[GaussianMixtureWrapp\n       .setStages(Array(rFormulaModel, gm))\n       .fit(data)\n \n-    new GaussianMixtureWrapper(pipeline, dim)\n+    val gmm: GaussianMixtureModel = pipeline.stages(1).asInstanceOf[GaussianMixtureModel]\n+    val logLikelihood: Double = gmm.summary.logLikelihood\n+\n+    new GaussianMixtureWrapper(pipeline, dim, logLikelihood)",
+    "line": 16
+  }],
+  "prId": 16646
+}, {
+  "comments": [{
+    "author": {
+      "login": "felixcheung"
+    },
+    "body": "for this line and above it, why do we need to explicitly give it a type (ie, `Double` or `GaussianMixtureModel`)?\r\n\r\nin other words, why\r\n```\r\nval gmm: GaussianMixtureModel = pipeline.stages(1).asInstanceOf[GaussianMixtureModel]\r\n```\r\ninstead of\r\n```\r\nval gmm = pipeline.stages(1).asInstanceOf[GaussianMixtureModel]\r\n```",
+    "commit": "a2aa6ce0c25d1ca0e8f42e52459a62c7c09c9a46",
+    "createdAt": "2017-01-20T05:10:59Z",
+    "diffHunk": "@@ -91,7 +92,10 @@ private[r] object GaussianMixtureWrapper extends MLReadable[GaussianMixtureWrapp\n       .setStages(Array(rFormulaModel, gm))\n       .fit(data)\n \n-    new GaussianMixtureWrapper(pipeline, dim)\n+    val gmm: GaussianMixtureModel = pipeline.stages(1).asInstanceOf[GaussianMixtureModel]\n+    val logLikelihood: Double = gmm.summary.logLikelihood",
+    "line": 14
+  }, {
+    "author": {
+      "login": "yanboliang"
+    },
+    "body": "Both are ok, to explicitly give a type will make developers clearly understand what it means.",
+    "commit": "a2aa6ce0c25d1ca0e8f42e52459a62c7c09c9a46",
+    "createdAt": "2017-01-20T05:40:53Z",
+    "diffHunk": "@@ -91,7 +92,10 @@ private[r] object GaussianMixtureWrapper extends MLReadable[GaussianMixtureWrapp\n       .setStages(Array(rFormulaModel, gm))\n       .fit(data)\n \n-    new GaussianMixtureWrapper(pipeline, dim)\n+    val gmm: GaussianMixtureModel = pipeline.stages(1).asInstanceOf[GaussianMixtureModel]\n+    val logLikelihood: Double = gmm.summary.logLikelihood",
+    "line": 14
+  }],
+  "prId": 16646
+}, {
+  "comments": [{
+    "author": {
+      "login": "felixcheung"
+    },
+    "body": "would this break with any existing persisted model (that is missing a double here for logLikelihood)?\r\nis there a way to mitigate that?\r\n",
+    "commit": "a2aa6ce0c25d1ca0e8f42e52459a62c7c09c9a46",
+    "createdAt": "2017-01-20T05:13:58Z",
+    "diffHunk": "@@ -124,7 +129,8 @@ private[r] object GaussianMixtureWrapper extends MLReadable[GaussianMixtureWrapp\n       val rMetadataStr = sc.textFile(rMetadataPath, 1).first()\n       val rMetadata = parse(rMetadataStr)\n       val dim = (rMetadata \\ \"dim\").extract[Int]\n-      new GaussianMixtureWrapper(pipeline, dim, isLoaded = true)\n+      val logLikelihood = (rMetadata \\ \"logLikelihood\").extract[Double]\n+      new GaussianMixtureWrapper(pipeline, dim, logLikelihood, isLoaded = true)",
+    "line": 36
+  }, {
+    "author": {
+      "login": "yanboliang"
+    },
+    "body": "Yeah, it will break existing persisted model, but I think we don't guarantee mode persistent compatibility between different versions for SparkR. We are planing to make model persistence consistent between SparkR and MLlib, then there is no specific handling for SparkR and will let MLlib to handle all model persistent issue.\r\nHowever if we want to make model persistent compatibility for SparkR currently, I can add code here to handle different versions but will lead maintenance more complicated. What's your opinions? ",
+    "commit": "a2aa6ce0c25d1ca0e8f42e52459a62c7c09c9a46",
+    "createdAt": "2017-01-20T05:49:43Z",
+    "diffHunk": "@@ -124,7 +129,8 @@ private[r] object GaussianMixtureWrapper extends MLReadable[GaussianMixtureWrapp\n       val rMetadataStr = sc.textFile(rMetadataPath, 1).first()\n       val rMetadata = parse(rMetadataStr)\n       val dim = (rMetadata \\ \"dim\").extract[Int]\n-      new GaussianMixtureWrapper(pipeline, dim, isLoaded = true)\n+      val logLikelihood = (rMetadata \\ \"logLikelihood\").extract[Double]\n+      new GaussianMixtureWrapper(pipeline, dim, logLikelihood, isLoaded = true)",
+    "line": 36
+  }, {
+    "author": {
+      "login": "felixcheung"
+    },
+    "body": "it may not be a big deal right now, since gaussianMixture is relatively new.\r\nbut I think we should come up with a plan on model persistent compability not only with R vs JVM but also across versions of Spark.\r\nalso might be useful to link this JIRA to SPARK-18864",
+    "commit": "a2aa6ce0c25d1ca0e8f42e52459a62c7c09c9a46",
+    "createdAt": "2017-01-20T06:27:12Z",
+    "diffHunk": "@@ -124,7 +129,8 @@ private[r] object GaussianMixtureWrapper extends MLReadable[GaussianMixtureWrapp\n       val rMetadataStr = sc.textFile(rMetadataPath, 1).first()\n       val rMetadata = parse(rMetadataStr)\n       val dim = (rMetadata \\ \"dim\").extract[Int]\n-      new GaussianMixtureWrapper(pipeline, dim, isLoaded = true)\n+      val logLikelihood = (rMetadata \\ \"logLikelihood\").extract[Double]\n+      new GaussianMixtureWrapper(pipeline, dim, logLikelihood, isLoaded = true)",
+    "line": 36
+  }, {
+    "author": {
+      "login": "yanboliang"
+    },
+    "body": "Yeah, I'll link this to SPARK-18864 and collect others' thoughts. If we really need make R model persistence compatibility with old versions, I can address it in follow-up work. Thanks.",
+    "commit": "a2aa6ce0c25d1ca0e8f42e52459a62c7c09c9a46",
+    "createdAt": "2017-01-20T08:59:10Z",
+    "diffHunk": "@@ -124,7 +129,8 @@ private[r] object GaussianMixtureWrapper extends MLReadable[GaussianMixtureWrapp\n       val rMetadataStr = sc.textFile(rMetadataPath, 1).first()\n       val rMetadata = parse(rMetadataStr)\n       val dim = (rMetadata \\ \"dim\").extract[Int]\n-      new GaussianMixtureWrapper(pipeline, dim, isLoaded = true)\n+      val logLikelihood = (rMetadata \\ \"logLikelihood\").extract[Double]\n+      new GaussianMixtureWrapper(pipeline, dim, logLikelihood, isLoaded = true)",
+    "line": 36
+  }, {
+    "author": {
+      "login": "yanboliang"
+    },
+    "body": "@jkbradley What do you think of the model persistence incompatibility issue? Thanks.",
+    "commit": "a2aa6ce0c25d1ca0e8f42e52459a62c7c09c9a46",
+    "createdAt": "2017-01-20T09:27:10Z",
+    "diffHunk": "@@ -124,7 +129,8 @@ private[r] object GaussianMixtureWrapper extends MLReadable[GaussianMixtureWrapp\n       val rMetadataStr = sc.textFile(rMetadataPath, 1).first()\n       val rMetadata = parse(rMetadataStr)\n       val dim = (rMetadata \\ \"dim\").extract[Int]\n-      new GaussianMixtureWrapper(pipeline, dim, isLoaded = true)\n+      val logLikelihood = (rMetadata \\ \"logLikelihood\").extract[Double]\n+      new GaussianMixtureWrapper(pipeline, dim, logLikelihood, isLoaded = true)",
+    "line": 36
+  }, {
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "Breaking it is OK with me for SparkR (but not for Python/Scala/Java).  Thanks for adding it to the \"changes of behavior\" JIRA for tracking!",
+    "commit": "a2aa6ce0c25d1ca0e8f42e52459a62c7c09c9a46",
+    "createdAt": "2017-02-03T00:25:10Z",
+    "diffHunk": "@@ -124,7 +129,8 @@ private[r] object GaussianMixtureWrapper extends MLReadable[GaussianMixtureWrapp\n       val rMetadataStr = sc.textFile(rMetadataPath, 1).first()\n       val rMetadata = parse(rMetadataStr)\n       val dim = (rMetadata \\ \"dim\").extract[Int]\n-      new GaussianMixtureWrapper(pipeline, dim, isLoaded = true)\n+      val logLikelihood = (rMetadata \\ \"logLikelihood\").extract[Double]\n+      new GaussianMixtureWrapper(pipeline, dim, logLikelihood, isLoaded = true)",
+    "line": 36
+  }],
+  "prId": 16646
+}]

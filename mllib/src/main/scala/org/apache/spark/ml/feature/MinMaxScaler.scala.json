@@ -1,0 +1,13 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "imatiach-msft"
+    },
+    "body": "this looks the same as the code above, can you refactor to a separate function and call it from both places?",
+    "commit": "5839ac206b4c011f042480895b9a9bc388f01292",
+    "createdAt": "2017-01-13T23:46:23Z",
+    "diffHunk": "@@ -117,11 +113,75 @@ class MinMaxScaler @Since(\"1.5.0\") (@Since(\"1.5.0\") override val uid: String)\n   @Since(\"2.0.0\")\n   override def fit(dataset: Dataset[_]): MinMaxScalerModel = {\n     transformSchema(dataset.schema, logging = true)\n-    val input: RDD[OldVector] = dataset.select($(inputCol)).rdd.map {\n-      case Row(v: Vector) => OldVectors.fromML(v)\n+\n+    val (mins, maxs, nnz, cnt) = dataset.select($(inputCol)).rdd.map {\n+      row => row.getAs[Vector](0)\n+    }.treeAggregate[(Array[Double], Array[Double], Array[Long], Long)](\n+      (Array.emptyDoubleArray, Array.emptyDoubleArray, Array.emptyLongArray, 0L))(\n+      seqOp = {\n+        case ((min, max, nnz, cnt), vec) if cnt == 0 =>\n+          val n = vec.size\n+          val min_ = Array.fill[Double](n)(Double.MaxValue)\n+          val max_ = Array.fill[Double](n)(Double.MinValue)\n+          val nnz_ = Array.fill[Long](n)(0L)\n+          vec.foreachActive {\n+            case (i, v) if v != 0.0 =>\n+              if (v < min_(i)) {\n+                min_(i) = v\n+              }\n+              if (v > max_(i)) {\n+                max_(i) = v\n+              }\n+              nnz_(i) = 1L\n+            case _ =>\n+          }\n+          (min_, max_, nnz_, 1L)\n+        case ((min, max, nnz, cnt), vec) =>\n+          require(min.length == vec.size,\n+            s\"Dimensions mismatch when adding new sample: ${min.length} != ${vec.size}\")\n+          vec.foreachActive {\n+            case (i, v) if v != 0.0 =>",
+    "line": 45
+  }],
+  "prId": 16571
+}]

@@ -1,0 +1,36 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "is it better to use fewer partitions? which can make it easier to reproduce the bug.",
+    "commit": "b61fc0c6d5e1db46f2df89ba43458bf0336ab90e",
+    "createdAt": "2017-07-06T12:31:14Z",
+    "diffHunk": "@@ -2277,6 +2277,29 @@ class DAGSchedulerSuite extends SparkFunSuite with LocalSparkContext with Timeou\n       (Success, 1)))\n   }\n \n+  test(\"task end event should have updated accumulators (SPARK-20342)\") {\n+    val accumIds = new HashSet[Long]()\n+    val listener = new SparkListener() {\n+      override def onTaskEnd(event: SparkListenerTaskEnd): Unit = {\n+        event.taskInfo.accumulables.foreach { acc => accumIds += acc.id }\n+      }\n+    }\n+    sc.addSparkListener(listener)\n+\n+    // Try a few times in a loop to make sure. This is not guaranteed to fail when the bug exists,\n+    // but it should at least make the test flaky. If the bug is fixed, this should always pass.\n+    (1 to 10).foreach { _ =>\n+      accumIds.clear()\n+\n+      val accum = sc.longAccumulator\n+      sc.parallelize(1 to 10, 10).foreach { _ =>"
+  }, {
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "The context in these tests uses the \"local\" master, which has a single core, so you'd have only one task running at a time. So it should be the same, no?",
+    "commit": "b61fc0c6d5e1db46f2df89ba43458bf0336ab90e",
+    "createdAt": "2017-07-07T21:34:02Z",
+    "diffHunk": "@@ -2277,6 +2277,29 @@ class DAGSchedulerSuite extends SparkFunSuite with LocalSparkContext with Timeou\n       (Success, 1)))\n   }\n \n+  test(\"task end event should have updated accumulators (SPARK-20342)\") {\n+    val accumIds = new HashSet[Long]()\n+    val listener = new SparkListener() {\n+      override def onTaskEnd(event: SparkListenerTaskEnd): Unit = {\n+        event.taskInfo.accumulables.foreach { acc => accumIds += acc.id }\n+      }\n+    }\n+    sc.addSparkListener(listener)\n+\n+    // Try a few times in a loop to make sure. This is not guaranteed to fail when the bug exists,\n+    // but it should at least make the test flaky. If the bug is fixed, this should always pass.\n+    (1 to 10).foreach { _ =>\n+      accumIds.clear()\n+\n+      val accum = sc.longAccumulator\n+      sc.parallelize(1 to 10, 10).foreach { _ =>"
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "The bug is, a task may lose the accumulator updates, but this test can only fail if all these 10 tasks lose the accumulator updates. Shall we use fewer partitions to make this test easier to fail?",
+    "commit": "b61fc0c6d5e1db46f2df89ba43458bf0336ab90e",
+    "createdAt": "2017-07-08T03:09:26Z",
+    "diffHunk": "@@ -2277,6 +2277,29 @@ class DAGSchedulerSuite extends SparkFunSuite with LocalSparkContext with Timeou\n       (Success, 1)))\n   }\n \n+  test(\"task end event should have updated accumulators (SPARK-20342)\") {\n+    val accumIds = new HashSet[Long]()\n+    val listener = new SparkListener() {\n+      override def onTaskEnd(event: SparkListenerTaskEnd): Unit = {\n+        event.taskInfo.accumulables.foreach { acc => accumIds += acc.id }\n+      }\n+    }\n+    sc.addSparkListener(listener)\n+\n+    // Try a few times in a loop to make sure. This is not guaranteed to fail when the bug exists,\n+    // but it should at least make the test flaky. If the bug is fixed, this should always pass.\n+    (1 to 10).foreach { _ =>\n+      accumIds.clear()\n+\n+      val accum = sc.longAccumulator\n+      sc.parallelize(1 to 10, 10).foreach { _ =>"
+  }, {
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "ah, I see. I'll tweak the test in a different way.",
+    "commit": "b61fc0c6d5e1db46f2df89ba43458bf0336ab90e",
+    "createdAt": "2017-07-08T03:58:43Z",
+    "diffHunk": "@@ -2277,6 +2277,29 @@ class DAGSchedulerSuite extends SparkFunSuite with LocalSparkContext with Timeou\n       (Success, 1)))\n   }\n \n+  test(\"task end event should have updated accumulators (SPARK-20342)\") {\n+    val accumIds = new HashSet[Long]()\n+    val listener = new SparkListener() {\n+      override def onTaskEnd(event: SparkListenerTaskEnd): Unit = {\n+        event.taskInfo.accumulables.foreach { acc => accumIds += acc.id }\n+      }\n+    }\n+    sc.addSparkListener(listener)\n+\n+    // Try a few times in a loop to make sure. This is not guaranteed to fail when the bug exists,\n+    // but it should at least make the test flaky. If the bug is fixed, this should always pass.\n+    (1 to 10).foreach { _ =>\n+      accumIds.clear()\n+\n+      val accum = sc.longAccumulator\n+      sc.parallelize(1 to 10, 10).foreach { _ =>"
+  }],
+  "prId": 18393
+}]

@@ -1,0 +1,45 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "squito"
+    },
+    "body": "this is just a minor variation of `RDDPage`, right?  better to make a common superclass with most of the code, then `RDDPage` and `BroadcastPage` would just need a couple of tweaks (eg., labels in the UI, which block map to look at etc.)\n",
+    "commit": "1aec3a8073a241d16953a0adad7a17cf3ac2bba4",
+    "createdAt": "2015-02-13T15:40:02Z",
+    "diffHunk": "@@ -0,0 +1,152 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.ui.storage\n+\n+import javax.servlet.http.HttpServletRequest\n+\n+import org.apache.spark.storage.{BlockStatus, BlockId, StorageStatus, StorageUtils}\n+import org.apache.spark.ui.{UIUtils, WebUIPage}\n+import org.apache.spark.util.Utils\n+\n+import scala.xml.Node\n+\n+private[ui] class BroadcastPage(parent: StorageTab) extends WebUIPage(\"broadcast\"){"
+  }],
+  "prId": 2851
+}, {
+  "comments": [{
+    "author": {
+      "login": "squito"
+    },
+    "body": "`numPartitions` doesn't mean anything for a Broadcast var.  I think its always `0` in your code, unless I've missed something.\n",
+    "commit": "1aec3a8073a241d16953a0adad7a17cf3ac2bba4",
+    "createdAt": "2015-02-17T17:42:25Z",
+    "diffHunk": "@@ -0,0 +1,90 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.ui.storage\n+\n+import org.apache.spark.storage.StorageUtils\n+import org.apache.spark.ui.UIUtils\n+import org.apache.spark.util.Utils\n+\n+import scala.xml.Node\n+\n+private[ui] class BroadcastPage(parent: StorageTab) extends InMemoryObjectPage(\"broadcast\", parent){\n+\n+  protected override val workerTableID: String = \"broadcast-storage-by-block-table\"\n+  \n+  protected override def objectList = listener.broadcastInfoList\n+\n+  protected override def getBlockTableAndSize(objectId: Any): (Seq[Node], Int) = {\n+    val blockLocations = StorageUtils.getBroadcastBlockLocation(objectId.asInstanceOf[Long],\n+      storageStatusList)\n+    val blocks = listener.storageStatusList\n+      .flatMap(_.broadcastBlocksById(objectId.asInstanceOf[Long]))\n+      .sortWith(_._1.name < _._1.name)\n+      .map { case (blockId, status) =>\n+      (blockId, status, blockLocations.get(blockId).getOrElse(Seq[String](\"Unknown\")))\n+    }\n+    (UIUtils.listingTable(blockHeader, blockRow, blocks, id = Some(\"rdd-storage-by-block-table\")),\n+      blocks.size)\n+  }\n+\n+  protected override def generateContent(objectId: Long): (String, Seq[Node]) = {\n+    val objectInfo = objectList.find(_.id == objectId).getOrElse {\n+      // Rather than crashing, render an \"Not Found\" page\n+      return (objectId.toString, nonFoundErrorInfo)\n+    }\n+    val (workerTable, workerCount) = getWorkerTableAndSize(objectId)\n+\n+    val (blockTable, blockCount) = getBlockTableAndSize(objectId)\n+\n+    val content =\n+      <div class=\"row-fluid\">\n+        <div class=\"span12\">\n+          <ul class=\"unstyled\">\n+            <li>\n+              <strong>Total Partitions:</strong>\n+              {objectInfo.numPartitions}"
+  }],
+  "prId": 2851
+}, {
+  "comments": [{
+    "author": {
+      "login": "squito"
+    },
+    "body": "by _worker_, not by _block_\n",
+    "commit": "1aec3a8073a241d16953a0adad7a17cf3ac2bba4",
+    "createdAt": "2015-03-13T15:36:34Z",
+    "diffHunk": "@@ -0,0 +1,86 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.ui.storage\n+\n+import org.apache.spark.storage.StorageUtils\n+import org.apache.spark.ui.UIUtils\n+import org.apache.spark.util.Utils\n+\n+import scala.xml.Node\n+\n+private[ui] class BroadcastPage(parent: StorageTab) extends StorageDetailPage(\"broadcast\", parent){\n+\n+  protected override val workerTableID: String = \"broadcast-storage-by-block-table\""
+  }],
+  "prId": 2851
+}, {
+  "comments": [{
+    "author": {
+      "login": "squito"
+    },
+    "body": "broadcast, not rdd\n",
+    "commit": "1aec3a8073a241d16953a0adad7a17cf3ac2bba4",
+    "createdAt": "2015-03-13T15:36:55Z",
+    "diffHunk": "@@ -0,0 +1,86 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.ui.storage\n+\n+import org.apache.spark.storage.StorageUtils\n+import org.apache.spark.ui.UIUtils\n+import org.apache.spark.util.Utils\n+\n+import scala.xml.Node\n+\n+private[ui] class BroadcastPage(parent: StorageTab) extends StorageDetailPage(\"broadcast\", parent){\n+\n+  protected override val workerTableID: String = \"broadcast-storage-by-block-table\"\n+  \n+  protected override def objectList = listener.broadcastInfoList\n+\n+  protected override def getBlockTableAndSize(objectId: Any): (Seq[Node], Int) = {\n+    val blockLocations = StorageUtils.getBroadcastBlockLocation(objectId.asInstanceOf[Long],\n+      storageStatusList)\n+    val blocks = listener.storageStatusList\n+      .flatMap(_.broadcastBlocksById(objectId.asInstanceOf[Long]))\n+      .sortWith(_._1.name < _._1.name)\n+      .map { case (blockId, status) =>\n+      (blockId, status, blockLocations.get(blockId).getOrElse(Seq[String](\"Unknown\")))\n+    }\n+    (UIUtils.listingTable(blockHeader, blockRow, blocks, id = Some(\"rdd-storage-by-block-table\")),"
+  }],
+  "prId": 2851
+}]

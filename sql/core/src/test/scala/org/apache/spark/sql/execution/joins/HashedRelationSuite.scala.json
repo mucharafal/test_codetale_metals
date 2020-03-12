@@ -1,0 +1,113 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "let's add a comment to say, the page array is initialized with length `1 << 17`, so here we need a value larger than `1 << 18`, to trigger the bug",
+    "commit": "b8b632450d824d7abf092c10f8e94f6938be1104",
+    "createdAt": "2018-05-22T13:58:20Z",
+    "diffHunk": "@@ -254,6 +254,30 @@ class HashedRelationSuite extends SparkFunSuite with SharedSQLContext {\n     map.free()\n   }\n \n+  test(\"LongToUnsafeRowMap with big values\") {\n+    val taskMemoryManager = new TaskMemoryManager(\n+      new StaticMemoryManager(\n+        new SparkConf().set(MEMORY_OFFHEAP_ENABLED.key, \"false\"),\n+        Long.MaxValue,\n+        Long.MaxValue,\n+        1),\n+      0)\n+    val unsafeProj = UnsafeProjection.create(Seq(BoundReference(0, StringType, false)))\n+    val keys = Seq(0L)\n+    val map = new LongToUnsafeRowMap(taskMemoryManager, 1)\n+    val bigStr = UTF8String.fromString(\"x\" * 1024 * 1024 * 2)"
+  }],
+  "prId": 21311
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "we just have one key, why use loop?",
+    "commit": "b8b632450d824d7abf092c10f8e94f6938be1104",
+    "createdAt": "2018-05-22T13:58:44Z",
+    "diffHunk": "@@ -254,6 +254,30 @@ class HashedRelationSuite extends SparkFunSuite with SharedSQLContext {\n     map.free()\n   }\n \n+  test(\"LongToUnsafeRowMap with big values\") {\n+    val taskMemoryManager = new TaskMemoryManager(\n+      new StaticMemoryManager(\n+        new SparkConf().set(MEMORY_OFFHEAP_ENABLED.key, \"false\"),\n+        Long.MaxValue,\n+        Long.MaxValue,\n+        1),\n+      0)\n+    val unsafeProj = UnsafeProjection.create(Seq(BoundReference(0, StringType, false)))\n+    val keys = Seq(0L)\n+    val map = new LongToUnsafeRowMap(taskMemoryManager, 1)\n+    val bigStr = UTF8String.fromString(\"x\" * 1024 * 1024 * 2)\n+    keys.foreach { k =>"
+  }],
+  "prId": 21311
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "nit: `UnsafeProjection.create(Array(StringType))`",
+    "commit": "b8b632450d824d7abf092c10f8e94f6938be1104",
+    "createdAt": "2018-05-22T14:01:17Z",
+    "diffHunk": "@@ -254,6 +254,30 @@ class HashedRelationSuite extends SparkFunSuite with SharedSQLContext {\n     map.free()\n   }\n \n+  test(\"LongToUnsafeRowMap with big values\") {\n+    val taskMemoryManager = new TaskMemoryManager(\n+      new StaticMemoryManager(\n+        new SparkConf().set(MEMORY_OFFHEAP_ENABLED.key, \"false\"),\n+        Long.MaxValue,\n+        Long.MaxValue,\n+        1),\n+      0)\n+    val unsafeProj = UnsafeProjection.create(Seq(BoundReference(0, StringType, false)))"
+  }],
+  "prId": 21311
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "`val resultRow = new UnsafeRow(1)`",
+    "commit": "b8b632450d824d7abf092c10f8e94f6938be1104",
+    "createdAt": "2018-05-22T14:02:46Z",
+    "diffHunk": "@@ -254,6 +254,30 @@ class HashedRelationSuite extends SparkFunSuite with SharedSQLContext {\n     map.free()\n   }\n \n+  test(\"LongToUnsafeRowMap with big values\") {\n+    val taskMemoryManager = new TaskMemoryManager(\n+      new StaticMemoryManager(\n+        new SparkConf().set(MEMORY_OFFHEAP_ENABLED.key, \"false\"),\n+        Long.MaxValue,\n+        Long.MaxValue,\n+        1),\n+      0)\n+    val unsafeProj = UnsafeProjection.create(Seq(BoundReference(0, StringType, false)))\n+    val keys = Seq(0L)\n+    val map = new LongToUnsafeRowMap(taskMemoryManager, 1)\n+    val bigStr = UTF8String.fromString(\"x\" * 1024 * 1024 * 2)\n+    keys.foreach { k =>\n+      map.append(k, unsafeProj(InternalRow(bigStr)))\n+    }\n+    map.optimize()\n+    val row = unsafeProj(InternalRow(bigStr)).copy()"
+  }],
+  "prId": 21311
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "nit: can we just do `\"x\" * (1 << 19)` here?",
+    "commit": "b8b632450d824d7abf092c10f8e94f6938be1104",
+    "createdAt": "2018-05-22T15:04:26Z",
+    "diffHunk": "@@ -254,6 +254,30 @@ class HashedRelationSuite extends SparkFunSuite with SharedSQLContext {\n     map.free()\n   }\n \n+  test(\"LongToUnsafeRowMap with big values\") {\n+    val taskMemoryManager = new TaskMemoryManager(\n+      new StaticMemoryManager(\n+        new SparkConf().set(MEMORY_OFFHEAP_ENABLED.key, \"false\"),\n+        Long.MaxValue,\n+        Long.MaxValue,\n+        1),\n+      0)\n+    val unsafeProj = UnsafeProjection.create(Array[DataType](StringType))\n+    val map = new LongToUnsafeRowMap(taskMemoryManager, 1)\n+\n+    val key = 0L\n+    // the page array is initialized with length 1 << 17,\n+    // so here we need a value larger than 1 << 18\n+    val bigStr = UTF8String.fromString(\"x\" * 1024 * 1024 * 2)"
+  }],
+  "prId": 21311
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "to double check, do we have to use `1 << 22` to trigger this bug?",
+    "commit": "b8b632450d824d7abf092c10f8e94f6938be1104",
+    "createdAt": "2018-05-22T16:48:14Z",
+    "diffHunk": "@@ -254,6 +254,30 @@ class HashedRelationSuite extends SparkFunSuite with SharedSQLContext {\n     map.free()\n   }\n \n+  test(\"LongToUnsafeRowMap with big values\") {\n+    val taskMemoryManager = new TaskMemoryManager(\n+      new StaticMemoryManager(\n+        new SparkConf().set(MEMORY_OFFHEAP_ENABLED.key, \"false\"),\n+        Long.MaxValue,\n+        Long.MaxValue,\n+        1),\n+      0)\n+    val unsafeProj = UnsafeProjection.create(Array[DataType](StringType))\n+    val map = new LongToUnsafeRowMap(taskMemoryManager, 1)\n+\n+    val key = 0L\n+    // the page array is initialized with length 1 << 17 (1M bytes),\n+    // so here we need a value larger than 1 << 18 (2M bytes),to trigger the bug\n+    val bigStr = UTF8String.fromString(\"x\" * (1 << 22))",
+    "line": 27
+  }, {
+    "author": {
+      "login": "cxzl25"
+    },
+    "body": "Not necessary. \r\nJust chose a larger value to make it easier to lose data.",
+    "commit": "b8b632450d824d7abf092c10f8e94f6938be1104",
+    "createdAt": "2018-05-22T18:00:30Z",
+    "diffHunk": "@@ -254,6 +254,30 @@ class HashedRelationSuite extends SparkFunSuite with SharedSQLContext {\n     map.free()\n   }\n \n+  test(\"LongToUnsafeRowMap with big values\") {\n+    val taskMemoryManager = new TaskMemoryManager(\n+      new StaticMemoryManager(\n+        new SparkConf().set(MEMORY_OFFHEAP_ENABLED.key, \"false\"),\n+        Long.MaxValue,\n+        Long.MaxValue,\n+        1),\n+      0)\n+    val unsafeProj = UnsafeProjection.create(Array[DataType](StringType))\n+    val map = new LongToUnsafeRowMap(taskMemoryManager, 1)\n+\n+    val key = 0L\n+    // the page array is initialized with length 1 << 17 (1M bytes),\n+    // so here we need a value larger than 1 << 18 (2M bytes),to trigger the bug\n+    val bigStr = UTF8String.fromString(\"x\" * (1 << 22))",
+    "line": 27
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "do you mean this bug can't be reproduced consistently? e.g. if we pick `1 << 18 + 1`, we may not expose this bug, so we have to use `1 << 22` to  100% reproduce this bug?",
+    "commit": "b8b632450d824d7abf092c10f8e94f6938be1104",
+    "createdAt": "2018-05-23T02:25:05Z",
+    "diffHunk": "@@ -254,6 +254,30 @@ class HashedRelationSuite extends SparkFunSuite with SharedSQLContext {\n     map.free()\n   }\n \n+  test(\"LongToUnsafeRowMap with big values\") {\n+    val taskMemoryManager = new TaskMemoryManager(\n+      new StaticMemoryManager(\n+        new SparkConf().set(MEMORY_OFFHEAP_ENABLED.key, \"false\"),\n+        Long.MaxValue,\n+        Long.MaxValue,\n+        1),\n+      0)\n+    val unsafeProj = UnsafeProjection.create(Array[DataType](StringType))\n+    val map = new LongToUnsafeRowMap(taskMemoryManager, 1)\n+\n+    val key = 0L\n+    // the page array is initialized with length 1 << 17 (1M bytes),\n+    // so here we need a value larger than 1 << 18 (2M bytes),to trigger the bug\n+    val bigStr = UTF8String.fromString(\"x\" * (1 << 22))",
+    "line": 27
+  }, {
+    "author": {
+      "login": "cxzl25"
+    },
+    "body": "LongToUnsafeRowMap#getRow\r\nresultRow=UnsafeRow#pointTo(page(1<<18), baseOffset(16), sizeInBytes(1<<21+16))\r\n\r\nUTF8String#getBytes\r\ncopyMemory(base(page), offset, bytes, BYTE_ARRAY_OFFSET, numBytes(1<<21+16));\r\n\r\nIn the case of similar size sometimes, can still read the original value.\r\n\r\nWhen introducing SPARK-10399,UnsafeRow#getUTF8String check the size at this time.\r\nIf we pick 1 << 18 + 1, 100% reproduce this bug.\r\n\r\nBut when this patch is not introduced, differences that are too small sometimes do not trigger.\r\nSo I chose a larger value.\r\n\r\nMy understanding may be problematic. Please advise. Thank you.\r\n\r\n```java\r\n        sun.misc.Unsafe unsafe;\r\n        try {\r\n            Field unsafeField = Unsafe.class.getDeclaredField(\"theUnsafe\");\r\n            unsafeField.setAccessible(true);\r\n            unsafe = (sun.misc.Unsafe) unsafeField.get(null);\r\n        } catch (Throwable cause) {\r\n            unsafe = null;\r\n        }\r\n\r\n        String value = \"xxxxx\";\r\n        byte[] src = value.getBytes();\r\n\r\n        byte[] dst = new byte[3];\r\n        byte[] newDst = new byte[5];\r\n\r\n        unsafe.copyMemory(src, 16, dst, 16, src.length);\r\n        unsafe.copyMemory(dst, 16, newDst, 16, src.length);\r\n\r\n        System.out.println(\"dst:\" + new String(dst));\r\n        System.out.println(\"newDst:\" + new String(newDst));\r\n```\r\noutput:\r\n>dst:xxx\r\n>newDst:xxxxx\r\n\r\n\r\n",
+    "commit": "b8b632450d824d7abf092c10f8e94f6938be1104",
+    "createdAt": "2018-05-23T07:28:22Z",
+    "diffHunk": "@@ -254,6 +254,30 @@ class HashedRelationSuite extends SparkFunSuite with SharedSQLContext {\n     map.free()\n   }\n \n+  test(\"LongToUnsafeRowMap with big values\") {\n+    val taskMemoryManager = new TaskMemoryManager(\n+      new StaticMemoryManager(\n+        new SparkConf().set(MEMORY_OFFHEAP_ENABLED.key, \"false\"),\n+        Long.MaxValue,\n+        Long.MaxValue,\n+        1),\n+      0)\n+    val unsafeProj = UnsafeProjection.create(Array[DataType](StringType))\n+    val map = new LongToUnsafeRowMap(taskMemoryManager, 1)\n+\n+    val key = 0L\n+    // the page array is initialized with length 1 << 17 (1M bytes),\n+    // so here we need a value larger than 1 << 18 (2M bytes),to trigger the bug\n+    val bigStr = UTF8String.fromString(\"x\" * (1 << 22))",
+    "line": 27
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "then 1 << 19 should be good enough as it doubles the size?",
+    "commit": "b8b632450d824d7abf092c10f8e94f6938be1104",
+    "createdAt": "2018-05-23T13:59:50Z",
+    "diffHunk": "@@ -254,6 +254,30 @@ class HashedRelationSuite extends SparkFunSuite with SharedSQLContext {\n     map.free()\n   }\n \n+  test(\"LongToUnsafeRowMap with big values\") {\n+    val taskMemoryManager = new TaskMemoryManager(\n+      new StaticMemoryManager(\n+        new SparkConf().set(MEMORY_OFFHEAP_ENABLED.key, \"false\"),\n+        Long.MaxValue,\n+        Long.MaxValue,\n+        1),\n+      0)\n+    val unsafeProj = UnsafeProjection.create(Array[DataType](StringType))\n+    val map = new LongToUnsafeRowMap(taskMemoryManager, 1)\n+\n+    val key = 0L\n+    // the page array is initialized with length 1 << 17 (1M bytes),\n+    // so here we need a value larger than 1 << 18 (2M bytes),to trigger the bug\n+    val bigStr = UTF8String.fromString(\"x\" * (1 << 22))",
+    "line": 27
+  }, {
+    "author": {
+      "login": "cxzl25"
+    },
+    "body": "Yes. I think so.",
+    "commit": "b8b632450d824d7abf092c10f8e94f6938be1104",
+    "createdAt": "2018-05-23T18:03:56Z",
+    "diffHunk": "@@ -254,6 +254,30 @@ class HashedRelationSuite extends SparkFunSuite with SharedSQLContext {\n     map.free()\n   }\n \n+  test(\"LongToUnsafeRowMap with big values\") {\n+    val taskMemoryManager = new TaskMemoryManager(\n+      new StaticMemoryManager(\n+        new SparkConf().set(MEMORY_OFFHEAP_ENABLED.key, \"false\"),\n+        Long.MaxValue,\n+        Long.MaxValue,\n+        1),\n+      0)\n+    val unsafeProj = UnsafeProjection.create(Array[DataType](StringType))\n+    val map = new LongToUnsafeRowMap(taskMemoryManager, 1)\n+\n+    val key = 0L\n+    // the page array is initialized with length 1 << 17 (1M bytes),\n+    // so here we need a value larger than 1 << 18 (2M bytes),to trigger the bug\n+    val bigStr = UTF8String.fromString(\"x\" * (1 << 22))",
+    "line": 27
+  }],
+  "prId": 21311
+}]

@@ -1,0 +1,58 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "I have a question that is not related to this JIRA. In the above query, if we do not have the `GROUP BY c1.cv`, it still works. It sounds like the subquery progressing ignores group by clauses. What is the reason? ",
+    "commit": "0b6bfd4ba4b4a4b445a0f44441518cb487c03f78",
+    "createdAt": "2016-12-14T07:27:29Z",
+    "diffHunk": "@@ -0,0 +1,20 @@\n+CREATE OR REPLACE TEMPORARY VIEW p AS VALUES (1, 1) AS T(pk, pv);\n+CREATE OR REPLACE TEMPORARY VIEW c AS VALUES (1, 1) AS T(ck, cv);\n+\n+-- SPARK-18814.1: Simplified version of TPCDS-Q32\n+SELECT pk, cv\n+FROM   p, c\n+WHERE  p.pk = c.ck\n+AND    c.cv = (SELECT avg(c1.cv)\n+               FROM   c c1\n+               WHERE  c1.ck = p.pk);\n+\n+-- SPARK-18814.2: Adding stack of aggregates\n+SELECT pk, cv\n+FROM   p, c\n+WHERE  p.pk = c.ck\n+AND    c.cv = (SELECT max(avg)\n+\t       FROM   (SELECT   c1.cv, avg(c1.cv) avg\n+\t\t       FROM     c c1\n+\t\t       WHERE    c1.ck = p.pk\n+                       GROUP BY c1.cv));",
+    "line": 20
+  }, {
+    "author": {
+      "login": "nsyca"
+    },
+    "body": "Nice catch! I think this is a bug. There could be multiple values of c1.cv. Without a GROUP BY clause, which value does it return? Could you please open a JIRA to track this? I will investigate along with my subquery work. Do you think this is a blocker?",
+    "commit": "0b6bfd4ba4b4a4b445a0f44441518cb487c03f78",
+    "createdAt": "2016-12-14T15:33:56Z",
+    "diffHunk": "@@ -0,0 +1,20 @@\n+CREATE OR REPLACE TEMPORARY VIEW p AS VALUES (1, 1) AS T(pk, pv);\n+CREATE OR REPLACE TEMPORARY VIEW c AS VALUES (1, 1) AS T(ck, cv);\n+\n+-- SPARK-18814.1: Simplified version of TPCDS-Q32\n+SELECT pk, cv\n+FROM   p, c\n+WHERE  p.pk = c.ck\n+AND    c.cv = (SELECT avg(c1.cv)\n+               FROM   c c1\n+               WHERE  c1.ck = p.pk);\n+\n+-- SPARK-18814.2: Adding stack of aggregates\n+SELECT pk, cv\n+FROM   p, c\n+WHERE  p.pk = c.ck\n+AND    c.cv = (SELECT max(avg)\n+\t       FROM   (SELECT   c1.cv, avg(c1.cv) avg\n+\t\t       FROM     c c1\n+\t\t       WHERE    c1.ck = p.pk\n+                       GROUP BY c1.cv));",
+    "line": 20
+  }, {
+    "author": {
+      "login": "hvanhovell"
+    },
+    "body": "It is not a blocker. We are probably missing this case in `CheckAnalysis`. This currently works because it gets eliminated during optimization (the optimizer prunes the unused output). @nsyca it would be great if you can take a look at it, could you also create a separate JIRA to track this?",
+    "commit": "0b6bfd4ba4b4a4b445a0f44441518cb487c03f78",
+    "createdAt": "2016-12-14T15:46:50Z",
+    "diffHunk": "@@ -0,0 +1,20 @@\n+CREATE OR REPLACE TEMPORARY VIEW p AS VALUES (1, 1) AS T(pk, pv);\n+CREATE OR REPLACE TEMPORARY VIEW c AS VALUES (1, 1) AS T(ck, cv);\n+\n+-- SPARK-18814.1: Simplified version of TPCDS-Q32\n+SELECT pk, cv\n+FROM   p, c\n+WHERE  p.pk = c.ck\n+AND    c.cv = (SELECT avg(c1.cv)\n+               FROM   c c1\n+               WHERE  c1.ck = p.pk);\n+\n+-- SPARK-18814.2: Adding stack of aggregates\n+SELECT pk, cv\n+FROM   p, c\n+WHERE  p.pk = c.ck\n+AND    c.cv = (SELECT max(avg)\n+\t       FROM   (SELECT   c1.cv, avg(c1.cv) avg\n+\t\t       FROM     c c1\n+\t\t       WHERE    c1.ck = p.pk\n+                       GROUP BY c1.cv));",
+    "line": 20
+  }, {
+    "author": {
+      "login": "nsyca"
+    },
+    "body": "I opened [SPARK-18863](https://issues.apache.org/jira/browse/SPARK-18863) to track this problem.",
+    "commit": "0b6bfd4ba4b4a4b445a0f44441518cb487c03f78",
+    "createdAt": "2016-12-14T16:03:35Z",
+    "diffHunk": "@@ -0,0 +1,20 @@\n+CREATE OR REPLACE TEMPORARY VIEW p AS VALUES (1, 1) AS T(pk, pv);\n+CREATE OR REPLACE TEMPORARY VIEW c AS VALUES (1, 1) AS T(ck, cv);\n+\n+-- SPARK-18814.1: Simplified version of TPCDS-Q32\n+SELECT pk, cv\n+FROM   p, c\n+WHERE  p.pk = c.ck\n+AND    c.cv = (SELECT avg(c1.cv)\n+               FROM   c c1\n+               WHERE  c1.ck = p.pk);\n+\n+-- SPARK-18814.2: Adding stack of aggregates\n+SELECT pk, cv\n+FROM   p, c\n+WHERE  p.pk = c.ck\n+AND    c.cv = (SELECT max(avg)\n+\t       FROM   (SELECT   c1.cv, avg(c1.cv) avg\n+\t\t       FROM     c c1\n+\t\t       WHERE    c1.ck = p.pk\n+                       GROUP BY c1.cv));",
+    "line": 20
+  }, {
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "Thank you confirming this is a bug. I expect I can get the error message like\r\n```\r\norg.apache.spark.sql.AnalysisException: grouping expressions sequence is empty, and 'c1.`cv`' is not an aggregate function. \r\n```",
+    "commit": "0b6bfd4ba4b4a4b445a0f44441518cb487c03f78",
+    "createdAt": "2016-12-14T17:39:39Z",
+    "diffHunk": "@@ -0,0 +1,20 @@\n+CREATE OR REPLACE TEMPORARY VIEW p AS VALUES (1, 1) AS T(pk, pv);\n+CREATE OR REPLACE TEMPORARY VIEW c AS VALUES (1, 1) AS T(ck, cv);\n+\n+-- SPARK-18814.1: Simplified version of TPCDS-Q32\n+SELECT pk, cv\n+FROM   p, c\n+WHERE  p.pk = c.ck\n+AND    c.cv = (SELECT avg(c1.cv)\n+               FROM   c c1\n+               WHERE  c1.ck = p.pk);\n+\n+-- SPARK-18814.2: Adding stack of aggregates\n+SELECT pk, cv\n+FROM   p, c\n+WHERE  p.pk = c.ck\n+AND    c.cv = (SELECT max(avg)\n+\t       FROM   (SELECT   c1.cv, avg(c1.cv) avg\n+\t\t       FROM     c c1\n+\t\t       WHERE    c1.ck = p.pk\n+                       GROUP BY c1.cv));",
+    "line": 20
+  }, {
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "Or in some other cases, we should see the error message like \r\n```\r\norg.apache.spark.sql.AnalysisException: expression 'c1.`cv`' is neither present in the group by, nor is it an aggregate function.\r\n```\r\n\r\nBoth error handling are missing.",
+    "commit": "0b6bfd4ba4b4a4b445a0f44441518cb487c03f78",
+    "createdAt": "2016-12-14T17:52:45Z",
+    "diffHunk": "@@ -0,0 +1,20 @@\n+CREATE OR REPLACE TEMPORARY VIEW p AS VALUES (1, 1) AS T(pk, pv);\n+CREATE OR REPLACE TEMPORARY VIEW c AS VALUES (1, 1) AS T(ck, cv);\n+\n+-- SPARK-18814.1: Simplified version of TPCDS-Q32\n+SELECT pk, cv\n+FROM   p, c\n+WHERE  p.pk = c.ck\n+AND    c.cv = (SELECT avg(c1.cv)\n+               FROM   c c1\n+               WHERE  c1.ck = p.pk);\n+\n+-- SPARK-18814.2: Adding stack of aggregates\n+SELECT pk, cv\n+FROM   p, c\n+WHERE  p.pk = c.ck\n+AND    c.cv = (SELECT max(avg)\n+\t       FROM   (SELECT   c1.cv, avg(c1.cv) avg\n+\t\t       FROM     c c1\n+\t\t       WHERE    c1.ck = p.pk\n+                       GROUP BY c1.cv));",
+    "line": 20
+  }],
+  "prId": 16246
+}]

@@ -1,0 +1,44 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "marmbrus"
+    },
+    "body": "Hmm, I realize this is a little different than `from_json`, but it seems it would be better to eagerly throw an `AnalysisException` to say the schema contains an unsupported type.  We know that ahead of time, and otherwise its kind of mysterious why all the values come out as `null`.\n",
+    "commit": "971d1c0c134bd721f985480aa3274d8bd9b9a72c",
+    "createdAt": "2016-10-07T18:20:34Z",
+    "diffHunk": "@@ -343,4 +343,23 @@ class JsonExpressionsSuite extends SparkFunSuite with ExpressionEvalHelper {\n       null\n     )\n   }\n+\n+  test(\"to_json\") {\n+    val schema = StructType(StructField(\"a\", IntegerType) :: Nil)\n+    val struct = Literal.create(create_row(1), schema)\n+    checkEvaluation(\n+      StructToJson(Map.empty, struct),\n+      \"\"\"{\"a\":1}\"\"\"\n+    )\n+  }\n+\n+  test(\"to_json - invalid type\") {\n+    val schema = StructType(StructField(\"a\", CalendarIntervalType) :: Nil)"
+  }, {
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "Sure, that makes sense. Thanks.\n",
+    "commit": "971d1c0c134bd721f985480aa3274d8bd9b9a72c",
+    "createdAt": "2016-10-07T19:01:16Z",
+    "diffHunk": "@@ -343,4 +343,23 @@ class JsonExpressionsSuite extends SparkFunSuite with ExpressionEvalHelper {\n       null\n     )\n   }\n+\n+  test(\"to_json\") {\n+    val schema = StructType(StructField(\"a\", IntegerType) :: Nil)\n+    val struct = Literal.create(create_row(1), schema)\n+    checkEvaluation(\n+      StructToJson(Map.empty, struct),\n+      \"\"\"{\"a\":1}\"\"\"\n+    )\n+  }\n+\n+  test(\"to_json - invalid type\") {\n+    val schema = StructType(StructField(\"a\", CalendarIntervalType) :: Nil)"
+  }, {
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "I would like to leave a note. In case of CSV we are verifying the types before actually running tasks but for JSON it is not doing this. So, I made this `SparkSQLJsonProcessingException` which is technically a `RuntimeException`. However, if you want me to fix it here (adding a logic to verify the schema ahead) I will definitely do this here together.\n",
+    "commit": "971d1c0c134bd721f985480aa3274d8bd9b9a72c",
+    "createdAt": "2016-10-08T07:42:10Z",
+    "diffHunk": "@@ -343,4 +343,23 @@ class JsonExpressionsSuite extends SparkFunSuite with ExpressionEvalHelper {\n       null\n     )\n   }\n+\n+  test(\"to_json\") {\n+    val schema = StructType(StructField(\"a\", IntegerType) :: Nil)\n+    val struct = Literal.create(create_row(1), schema)\n+    checkEvaluation(\n+      StructToJson(Map.empty, struct),\n+      \"\"\"{\"a\":1}\"\"\"\n+    )\n+  }\n+\n+  test(\"to_json - invalid type\") {\n+    val schema = StructType(StructField(\"a\", CalendarIntervalType) :: Nil)"
+  }, {
+    "author": {
+      "login": "marmbrus"
+    },
+    "body": "Yeah, I think it makes more sense to add a static check for this case.  We know all of the types that we are able to handle.  For consistency I would also add this to the `write.json` code path.\n",
+    "commit": "971d1c0c134bd721f985480aa3274d8bd9b9a72c",
+    "createdAt": "2016-10-12T22:16:16Z",
+    "diffHunk": "@@ -343,4 +343,23 @@ class JsonExpressionsSuite extends SparkFunSuite with ExpressionEvalHelper {\n       null\n     )\n   }\n+\n+  test(\"to_json\") {\n+    val schema = StructType(StructField(\"a\", IntegerType) :: Nil)\n+    val struct = Literal.create(create_row(1), schema)\n+    checkEvaluation(\n+      StructToJson(Map.empty, struct),\n+      \"\"\"{\"a\":1}\"\"\"\n+    )\n+  }\n+\n+  test(\"to_json - invalid type\") {\n+    val schema = StructType(StructField(\"a\", CalendarIntervalType) :: Nil)"
+  }, {
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "@marmbrus Do you mind if I ask it is okay for me to create another JIRA and deal with this problem for JSON/CSV for reading/writing paths in another pr? It seems I should add this logics separatlely from `JacksonGenerator` instance (as it seems initiated in tasks and it is used in `DataSet.toJSON`, `StructToJson` and `write.json` and therefore, it seems I should add each separate test for each..)\n",
+    "commit": "971d1c0c134bd721f985480aa3274d8bd9b9a72c",
+    "createdAt": "2016-10-14T02:49:06Z",
+    "diffHunk": "@@ -343,4 +343,23 @@ class JsonExpressionsSuite extends SparkFunSuite with ExpressionEvalHelper {\n       null\n     )\n   }\n+\n+  test(\"to_json\") {\n+    val schema = StructType(StructField(\"a\", IntegerType) :: Nil)\n+    val struct = Literal.create(create_row(1), schema)\n+    checkEvaluation(\n+      StructToJson(Map.empty, struct),\n+      \"\"\"{\"a\":1}\"\"\"\n+    )\n+  }\n+\n+  test(\"to_json - invalid type\") {\n+    val schema = StructType(StructField(\"a\", CalendarIntervalType) :: Nil)"
+  }],
+  "prId": 15354
+}]

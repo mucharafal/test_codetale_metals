@@ -1,0 +1,53 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "tdas"
+    },
+    "body": "Its more scala-like to not have the type in case of a val. So \n`val peristance = new MqttDefaultFi....`\n\nAlso, peristance --> persistence !!!!\n",
+    "commit": "ea74365b7c5a3ac29cae9ba66f140f1fa5e8d312",
+    "createdAt": "2015-01-09T09:38:45Z",
+    "diffHunk": "@@ -42,25 +41,34 @@ object MQTTPublisher {\n     StreamingExamples.setStreamingLogLevels()\n \n     val Seq(brokerUrl, topic) = args.toSeq\n+    val tempDir = Utils.createTempDir()\n+    \n+    var client: MqttClient = null\n \n     try {\n-      var peristance:MqttClientPersistence =new MqttDefaultFilePersistence(\"/tmp\")\n+      val peristance:MqttClientPersistence = new MqttDefaultFilePersistence(tempDir.getAbsolutePath)"
+  }],
+  "prId": 3947
+}, {
+  "comments": [{
+    "author": {
+      "login": "tdas"
+    },
+    "body": "Same comment as above.\n`val msgTopic = client.getTopic(topic)`. \n\nAlso for the following lines.\n",
+    "commit": "ea74365b7c5a3ac29cae9ba66f140f1fa5e8d312",
+    "createdAt": "2015-01-09T09:39:23Z",
+    "diffHunk": "@@ -42,25 +41,34 @@ object MQTTPublisher {\n     StreamingExamples.setStreamingLogLevels()\n \n     val Seq(brokerUrl, topic) = args.toSeq\n+    val tempDir = Utils.createTempDir()\n+    \n+    var client: MqttClient = null\n \n     try {\n-      var peristance:MqttClientPersistence =new MqttDefaultFilePersistence(\"/tmp\")\n+      val peristance:MqttClientPersistence = new MqttDefaultFilePersistence(tempDir.getAbsolutePath)\n       client = new MqttClient(brokerUrl, MqttClient.generateClientId(), peristance)\n-    } catch {\n-      case e: MqttException => println(\"Exception Caught: \" + e)\n-    }\n \n-    client.connect()\n+      client.connect()\n+\n+      val msgtopic: MqttTopic = client.getTopic(topic)"
+  }],
+  "prId": 3947
+}, {
+  "comments": [{
+    "author": {
+      "login": "tdas"
+    },
+    "body": "```\n} catch {\n    case e:\n} finally {\n   ...\n}\n```\n",
+    "commit": "ea74365b7c5a3ac29cae9ba66f140f1fa5e8d312",
+    "createdAt": "2015-01-09T09:40:06Z",
+    "diffHunk": "@@ -42,25 +41,34 @@ object MQTTPublisher {\n     StreamingExamples.setStreamingLogLevels()\n \n     val Seq(brokerUrl, topic) = args.toSeq\n+    val tempDir = Utils.createTempDir()\n+    \n+    var client: MqttClient = null\n \n     try {\n-      var peristance:MqttClientPersistence =new MqttDefaultFilePersistence(\"/tmp\")\n+      val peristance:MqttClientPersistence = new MqttDefaultFilePersistence(tempDir.getAbsolutePath)\n       client = new MqttClient(brokerUrl, MqttClient.generateClientId(), peristance)\n-    } catch {\n-      case e: MqttException => println(\"Exception Caught: \" + e)\n-    }\n \n-    client.connect()\n+      client.connect()\n+\n+      val msgtopic: MqttTopic = client.getTopic(topic)\n+      val msgContent: String = \"hello mqtt demo for spark streaming\"\n+      val message: MqttMessage = new MqttMessage(msgContent.getBytes(\"utf-8\"))\n \n-    val msgtopic: MqttTopic = client.getTopic(topic)\n-    val msg: String = \"hello mqtt demo for spark streaming\"\n+      while (true) {\n+        msgtopic.publish(message)\n+        println(\"Published data. topic: \" + msgtopic.getName() + \" Message: \" + message)\n+      }\n+    }\n+ "
+  }],
+  "prId": 3947
+}, {
+  "comments": [{
+    "author": {
+      "login": "tdas"
+    },
+    "body": "Do not use this. This Utils class is private to Spark, and should not be used in an example as other wont be able to access this class (unless they put their code in package org.apache.spark....).\n",
+    "commit": "ea74365b7c5a3ac29cae9ba66f140f1fa5e8d312",
+    "createdAt": "2015-01-09T09:42:11Z",
+    "diffHunk": "@@ -42,25 +41,34 @@ object MQTTPublisher {\n     StreamingExamples.setStreamingLogLevels()\n \n     val Seq(brokerUrl, topic) = args.toSeq\n+    val tempDir = Utils.createTempDir()\n+    \n+    var client: MqttClient = null\n \n     try {\n-      var peristance:MqttClientPersistence =new MqttDefaultFilePersistence(\"/tmp\")\n+      val peristance:MqttClientPersistence = new MqttDefaultFilePersistence(tempDir.getAbsolutePath)\n       client = new MqttClient(brokerUrl, MqttClient.generateClientId(), peristance)\n-    } catch {\n-      case e: MqttException => println(\"Exception Caught: \" + e)\n-    }\n \n-    client.connect()\n+      client.connect()\n+\n+      val msgtopic: MqttTopic = client.getTopic(topic)\n+      val msgContent: String = \"hello mqtt demo for spark streaming\"\n+      val message: MqttMessage = new MqttMessage(msgContent.getBytes(\"utf-8\"))\n \n-    val msgtopic: MqttTopic = client.getTopic(topic)\n-    val msg: String = \"hello mqtt demo for spark streaming\"\n+      while (true) {\n+        msgtopic.publish(message)\n+        println(\"Published data. topic: \" + msgtopic.getName() + \" Message: \" + message)\n+      }\n+    }\n+ \n+    catch {\n+      case e: MqttException => println(\"Exception Caught: \" + e)\n+    }\n \n-    while (true) {\n-      val message: MqttMessage = new MqttMessage(String.valueOf(msg).getBytes(\"utf-8\"))\n-      msgtopic.publish(message)\n-      println(\"Published data. topic: \" + msgtopic.getName() + \" Message: \" + message)\n+    finally {\n+      client.disconnect()\n+      Utils.deleteRecursively(tempDir)"
+  }, {
+    "author": {
+      "login": "prabeesh"
+    },
+    "body": "@tdas , then we can keep \"/tmp\" as itself  ? or should we create a temp directory in another way ?\n",
+    "commit": "ea74365b7c5a3ac29cae9ba66f140f1fa5e8d312",
+    "createdAt": "2015-01-09T09:46:35Z",
+    "diffHunk": "@@ -42,25 +41,34 @@ object MQTTPublisher {\n     StreamingExamples.setStreamingLogLevels()\n \n     val Seq(brokerUrl, topic) = args.toSeq\n+    val tempDir = Utils.createTempDir()\n+    \n+    var client: MqttClient = null\n \n     try {\n-      var peristance:MqttClientPersistence =new MqttDefaultFilePersistence(\"/tmp\")\n+      val peristance:MqttClientPersistence = new MqttDefaultFilePersistence(tempDir.getAbsolutePath)\n       client = new MqttClient(brokerUrl, MqttClient.generateClientId(), peristance)\n-    } catch {\n-      case e: MqttException => println(\"Exception Caught: \" + e)\n-    }\n \n-    client.connect()\n+      client.connect()\n+\n+      val msgtopic: MqttTopic = client.getTopic(topic)\n+      val msgContent: String = \"hello mqtt demo for spark streaming\"\n+      val message: MqttMessage = new MqttMessage(msgContent.getBytes(\"utf-8\"))\n \n-    val msgtopic: MqttTopic = client.getTopic(topic)\n-    val msg: String = \"hello mqtt demo for spark streaming\"\n+      while (true) {\n+        msgtopic.publish(message)\n+        println(\"Published data. topic: \" + msgtopic.getName() + \" Message: \" + message)\n+      }\n+    }\n+ \n+    catch {\n+      case e: MqttException => println(\"Exception Caught: \" + e)\n+    }\n \n-    while (true) {\n-      val message: MqttMessage = new MqttMessage(String.valueOf(msg).getBytes(\"utf-8\"))\n-      msgtopic.publish(message)\n-      println(\"Published data. topic: \" + msgtopic.getName() + \" Message: \" + message)\n+    finally {\n+      client.disconnect()\n+      Utils.deleteRecursively(tempDir)"
+  }],
+  "prId": 3947
+}]

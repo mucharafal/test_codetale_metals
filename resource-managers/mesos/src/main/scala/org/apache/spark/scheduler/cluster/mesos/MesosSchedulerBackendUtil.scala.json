@@ -1,0 +1,335 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "skonto"
+    },
+    "body": "IMHO a better name would be createContainerInfo or buildContainerInfo",
+    "commit": "88dfb42bfd794ab1eea969c3b51970e68e4ca407",
+    "createdAt": "2017-10-06T23:34:54Z",
+    "diffHunk": "@@ -122,7 +126,7 @@ private[mesos] object MesosSchedulerBackendUtil extends Logging {\n     .toList\n   }\n \n-  def containerInfo(conf: SparkConf): ContainerInfo.Builder = {\n+  def containerInfo(conf: SparkConf, secretConfig: MesosSecretConfig): ContainerInfo.Builder = {"
+  }, {
+    "author": {
+      "login": "susanxhuynh"
+    },
+    "body": "OK, I'll use `buildContainerInfo`.",
+    "commit": "88dfb42bfd794ab1eea969c3b51970e68e4ca407",
+    "createdAt": "2017-10-09T18:48:18Z",
+    "diffHunk": "@@ -122,7 +126,7 @@ private[mesos] object MesosSchedulerBackendUtil extends Logging {\n     .toList\n   }\n \n-  def containerInfo(conf: SparkConf): ContainerInfo.Builder = {\n+  def containerInfo(conf: SparkConf, secretConfig: MesosSecretConfig): ContainerInfo.Builder = {"
+  }],
+  "prId": 19437
+}, {
+  "comments": [{
+    "author": {
+      "login": "skonto"
+    },
+    "body": "avoid wild card imports if possible.",
+    "commit": "88dfb42bfd794ab1eea969c3b51970e68e4ca407",
+    "createdAt": "2017-10-06T23:35:36Z",
+    "diffHunk": "@@ -17,10 +17,14 @@\n \n package org.apache.spark.scheduler.cluster.mesos\n \n-import org.apache.mesos.Protos.{ContainerInfo, Image, NetworkInfo, Parameter, Volume}\n+import org.apache.mesos.Protos._"
+  }, {
+    "author": {
+      "login": "susanxhuynh"
+    },
+    "body": "Hmm, IntelliJ added this automatically - I'll fix it.",
+    "commit": "88dfb42bfd794ab1eea969c3b51970e68e4ca407",
+    "createdAt": "2017-10-09T18:40:25Z",
+    "diffHunk": "@@ -17,10 +17,14 @@\n \n package org.apache.spark.scheduler.cluster.mesos\n \n-import org.apache.mesos.Protos.{ContainerInfo, Image, NetworkInfo, Parameter, Volume}\n+import org.apache.mesos.Protos._"
+  }],
+  "prId": 19437
+}, {
+  "comments": [{
+    "author": {
+      "login": "skonto"
+    },
+    "body": "s -> secrets\r\n",
+    "commit": "88dfb42bfd794ab1eea969c3b51970e68e4ca407",
+    "createdAt": "2017-10-09T08:52:04Z",
+    "diffHunk": "@@ -170,9 +174,122 @@ private[mesos] object MesosSchedulerBackendUtil extends Logging {\n       containerInfo.addNetworkInfos(info)\n     }\n \n+    getSecretVolume(conf, secretConfig).foreach { volume =>\n+      if (volume.getSource.getSecret.getReference.isInitialized) {\n+        logInfo(s\"Setting reference secret ${volume.getSource.getSecret.getReference.getName}\" +\n+          s\"on file ${volume.getContainerPath}\")\n+      } else {\n+        logInfo(s\"Setting secret on file name=${volume.getContainerPath}\")\n+      }\n+      containerInfo.addVolumes(volume)\n+    }\n+\n     containerInfo\n   }\n \n+  def addSecretEnvVar(\n+      envBuilder: Environment.Builder,\n+      conf: SparkConf,\n+      secretConfig: MesosSecretConfig): Unit = {\n+    getSecretEnvVar(conf, secretConfig).foreach { variable =>\n+      if (variable.getSecret.getReference.isInitialized) {\n+        logInfo(s\"Setting reference secret ${variable.getSecret.getReference.getName}\" +\n+          s\"on file ${variable.getName}\")\n+      } else {\n+        logInfo(s\"Setting secret on environment variable name=${variable.getName}\")\n+      }\n+      envBuilder.addVariables(variable)\n+    }\n+  }\n+\n+  private def getSecrets(conf: SparkConf, secretConfig: MesosSecretConfig):\n+  Seq[Secret] = {\n+    def createValueSecret(data: String): Secret = {\n+      Secret.newBuilder()\n+        .setType(Secret.Type.VALUE)\n+        .setValue(Secret.Value.newBuilder().setData(ByteString.copyFrom(data.getBytes)))\n+        .build()\n+    }\n+\n+    def createReferenceSecret(name: String): Secret = {\n+      Secret.newBuilder()\n+        .setReference(Secret.Reference.newBuilder().setName(name))\n+        .setType(Secret.Type.REFERENCE)\n+        .build()\n+    }\n+\n+    val referenceSecrets: Seq[Secret] =\n+      conf.get(secretConfig.SECRET_NAME).getOrElse(Nil).map(s => createReferenceSecret(s))\n+\n+    val valueSecrets: Seq[Secret] = {\n+      conf.get(secretConfig.SECRET_VALUE).getOrElse(Nil).map(s => createValueSecret(s))\n+    }\n+\n+    if (valueSecrets.nonEmpty && referenceSecrets.nonEmpty) {\n+      throw new SparkException(\"Cannot specify VALUE type secrets and REFERENCE types ones\")\n+    }\n+\n+    if (referenceSecrets.nonEmpty) referenceSecrets else valueSecrets\n+  }\n+\n+  private def illegalSecretInput(dest: Seq[String], s: Seq[Secret]): Boolean = {"
+  }, {
+    "author": {
+      "login": "susanxhuynh"
+    },
+    "body": "Done",
+    "commit": "88dfb42bfd794ab1eea969c3b51970e68e4ca407",
+    "createdAt": "2017-10-09T18:51:57Z",
+    "diffHunk": "@@ -170,9 +174,122 @@ private[mesos] object MesosSchedulerBackendUtil extends Logging {\n       containerInfo.addNetworkInfos(info)\n     }\n \n+    getSecretVolume(conf, secretConfig).foreach { volume =>\n+      if (volume.getSource.getSecret.getReference.isInitialized) {\n+        logInfo(s\"Setting reference secret ${volume.getSource.getSecret.getReference.getName}\" +\n+          s\"on file ${volume.getContainerPath}\")\n+      } else {\n+        logInfo(s\"Setting secret on file name=${volume.getContainerPath}\")\n+      }\n+      containerInfo.addVolumes(volume)\n+    }\n+\n     containerInfo\n   }\n \n+  def addSecretEnvVar(\n+      envBuilder: Environment.Builder,\n+      conf: SparkConf,\n+      secretConfig: MesosSecretConfig): Unit = {\n+    getSecretEnvVar(conf, secretConfig).foreach { variable =>\n+      if (variable.getSecret.getReference.isInitialized) {\n+        logInfo(s\"Setting reference secret ${variable.getSecret.getReference.getName}\" +\n+          s\"on file ${variable.getName}\")\n+      } else {\n+        logInfo(s\"Setting secret on environment variable name=${variable.getName}\")\n+      }\n+      envBuilder.addVariables(variable)\n+    }\n+  }\n+\n+  private def getSecrets(conf: SparkConf, secretConfig: MesosSecretConfig):\n+  Seq[Secret] = {\n+    def createValueSecret(data: String): Secret = {\n+      Secret.newBuilder()\n+        .setType(Secret.Type.VALUE)\n+        .setValue(Secret.Value.newBuilder().setData(ByteString.copyFrom(data.getBytes)))\n+        .build()\n+    }\n+\n+    def createReferenceSecret(name: String): Secret = {\n+      Secret.newBuilder()\n+        .setReference(Secret.Reference.newBuilder().setName(name))\n+        .setType(Secret.Type.REFERENCE)\n+        .build()\n+    }\n+\n+    val referenceSecrets: Seq[Secret] =\n+      conf.get(secretConfig.SECRET_NAME).getOrElse(Nil).map(s => createReferenceSecret(s))\n+\n+    val valueSecrets: Seq[Secret] = {\n+      conf.get(secretConfig.SECRET_VALUE).getOrElse(Nil).map(s => createValueSecret(s))\n+    }\n+\n+    if (valueSecrets.nonEmpty && referenceSecrets.nonEmpty) {\n+      throw new SparkException(\"Cannot specify VALUE type secrets and REFERENCE types ones\")\n+    }\n+\n+    if (referenceSecrets.nonEmpty) referenceSecrets else valueSecrets\n+  }\n+\n+  private def illegalSecretInput(dest: Seq[String], s: Seq[Secret]): Boolean = {"
+  }],
+  "prId": 19437
+}, {
+  "comments": [{
+    "author": {
+      "login": "skonto"
+    },
+    "body": "I think this is redundant, it is covered by the last false statement anyway.\r\nDoes it make sense to have paths but no secrets?",
+    "commit": "88dfb42bfd794ab1eea969c3b51970e68e4ca407",
+    "createdAt": "2017-10-09T09:10:13Z",
+    "diffHunk": "@@ -170,9 +174,122 @@ private[mesos] object MesosSchedulerBackendUtil extends Logging {\n       containerInfo.addNetworkInfos(info)\n     }\n \n+    getSecretVolume(conf, secretConfig).foreach { volume =>\n+      if (volume.getSource.getSecret.getReference.isInitialized) {\n+        logInfo(s\"Setting reference secret ${volume.getSource.getSecret.getReference.getName}\" +\n+          s\"on file ${volume.getContainerPath}\")\n+      } else {\n+        logInfo(s\"Setting secret on file name=${volume.getContainerPath}\")\n+      }\n+      containerInfo.addVolumes(volume)\n+    }\n+\n     containerInfo\n   }\n \n+  def addSecretEnvVar(\n+      envBuilder: Environment.Builder,\n+      conf: SparkConf,\n+      secretConfig: MesosSecretConfig): Unit = {\n+    getSecretEnvVar(conf, secretConfig).foreach { variable =>\n+      if (variable.getSecret.getReference.isInitialized) {\n+        logInfo(s\"Setting reference secret ${variable.getSecret.getReference.getName}\" +\n+          s\"on file ${variable.getName}\")\n+      } else {\n+        logInfo(s\"Setting secret on environment variable name=${variable.getName}\")\n+      }\n+      envBuilder.addVariables(variable)\n+    }\n+  }\n+\n+  private def getSecrets(conf: SparkConf, secretConfig: MesosSecretConfig):\n+  Seq[Secret] = {\n+    def createValueSecret(data: String): Secret = {\n+      Secret.newBuilder()\n+        .setType(Secret.Type.VALUE)\n+        .setValue(Secret.Value.newBuilder().setData(ByteString.copyFrom(data.getBytes)))\n+        .build()\n+    }\n+\n+    def createReferenceSecret(name: String): Secret = {\n+      Secret.newBuilder()\n+        .setReference(Secret.Reference.newBuilder().setName(name))\n+        .setType(Secret.Type.REFERENCE)\n+        .build()\n+    }\n+\n+    val referenceSecrets: Seq[Secret] =\n+      conf.get(secretConfig.SECRET_NAME).getOrElse(Nil).map(s => createReferenceSecret(s))\n+\n+    val valueSecrets: Seq[Secret] = {\n+      conf.get(secretConfig.SECRET_VALUE).getOrElse(Nil).map(s => createValueSecret(s))\n+    }\n+\n+    if (valueSecrets.nonEmpty && referenceSecrets.nonEmpty) {\n+      throw new SparkException(\"Cannot specify VALUE type secrets and REFERENCE types ones\")\n+    }\n+\n+    if (referenceSecrets.nonEmpty) referenceSecrets else valueSecrets\n+  }\n+\n+  private def illegalSecretInput(dest: Seq[String], s: Seq[Secret]): Boolean = {\n+    if (dest.isEmpty) {  // no destination set (ie not using secrets of this type"
+  }, {
+    "author": {
+      "login": "susanxhuynh"
+    },
+    "body": "Good point. If they specify paths but no secrets, it should throw an exception.",
+    "commit": "88dfb42bfd794ab1eea969c3b51970e68e4ca407",
+    "createdAt": "2017-10-09T20:10:42Z",
+    "diffHunk": "@@ -170,9 +174,122 @@ private[mesos] object MesosSchedulerBackendUtil extends Logging {\n       containerInfo.addNetworkInfos(info)\n     }\n \n+    getSecretVolume(conf, secretConfig).foreach { volume =>\n+      if (volume.getSource.getSecret.getReference.isInitialized) {\n+        logInfo(s\"Setting reference secret ${volume.getSource.getSecret.getReference.getName}\" +\n+          s\"on file ${volume.getContainerPath}\")\n+      } else {\n+        logInfo(s\"Setting secret on file name=${volume.getContainerPath}\")\n+      }\n+      containerInfo.addVolumes(volume)\n+    }\n+\n     containerInfo\n   }\n \n+  def addSecretEnvVar(\n+      envBuilder: Environment.Builder,\n+      conf: SparkConf,\n+      secretConfig: MesosSecretConfig): Unit = {\n+    getSecretEnvVar(conf, secretConfig).foreach { variable =>\n+      if (variable.getSecret.getReference.isInitialized) {\n+        logInfo(s\"Setting reference secret ${variable.getSecret.getReference.getName}\" +\n+          s\"on file ${variable.getName}\")\n+      } else {\n+        logInfo(s\"Setting secret on environment variable name=${variable.getName}\")\n+      }\n+      envBuilder.addVariables(variable)\n+    }\n+  }\n+\n+  private def getSecrets(conf: SparkConf, secretConfig: MesosSecretConfig):\n+  Seq[Secret] = {\n+    def createValueSecret(data: String): Secret = {\n+      Secret.newBuilder()\n+        .setType(Secret.Type.VALUE)\n+        .setValue(Secret.Value.newBuilder().setData(ByteString.copyFrom(data.getBytes)))\n+        .build()\n+    }\n+\n+    def createReferenceSecret(name: String): Secret = {\n+      Secret.newBuilder()\n+        .setReference(Secret.Reference.newBuilder().setName(name))\n+        .setType(Secret.Type.REFERENCE)\n+        .build()\n+    }\n+\n+    val referenceSecrets: Seq[Secret] =\n+      conf.get(secretConfig.SECRET_NAME).getOrElse(Nil).map(s => createReferenceSecret(s))\n+\n+    val valueSecrets: Seq[Secret] = {\n+      conf.get(secretConfig.SECRET_VALUE).getOrElse(Nil).map(s => createValueSecret(s))\n+    }\n+\n+    if (valueSecrets.nonEmpty && referenceSecrets.nonEmpty) {\n+      throw new SparkException(\"Cannot specify VALUE type secrets and REFERENCE types ones\")\n+    }\n+\n+    if (referenceSecrets.nonEmpty) referenceSecrets else valueSecrets\n+  }\n+\n+  private def illegalSecretInput(dest: Seq[String], s: Seq[Secret]): Boolean = {\n+    if (dest.isEmpty) {  // no destination set (ie not using secrets of this type"
+  }],
+  "prId": 19437
+}, {
+  "comments": [{
+    "author": {
+      "login": "ArtRand"
+    },
+    "body": "Maybe change `secretConfig` to `mesosConfig` and pass the whole thing? That way if we want to add new functionality later this function is more general. Given that most of what we do is proto-generation, I bet we'll have to do this eventually anyways. ",
+    "commit": "88dfb42bfd794ab1eea969c3b51970e68e4ca407",
+    "createdAt": "2017-10-14T00:35:53Z",
+    "diffHunk": "@@ -122,7 +126,8 @@ private[mesos] object MesosSchedulerBackendUtil extends Logging {\n     .toList\n   }\n \n-  def containerInfo(conf: SparkConf): ContainerInfo.Builder = {\n+  def buildContainerInfo(conf: SparkConf, secretConfig: MesosSecretConfig):"
+  }, {
+    "author": {
+      "login": "susanxhuynh"
+    },
+    "body": "I've removed that second parameter and moved the secret stuff out of this method, since it's called by Fine-Grained mode, and we don't want to touch Fine-Grained mode.",
+    "commit": "88dfb42bfd794ab1eea969c3b51970e68e4ca407",
+    "createdAt": "2017-10-17T23:27:00Z",
+    "diffHunk": "@@ -122,7 +126,8 @@ private[mesos] object MesosSchedulerBackendUtil extends Logging {\n     .toList\n   }\n \n-  def containerInfo(conf: SparkConf): ContainerInfo.Builder = {\n+  def buildContainerInfo(conf: SparkConf, secretConfig: MesosSecretConfig):"
+  }],
+  "prId": 19437
+}, {
+  "comments": [{
+    "author": {
+      "login": "ArtRand"
+    },
+    "body": "Need a space at the end of this log line (my bad!)",
+    "commit": "88dfb42bfd794ab1eea969c3b51970e68e4ca407",
+    "createdAt": "2017-10-14T00:38:51Z",
+    "diffHunk": "@@ -170,9 +175,119 @@ private[mesos] object MesosSchedulerBackendUtil extends Logging {\n       containerInfo.addNetworkInfos(info)\n     }\n \n+    getSecretVolume(conf, secretConfig).foreach { volume =>\n+      if (volume.getSource.getSecret.getReference.isInitialized) {\n+        logInfo(s\"Setting reference secret ${volume.getSource.getSecret.getReference.getName}\" +"
+  }, {
+    "author": {
+      "login": "susanxhuynh"
+    },
+    "body": "Fixed.",
+    "commit": "88dfb42bfd794ab1eea969c3b51970e68e4ca407",
+    "createdAt": "2017-10-17T23:49:45Z",
+    "diffHunk": "@@ -170,9 +175,119 @@ private[mesos] object MesosSchedulerBackendUtil extends Logging {\n       containerInfo.addNetworkInfos(info)\n     }\n \n+    getSecretVolume(conf, secretConfig).foreach { volume =>\n+      if (volume.getSource.getSecret.getReference.isInitialized) {\n+        logInfo(s\"Setting reference secret ${volume.getSource.getSecret.getReference.getName}\" +"
+  }],
+  "prId": 19437
+}, {
+  "comments": [{
+    "author": {
+      "login": "ArtRand"
+    },
+    "body": "Space at the end of this log line too.",
+    "commit": "88dfb42bfd794ab1eea969c3b51970e68e4ca407",
+    "createdAt": "2017-10-14T00:39:06Z",
+    "diffHunk": "@@ -170,9 +175,119 @@ private[mesos] object MesosSchedulerBackendUtil extends Logging {\n       containerInfo.addNetworkInfos(info)\n     }\n \n+    getSecretVolume(conf, secretConfig).foreach { volume =>\n+      if (volume.getSource.getSecret.getReference.isInitialized) {\n+        logInfo(s\"Setting reference secret ${volume.getSource.getSecret.getReference.getName}\" +\n+          s\"on file ${volume.getContainerPath}\")\n+      } else {\n+        logInfo(s\"Setting secret on file name=${volume.getContainerPath}\")\n+      }\n+      containerInfo.addVolumes(volume)\n+    }\n+\n     containerInfo\n   }\n \n+  def addSecretEnvVar(\n+      envBuilder: Environment.Builder,\n+      conf: SparkConf,\n+      secretConfig: MesosSecretConfig): Unit = {\n+    getSecretEnvVar(conf, secretConfig).foreach { variable =>\n+      if (variable.getSecret.getReference.isInitialized) {\n+        logInfo(s\"Setting reference secret ${variable.getSecret.getReference.getName}\" +"
+  }, {
+    "author": {
+      "login": "susanxhuynh"
+    },
+    "body": "Fixed",
+    "commit": "88dfb42bfd794ab1eea969c3b51970e68e4ca407",
+    "createdAt": "2017-10-18T00:23:02Z",
+    "diffHunk": "@@ -170,9 +175,119 @@ private[mesos] object MesosSchedulerBackendUtil extends Logging {\n       containerInfo.addNetworkInfos(info)\n     }\n \n+    getSecretVolume(conf, secretConfig).foreach { volume =>\n+      if (volume.getSource.getSecret.getReference.isInitialized) {\n+        logInfo(s\"Setting reference secret ${volume.getSource.getSecret.getReference.getName}\" +\n+          s\"on file ${volume.getContainerPath}\")\n+      } else {\n+        logInfo(s\"Setting secret on file name=${volume.getContainerPath}\")\n+      }\n+      containerInfo.addVolumes(volume)\n+    }\n+\n     containerInfo\n   }\n \n+  def addSecretEnvVar(\n+      envBuilder: Environment.Builder,\n+      conf: SparkConf,\n+      secretConfig: MesosSecretConfig): Unit = {\n+    getSecretEnvVar(conf, secretConfig).foreach { variable =>\n+      if (variable.getSecret.getReference.isInitialized) {\n+        logInfo(s\"Setting reference secret ${variable.getSecret.getReference.getName}\" +"
+  }],
+  "prId": 19437
+}, {
+  "comments": [{
+    "author": {
+      "login": "ArtRand"
+    },
+    "body": "Is it possible to make this return `List[Variable]` like it used to as opposed to mutating the `Environment.Builder`, just more consistent (e.g. `getSecretVolume`)",
+    "commit": "88dfb42bfd794ab1eea969c3b51970e68e4ca407",
+    "createdAt": "2017-10-14T01:05:57Z",
+    "diffHunk": "@@ -170,9 +175,119 @@ private[mesos] object MesosSchedulerBackendUtil extends Logging {\n       containerInfo.addNetworkInfos(info)\n     }\n \n+    getSecretVolume(conf, secretConfig).foreach { volume =>\n+      if (volume.getSource.getSecret.getReference.isInitialized) {\n+        logInfo(s\"Setting reference secret ${volume.getSource.getSecret.getReference.getName}\" +\n+          s\"on file ${volume.getContainerPath}\")\n+      } else {\n+        logInfo(s\"Setting secret on file name=${volume.getContainerPath}\")\n+      }\n+      containerInfo.addVolumes(volume)\n+    }\n+\n     containerInfo\n   }\n \n+  def addSecretEnvVar("
+  }, {
+    "author": {
+      "login": "susanxhuynh"
+    },
+    "body": "I've removed this method. To be more consistent, I've moved this code back into MesosClusterScheduler. There's a little duplication, because MesosCoarseGrainedSchedulerBackend now has a similar code snippet, but it does avoid the mutation.",
+    "commit": "88dfb42bfd794ab1eea969c3b51970e68e4ca407",
+    "createdAt": "2017-10-17T23:59:35Z",
+    "diffHunk": "@@ -170,9 +175,119 @@ private[mesos] object MesosSchedulerBackendUtil extends Logging {\n       containerInfo.addNetworkInfos(info)\n     }\n \n+    getSecretVolume(conf, secretConfig).foreach { volume =>\n+      if (volume.getSource.getSecret.getReference.isInitialized) {\n+        logInfo(s\"Setting reference secret ${volume.getSource.getSecret.getReference.getName}\" +\n+          s\"on file ${volume.getContainerPath}\")\n+      } else {\n+        logInfo(s\"Setting secret on file name=${volume.getContainerPath}\")\n+      }\n+      containerInfo.addVolumes(volume)\n+    }\n+\n     containerInfo\n   }\n \n+  def addSecretEnvVar("
+  }],
+  "prId": 19437
+}, {
+  "comments": [{
+    "author": {
+      "login": "ArtRand"
+    },
+    "body": "Indentation? ",
+    "commit": "88dfb42bfd794ab1eea969c3b51970e68e4ca407",
+    "createdAt": "2017-10-14T01:06:39Z",
+    "diffHunk": "@@ -170,9 +175,119 @@ private[mesos] object MesosSchedulerBackendUtil extends Logging {\n       containerInfo.addNetworkInfos(info)\n     }\n \n+    getSecretVolume(conf, secretConfig).foreach { volume =>\n+      if (volume.getSource.getSecret.getReference.isInitialized) {\n+        logInfo(s\"Setting reference secret ${volume.getSource.getSecret.getReference.getName}\" +\n+          s\"on file ${volume.getContainerPath}\")\n+      } else {\n+        logInfo(s\"Setting secret on file name=${volume.getContainerPath}\")\n+      }\n+      containerInfo.addVolumes(volume)\n+    }\n+\n     containerInfo\n   }\n \n+  def addSecretEnvVar(\n+      envBuilder: Environment.Builder,\n+      conf: SparkConf,\n+      secretConfig: MesosSecretConfig): Unit = {\n+    getSecretEnvVar(conf, secretConfig).foreach { variable =>\n+      if (variable.getSecret.getReference.isInitialized) {\n+        logInfo(s\"Setting reference secret ${variable.getSecret.getReference.getName}\" +\n+          s\"on file ${variable.getName}\")\n+      } else {\n+        logInfo(s\"Setting secret on environment variable name=${variable.getName}\")\n+      }\n+      envBuilder.addVariables(variable)\n+    }\n+  }\n+\n+  private def getSecrets(conf: SparkConf, secretConfig: MesosSecretConfig):\n+  Seq[Secret] = {"
+  }, {
+    "author": {
+      "login": "susanxhuynh"
+    },
+    "body": "Fixed",
+    "commit": "88dfb42bfd794ab1eea969c3b51970e68e4ca407",
+    "createdAt": "2017-10-18T00:22:52Z",
+    "diffHunk": "@@ -170,9 +175,119 @@ private[mesos] object MesosSchedulerBackendUtil extends Logging {\n       containerInfo.addNetworkInfos(info)\n     }\n \n+    getSecretVolume(conf, secretConfig).foreach { volume =>\n+      if (volume.getSource.getSecret.getReference.isInitialized) {\n+        logInfo(s\"Setting reference secret ${volume.getSource.getSecret.getReference.getName}\" +\n+          s\"on file ${volume.getContainerPath}\")\n+      } else {\n+        logInfo(s\"Setting secret on file name=${volume.getContainerPath}\")\n+      }\n+      containerInfo.addVolumes(volume)\n+    }\n+\n     containerInfo\n   }\n \n+  def addSecretEnvVar(\n+      envBuilder: Environment.Builder,\n+      conf: SparkConf,\n+      secretConfig: MesosSecretConfig): Unit = {\n+    getSecretEnvVar(conf, secretConfig).foreach { variable =>\n+      if (variable.getSecret.getReference.isInitialized) {\n+        logInfo(s\"Setting reference secret ${variable.getSecret.getReference.getName}\" +\n+          s\"on file ${variable.getName}\")\n+      } else {\n+        logInfo(s\"Setting secret on environment variable name=${variable.getName}\")\n+      }\n+      envBuilder.addVariables(variable)\n+    }\n+  }\n+\n+  private def getSecrets(conf: SparkConf, secretConfig: MesosSecretConfig):\n+  Seq[Secret] = {"
+  }],
+  "prId": 19437
+}, {
+  "comments": [{
+    "author": {
+      "login": "ArtRand"
+    },
+    "body": "Out of curiosity, why do we have this file _and_ `MesosSchedulerUtils`?",
+    "commit": "88dfb42bfd794ab1eea969c3b51970e68e4ca407",
+    "createdAt": "2017-10-14T01:23:25Z",
+    "diffHunk": "@@ -17,10 +17,14 @@\n \n package org.apache.spark.scheduler.cluster.mesos",
+    "line": 2
+  }, {
+    "author": {
+      "login": "skonto"
+    },
+    "body": "It is for the MesosScheduler's helper functions but there are methods (eg. createResource) used all over the place. We need to cleanup the code at some point.",
+    "commit": "88dfb42bfd794ab1eea969c3b51970e68e4ca407",
+    "createdAt": "2017-10-17T09:45:56Z",
+    "diffHunk": "@@ -17,10 +17,14 @@\n \n package org.apache.spark.scheduler.cluster.mesos",
+    "line": 2
+  }, {
+    "author": {
+      "login": "ArtRand"
+    },
+    "body": "Ah ok. One of these days let's make a \"clean up\" JIRA and harmonize all of this code. The naming is also all over the place.. ",
+    "commit": "88dfb42bfd794ab1eea969c3b51970e68e4ca407",
+    "createdAt": "2017-10-18T00:54:35Z",
+    "diffHunk": "@@ -17,10 +17,14 @@\n \n package org.apache.spark.scheduler.cluster.mesos",
+    "line": 2
+  }],
+  "prId": 19437
+}, {
+  "comments": [{
+    "author": {
+      "login": "ArtRand"
+    },
+    "body": "indentation? ",
+    "commit": "88dfb42bfd794ab1eea969c3b51970e68e4ca407",
+    "createdAt": "2017-10-18T00:55:24Z",
+    "diffHunk": "@@ -173,6 +178,90 @@ private[mesos] object MesosSchedulerBackendUtil extends Logging {\n     containerInfo\n   }\n \n+  private def getSecrets(conf: SparkConf, secretConfig: MesosSecretConfig): Seq[Secret] = {\n+    def createValueSecret(data: String): Secret = {\n+      Secret.newBuilder()\n+        .setType(Secret.Type.VALUE)\n+        .setValue(Secret.Value.newBuilder().setData(ByteString.copyFrom(data.getBytes)))\n+        .build()\n+    }\n+\n+    def createReferenceSecret(name: String): Secret = {\n+      Secret.newBuilder()\n+        .setReference(Secret.Reference.newBuilder().setName(name))\n+        .setType(Secret.Type.REFERENCE)\n+        .build()\n+    }\n+\n+    val referenceSecrets: Seq[Secret] =\n+      conf.get(secretConfig.SECRET_NAMES).getOrElse(Nil).map(s => createReferenceSecret(s))\n+\n+    val valueSecrets: Seq[Secret] = {\n+      conf.get(secretConfig.SECRET_VALUES).getOrElse(Nil).map(s => createValueSecret(s))\n+    }\n+\n+    if (valueSecrets.nonEmpty && referenceSecrets.nonEmpty) {\n+      throw new SparkException(\"Cannot specify VALUE type secrets and REFERENCE types ones\")\n+    }\n+\n+    if (referenceSecrets.nonEmpty) referenceSecrets else valueSecrets\n+  }\n+\n+  private def illegalSecretInput(dest: Seq[String], secrets: Seq[Secret]): Boolean = {\n+    if (dest.nonEmpty) {\n+      // make sure there is a one-to-one correspondence between destinations and secrets\n+      if (dest.length != secrets.length) {\n+        return true\n+      }\n+    }\n+    false\n+  }\n+\n+  def getSecretVolume(conf: SparkConf, secretConfig: MesosSecretConfig): List[Volume] = {\n+    val secrets = getSecrets(conf, secretConfig)\n+    val secretPaths: Seq[String] =\n+      conf.get(secretConfig.SECRET_FILENAMES).getOrElse(Nil)\n+\n+    if (illegalSecretInput(secretPaths, secrets)) {\n+      throw new SparkException(\n+        s\"Need to give equal numbers of secrets and file paths for file-based \" +\n+          s\"reference secrets got secrets $secrets, and paths $secretPaths\")\n+    }\n+\n+    secrets.zip(secretPaths).map {\n+      case (s, p) =>\n+        val source = Volume.Source.newBuilder()\n+          .setType(Volume.Source.Type.SECRET)\n+          .setSecret(s)\n+        Volume.newBuilder()\n+          .setContainerPath(p)\n+          .setSource(source)\n+          .setMode(Volume.Mode.RO)\n+          .build\n+    }.toList\n+  }\n+\n+  def getSecretEnvVar(conf: SparkConf, secretConfig: MesosSecretConfig):\n+  List[Variable] = {"
+  }, {
+    "author": {
+      "login": "susanxhuynh"
+    },
+    "body": "Fixed",
+    "commit": "88dfb42bfd794ab1eea969c3b51970e68e4ca407",
+    "createdAt": "2017-10-18T14:47:21Z",
+    "diffHunk": "@@ -173,6 +178,90 @@ private[mesos] object MesosSchedulerBackendUtil extends Logging {\n     containerInfo\n   }\n \n+  private def getSecrets(conf: SparkConf, secretConfig: MesosSecretConfig): Seq[Secret] = {\n+    def createValueSecret(data: String): Secret = {\n+      Secret.newBuilder()\n+        .setType(Secret.Type.VALUE)\n+        .setValue(Secret.Value.newBuilder().setData(ByteString.copyFrom(data.getBytes)))\n+        .build()\n+    }\n+\n+    def createReferenceSecret(name: String): Secret = {\n+      Secret.newBuilder()\n+        .setReference(Secret.Reference.newBuilder().setName(name))\n+        .setType(Secret.Type.REFERENCE)\n+        .build()\n+    }\n+\n+    val referenceSecrets: Seq[Secret] =\n+      conf.get(secretConfig.SECRET_NAMES).getOrElse(Nil).map(s => createReferenceSecret(s))\n+\n+    val valueSecrets: Seq[Secret] = {\n+      conf.get(secretConfig.SECRET_VALUES).getOrElse(Nil).map(s => createValueSecret(s))\n+    }\n+\n+    if (valueSecrets.nonEmpty && referenceSecrets.nonEmpty) {\n+      throw new SparkException(\"Cannot specify VALUE type secrets and REFERENCE types ones\")\n+    }\n+\n+    if (referenceSecrets.nonEmpty) referenceSecrets else valueSecrets\n+  }\n+\n+  private def illegalSecretInput(dest: Seq[String], secrets: Seq[Secret]): Boolean = {\n+    if (dest.nonEmpty) {\n+      // make sure there is a one-to-one correspondence between destinations and secrets\n+      if (dest.length != secrets.length) {\n+        return true\n+      }\n+    }\n+    false\n+  }\n+\n+  def getSecretVolume(conf: SparkConf, secretConfig: MesosSecretConfig): List[Volume] = {\n+    val secrets = getSecrets(conf, secretConfig)\n+    val secretPaths: Seq[String] =\n+      conf.get(secretConfig.SECRET_FILENAMES).getOrElse(Nil)\n+\n+    if (illegalSecretInput(secretPaths, secrets)) {\n+      throw new SparkException(\n+        s\"Need to give equal numbers of secrets and file paths for file-based \" +\n+          s\"reference secrets got secrets $secrets, and paths $secretPaths\")\n+    }\n+\n+    secrets.zip(secretPaths).map {\n+      case (s, p) =>\n+        val source = Volume.Source.newBuilder()\n+          .setType(Volume.Source.Type.SECRET)\n+          .setSecret(s)\n+        Volume.newBuilder()\n+          .setContainerPath(p)\n+          .setSource(source)\n+          .setMode(Volume.Mode.RO)\n+          .build\n+    }.toList\n+  }\n+\n+  def getSecretEnvVar(conf: SparkConf, secretConfig: MesosSecretConfig):\n+  List[Variable] = {"
+  }],
+  "prId": 19437
+}, {
+  "comments": [{
+    "author": {
+      "login": "ArtRand"
+    },
+    "body": "indentation?",
+    "commit": "88dfb42bfd794ab1eea969c3b51970e68e4ca407",
+    "createdAt": "2017-10-18T00:59:17Z",
+    "diffHunk": "@@ -122,7 +126,8 @@ private[mesos] object MesosSchedulerBackendUtil extends Logging {\n     .toList\n   }\n \n-  def containerInfo(conf: SparkConf): ContainerInfo.Builder = {\n+  def buildContainerInfo(conf: SparkConf):\n+  ContainerInfo.Builder = {"
+  }, {
+    "author": {
+      "login": "susanxhuynh"
+    },
+    "body": "Fixed",
+    "commit": "88dfb42bfd794ab1eea969c3b51970e68e4ca407",
+    "createdAt": "2017-10-18T14:46:47Z",
+    "diffHunk": "@@ -122,7 +126,8 @@ private[mesos] object MesosSchedulerBackendUtil extends Logging {\n     .toList\n   }\n \n-  def containerInfo(conf: SparkConf): ContainerInfo.Builder = {\n+  def buildContainerInfo(conf: SparkConf):\n+  ContainerInfo.Builder = {"
+  }],
+  "prId": 19437
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Move to previous line.",
+    "commit": "88dfb42bfd794ab1eea969c3b51970e68e4ca407",
+    "createdAt": "2017-10-24T20:29:48Z",
+    "diffHunk": "@@ -122,7 +126,8 @@ private[mesos] object MesosSchedulerBackendUtil extends Logging {\n     .toList\n   }\n \n-  def containerInfo(conf: SparkConf): ContainerInfo.Builder = {\n+  def buildContainerInfo(conf: SparkConf):\n+    ContainerInfo.Builder = {"
+  }, {
+    "author": {
+      "login": "susanxhuynh"
+    },
+    "body": "ok",
+    "commit": "88dfb42bfd794ab1eea969c3b51970e68e4ca407",
+    "createdAt": "2017-10-24T22:41:27Z",
+    "diffHunk": "@@ -122,7 +126,8 @@ private[mesos] object MesosSchedulerBackendUtil extends Logging {\n     .toList\n   }\n \n-  def containerInfo(conf: SparkConf): ContainerInfo.Builder = {\n+  def buildContainerInfo(conf: SparkConf):\n+    ContainerInfo.Builder = {"
+  }],
+  "prId": 19437
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Move to previous line.",
+    "commit": "88dfb42bfd794ab1eea969c3b51970e68e4ca407",
+    "createdAt": "2017-10-24T20:30:45Z",
+    "diffHunk": "@@ -173,6 +178,90 @@ private[mesos] object MesosSchedulerBackendUtil extends Logging {\n     containerInfo\n   }\n \n+  private def getSecrets(conf: SparkConf, secretConfig: MesosSecretConfig): Seq[Secret] = {\n+    def createValueSecret(data: String): Secret = {\n+      Secret.newBuilder()\n+        .setType(Secret.Type.VALUE)\n+        .setValue(Secret.Value.newBuilder().setData(ByteString.copyFrom(data.getBytes)))\n+        .build()\n+    }\n+\n+    def createReferenceSecret(name: String): Secret = {\n+      Secret.newBuilder()\n+        .setReference(Secret.Reference.newBuilder().setName(name))\n+        .setType(Secret.Type.REFERENCE)\n+        .build()\n+    }\n+\n+    val referenceSecrets: Seq[Secret] =\n+      conf.get(secretConfig.SECRET_NAMES).getOrElse(Nil).map(s => createReferenceSecret(s))\n+\n+    val valueSecrets: Seq[Secret] = {\n+      conf.get(secretConfig.SECRET_VALUES).getOrElse(Nil).map(s => createValueSecret(s))\n+    }\n+\n+    if (valueSecrets.nonEmpty && referenceSecrets.nonEmpty) {\n+      throw new SparkException(\"Cannot specify VALUE type secrets and REFERENCE types ones\")\n+    }\n+\n+    if (referenceSecrets.nonEmpty) referenceSecrets else valueSecrets\n+  }\n+\n+  private def illegalSecretInput(dest: Seq[String], secrets: Seq[Secret]): Boolean = {\n+    if (dest.nonEmpty) {\n+      // make sure there is a one-to-one correspondence between destinations and secrets\n+      if (dest.length != secrets.length) {\n+        return true\n+      }\n+    }\n+    false\n+  }\n+\n+  def getSecretVolume(conf: SparkConf, secretConfig: MesosSecretConfig): List[Volume] = {\n+    val secrets = getSecrets(conf, secretConfig)\n+    val secretPaths: Seq[String] =\n+      conf.get(secretConfig.SECRET_FILENAMES).getOrElse(Nil)\n+\n+    if (illegalSecretInput(secretPaths, secrets)) {\n+      throw new SparkException(\n+        s\"Need to give equal numbers of secrets and file paths for file-based \" +\n+          s\"reference secrets got secrets $secrets, and paths $secretPaths\")\n+    }\n+\n+    secrets.zip(secretPaths).map {\n+      case (s, p) =>"
+  }, {
+    "author": {
+      "login": "susanxhuynh"
+    },
+    "body": "ok",
+    "commit": "88dfb42bfd794ab1eea969c3b51970e68e4ca407",
+    "createdAt": "2017-10-24T22:42:48Z",
+    "diffHunk": "@@ -173,6 +178,90 @@ private[mesos] object MesosSchedulerBackendUtil extends Logging {\n     containerInfo\n   }\n \n+  private def getSecrets(conf: SparkConf, secretConfig: MesosSecretConfig): Seq[Secret] = {\n+    def createValueSecret(data: String): Secret = {\n+      Secret.newBuilder()\n+        .setType(Secret.Type.VALUE)\n+        .setValue(Secret.Value.newBuilder().setData(ByteString.copyFrom(data.getBytes)))\n+        .build()\n+    }\n+\n+    def createReferenceSecret(name: String): Secret = {\n+      Secret.newBuilder()\n+        .setReference(Secret.Reference.newBuilder().setName(name))\n+        .setType(Secret.Type.REFERENCE)\n+        .build()\n+    }\n+\n+    val referenceSecrets: Seq[Secret] =\n+      conf.get(secretConfig.SECRET_NAMES).getOrElse(Nil).map(s => createReferenceSecret(s))\n+\n+    val valueSecrets: Seq[Secret] = {\n+      conf.get(secretConfig.SECRET_VALUES).getOrElse(Nil).map(s => createValueSecret(s))\n+    }\n+\n+    if (valueSecrets.nonEmpty && referenceSecrets.nonEmpty) {\n+      throw new SparkException(\"Cannot specify VALUE type secrets and REFERENCE types ones\")\n+    }\n+\n+    if (referenceSecrets.nonEmpty) referenceSecrets else valueSecrets\n+  }\n+\n+  private def illegalSecretInput(dest: Seq[String], secrets: Seq[Secret]): Boolean = {\n+    if (dest.nonEmpty) {\n+      // make sure there is a one-to-one correspondence between destinations and secrets\n+      if (dest.length != secrets.length) {\n+        return true\n+      }\n+    }\n+    false\n+  }\n+\n+  def getSecretVolume(conf: SparkConf, secretConfig: MesosSecretConfig): List[Volume] = {\n+    val secrets = getSecrets(conf, secretConfig)\n+    val secretPaths: Seq[String] =\n+      conf.get(secretConfig.SECRET_FILENAMES).getOrElse(Nil)\n+\n+    if (illegalSecretInput(secretPaths, secrets)) {\n+      throw new SparkException(\n+        s\"Need to give equal numbers of secrets and file paths for file-based \" +\n+          s\"reference secrets got secrets $secrets, and paths $secretPaths\")\n+    }\n+\n+    secrets.zip(secretPaths).map {\n+      case (s, p) =>"
+  }],
+  "prId": 19437
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Move to previous line.",
+    "commit": "88dfb42bfd794ab1eea969c3b51970e68e4ca407",
+    "createdAt": "2017-10-24T20:31:02Z",
+    "diffHunk": "@@ -173,6 +178,90 @@ private[mesos] object MesosSchedulerBackendUtil extends Logging {\n     containerInfo\n   }\n \n+  private def getSecrets(conf: SparkConf, secretConfig: MesosSecretConfig): Seq[Secret] = {\n+    def createValueSecret(data: String): Secret = {\n+      Secret.newBuilder()\n+        .setType(Secret.Type.VALUE)\n+        .setValue(Secret.Value.newBuilder().setData(ByteString.copyFrom(data.getBytes)))\n+        .build()\n+    }\n+\n+    def createReferenceSecret(name: String): Secret = {\n+      Secret.newBuilder()\n+        .setReference(Secret.Reference.newBuilder().setName(name))\n+        .setType(Secret.Type.REFERENCE)\n+        .build()\n+    }\n+\n+    val referenceSecrets: Seq[Secret] =\n+      conf.get(secretConfig.SECRET_NAMES).getOrElse(Nil).map(s => createReferenceSecret(s))\n+\n+    val valueSecrets: Seq[Secret] = {\n+      conf.get(secretConfig.SECRET_VALUES).getOrElse(Nil).map(s => createValueSecret(s))\n+    }\n+\n+    if (valueSecrets.nonEmpty && referenceSecrets.nonEmpty) {\n+      throw new SparkException(\"Cannot specify VALUE type secrets and REFERENCE types ones\")\n+    }\n+\n+    if (referenceSecrets.nonEmpty) referenceSecrets else valueSecrets\n+  }\n+\n+  private def illegalSecretInput(dest: Seq[String], secrets: Seq[Secret]): Boolean = {\n+    if (dest.nonEmpty) {\n+      // make sure there is a one-to-one correspondence between destinations and secrets\n+      if (dest.length != secrets.length) {\n+        return true\n+      }\n+    }\n+    false\n+  }\n+\n+  def getSecretVolume(conf: SparkConf, secretConfig: MesosSecretConfig): List[Volume] = {\n+    val secrets = getSecrets(conf, secretConfig)\n+    val secretPaths: Seq[String] =\n+      conf.get(secretConfig.SECRET_FILENAMES).getOrElse(Nil)\n+\n+    if (illegalSecretInput(secretPaths, secrets)) {\n+      throw new SparkException(\n+        s\"Need to give equal numbers of secrets and file paths for file-based \" +\n+          s\"reference secrets got secrets $secrets, and paths $secretPaths\")\n+    }\n+\n+    secrets.zip(secretPaths).map {\n+      case (s, p) =>\n+        val source = Volume.Source.newBuilder()\n+          .setType(Volume.Source.Type.SECRET)\n+          .setSecret(s)\n+        Volume.newBuilder()\n+          .setContainerPath(p)\n+          .setSource(source)\n+          .setMode(Volume.Mode.RO)\n+          .build\n+    }.toList\n+  }\n+\n+  def getSecretEnvVar(conf: SparkConf, secretConfig: MesosSecretConfig):\n+    List[Variable] = {\n+    val secrets = getSecrets(conf, secretConfig)\n+    val secretEnvKeys = conf.get(secretConfig.SECRET_ENVKEYS).getOrElse(Nil)\n+    if (illegalSecretInput(secretEnvKeys, secrets)) {\n+      throw new SparkException(\n+        s\"Need to give equal numbers of secrets and environment keys \" +\n+          s\"for environment-based reference secrets got secrets $secrets, \" +\n+          s\"and keys $secretEnvKeys\")\n+    }\n+\n+    secrets.zip(secretEnvKeys).map {\n+      case (s, k) =>"
+  }, {
+    "author": {
+      "login": "susanxhuynh"
+    },
+    "body": "ok",
+    "commit": "88dfb42bfd794ab1eea969c3b51970e68e4ca407",
+    "createdAt": "2017-10-24T22:43:29Z",
+    "diffHunk": "@@ -173,6 +178,90 @@ private[mesos] object MesosSchedulerBackendUtil extends Logging {\n     containerInfo\n   }\n \n+  private def getSecrets(conf: SparkConf, secretConfig: MesosSecretConfig): Seq[Secret] = {\n+    def createValueSecret(data: String): Secret = {\n+      Secret.newBuilder()\n+        .setType(Secret.Type.VALUE)\n+        .setValue(Secret.Value.newBuilder().setData(ByteString.copyFrom(data.getBytes)))\n+        .build()\n+    }\n+\n+    def createReferenceSecret(name: String): Secret = {\n+      Secret.newBuilder()\n+        .setReference(Secret.Reference.newBuilder().setName(name))\n+        .setType(Secret.Type.REFERENCE)\n+        .build()\n+    }\n+\n+    val referenceSecrets: Seq[Secret] =\n+      conf.get(secretConfig.SECRET_NAMES).getOrElse(Nil).map(s => createReferenceSecret(s))\n+\n+    val valueSecrets: Seq[Secret] = {\n+      conf.get(secretConfig.SECRET_VALUES).getOrElse(Nil).map(s => createValueSecret(s))\n+    }\n+\n+    if (valueSecrets.nonEmpty && referenceSecrets.nonEmpty) {\n+      throw new SparkException(\"Cannot specify VALUE type secrets and REFERENCE types ones\")\n+    }\n+\n+    if (referenceSecrets.nonEmpty) referenceSecrets else valueSecrets\n+  }\n+\n+  private def illegalSecretInput(dest: Seq[String], secrets: Seq[Secret]): Boolean = {\n+    if (dest.nonEmpty) {\n+      // make sure there is a one-to-one correspondence between destinations and secrets\n+      if (dest.length != secrets.length) {\n+        return true\n+      }\n+    }\n+    false\n+  }\n+\n+  def getSecretVolume(conf: SparkConf, secretConfig: MesosSecretConfig): List[Volume] = {\n+    val secrets = getSecrets(conf, secretConfig)\n+    val secretPaths: Seq[String] =\n+      conf.get(secretConfig.SECRET_FILENAMES).getOrElse(Nil)\n+\n+    if (illegalSecretInput(secretPaths, secrets)) {\n+      throw new SparkException(\n+        s\"Need to give equal numbers of secrets and file paths for file-based \" +\n+          s\"reference secrets got secrets $secrets, and paths $secretPaths\")\n+    }\n+\n+    secrets.zip(secretPaths).map {\n+      case (s, p) =>\n+        val source = Volume.Source.newBuilder()\n+          .setType(Volume.Source.Type.SECRET)\n+          .setSecret(s)\n+        Volume.newBuilder()\n+          .setContainerPath(p)\n+          .setSource(source)\n+          .setMode(Volume.Mode.RO)\n+          .build\n+    }.toList\n+  }\n+\n+  def getSecretEnvVar(conf: SparkConf, secretConfig: MesosSecretConfig):\n+    List[Variable] = {\n+    val secrets = getSecrets(conf, secretConfig)\n+    val secretEnvKeys = conf.get(secretConfig.SECRET_ENVKEYS).getOrElse(Nil)\n+    if (illegalSecretInput(secretEnvKeys, secrets)) {\n+      throw new SparkException(\n+        s\"Need to give equal numbers of secrets and environment keys \" +\n+          s\"for environment-based reference secrets got secrets $secrets, \" +\n+          s\"and keys $secretEnvKeys\")\n+    }\n+\n+    secrets.zip(secretEnvKeys).map {\n+      case (s, k) =>"
+  }],
+  "prId": 19437
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "\"Cannot specify both value-type and reference-type secrets.\"",
+    "commit": "88dfb42bfd794ab1eea969c3b51970e68e4ca407",
+    "createdAt": "2017-10-25T21:26:15Z",
+    "diffHunk": "@@ -173,6 +177,88 @@ private[mesos] object MesosSchedulerBackendUtil extends Logging {\n     containerInfo\n   }\n \n+  private def getSecrets(conf: SparkConf, secretConfig: MesosSecretConfig): Seq[Secret] = {\n+    def createValueSecret(data: String): Secret = {\n+      Secret.newBuilder()\n+        .setType(Secret.Type.VALUE)\n+        .setValue(Secret.Value.newBuilder().setData(ByteString.copyFrom(data.getBytes)))\n+        .build()\n+    }\n+\n+    def createReferenceSecret(name: String): Secret = {\n+      Secret.newBuilder()\n+        .setReference(Secret.Reference.newBuilder().setName(name))\n+        .setType(Secret.Type.REFERENCE)\n+        .build()\n+    }\n+\n+    val referenceSecrets: Seq[Secret] =\n+      conf.get(secretConfig.SECRET_NAMES).getOrElse(Nil).map(s => createReferenceSecret(s))\n+\n+    val valueSecrets: Seq[Secret] = {\n+      conf.get(secretConfig.SECRET_VALUES).getOrElse(Nil).map(s => createValueSecret(s))\n+    }\n+\n+    if (valueSecrets.nonEmpty && referenceSecrets.nonEmpty) {\n+      throw new SparkException(\"Cannot specify VALUE type secrets and REFERENCE types ones\")"
+  }, {
+    "author": {
+      "login": "susanxhuynh"
+    },
+    "body": "Fixed.",
+    "commit": "88dfb42bfd794ab1eea969c3b51970e68e4ca407",
+    "createdAt": "2017-10-26T14:46:45Z",
+    "diffHunk": "@@ -173,6 +177,88 @@ private[mesos] object MesosSchedulerBackendUtil extends Logging {\n     containerInfo\n   }\n \n+  private def getSecrets(conf: SparkConf, secretConfig: MesosSecretConfig): Seq[Secret] = {\n+    def createValueSecret(data: String): Secret = {\n+      Secret.newBuilder()\n+        .setType(Secret.Type.VALUE)\n+        .setValue(Secret.Value.newBuilder().setData(ByteString.copyFrom(data.getBytes)))\n+        .build()\n+    }\n+\n+    def createReferenceSecret(name: String): Secret = {\n+      Secret.newBuilder()\n+        .setReference(Secret.Reference.newBuilder().setName(name))\n+        .setType(Secret.Type.REFERENCE)\n+        .build()\n+    }\n+\n+    val referenceSecrets: Seq[Secret] =\n+      conf.get(secretConfig.SECRET_NAMES).getOrElse(Nil).map(s => createReferenceSecret(s))\n+\n+    val valueSecrets: Seq[Secret] = {\n+      conf.get(secretConfig.SECRET_VALUES).getOrElse(Nil).map(s => createValueSecret(s))\n+    }\n+\n+    if (valueSecrets.nonEmpty && referenceSecrets.nonEmpty) {\n+      throw new SparkException(\"Cannot specify VALUE type secrets and REFERENCE types ones\")"
+  }],
+  "prId": 19437
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "nit (also in other places): `.map { s => ... }`",
+    "commit": "88dfb42bfd794ab1eea969c3b51970e68e4ca407",
+    "createdAt": "2017-10-25T21:26:32Z",
+    "diffHunk": "@@ -173,6 +177,88 @@ private[mesos] object MesosSchedulerBackendUtil extends Logging {\n     containerInfo\n   }\n \n+  private def getSecrets(conf: SparkConf, secretConfig: MesosSecretConfig): Seq[Secret] = {\n+    def createValueSecret(data: String): Secret = {\n+      Secret.newBuilder()\n+        .setType(Secret.Type.VALUE)\n+        .setValue(Secret.Value.newBuilder().setData(ByteString.copyFrom(data.getBytes)))\n+        .build()\n+    }\n+\n+    def createReferenceSecret(name: String): Secret = {\n+      Secret.newBuilder()\n+        .setReference(Secret.Reference.newBuilder().setName(name))\n+        .setType(Secret.Type.REFERENCE)\n+        .build()\n+    }\n+\n+    val referenceSecrets: Seq[Secret] =\n+      conf.get(secretConfig.SECRET_NAMES).getOrElse(Nil).map(s => createReferenceSecret(s))"
+  }, {
+    "author": {
+      "login": "susanxhuynh"
+    },
+    "body": "Fixed.",
+    "commit": "88dfb42bfd794ab1eea969c3b51970e68e4ca407",
+    "createdAt": "2017-10-26T14:46:53Z",
+    "diffHunk": "@@ -173,6 +177,88 @@ private[mesos] object MesosSchedulerBackendUtil extends Logging {\n     containerInfo\n   }\n \n+  private def getSecrets(conf: SparkConf, secretConfig: MesosSecretConfig): Seq[Secret] = {\n+    def createValueSecret(data: String): Secret = {\n+      Secret.newBuilder()\n+        .setType(Secret.Type.VALUE)\n+        .setValue(Secret.Value.newBuilder().setData(ByteString.copyFrom(data.getBytes)))\n+        .build()\n+    }\n+\n+    def createReferenceSecret(name: String): Secret = {\n+      Secret.newBuilder()\n+        .setReference(Secret.Reference.newBuilder().setName(name))\n+        .setType(Secret.Type.REFERENCE)\n+        .build()\n+    }\n+\n+    val referenceSecrets: Seq[Secret] =\n+      conf.get(secretConfig.SECRET_NAMES).getOrElse(Nil).map(s => createReferenceSecret(s))"
+  }],
+  "prId": 19437
+}]

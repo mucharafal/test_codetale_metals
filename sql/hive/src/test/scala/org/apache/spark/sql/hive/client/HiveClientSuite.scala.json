@@ -1,0 +1,82 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "Also need to set `HIVE_METASTORE_PARTITION_PRUNING.key` to `true`",
+    "commit": "01e2123a3ddd0cf0c15d5e79c2beafad821a2cf6",
+    "createdAt": "2018-10-05T21:02:20Z",
+    "diffHunk": "@@ -87,6 +90,18 @@ class HiveClientSuite(version: String)\n     assert(filteredPartitions.size == testPartitionCount)\n   }\n \n+  test(s\"getPartitionsByFilter should throw an exception if $partPruningFallbackKey=false\") {\n+    withSQLConf(SQLConf.HIVE_METASTORE_PARTITION_PRUNING_FALLBACK.key -> \"false\") {"
+  }, {
+    "author": {
+      "login": "kmanamcheri"
+    },
+    "body": "Ok will do.",
+    "commit": "01e2123a3ddd0cf0c15d5e79c2beafad821a2cf6",
+    "createdAt": "2018-10-05T21:11:31Z",
+    "diffHunk": "@@ -87,6 +90,18 @@ class HiveClientSuite(version: String)\n     assert(filteredPartitions.size == testPartitionCount)\n   }\n \n+  test(s\"getPartitionsByFilter should throw an exception if $partPruningFallbackKey=false\") {\n+    withSQLConf(SQLConf.HIVE_METASTORE_PARTITION_PRUNING_FALLBACK.key -> \"false\") {"
+  }, {
+    "author": {
+      "login": "kmanamcheri"
+    },
+    "body": "Done.",
+    "commit": "01e2123a3ddd0cf0c15d5e79c2beafad821a2cf6",
+    "createdAt": "2018-10-05T21:56:13Z",
+    "diffHunk": "@@ -87,6 +90,18 @@ class HiveClientSuite(version: String)\n     assert(filteredPartitions.size == testPartitionCount)\n   }\n \n+  test(s\"getPartitionsByFilter should throw an exception if $partPruningFallbackKey=false\") {\n+    withSQLConf(SQLConf.HIVE_METASTORE_PARTITION_PRUNING_FALLBACK.key -> \"false\") {"
+  }],
+  "prId": 22614
+}, {
+  "comments": [{
+    "author": {
+      "login": "mallman"
+    },
+    "body": "Change test name to\r\n\r\n```\r\ns\"getPartitionsByFilter returns all partitions when $tryDirectSqlKey=false and $partPruningFallbackKey=true\"\r\n```\r\n\r\n?",
+    "commit": "01e2123a3ddd0cf0c15d5e79c2beafad821a2cf6",
+    "createdAt": "2018-10-08T16:25:23Z",
+    "diffHunk": "@@ -79,12 +82,30 @@ class HiveClientSuite(version: String)\n     client = init(true)\n   }\n \n-  test(s\"getPartitionsByFilter returns all partitions when $tryDirectSqlKey=false\") {\n-    val client = init(false)\n-    val filteredPartitions = client.getPartitionsByFilter(client.getTable(\"default\", \"test\"),\n-      Seq(attr(\"ds\") === 20170101))\n+  test(s\"getPartitionsByFilter returns all partitions when $partPruningFallbackKey=true\") {"
+  }],
+  "prId": 22614
+}, {
+  "comments": [{
+    "author": {
+      "login": "mallman"
+    },
+    "body": "Change test name to\r\n\r\n```\r\ns\"getPartitionsByFilter should throw an exception when $tryDirectSqlKey=false and $partPruningFallbackKey=false\"\r\n```\r\n\r\n?",
+    "commit": "01e2123a3ddd0cf0c15d5e79c2beafad821a2cf6",
+    "createdAt": "2018-10-08T16:26:41Z",
+    "diffHunk": "@@ -79,12 +82,30 @@ class HiveClientSuite(version: String)\n     client = init(true)\n   }\n \n-  test(s\"getPartitionsByFilter returns all partitions when $tryDirectSqlKey=false\") {\n-    val client = init(false)\n-    val filteredPartitions = client.getPartitionsByFilter(client.getTable(\"default\", \"test\"),\n-      Seq(attr(\"ds\") === 20170101))\n+  test(s\"getPartitionsByFilter returns all partitions when $partPruningFallbackKey=true\") {\n+    withSQLConf(SQLConf.HIVE_METASTORE_PARTITION_PRUNING_FALLBACK_ENABLED.key -> \"true\",\n+        SQLConf.HIVE_METASTORE_PARTITION_PRUNING.key -> \"true\") {\n+      val client = init(false)\n+      // tryDirectSql = false and a non-string partition filter will always fail. This condition\n+      // is used to test if the fallback works\n+      val filteredPartitions = client.getPartitionsByFilter(client.getTable(\"default\", \"test\"),\n+        Seq(attr(\"ds\") === 20170101))\n \n-    assert(filteredPartitions.size == testPartitionCount)\n+      assert(filteredPartitions.size == testPartitionCount)\n+    }\n+  }\n+\n+  test(s\"getPartitionsByFilter should throw an exception if $partPruningFallbackKey=false\") {"
+  }, {
+    "author": {
+      "login": "kmanamcheri"
+    },
+    "body": "Hmm.. The behavior does not depend on the value of tryDirectSqlKey though. It solely only depends on if pruning is enabled and if pruning.fallback is enabled. \r\n\r\nThe reason we set tryDirectSqlKey to false is to generate a consistent way for pruning to fail. Only setting tryDirectSql to false does not throw an exception.",
+    "commit": "01e2123a3ddd0cf0c15d5e79c2beafad821a2cf6",
+    "createdAt": "2018-10-08T16:40:51Z",
+    "diffHunk": "@@ -79,12 +82,30 @@ class HiveClientSuite(version: String)\n     client = init(true)\n   }\n \n-  test(s\"getPartitionsByFilter returns all partitions when $tryDirectSqlKey=false\") {\n-    val client = init(false)\n-    val filteredPartitions = client.getPartitionsByFilter(client.getTable(\"default\", \"test\"),\n-      Seq(attr(\"ds\") === 20170101))\n+  test(s\"getPartitionsByFilter returns all partitions when $partPruningFallbackKey=true\") {\n+    withSQLConf(SQLConf.HIVE_METASTORE_PARTITION_PRUNING_FALLBACK_ENABLED.key -> \"true\",\n+        SQLConf.HIVE_METASTORE_PARTITION_PRUNING.key -> \"true\") {\n+      val client = init(false)\n+      // tryDirectSql = false and a non-string partition filter will always fail. This condition\n+      // is used to test if the fallback works\n+      val filteredPartitions = client.getPartitionsByFilter(client.getTable(\"default\", \"test\"),\n+        Seq(attr(\"ds\") === 20170101))\n \n-    assert(filteredPartitions.size == testPartitionCount)\n+      assert(filteredPartitions.size == testPartitionCount)\n+    }\n+  }\n+\n+  test(s\"getPartitionsByFilter should throw an exception if $partPruningFallbackKey=false\") {"
+  }, {
+    "author": {
+      "login": "mallman"
+    },
+    "body": "The test name states that `getPartitionsByFilter` should throw an exception if partition pruning fallback is disabled. But that's not right. I think we need an accurate name for this and the previous test. Perhaps it should include a mention that the underlying call to the metastore throws an exception. How about\r\n\r\n```\r\ns\"getPartitionsByFilter should throw an exception if the underlying call to the\r\nmetastore throws an exception and $partPruningFallbackKey=false\"\r\n```\r\n\r\n?",
+    "commit": "01e2123a3ddd0cf0c15d5e79c2beafad821a2cf6",
+    "createdAt": "2018-10-08T17:28:14Z",
+    "diffHunk": "@@ -79,12 +82,30 @@ class HiveClientSuite(version: String)\n     client = init(true)\n   }\n \n-  test(s\"getPartitionsByFilter returns all partitions when $tryDirectSqlKey=false\") {\n-    val client = init(false)\n-    val filteredPartitions = client.getPartitionsByFilter(client.getTable(\"default\", \"test\"),\n-      Seq(attr(\"ds\") === 20170101))\n+  test(s\"getPartitionsByFilter returns all partitions when $partPruningFallbackKey=true\") {\n+    withSQLConf(SQLConf.HIVE_METASTORE_PARTITION_PRUNING_FALLBACK_ENABLED.key -> \"true\",\n+        SQLConf.HIVE_METASTORE_PARTITION_PRUNING.key -> \"true\") {\n+      val client = init(false)\n+      // tryDirectSql = false and a non-string partition filter will always fail. This condition\n+      // is used to test if the fallback works\n+      val filteredPartitions = client.getPartitionsByFilter(client.getTable(\"default\", \"test\"),\n+        Seq(attr(\"ds\") === 20170101))\n \n-    assert(filteredPartitions.size == testPartitionCount)\n+      assert(filteredPartitions.size == testPartitionCount)\n+    }\n+  }\n+\n+  test(s\"getPartitionsByFilter should throw an exception if $partPruningFallbackKey=false\") {"
+  }, {
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Shorter: \"getPartitionsByFilter fails if metastore call fails and $partPruningFallbackKey=false\"",
+    "commit": "01e2123a3ddd0cf0c15d5e79c2beafad821a2cf6",
+    "createdAt": "2018-10-08T18:43:27Z",
+    "diffHunk": "@@ -79,12 +82,30 @@ class HiveClientSuite(version: String)\n     client = init(true)\n   }\n \n-  test(s\"getPartitionsByFilter returns all partitions when $tryDirectSqlKey=false\") {\n-    val client = init(false)\n-    val filteredPartitions = client.getPartitionsByFilter(client.getTable(\"default\", \"test\"),\n-      Seq(attr(\"ds\") === 20170101))\n+  test(s\"getPartitionsByFilter returns all partitions when $partPruningFallbackKey=true\") {\n+    withSQLConf(SQLConf.HIVE_METASTORE_PARTITION_PRUNING_FALLBACK_ENABLED.key -> \"true\",\n+        SQLConf.HIVE_METASTORE_PARTITION_PRUNING.key -> \"true\") {\n+      val client = init(false)\n+      // tryDirectSql = false and a non-string partition filter will always fail. This condition\n+      // is used to test if the fallback works\n+      val filteredPartitions = client.getPartitionsByFilter(client.getTable(\"default\", \"test\"),\n+        Seq(attr(\"ds\") === 20170101))\n \n-    assert(filteredPartitions.size == testPartitionCount)\n+      assert(filteredPartitions.size == testPartitionCount)\n+    }\n+  }\n+\n+  test(s\"getPartitionsByFilter should throw an exception if $partPruningFallbackKey=false\") {"
+  }, {
+    "author": {
+      "login": "kmanamcheri"
+    },
+    "body": "Ok I changed the test description to be more accurate of what we are testing.",
+    "commit": "01e2123a3ddd0cf0c15d5e79c2beafad821a2cf6",
+    "createdAt": "2018-10-08T19:10:49Z",
+    "diffHunk": "@@ -79,12 +82,30 @@ class HiveClientSuite(version: String)\n     client = init(true)\n   }\n \n-  test(s\"getPartitionsByFilter returns all partitions when $tryDirectSqlKey=false\") {\n-    val client = init(false)\n-    val filteredPartitions = client.getPartitionsByFilter(client.getTable(\"default\", \"test\"),\n-      Seq(attr(\"ds\") === 20170101))\n+  test(s\"getPartitionsByFilter returns all partitions when $partPruningFallbackKey=true\") {\n+    withSQLConf(SQLConf.HIVE_METASTORE_PARTITION_PRUNING_FALLBACK_ENABLED.key -> \"true\",\n+        SQLConf.HIVE_METASTORE_PARTITION_PRUNING.key -> \"true\") {\n+      val client = init(false)\n+      // tryDirectSql = false and a non-string partition filter will always fail. This condition\n+      // is used to test if the fallback works\n+      val filteredPartitions = client.getPartitionsByFilter(client.getTable(\"default\", \"test\"),\n+        Seq(attr(\"ds\") === 20170101))\n \n-    assert(filteredPartitions.size == testPartitionCount)\n+      assert(filteredPartitions.size == testPartitionCount)\n+    }\n+  }\n+\n+  test(s\"getPartitionsByFilter should throw an exception if $partPruningFallbackKey=false\") {"
+  }],
+  "prId": 22614
+}]

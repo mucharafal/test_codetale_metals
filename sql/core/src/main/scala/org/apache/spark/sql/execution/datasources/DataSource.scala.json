@@ -1,0 +1,89 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "I do not know whether returning null is ok here. This is based on a [similar early-exit solution](https://github.com/gatorsmile/spark/blob/5d38f09f47a767a342a0a8219c63efa2943b5d1f/sql/core/src/main/scala/org/apache/spark/sql/execution/datasources/DataSource.scala#L178) used in `getOrInferFileFormatSchema`. ",
+    "commit": "111025f1d39b55db08896c35f46149dcacf9b3b3",
+    "createdAt": "2017-01-06T00:10:17Z",
+    "diffHunk": "@@ -494,8 +500,13 @@ case class DataSource(\n             catalogTable = catalogTable,\n             fileIndex = fileIndex)\n         sparkSession.sessionState.executePlan(plan).toRdd\n-        // Replace the schema with that of the DataFrame we just wrote out to avoid re-inferring it.\n-        copy(userSpecifiedSchema = Some(data.schema.asNullable)).resolveRelation()\n+        if (isForWriteOnly) {\n+          // Exit earlier and return null\n+          null"
+  }, {
+    "author": {
+      "login": "ericl"
+    },
+    "body": "Maybe we can change it to return an option?",
+    "commit": "111025f1d39b55db08896c35f46149dcacf9b3b3",
+    "createdAt": "2017-01-06T01:19:52Z",
+    "diffHunk": "@@ -494,8 +500,13 @@ case class DataSource(\n             catalogTable = catalogTable,\n             fileIndex = fileIndex)\n         sparkSession.sessionState.executePlan(plan).toRdd\n-        // Replace the schema with that of the DataFrame we just wrote out to avoid re-inferring it.\n-        copy(userSpecifiedSchema = Some(data.schema.asNullable)).resolveRelation()\n+        if (isForWriteOnly) {\n+          // Exit earlier and return null\n+          null"
+  }],
+  "prId": 16481
+}, {
+  "comments": [{
+    "author": {
+      "login": "jaceklaskowski"
+    },
+    "body": "I'd remove \"and return null\"",
+    "commit": "111025f1d39b55db08896c35f46149dcacf9b3b3",
+    "createdAt": "2017-01-07T20:51:57Z",
+    "diffHunk": "@@ -494,8 +500,13 @@ case class DataSource(\n             catalogTable = catalogTable,\n             fileIndex = fileIndex)\n         sparkSession.sessionState.executePlan(plan).toRdd\n-        // Replace the schema with that of the DataFrame we just wrote out to avoid re-inferring it.\n-        copy(userSpecifiedSchema = Some(data.schema.asNullable)).resolveRelation()\n+        if (isForWriteOnly) {\n+          // Exit earlier and return null"
+  }, {
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "Sure",
+    "commit": "111025f1d39b55db08896c35f46149dcacf9b3b3",
+    "createdAt": "2017-01-08T02:44:32Z",
+    "diffHunk": "@@ -494,8 +500,13 @@ case class DataSource(\n             catalogTable = catalogTable,\n             fileIndex = fileIndex)\n         sparkSession.sessionState.executePlan(plan).toRdd\n-        // Replace the schema with that of the DataFrame we just wrote out to avoid re-inferring it.\n-        copy(userSpecifiedSchema = Some(data.schema.asNullable)).resolveRelation()\n+        if (isForWriteOnly) {\n+          // Exit earlier and return null"
+  }],
+  "prId": 16481
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "it would be really weird if `CreatableRelationProvider.createRelation` can return a relation with different schema from the written `data`. Is it safe to assume the schema won't change? cc @marmbrus @yhuai @liancheng ",
+    "commit": "111025f1d39b55db08896c35f46149dcacf9b3b3",
+    "createdAt": "2017-01-10T04:42:56Z",
+    "diffHunk": "@@ -413,17 +413,22 @@ case class DataSource(\n     relation\n   }\n \n-  /** Writes the given [[DataFrame]] out to this [[DataSource]]. */\n+  /**\n+   * Writes the given [[DataFrame]] out to this [[DataSource]].\n+   *\n+   * @param isForWriteOnly Whether to just write the data without returning a [[BaseRelation]].\n+   */\n   def write(\n       mode: SaveMode,\n-      data: DataFrame): BaseRelation = {\n+      data: DataFrame,\n+      isForWriteOnly: Boolean = false): Option[BaseRelation] = {\n     if (data.schema.map(_.dataType).exists(_.isInstanceOf[CalendarIntervalType])) {\n       throw new AnalysisException(\"Cannot save interval data type into external storage.\")\n     }\n \n     providingClass.newInstance() match {\n       case dataSource: CreatableRelationProvider =>\n-        dataSource.createRelation(sparkSession.sqlContext, mode, caseInsensitiveOptions, data)\n+        Some(dataSource.createRelation(sparkSession.sqlContext, mode, caseInsensitiveOptions, data))"
+  }, {
+    "author": {
+      "login": "cenyuhai"
+    },
+    "body": "maybe we can set a parameter here, let user to choose true or false, default is not refresh schema",
+    "commit": "111025f1d39b55db08896c35f46149dcacf9b3b3",
+    "createdAt": "2017-01-11T09:21:13Z",
+    "diffHunk": "@@ -413,17 +413,22 @@ case class DataSource(\n     relation\n   }\n \n-  /** Writes the given [[DataFrame]] out to this [[DataSource]]. */\n+  /**\n+   * Writes the given [[DataFrame]] out to this [[DataSource]].\n+   *\n+   * @param isForWriteOnly Whether to just write the data without returning a [[BaseRelation]].\n+   */\n   def write(\n       mode: SaveMode,\n-      data: DataFrame): BaseRelation = {\n+      data: DataFrame,\n+      isForWriteOnly: Boolean = false): Option[BaseRelation] = {\n     if (data.schema.map(_.dataType).exists(_.isInstanceOf[CalendarIntervalType])) {\n       throw new AnalysisException(\"Cannot save interval data type into external storage.\")\n     }\n \n     providingClass.newInstance() match {\n       case dataSource: CreatableRelationProvider =>\n-        dataSource.createRelation(sparkSession.sqlContext, mode, caseInsensitiveOptions, data)\n+        Some(dataSource.createRelation(sparkSession.sqlContext, mode, caseInsensitiveOptions, data))"
+  }],
+  "prId": 16481
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "let's create a new `write` method that returns `Unit`, and rename this `write` to `writeAndRead`, which should be removed eventually.",
+    "commit": "111025f1d39b55db08896c35f46149dcacf9b3b3",
+    "createdAt": "2017-01-12T02:33:45Z",
+    "diffHunk": "@@ -413,17 +413,22 @@ case class DataSource(\n     relation\n   }\n \n-  /** Writes the given [[DataFrame]] out to this [[DataSource]]. */\n+  /**\n+   * Writes the given [[DataFrame]] out to this [[DataSource]].\n+   *\n+   * @param isForWriteOnly Whether to just write the data without returning a [[BaseRelation]].\n+   */\n   def write("
+  }, {
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "Sure. Will do it.",
+    "commit": "111025f1d39b55db08896c35f46149dcacf9b3b3",
+    "createdAt": "2017-01-12T04:39:11Z",
+    "diffHunk": "@@ -413,17 +413,22 @@ case class DataSource(\n     relation\n   }\n \n-  /** Writes the given [[DataFrame]] out to this [[DataSource]]. */\n+  /**\n+   * Writes the given [[DataFrame]] out to this [[DataSource]].\n+   *\n+   * @param isForWriteOnly Whether to just write the data without returning a [[BaseRelation]].\n+   */\n   def write("
+  }],
+  "prId": 16481
+}, {
+  "comments": [{
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "To the reviewers, the code in `writeInFileFormat` is copied from the case `FileFormat` of the original `write` function. ",
+    "commit": "111025f1d39b55db08896c35f46149dcacf9b3b3",
+    "createdAt": "2017-01-12T22:59:35Z",
+    "diffHunk": "@@ -413,10 +413,85 @@ case class DataSource(\n     relation\n   }\n \n-  /** Writes the given [[DataFrame]] out to this [[DataSource]]. */\n-  def write(\n-      mode: SaveMode,\n-      data: DataFrame): BaseRelation = {\n+  /**\n+   * Writes the given [[DataFrame]] out in this [[FileFormat]].\n+   */\n+  private def writeInFileFormat(format: FileFormat, mode: SaveMode, data: DataFrame): Unit = {\n+    // Don't glob path for the write path.  The contracts here are:\n+    //  1. Only one output path can be specified on the write path;\n+    //  2. Output path must be a legal HDFS style file system path;\n+    //  3. It's OK that the output path doesn't exist yet;\n+    val allPaths = paths ++ caseInsensitiveOptions.get(\"path\")\n+    val outputPath = if (allPaths.length == 1) {\n+      val path = new Path(allPaths.head)\n+      val fs = path.getFileSystem(sparkSession.sessionState.newHadoopConf())\n+      path.makeQualified(fs.getUri, fs.getWorkingDirectory)\n+    } else {\n+      throw new IllegalArgumentException(\"Expected exactly one path to be specified, but \" +\n+        s\"got: ${allPaths.mkString(\", \")}\")\n+    }\n+\n+    val caseSensitive = sparkSession.sessionState.conf.caseSensitiveAnalysis\n+    PartitioningUtils.validatePartitionColumn(data.schema, partitionColumns, caseSensitive)\n+\n+    // If we are appending to a table that already exists, make sure the partitioning matches\n+    // up.  If we fail to load the table for whatever reason, ignore the check.\n+    if (mode == SaveMode.Append) {\n+      val existingPartitionColumns = Try {\n+        getOrInferFileFormatSchema(format, justPartitioning = true)._2.fieldNames.toList\n+      }.getOrElse(Seq.empty[String])\n+      // TODO: Case sensitivity.\n+      val sameColumns =\n+        existingPartitionColumns.map(_.toLowerCase()) == partitionColumns.map(_.toLowerCase())\n+      if (existingPartitionColumns.nonEmpty && !sameColumns) {\n+        throw new AnalysisException(\n+          s\"\"\"Requested partitioning does not match existing partitioning.\n+             |Existing partitioning columns:\n+             |  ${existingPartitionColumns.mkString(\", \")}\n+             |Requested partitioning columns:\n+             |  ${partitionColumns.mkString(\", \")}\n+             |\"\"\".stripMargin)\n+      }\n+    }\n+\n+    // SPARK-17230: Resolve the partition columns so InsertIntoHadoopFsRelationCommand does\n+    // not need to have the query as child, to avoid to analyze an optimized query,\n+    // because InsertIntoHadoopFsRelationCommand will be optimized first.\n+    val partitionAttributes = partitionColumns.map { name =>\n+      val plan = data.logicalPlan\n+      plan.resolve(name :: Nil, data.sparkSession.sessionState.analyzer.resolver).getOrElse {\n+        throw new AnalysisException(\n+          s\"Unable to resolve $name given [${plan.output.map(_.name).mkString(\", \")}]\")\n+      }.asInstanceOf[Attribute]\n+    }\n+    val fileIndex = catalogTable.map(_.identifier).map { tableIdent =>\n+      sparkSession.table(tableIdent).queryExecution.analyzed.collect {\n+        case LogicalRelation(t: HadoopFsRelation, _, _) => t.location\n+      }.head\n+    }\n+    // For partitioned relation r, r.schema's column ordering can be different from the column\n+    // ordering of data.logicalPlan (partition columns are all moved after data column).  This\n+    // will be adjusted within InsertIntoHadoopFsRelation.\n+    val plan =\n+      InsertIntoHadoopFsRelationCommand(\n+        outputPath = outputPath,\n+        staticPartitions = Map.empty,\n+        partitionColumns = partitionAttributes,\n+        bucketSpec = bucketSpec,\n+        fileFormat = format,\n+        options = options,\n+        query = data.logicalPlan,\n+        mode = mode,\n+        catalogTable = catalogTable,\n+        fileIndex = fileIndex)\n+      sparkSession.sessionState.executePlan(plan).toRdd",
+    "line": 79
+  }],
+  "prId": 16481
+}]

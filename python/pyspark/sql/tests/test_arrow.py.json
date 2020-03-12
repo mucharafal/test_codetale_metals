@@ -1,0 +1,77 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "BryanCutler"
+    },
+    "body": "This import is already at the top",
+    "commit": "bda31b5811c9ac2eff27bfcec548ad2b3b0d2f3a",
+    "createdAt": "2019-06-12T17:44:21Z",
+    "diffHunk": "@@ -383,6 +383,19 @@ def test_timestamp_dst(self):\n         assert_frame_equal(pdf, df_from_python.toPandas())\n         assert_frame_equal(pdf, df_from_pandas.toPandas())\n \n+    def test_timestamp_nat(self):\n+        import pandas as pd"
+  }],
+  "prId": 24844
+}, {
+  "comments": [{
+    "author": {
+      "login": "BryanCutler"
+    },
+    "body": "I think you can just combine these to 1 DataFrame, but I think it would be good to also check against toPandas without Arrow",
+    "commit": "bda31b5811c9ac2eff27bfcec548ad2b3b0d2f3a",
+    "createdAt": "2019-06-12T17:45:10Z",
+    "diffHunk": "@@ -383,6 +383,19 @@ def test_timestamp_dst(self):\n         assert_frame_equal(pdf, df_from_python.toPandas())\n         assert_frame_equal(pdf, df_from_pandas.toPandas())\n \n+    def test_timestamp_nat(self):\n+        import pandas as pd\n+        dt1 = [pd.NaT, pd.Timestamp('2019-06-11')] * 100\n+        dt2 = [None, pd.Timestamp('2019-06-11')] * 100\n+        pdf1 = pd.DataFrame({'time': dt1})\n+        pdf2 = pd.DataFrame({'time': dt2})\n+\n+        df1 = self.spark.createDataFrame(pdf1)\n+        df2 = self.spark.createDataFrame(pdf2)"
+  }, {
+    "author": {
+      "login": "icexelloss"
+    },
+    "body": "Combined",
+    "commit": "bda31b5811c9ac2eff27bfcec548ad2b3b0d2f3a",
+    "createdAt": "2019-06-12T22:33:25Z",
+    "diffHunk": "@@ -383,6 +383,19 @@ def test_timestamp_dst(self):\n         assert_frame_equal(pdf, df_from_python.toPandas())\n         assert_frame_equal(pdf, df_from_pandas.toPandas())\n \n+    def test_timestamp_nat(self):\n+        import pandas as pd\n+        dt1 = [pd.NaT, pd.Timestamp('2019-06-11')] * 100\n+        dt2 = [None, pd.Timestamp('2019-06-11')] * 100\n+        pdf1 = pd.DataFrame({'time': dt1})\n+        pdf2 = pd.DataFrame({'time': dt2})\n+\n+        df1 = self.spark.createDataFrame(pdf1)\n+        df2 = self.spark.createDataFrame(pdf2)"
+  }, {
+    "author": {
+      "login": "icexelloss"
+    },
+    "body": "Also checked non-arrow codepath",
+    "commit": "bda31b5811c9ac2eff27bfcec548ad2b3b0d2f3a",
+    "createdAt": "2019-06-12T22:33:37Z",
+    "diffHunk": "@@ -383,6 +383,19 @@ def test_timestamp_dst(self):\n         assert_frame_equal(pdf, df_from_python.toPandas())\n         assert_frame_equal(pdf, df_from_pandas.toPandas())\n \n+    def test_timestamp_nat(self):\n+        import pandas as pd\n+        dt1 = [pd.NaT, pd.Timestamp('2019-06-11')] * 100\n+        dt2 = [None, pd.Timestamp('2019-06-11')] * 100\n+        pdf1 = pd.DataFrame({'time': dt1})\n+        pdf2 = pd.DataFrame({'time': dt2})\n+\n+        df1 = self.spark.createDataFrame(pdf1)\n+        df2 = self.spark.createDataFrame(pdf2)"
+  }],
+  "prId": 24844
+}, {
+  "comments": [{
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "not a big deal but I think we can do this with a for loop.",
+    "commit": "bda31b5811c9ac2eff27bfcec548ad2b3b0d2f3a",
+    "createdAt": "2019-06-13T07:10:28Z",
+    "diffHunk": "@@ -383,6 +383,18 @@ def test_timestamp_dst(self):\n         assert_frame_equal(pdf, df_from_python.toPandas())\n         assert_frame_equal(pdf, df_from_pandas.toPandas())\n \n+    def test_timestamp_nat(self):\n+        dt = [pd.NaT, pd.Timestamp('2019-06-11'), None] * 100\n+        pdf = pd.DataFrame({'time': dt})\n+\n+        with self.sql_conf({'spark.sql.execution.arrow.pyspark.enabled': \"false\"}):"
+  }, {
+    "author": {
+      "login": "icexelloss"
+    },
+    "body": "Good point refactored to forloop",
+    "commit": "bda31b5811c9ac2eff27bfcec548ad2b3b0d2f3a",
+    "createdAt": "2019-06-13T15:46:24Z",
+    "diffHunk": "@@ -383,6 +383,18 @@ def test_timestamp_dst(self):\n         assert_frame_equal(pdf, df_from_python.toPandas())\n         assert_frame_equal(pdf, df_from_pandas.toPandas())\n \n+    def test_timestamp_nat(self):\n+        dt = [pd.NaT, pd.Timestamp('2019-06-11'), None] * 100\n+        pdf = pd.DataFrame({'time': dt})\n+\n+        with self.sql_conf({'spark.sql.execution.arrow.pyspark.enabled': \"false\"}):"
+  }],
+  "prId": 24844
+}, {
+  "comments": [{
+    "author": {
+      "login": "BryanCutler"
+    },
+    "body": "you can just use `_toPandas_arrow_toggle` which returns 2 DataFrames with and without arrow",
+    "commit": "bda31b5811c9ac2eff27bfcec548ad2b3b0d2f3a",
+    "createdAt": "2019-06-13T17:24:05Z",
+    "diffHunk": "@@ -383,6 +383,16 @@ def test_timestamp_dst(self):\n         assert_frame_equal(pdf, df_from_python.toPandas())\n         assert_frame_equal(pdf, df_from_pandas.toPandas())\n \n+    # Regression test for SPARK-28003\n+    def test_timestamp_nat(self):\n+        dt = [pd.NaT, pd.Timestamp('2019-06-11'), None] * 100\n+        pdf = pd.DataFrame({'time': dt})\n+\n+        for arrow_enabled in [False, True]:"
+  }, {
+    "author": {
+      "login": "icexelloss"
+    },
+    "body": "Ah thanks for the tip! (I ended up using _createDataFrame_toggle because that's the path I want to test)",
+    "commit": "bda31b5811c9ac2eff27bfcec548ad2b3b0d2f3a",
+    "createdAt": "2019-06-13T18:31:53Z",
+    "diffHunk": "@@ -383,6 +383,16 @@ def test_timestamp_dst(self):\n         assert_frame_equal(pdf, df_from_python.toPandas())\n         assert_frame_equal(pdf, df_from_pandas.toPandas())\n \n+    # Regression test for SPARK-28003\n+    def test_timestamp_nat(self):\n+        dt = [pd.NaT, pd.Timestamp('2019-06-11'), None] * 100\n+        pdf = pd.DataFrame({'time': dt})\n+\n+        for arrow_enabled in [False, True]:"
+  }],
+  "prId": 24844
+}]

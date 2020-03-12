@@ -1,0 +1,45 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "yanboliang"
+    },
+    "body": "Please construct ```OffsetInstance``` with offset = 0.0 directly, it will make code more easy to understand.",
+    "commit": "db0ac937b9df678f7f58b26bab1afa43d77eb5a1",
+    "createdAt": "2017-06-27T12:31:44Z",
+    "diffHunk": "@@ -43,7 +43,7 @@ class IterativelyReweightedLeastSquaresSuite extends SparkFunSuite with MLlibTes\n       Instance(0.0, 2.0, Vectors.dense(1.0, 2.0)),\n       Instance(1.0, 3.0, Vectors.dense(2.0, 1.0)),\n       Instance(0.0, 4.0, Vectors.dense(3.0, 3.0))\n-    ), 2)\n+    ), 2).map(new OffsetInstance(_))"
+  }],
+  "prId": 16699
+}, {
+  "comments": [{
+    "author": {
+      "login": "yanboliang"
+    },
+    "body": "See my above comment about adding interface ```fit(instances: RDD[OffsetInstance])```.",
+    "commit": "db0ac937b9df678f7f58b26bab1afa43d77eb5a1",
+    "createdAt": "2017-06-27T12:47:00Z",
+    "diffHunk": "@@ -156,7 +156,7 @@ class IterativelyReweightedLeastSquaresSuite extends SparkFunSuite with MLlibTes\n     var idx = 0\n     for (fitIntercept <- Seq(false, true)) {\n       val initial = new WeightedLeastSquares(fitIntercept, regParam = 0.0, elasticNetParam = 0.0,\n-        standardizeFeatures = false, standardizeLabel = false).fit(instances2)\n+        standardizeFeatures = false, standardizeLabel = false).fit(instances2.map(_.toInstance))",
+    "line": 55
+  }],
+  "prId": 16699
+}, {
+  "comments": [{
+    "author": {
+      "login": "yanboliang"
+    },
+    "body": "Why ```- instance.offset```? I suspect it's wrong, the test doesn't fail because it's zero.",
+    "commit": "db0ac937b9df678f7f58b26bab1afa43d77eb5a1",
+    "createdAt": "2017-06-27T13:01:35Z",
+    "diffHunk": "@@ -169,29 +169,29 @@ class IterativelyReweightedLeastSquaresSuite extends SparkFunSuite with MLlibTes\n object IterativelyReweightedLeastSquaresSuite {\n \n   def BinomialReweightFunc(\n-      instance: Instance,\n+      instance: OffsetInstance,\n       model: WeightedLeastSquaresModel): (Double, Double) = {\n-    val eta = model.predict(instance.features)\n+    val eta = model.predict(instance.features) + instance.offset\n     val mu = 1.0 / (1.0 + math.exp(-1.0 * eta))\n-    val z = eta + (instance.label - mu) / (mu * (1.0 - mu))\n+    val z = eta - instance.offset + (instance.label - mu) / (mu * (1.0 - mu))",
+    "line": 70
+  }, {
+    "author": {
+      "login": "actuaryzhang"
+    },
+    "body": "Indeed this is the correct implementation: in the IRWLS, we only include offset when computing `mu` and use `Xb` (without offset) when updating the working label. To see this clearly, one would have to derive the IRWLS. But for a quick reference, below is R's implementation:\r\n\r\n```\r\neta <- drop(x %*% start)\r\nmu <- linkinv(eta <- eta + offset)\r\nz <- (eta - offset)[good] + (y - mu)[good]/mu.eta.val[good]\r\nw <- sqrt((weights[good] * mu.eta.val[good]^2)/variance(mu)[good])\r\nfit <- .Call(C_Cdqrls, x[good, , drop = FALSE] * \r\n              w, z * w, min(1e-07, control$epsilon/1000), check = FALSE)\r\n```",
+    "commit": "db0ac937b9df678f7f58b26bab1afa43d77eb5a1",
+    "createdAt": "2017-06-27T21:34:16Z",
+    "diffHunk": "@@ -169,29 +169,29 @@ class IterativelyReweightedLeastSquaresSuite extends SparkFunSuite with MLlibTes\n object IterativelyReweightedLeastSquaresSuite {\n \n   def BinomialReweightFunc(\n-      instance: Instance,\n+      instance: OffsetInstance,\n       model: WeightedLeastSquaresModel): (Double, Double) = {\n-    val eta = model.predict(instance.features)\n+    val eta = model.predict(instance.features) + instance.offset\n     val mu = 1.0 / (1.0 + math.exp(-1.0 * eta))\n-    val z = eta + (instance.label - mu) / (mu * (1.0 - mu))\n+    val z = eta - instance.offset + (instance.label - mu) / (mu * (1.0 - mu))",
+    "line": 70
+  }],
+  "prId": 16699
+}]

@@ -1,0 +1,106 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "@haoyuan In addition to improper use of `read()`, I think this method could have potentially returned `Some(null)` when `is == null` (which should never happen, but still...).\n\nCan you verify that these changes are correct?\n",
+    "commit": "e724a9f118e98c056592424ac3bc27a330a4fed7",
+    "createdAt": "2014-10-28T03:04:49Z",
+    "diffHunk": "@@ -105,25 +106,17 @@ private[spark] class TachyonStore(\n       return None\n     }\n     val is = file.getInStream(ReadType.CACHE)\n-    var buffer: ByteBuffer = null\n+    assert (is != null)\n     try {\n-      if (is != null) {",
+    "line": 15
+  }, {
+    "author": {
+      "login": "aarondav"
+    },
+    "body": "I checked the source code for all releases back until 0.4.0 (which is the first one Spark supports), and it's true that `is` cannot be null.\n",
+    "commit": "e724a9f118e98c056592424ac3bc27a330a4fed7",
+    "createdAt": "2014-10-28T03:32:38Z",
+    "diffHunk": "@@ -105,25 +106,17 @@ private[spark] class TachyonStore(\n       return None\n     }\n     val is = file.getInStream(ReadType.CACHE)\n-    var buffer: ByteBuffer = null\n+    assert (is != null)\n     try {\n-      if (is != null) {",
+    "line": 15
+  }, {
+    "author": {
+      "login": "haoyuan"
+    },
+    "body": "@RongGu \n",
+    "commit": "e724a9f118e98c056592424ac3bc27a330a4fed7",
+    "createdAt": "2014-10-28T03:59:13Z",
+    "diffHunk": "@@ -105,25 +106,17 @@ private[spark] class TachyonStore(\n       return None\n     }\n     val is = file.getInStream(ReadType.CACHE)\n-    var buffer: ByteBuffer = null\n+    assert (is != null)\n     try {\n-      if (is != null) {",
+    "line": 15
+  }],
+  "prId": 2969
+}, {
+  "comments": [{
+    "author": {
+      "login": "rxin"
+    },
+    "body": "u probably want to catch other exception / errors, e.g. in this case i'd also try to catch out of memory\n",
+    "commit": "e724a9f118e98c056592424ac3bc27a330a4fed7",
+    "createdAt": "2014-10-28T05:54:58Z",
+    "diffHunk": "@@ -105,25 +106,17 @@ private[spark] class TachyonStore(\n       return None\n     }\n     val is = file.getInStream(ReadType.CACHE)\n-    var buffer: ByteBuffer = null\n+    assert (is != null)\n     try {\n-      if (is != null) {\n-        val size = file.length\n-        val bs = new Array[Byte](size.asInstanceOf[Int])\n-        val fetchSize = is.read(bs, 0, size.asInstanceOf[Int])\n-        buffer = ByteBuffer.wrap(bs)\n-        if (fetchSize != size) {\n-          logWarning(s\"Failed to fetch the block $blockId from Tachyon: Size $size \" +\n-            s\"is not equal to fetched size $fetchSize\")\n-          return None\n-        }\n-      }\n+      val size = file.length\n+      val bs = new Array[Byte](size.asInstanceOf[Int])\n+      ByteStreams.readFully(is, bs)\n+      Some(ByteBuffer.wrap(bs))\n     } catch {",
+    "line": 30
+  }, {
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "It's not generally safe to recover from OOM, so why would we want to catch it here?\n",
+    "commit": "e724a9f118e98c056592424ac3bc27a330a4fed7",
+    "createdAt": "2014-10-28T05:58:53Z",
+    "diffHunk": "@@ -105,25 +106,17 @@ private[spark] class TachyonStore(\n       return None\n     }\n     val is = file.getInStream(ReadType.CACHE)\n-    var buffer: ByteBuffer = null\n+    assert (is != null)\n     try {\n-      if (is != null) {\n-        val size = file.length\n-        val bs = new Array[Byte](size.asInstanceOf[Int])\n-        val fetchSize = is.read(bs, 0, size.asInstanceOf[Int])\n-        buffer = ByteBuffer.wrap(bs)\n-        if (fetchSize != size) {\n-          logWarning(s\"Failed to fetch the block $blockId from Tachyon: Size $size \" +\n-            s\"is not equal to fetched size $fetchSize\")\n-          return None\n-        }\n-      }\n+      val size = file.length\n+      val bs = new Array[Byte](size.asInstanceOf[Int])\n+      ByteStreams.readFully(is, bs)\n+      Some(ByteBuffer.wrap(bs))\n     } catch {",
+    "line": 30
+  }, {
+    "author": {
+      "login": "rxin"
+    },
+    "body": "because we are supposed to return None if this fails ... it is pretty easy to recover from OOM here, if the OOM is due to the creation of the array.\n",
+    "commit": "e724a9f118e98c056592424ac3bc27a330a4fed7",
+    "createdAt": "2014-10-28T06:20:46Z",
+    "diffHunk": "@@ -105,25 +106,17 @@ private[spark] class TachyonStore(\n       return None\n     }\n     val is = file.getInStream(ReadType.CACHE)\n-    var buffer: ByteBuffer = null\n+    assert (is != null)\n     try {\n-      if (is != null) {\n-        val size = file.length\n-        val bs = new Array[Byte](size.asInstanceOf[Int])\n-        val fetchSize = is.read(bs, 0, size.asInstanceOf[Int])\n-        buffer = ByteBuffer.wrap(bs)\n-        if (fetchSize != size) {\n-          logWarning(s\"Failed to fetch the block $blockId from Tachyon: Size $size \" +\n-            s\"is not equal to fetched size $fetchSize\")\n-          return None\n-        }\n-      }\n+      val size = file.length\n+      val bs = new Array[Byte](size.asInstanceOf[Int])\n+      ByteStreams.readFully(is, bs)\n+      Some(ByteBuffer.wrap(bs))\n     } catch {",
+    "line": 30
+  }, {
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "I think that catching OutOfMemoryError here is inconsistent with the rest of the code base.  The only places where we catch it are for the purposes of logging more information about why an executor died.\n\nI don't think that any of the changes that I've made here are inconsistent with the old implementation: if we fail to fetch, we still return None, since ByteStreams.readFully throws IOException when it encounters errors.\n\nBesides, couldn't the OOM have occurred due to some other thread starving this one of memory?\n",
+    "commit": "e724a9f118e98c056592424ac3bc27a330a4fed7",
+    "createdAt": "2014-10-28T06:26:32Z",
+    "diffHunk": "@@ -105,25 +106,17 @@ private[spark] class TachyonStore(\n       return None\n     }\n     val is = file.getInStream(ReadType.CACHE)\n-    var buffer: ByteBuffer = null\n+    assert (is != null)\n     try {\n-      if (is != null) {\n-        val size = file.length\n-        val bs = new Array[Byte](size.asInstanceOf[Int])\n-        val fetchSize = is.read(bs, 0, size.asInstanceOf[Int])\n-        buffer = ByteBuffer.wrap(bs)\n-        if (fetchSize != size) {\n-          logWarning(s\"Failed to fetch the block $blockId from Tachyon: Size $size \" +\n-            s\"is not equal to fetched size $fetchSize\")\n-          return None\n-        }\n-      }\n+      val size = file.length\n+      val bs = new Array[Byte](size.asInstanceOf[Int])\n+      ByteStreams.readFully(is, bs)\n+      Some(ByteBuffer.wrap(bs))\n     } catch {",
+    "line": 30
+  }, {
+    "author": {
+      "login": "rxin"
+    },
+    "body": "I was not suggesting your update was inconsistent with the old implementation. I merely pointed out this is a good place to check for more type of errors because the caller is usually not setup to deal with OOM, but it is setup to deal with None.\n",
+    "commit": "e724a9f118e98c056592424ac3bc27a330a4fed7",
+    "createdAt": "2014-10-28T06:35:56Z",
+    "diffHunk": "@@ -105,25 +106,17 @@ private[spark] class TachyonStore(\n       return None\n     }\n     val is = file.getInStream(ReadType.CACHE)\n-    var buffer: ByteBuffer = null\n+    assert (is != null)\n     try {\n-      if (is != null) {\n-        val size = file.length\n-        val bs = new Array[Byte](size.asInstanceOf[Int])\n-        val fetchSize = is.read(bs, 0, size.asInstanceOf[Int])\n-        buffer = ByteBuffer.wrap(bs)\n-        if (fetchSize != size) {\n-          logWarning(s\"Failed to fetch the block $blockId from Tachyon: Size $size \" +\n-            s\"is not equal to fetched size $fetchSize\")\n-          return None\n-        }\n-      }\n+      val size = file.length\n+      val bs = new Array[Byte](size.asInstanceOf[Int])\n+      ByteStreams.readFully(is, bs)\n+      Some(ByteBuffer.wrap(bs))\n     } catch {",
+    "line": 30
+  }, {
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "Ah, gotcha.\n\nFrom a general API design perspective, I think it's a little weird to have methods that swallow OOMs and resurface them as other errors.  As a library consumer, how would you feel if a third-party library, say Snappy, were to swallow OOMs and re-throw them as IOException?  A library with that sort of unexpected behavior might actually break user applications' ability to recover from OOMs: if we ran out of memory due to excessive memory usage in some other part of the app but the OOM happened to be caught and swallowed by the library, then the top-level uncaught exception handler might never get a chance to respond to the OOM in an application-specific way (e.g. attempt to close files, trigger GCs, or clear caches).\n\nI'm not against handling OOMs in principle, but I think that it should probably be done at higher levels of the stack since that seems easier to reason about.\n",
+    "commit": "e724a9f118e98c056592424ac3bc27a330a4fed7",
+    "createdAt": "2014-10-28T06:44:21Z",
+    "diffHunk": "@@ -105,25 +106,17 @@ private[spark] class TachyonStore(\n       return None\n     }\n     val is = file.getInStream(ReadType.CACHE)\n-    var buffer: ByteBuffer = null\n+    assert (is != null)\n     try {\n-      if (is != null) {\n-        val size = file.length\n-        val bs = new Array[Byte](size.asInstanceOf[Int])\n-        val fetchSize = is.read(bs, 0, size.asInstanceOf[Int])\n-        buffer = ByteBuffer.wrap(bs)\n-        if (fetchSize != size) {\n-          logWarning(s\"Failed to fetch the block $blockId from Tachyon: Size $size \" +\n-            s\"is not equal to fetched size $fetchSize\")\n-          return None\n-        }\n-      }\n+      val size = file.length\n+      val bs = new Array[Byte](size.asInstanceOf[Int])\n+      ByteStreams.readFully(is, bs)\n+      Some(ByteBuffer.wrap(bs))\n     } catch {",
+    "line": 30
+  }, {
+    "author": {
+      "login": "rxin"
+    },
+    "body": "ok you convinced me on this one.\n\nare there any other type of exceptions (not errors) that can be thrown? we shouldn't throw a random exception when the implicit contract of the api is already None - if it fails?\n",
+    "commit": "e724a9f118e98c056592424ac3bc27a330a4fed7",
+    "createdAt": "2014-10-28T06:53:33Z",
+    "diffHunk": "@@ -105,25 +106,17 @@ private[spark] class TachyonStore(\n       return None\n     }\n     val is = file.getInStream(ReadType.CACHE)\n-    var buffer: ByteBuffer = null\n+    assert (is != null)\n     try {\n-      if (is != null) {\n-        val size = file.length\n-        val bs = new Array[Byte](size.asInstanceOf[Int])\n-        val fetchSize = is.read(bs, 0, size.asInstanceOf[Int])\n-        buffer = ByteBuffer.wrap(bs)\n-        if (fetchSize != size) {\n-          logWarning(s\"Failed to fetch the block $blockId from Tachyon: Size $size \" +\n-            s\"is not equal to fetched size $fetchSize\")\n-          return None\n-        }\n-      }\n+      val size = file.length\n+      val bs = new Array[Byte](size.asInstanceOf[Int])\n+      ByteStreams.readFully(is, bs)\n+      Some(ByteBuffer.wrap(bs))\n     } catch {",
+    "line": 30
+  }, {
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "[ByteStreams.readFully()](http://docs.guava-libraries.googlecode.com/git/javadoc/com/google/common/io/ByteStreams.html#readFully%28java.io.InputStream,%20byte[]%29) only throws `IOException` and `EOFException`(which is a subclass of `IOException`).\n",
+    "commit": "e724a9f118e98c056592424ac3bc27a330a4fed7",
+    "createdAt": "2014-10-28T07:04:39Z",
+    "diffHunk": "@@ -105,25 +106,17 @@ private[spark] class TachyonStore(\n       return None\n     }\n     val is = file.getInStream(ReadType.CACHE)\n-    var buffer: ByteBuffer = null\n+    assert (is != null)\n     try {\n-      if (is != null) {\n-        val size = file.length\n-        val bs = new Array[Byte](size.asInstanceOf[Int])\n-        val fetchSize = is.read(bs, 0, size.asInstanceOf[Int])\n-        buffer = ByteBuffer.wrap(bs)\n-        if (fetchSize != size) {\n-          logWarning(s\"Failed to fetch the block $blockId from Tachyon: Size $size \" +\n-            s\"is not equal to fetched size $fetchSize\")\n-          return None\n-        }\n-      }\n+      val size = file.length\n+      val bs = new Array[Byte](size.asInstanceOf[Int])\n+      ByteStreams.readFully(is, bs)\n+      Some(ByteBuffer.wrap(bs))\n     } catch {",
+    "line": 30
+  }],
+  "prId": 2969
+}]

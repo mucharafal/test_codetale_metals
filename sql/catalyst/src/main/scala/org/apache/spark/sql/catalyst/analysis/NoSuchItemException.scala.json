@@ -1,0 +1,58 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "maropu"
+    },
+    "body": "How about `, cause: Option[Throwable] = None`?",
+    "commit": "d1d4adfe0620253f65e5c54366768c695823ae28",
+    "createdAt": "2018-08-30T11:40:07Z",
+    "diffHunk": "@@ -40,10 +40,11 @@ class NoSuchPartitionException(\n class NoSuchPermanentFunctionException(db: String, func: String)\n   extends AnalysisException(s\"Function '$func' not found in database '$db'\")\n \n-class NoSuchFunctionException(db: String, func: String)\n+class NoSuchFunctionException(db: String, func: String, rootCause: Option[String] = None)"
+  }],
+  "prId": 21790
+}, {
+  "comments": [{
+    "author": {
+      "login": "maropu"
+    },
+    "body": "Then, `cause.map(th => s\"Exception thrown during look up: ${SparkUtils.exceptionString(th)}\").getOrElse(\"\")`?",
+    "commit": "d1d4adfe0620253f65e5c54366768c695823ae28",
+    "createdAt": "2018-08-30T11:42:01Z",
+    "diffHunk": "@@ -40,10 +40,11 @@ class NoSuchPartitionException(\n class NoSuchPermanentFunctionException(db: String, func: String)\n   extends AnalysisException(s\"Function '$func' not found in database '$db'\")\n \n-class NoSuchFunctionException(db: String, func: String)\n+class NoSuchFunctionException(db: String, func: String, rootCause: Option[String] = None)\n   extends AnalysisException(\n     s\"Undefined function: '$func'. This function is neither a registered temporary function nor \" +\n-    s\"a permanent function registered in the database '$db'.\")\n+    s\"a permanent function registered in the database '$db'.\" +\n+    s\"Exception thrown during look up: ${rootCause.getOrElse(\"None\")}\")"
+  }],
+  "prId": 21790
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "This is too complex for string interpolation. But why not just set the exception's cause?",
+    "commit": "d1d4adfe0620253f65e5c54366768c695823ae28",
+    "createdAt": "2018-12-27T14:30:48Z",
+    "diffHunk": "@@ -40,10 +41,12 @@ class NoSuchPartitionException(\n class NoSuchPermanentFunctionException(db: String, func: String)\n   extends AnalysisException(s\"Function '$func' not found in database '$db'\")\n \n-class NoSuchFunctionException(db: String, func: String)\n+class NoSuchFunctionException(db: String, func: String, cause: Option[Throwable] = None)\n   extends AnalysisException(\n-    s\"Undefined function: '$func'. This function is neither a registered temporary function nor \" +\n-    s\"a permanent function registered in the database '$db'.\")\n+     s\"Undefined function: '$func'. This function is neither a registered temporary function nor \" +\n+      s\"a permanent function registered in the database '$db'.\" +\n+      s\"${cause.map(th => s\"Exception thrown during look up:\" +"
+  }, {
+    "author": {
+      "login": "caneGuy"
+    },
+    "body": "@srowen Thanks.IIUC.Since some times the cause may be undefined.For that case, we do not need to print `Exception thrown during look up`.\r\n",
+    "commit": "d1d4adfe0620253f65e5c54366768c695823ae28",
+    "createdAt": "2018-12-28T02:21:33Z",
+    "diffHunk": "@@ -40,10 +41,12 @@ class NoSuchPartitionException(\n class NoSuchPermanentFunctionException(db: String, func: String)\n   extends AnalysisException(s\"Function '$func' not found in database '$db'\")\n \n-class NoSuchFunctionException(db: String, func: String)\n+class NoSuchFunctionException(db: String, func: String, cause: Option[Throwable] = None)\n   extends AnalysisException(\n-    s\"Undefined function: '$func'. This function is neither a registered temporary function nor \" +\n-    s\"a permanent function registered in the database '$db'.\")\n+     s\"Undefined function: '$func'. This function is neither a registered temporary function nor \" +\n+      s\"a permanent function registered in the database '$db'.\" +\n+      s\"${cause.map(th => s\"Exception thrown during look up:\" +"
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "I mean, why not set the cause on `AnalysisException`? the cause may be null if the Option is None, that's fine.",
+    "commit": "d1d4adfe0620253f65e5c54366768c695823ae28",
+    "createdAt": "2018-12-28T14:08:50Z",
+    "diffHunk": "@@ -40,10 +41,12 @@ class NoSuchPartitionException(\n class NoSuchPermanentFunctionException(db: String, func: String)\n   extends AnalysisException(s\"Function '$func' not found in database '$db'\")\n \n-class NoSuchFunctionException(db: String, func: String)\n+class NoSuchFunctionException(db: String, func: String, cause: Option[Throwable] = None)\n   extends AnalysisException(\n-    s\"Undefined function: '$func'. This function is neither a registered temporary function nor \" +\n-    s\"a permanent function registered in the database '$db'.\")\n+     s\"Undefined function: '$func'. This function is neither a registered temporary function nor \" +\n+      s\"a permanent function registered in the database '$db'.\" +\n+      s\"${cause.map(th => s\"Exception thrown during look up:\" +"
+  }, {
+    "author": {
+      "login": "caneGuy"
+    },
+    "body": "Update @srowen Thanks!",
+    "commit": "d1d4adfe0620253f65e5c54366768c695823ae28",
+    "createdAt": "2018-12-29T04:35:36Z",
+    "diffHunk": "@@ -40,10 +41,12 @@ class NoSuchPartitionException(\n class NoSuchPermanentFunctionException(db: String, func: String)\n   extends AnalysisException(s\"Function '$func' not found in database '$db'\")\n \n-class NoSuchFunctionException(db: String, func: String)\n+class NoSuchFunctionException(db: String, func: String, cause: Option[Throwable] = None)\n   extends AnalysisException(\n-    s\"Undefined function: '$func'. This function is neither a registered temporary function nor \" +\n-    s\"a permanent function registered in the database '$db'.\")\n+     s\"Undefined function: '$func'. This function is neither a registered temporary function nor \" +\n+      s\"a permanent function registered in the database '$db'.\" +\n+      s\"${cause.map(th => s\"Exception thrown during look up:\" +"
+  }],
+  "prId": 21790
+}]

@@ -1,0 +1,60 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "manishamde"
+    },
+    "body": "A comment here will be helpful.\n",
+    "commit": "abdcc47bd69624643908fb1924b94f22659e78f5",
+    "createdAt": "2015-08-28T22:14:04Z",
+    "diffHunk": "@@ -1056,6 +988,70 @@ object DecisionTree extends Serializable with Logging {\n     }\n   }\n \n+  private def findSplitsBinsBySorting(\n+      input: RDD[LabeledPoint],\n+      metadata: DecisionTreeMetadata,\n+      continuousFeatures: IndexedSeq[Int]): (Array[Array[Split]], Array[Array[Bin]]) = {\n+    def findSplits(\n+        featureIndex: Int,\n+        featureSamples: Iterable[Double]): (Int, (Array[Split], Array[Bin])) = {\n+      val splits = {\n+        val featureSplits = findSplitsForContinuousFeature(\n+          featureSamples.toArray,\n+          metadata,\n+          featureIndex)\n+        logDebug(s\"featureIndex = $featureIndex, numSplits = ${featureSplits.length}\")\n+\n+        featureSplits.map(threshold => new Split(featureIndex, threshold, Continuous, Nil))\n+      }\n+\n+      val bins = {\n+        val lowSplit = new DummyLowSplit(featureIndex, Continuous)\n+        val highSplit = new DummyHighSplit(featureIndex, Continuous)\n+        (lowSplit +: splits.toSeq :+ highSplit).sliding(2).map {"
+  }, {
+    "author": {
+      "login": "NathanHowell"
+    },
+    "body": "Done.\n",
+    "commit": "abdcc47bd69624643908fb1924b94f22659e78f5",
+    "createdAt": "2015-09-10T21:31:29Z",
+    "diffHunk": "@@ -1056,6 +988,70 @@ object DecisionTree extends Serializable with Logging {\n     }\n   }\n \n+  private def findSplitsBinsBySorting(\n+      input: RDD[LabeledPoint],\n+      metadata: DecisionTreeMetadata,\n+      continuousFeatures: IndexedSeq[Int]): (Array[Array[Split]], Array[Array[Bin]]) = {\n+    def findSplits(\n+        featureIndex: Int,\n+        featureSamples: Iterable[Double]): (Int, (Array[Split], Array[Bin])) = {\n+      val splits = {\n+        val featureSplits = findSplitsForContinuousFeature(\n+          featureSamples.toArray,\n+          metadata,\n+          featureIndex)\n+        logDebug(s\"featureIndex = $featureIndex, numSplits = ${featureSplits.length}\")\n+\n+        featureSplits.map(threshold => new Split(featureIndex, threshold, Continuous, Nil))\n+      }\n+\n+      val bins = {\n+        val lowSplit = new DummyLowSplit(featureIndex, Continuous)\n+        val highSplit = new DummyHighSplit(featureIndex, Continuous)\n+        (lowSplit +: splits.toSeq :+ highSplit).sliding(2).map {"
+  }],
+  "prId": 8246
+}, {
+  "comments": [{
+    "author": {
+      "login": "manishamde"
+    },
+    "body": "`numPartitions` logic could be extracted out in a separate line and a small explanation would help.\n",
+    "commit": "abdcc47bd69624643908fb1924b94f22659e78f5",
+    "createdAt": "2015-08-28T22:17:00Z",
+    "diffHunk": "@@ -1056,6 +988,70 @@ object DecisionTree extends Serializable with Logging {\n     }\n   }\n \n+  private def findSplitsBinsBySorting(\n+      input: RDD[LabeledPoint],\n+      metadata: DecisionTreeMetadata,\n+      continuousFeatures: IndexedSeq[Int]): (Array[Array[Split]], Array[Array[Bin]]) = {\n+    def findSplits(\n+        featureIndex: Int,\n+        featureSamples: Iterable[Double]): (Int, (Array[Split], Array[Bin])) = {\n+      val splits = {\n+        val featureSplits = findSplitsForContinuousFeature(\n+          featureSamples.toArray,\n+          metadata,\n+          featureIndex)\n+        logDebug(s\"featureIndex = $featureIndex, numSplits = ${featureSplits.length}\")\n+\n+        featureSplits.map(threshold => new Split(featureIndex, threshold, Continuous, Nil))\n+      }\n+\n+      val bins = {\n+        val lowSplit = new DummyLowSplit(featureIndex, Continuous)\n+        val highSplit = new DummyHighSplit(featureIndex, Continuous)\n+        (lowSplit +: splits.toSeq :+ highSplit).sliding(2).map {\n+          case Seq(lhs, right) => new Bin(lhs, right, Continuous, Double.MinValue)\n+        }.toArray\n+      }\n+\n+      (featureIndex, (splits, bins))\n+    }\n+\n+    val continuousSplits = input\n+      .flatMap(point => continuousFeatures.map(idx => (idx, point.features(idx))))\n+      .groupByKey(numPartitions = math.min(continuousFeatures.length, input.partitions.length))"
+  }, {
+    "author": {
+      "login": "NathanHowell"
+    },
+    "body": "Done.\n",
+    "commit": "abdcc47bd69624643908fb1924b94f22659e78f5",
+    "createdAt": "2015-09-10T21:31:23Z",
+    "diffHunk": "@@ -1056,6 +988,70 @@ object DecisionTree extends Serializable with Logging {\n     }\n   }\n \n+  private def findSplitsBinsBySorting(\n+      input: RDD[LabeledPoint],\n+      metadata: DecisionTreeMetadata,\n+      continuousFeatures: IndexedSeq[Int]): (Array[Array[Split]], Array[Array[Bin]]) = {\n+    def findSplits(\n+        featureIndex: Int,\n+        featureSamples: Iterable[Double]): (Int, (Array[Split], Array[Bin])) = {\n+      val splits = {\n+        val featureSplits = findSplitsForContinuousFeature(\n+          featureSamples.toArray,\n+          metadata,\n+          featureIndex)\n+        logDebug(s\"featureIndex = $featureIndex, numSplits = ${featureSplits.length}\")\n+\n+        featureSplits.map(threshold => new Split(featureIndex, threshold, Continuous, Nil))\n+      }\n+\n+      val bins = {\n+        val lowSplit = new DummyLowSplit(featureIndex, Continuous)\n+        val highSplit = new DummyHighSplit(featureIndex, Continuous)\n+        (lowSplit +: splits.toSeq :+ highSplit).sliding(2).map {\n+          case Seq(lhs, right) => new Bin(lhs, right, Continuous, Double.MinValue)\n+        }.toArray\n+      }\n+\n+      (featureIndex, (splits, bins))\n+    }\n+\n+    val continuousSplits = input\n+      .flatMap(point => continuousFeatures.map(idx => (idx, point.features(idx))))\n+      .groupByKey(numPartitions = math.min(continuousFeatures.length, input.partitions.length))"
+  }],
+  "prId": 8246
+}, {
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "Can you please remove the similar call to this in findSplitsForContinuousFeature since that will now be run on workers?\n",
+    "commit": "abdcc47bd69624643908fb1924b94f22659e78f5",
+    "createdAt": "2015-09-10T17:07:05Z",
+    "diffHunk": "@@ -1056,6 +988,70 @@ object DecisionTree extends Serializable with Logging {\n     }\n   }\n \n+  private def findSplitsBinsBySorting(\n+      input: RDD[LabeledPoint],\n+      metadata: DecisionTreeMetadata,\n+      continuousFeatures: IndexedSeq[Int]): (Array[Array[Split]], Array[Array[Bin]]) = {\n+    def findSplits(\n+        featureIndex: Int,\n+        featureSamples: Iterable[Double]): (Int, (Array[Split], Array[Bin])) = {\n+      val splits = {\n+        val featureSplits = findSplitsForContinuousFeature(\n+          featureSamples.toArray,\n+          metadata,\n+          featureIndex)\n+        logDebug(s\"featureIndex = $featureIndex, numSplits = ${featureSplits.length}\")\n+\n+        featureSplits.map(threshold => new Split(featureIndex, threshold, Continuous, Nil))\n+      }\n+\n+      val bins = {\n+        val lowSplit = new DummyLowSplit(featureIndex, Continuous)\n+        val highSplit = new DummyHighSplit(featureIndex, Continuous)\n+        (lowSplit +: splits.toSeq :+ highSplit).sliding(2).map {\n+          case Seq(lhs, right) => new Bin(lhs, right, Continuous, Double.MinValue)\n+        }.toArray\n+      }\n+\n+      (featureIndex, (splits, bins))\n+    }\n+\n+    val continuousSplits = input\n+      .flatMap(point => continuousFeatures.map(idx => (idx, point.features(idx))))\n+      .groupByKey(numPartitions = math.min(continuousFeatures.length, input.partitions.length))\n+      .map { case (k, v) => findSplits(k, v) }\n+      .collectAsMap()\n+\n+    val numFeatures = metadata.numFeatures\n+    val (splits, bins) = Range(0, numFeatures).unzip {\n+      case i if metadata.isContinuous(i) =>\n+        val (split, bin) = continuousSplits(i)\n+        metadata.setNumSplits(i, split.length)",
+    "line": 169
+  }, {
+    "author": {
+      "login": "NathanHowell"
+    },
+    "body": "Done.\n",
+    "commit": "abdcc47bd69624643908fb1924b94f22659e78f5",
+    "createdAt": "2015-09-10T21:31:13Z",
+    "diffHunk": "@@ -1056,6 +988,70 @@ object DecisionTree extends Serializable with Logging {\n     }\n   }\n \n+  private def findSplitsBinsBySorting(\n+      input: RDD[LabeledPoint],\n+      metadata: DecisionTreeMetadata,\n+      continuousFeatures: IndexedSeq[Int]): (Array[Array[Split]], Array[Array[Bin]]) = {\n+    def findSplits(\n+        featureIndex: Int,\n+        featureSamples: Iterable[Double]): (Int, (Array[Split], Array[Bin])) = {\n+      val splits = {\n+        val featureSplits = findSplitsForContinuousFeature(\n+          featureSamples.toArray,\n+          metadata,\n+          featureIndex)\n+        logDebug(s\"featureIndex = $featureIndex, numSplits = ${featureSplits.length}\")\n+\n+        featureSplits.map(threshold => new Split(featureIndex, threshold, Continuous, Nil))\n+      }\n+\n+      val bins = {\n+        val lowSplit = new DummyLowSplit(featureIndex, Continuous)\n+        val highSplit = new DummyHighSplit(featureIndex, Continuous)\n+        (lowSplit +: splits.toSeq :+ highSplit).sliding(2).map {\n+          case Seq(lhs, right) => new Bin(lhs, right, Continuous, Double.MinValue)\n+        }.toArray\n+      }\n+\n+      (featureIndex, (splits, bins))\n+    }\n+\n+    val continuousSplits = input\n+      .flatMap(point => continuousFeatures.map(idx => (idx, point.features(idx))))\n+      .groupByKey(numPartitions = math.min(continuousFeatures.length, input.partitions.length))\n+      .map { case (k, v) => findSplits(k, v) }\n+      .collectAsMap()\n+\n+    val numFeatures = metadata.numFeatures\n+    val (splits, bins) = Range(0, numFeatures).unzip {\n+      case i if metadata.isContinuous(i) =>\n+        val (split, bin) = continuousSplits(i)\n+        metadata.setNumSplits(i, split.length)",
+    "line": 169
+  }],
+  "prId": 8246
+}]

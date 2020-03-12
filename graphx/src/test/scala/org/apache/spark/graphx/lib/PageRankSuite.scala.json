@@ -1,0 +1,33 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": ">= is simpler to check rather than not <",
+    "commit": "830f6ed4760fc903dff32e7d2041e9bebc60c969",
+    "createdAt": "2019-11-14T15:19:32Z",
+    "diffHunk": "@@ -64,6 +64,38 @@ class PageRankSuite extends SparkFunSuite with LocalSparkContext {\n       .map { case (id, error) => error }.sum()\n   }\n \n+  def convergenceIterations[VD, ED](graph: Graph[VD, ED], resetProb: Double,\n+                                    tol: Double, errorTol: Double): (Int, Int) = {\n+    val dynamicRanks = graph.ops.pageRank(tol, resetProb).vertices.cache()\n+\n+    // Compute how many iterations it takes to converge\n+    var iter = 1\n+    var staticGraphRank = graph.ops.staticPageRank(iter, resetProb).vertices.cache()\n+    while (!(compareRanks(staticGraphRank, dynamicRanks) < errorTol)) {",
+    "line": 11
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "I don't think this is resolved",
+    "commit": "830f6ed4760fc903dff32e7d2041e9bebc60c969",
+    "createdAt": "2019-11-19T15:40:50Z",
+    "diffHunk": "@@ -64,6 +64,38 @@ class PageRankSuite extends SparkFunSuite with LocalSparkContext {\n       .map { case (id, error) => error }.sum()\n   }\n \n+  def convergenceIterations[VD, ED](graph: Graph[VD, ED], resetProb: Double,\n+                                    tol: Double, errorTol: Double): (Int, Int) = {\n+    val dynamicRanks = graph.ops.pageRank(tol, resetProb).vertices.cache()\n+\n+    // Compute how many iterations it takes to converge\n+    var iter = 1\n+    var staticGraphRank = graph.ops.staticPageRank(iter, resetProb).vertices.cache()\n+    while (!(compareRanks(staticGraphRank, dynamicRanks) < errorTol)) {",
+    "line": 11
+  }],
+  "prId": 26523
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Nit: remove blank lines like this",
+    "commit": "830f6ed4760fc903dff32e7d2041e9bebc60c969",
+    "createdAt": "2019-11-19T15:41:25Z",
+    "diffHunk": "@@ -268,6 +338,24 @@ class PageRankSuite extends SparkFunSuite with LocalSparkContext {\n     }\n   }\n \n+  test(\"Loop with source PageRank with checkpoint\") {\n+    withSpark { sc =>\n+      val edges = sc.parallelize((1L, 2L) :: (2L, 3L) :: (3L, 4L) :: (4L, 2L) :: Nil)\n+      val g = Graph.fromEdgeTuples(edges, 1)\n+      val resetProb = 0.15\n+      val tol = 0.0001\n+      val errorTol = 1.0e-5\n+\n+      val (iterAfterHalfCheckPoint, totalIters) =\n+        convergenceIterations(g, resetProb, tol, errorTol)\n+\n+      // In this case checkPoint helps a lot\n+      assert(totalIters == 34)\n+      assert(iterAfterHalfCheckPoint == 17)\n+"
+  }],
+  "prId": 26523
+}]

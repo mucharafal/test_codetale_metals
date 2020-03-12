@@ -1,0 +1,13 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "we shouldn't create a joined row for each input row.",
+    "commit": "8cfb6569f790f6cd181d5e01771787a6d5a47f84",
+    "createdAt": "2019-03-06T12:29:00Z",
+    "diffHunk": "@@ -0,0 +1,53 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+package org.apache.spark.sql.execution.datasources.v2\n+\n+import org.apache.spark.sql.catalyst.InternalRow\n+import org.apache.spark.sql.catalyst.expressions.JoinedRow\n+import org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjection\n+import org.apache.spark.sql.sources.v2.reader.PartitionReader\n+import org.apache.spark.sql.types.StructType\n+\n+/**\n+ * A wrapper reader that always appends partition values to [[InternalRow]]s produced by the input\n+ * reader [[fileReader]].\n+ */\n+class PartitionReaderWithPartitionValues(\n+    fileReader: PartitionReader[InternalRow],\n+    readDataSchema: StructType,\n+    partitionSchema: StructType,\n+    partitionValues: InternalRow) extends PartitionReader[InternalRow] {\n+  private val fullSchema = readDataSchema.toAttributes ++ partitionSchema.toAttributes\n+  private val unsafeProjection = GenerateUnsafeProjection.generate(fullSchema, fullSchema)\n+  // Note that we have to apply the converter even though `file.partitionValues` is empty.\n+  // This is because the converter is also responsible for converting safe `InternalRow`s into\n+  // `UnsafeRow`s\n+  private val rowConverter = () => {\n+    if (partitionSchema.isEmpty) {\n+      unsafeProjection(fileReader.get())}\n+    else {\n+      val joinedRow = new JoinedRow()",
+    "line": 43
+  }],
+  "prId": 23987
+}]

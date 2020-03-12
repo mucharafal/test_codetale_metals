@@ -1,0 +1,83 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "I still prefer to adding a comment above this line:\r\n```\r\n      // rowCount * (overhead + column size)\r\n```",
+    "commit": "0c42ea21b4a0756236789853092dbf0fbfa72d8a",
+    "createdAt": "2017-01-26T05:17:52Z",
+    "diffHunk": "@@ -18,12 +18,41 @@\n package org.apache.spark.sql.catalyst.statsEstimation\n \n import org.apache.spark.sql.catalyst.CatalystConf\n-import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeMap, AttributeReference}\n-import org.apache.spark.sql.catalyst.plans.logical.{ColumnStat, LogicalPlan, Statistics}\n+import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeMap, AttributeReference, Literal}\n+import org.apache.spark.sql.catalyst.plans.logical._\n import org.apache.spark.sql.types.IntegerType\n \n \n-class StatsConfSuite extends StatsEstimationTestBase {\n+class StatsEstimationSuite extends StatsEstimationTestBase {\n+  val (ar, colStat) = (attr(\"key\"), ColumnStat(distinctCount = 10, min = Some(1), max = Some(10),\n+    nullCount = 0, avgLen = 4, maxLen = 4))\n+\n+  val plan = StatsTestPlan(\n+    outputList = Seq(ar),\n+    attributeStats = AttributeMap(Seq(ar -> colStat)),\n+    rowCount = 10,\n+    size = Some(10 * (8 + 4)))"
+  }],
+  "prId": 16696
+}, {
+  "comments": [{
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "Could you replace the above three lines by `checkStats`?",
+    "commit": "0c42ea21b4a0756236789853092dbf0fbfa72d8a",
+    "createdAt": "2017-01-26T05:21:34Z",
+    "diffHunk": "@@ -48,6 +77,14 @@ class StatsConfSuite extends StatsEstimationTestBase {\n     // Return the simple statistics\n     assert(plan.stats(conf.copy(cboEnabled = false)) == expectedDefaultStats)"
+  }],
+  "prId": 16696
+}, {
+  "comments": [{
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "You know, this is a utility function. We can make it more general by having two expected stats values",
+    "commit": "0c42ea21b4a0756236789853092dbf0fbfa72d8a",
+    "createdAt": "2017-01-26T05:23:10Z",
+    "diffHunk": "@@ -48,6 +77,14 @@ class StatsConfSuite extends StatsEstimationTestBase {\n     // Return the simple statistics\n     assert(plan.stats(conf.copy(cboEnabled = false)) == expectedDefaultStats)\n   }\n+\n+  /** Check estimated stats which is the same when cbo is turned on/off. */\n+  private def checkStats(plan: LogicalPlan, expected: Statistics): Unit = {"
+  }],
+  "prId": 16696
+}, {
+  "comments": [{
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "rename `plan2` to `childPlan`",
+    "commit": "0c42ea21b4a0756236789853092dbf0fbfa72d8a",
+    "createdAt": "2017-01-26T05:25:10Z",
+    "diffHunk": "@@ -18,12 +18,41 @@\n package org.apache.spark.sql.catalyst.statsEstimation\n \n import org.apache.spark.sql.catalyst.CatalystConf\n-import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeMap, AttributeReference}\n-import org.apache.spark.sql.catalyst.plans.logical.{ColumnStat, LogicalPlan, Statistics}\n+import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeMap, AttributeReference, Literal}\n+import org.apache.spark.sql.catalyst.plans.logical._\n import org.apache.spark.sql.types.IntegerType\n \n \n-class StatsConfSuite extends StatsEstimationTestBase {\n+class StatsEstimationSuite extends StatsEstimationTestBase {\n+  val (ar, colStat) = (attr(\"key\"), ColumnStat(distinctCount = 10, min = Some(1), max = Some(10),\n+    nullCount = 0, avgLen = 4, maxLen = 4))\n+\n+  val plan = StatsTestPlan(\n+    outputList = Seq(ar),\n+    attributeStats = AttributeMap(Seq(ar -> colStat)),\n+    rowCount = 10,\n+    size = Some(10 * (8 + 4)))\n+\n+  test(\"limit estimation\") {\n+    val localLimit = LocalLimit(Literal(2), plan)\n+    val globalLimit = GlobalLimit(Literal(2), plan)\n+    // LocalLimit and GlobalLimit share the same stats estimation logic.\n+    val expected = Statistics(sizeInBytes = 24, rowCount = Some(2))\n+    checkStats(localLimit, expected)\n+    checkStats(globalLimit, expected)\n+  }\n+\n+  test(\"sample estimation\") {\n+    val sample = Sample(0.0, 0.5, withReplacement = false, (math.random * 1000).toLong, plan)()\n+    checkStats(sample, expected = Statistics(sizeInBytes = 60, rowCount = Some(5)))\n+\n+    // Test if Sample's child doesn't have rowCount in stats\n+    val stats2 = Statistics(sizeInBytes = 120)\n+    val plan2 = DummyLogicalPlan(stats2, stats2)"
+  }],
+  "prId": 16696
+}, {
+  "comments": [{
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "The same here",
+    "commit": "0c42ea21b4a0756236789853092dbf0fbfa72d8a",
+    "createdAt": "2017-01-26T05:25:29Z",
+    "diffHunk": "@@ -18,12 +18,41 @@\n package org.apache.spark.sql.catalyst.statsEstimation\n \n import org.apache.spark.sql.catalyst.CatalystConf\n-import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeMap, AttributeReference}\n-import org.apache.spark.sql.catalyst.plans.logical.{ColumnStat, LogicalPlan, Statistics}\n+import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeMap, AttributeReference, Literal}\n+import org.apache.spark.sql.catalyst.plans.logical._\n import org.apache.spark.sql.types.IntegerType\n \n \n-class StatsConfSuite extends StatsEstimationTestBase {\n+class StatsEstimationSuite extends StatsEstimationTestBase {\n+  val (ar, colStat) = (attr(\"key\"), ColumnStat(distinctCount = 10, min = Some(1), max = Some(10),\n+    nullCount = 0, avgLen = 4, maxLen = 4))\n+\n+  val plan = StatsTestPlan(\n+    outputList = Seq(ar),\n+    attributeStats = AttributeMap(Seq(ar -> colStat)),\n+    rowCount = 10,\n+    size = Some(10 * (8 + 4)))\n+\n+  test(\"limit estimation\") {\n+    val localLimit = LocalLimit(Literal(2), plan)\n+    val globalLimit = GlobalLimit(Literal(2), plan)\n+    // LocalLimit and GlobalLimit share the same stats estimation logic.\n+    val expected = Statistics(sizeInBytes = 24, rowCount = Some(2))\n+    checkStats(localLimit, expected)\n+    checkStats(globalLimit, expected)\n+  }\n+\n+  test(\"sample estimation\") {\n+    val sample = Sample(0.0, 0.5, withReplacement = false, (math.random * 1000).toLong, plan)()\n+    checkStats(sample, expected = Statistics(sizeInBytes = 60, rowCount = Some(5)))\n+\n+    // Test if Sample's child doesn't have rowCount in stats\n+    val stats2 = Statistics(sizeInBytes = 120)"
+  }, {
+    "author": {
+      "login": "ron8hu"
+    },
+    "body": "For limit estimation test cases, we may add a test with limit number greater than a child node's row count.  This test can show if we properly select the smaller value between limit number child node's row count. ",
+    "commit": "0c42ea21b4a0756236789853092dbf0fbfa72d8a",
+    "createdAt": "2017-02-04T20:27:47Z",
+    "diffHunk": "@@ -18,12 +18,41 @@\n package org.apache.spark.sql.catalyst.statsEstimation\n \n import org.apache.spark.sql.catalyst.CatalystConf\n-import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeMap, AttributeReference}\n-import org.apache.spark.sql.catalyst.plans.logical.{ColumnStat, LogicalPlan, Statistics}\n+import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeMap, AttributeReference, Literal}\n+import org.apache.spark.sql.catalyst.plans.logical._\n import org.apache.spark.sql.types.IntegerType\n \n \n-class StatsConfSuite extends StatsEstimationTestBase {\n+class StatsEstimationSuite extends StatsEstimationTestBase {\n+  val (ar, colStat) = (attr(\"key\"), ColumnStat(distinctCount = 10, min = Some(1), max = Some(10),\n+    nullCount = 0, avgLen = 4, maxLen = 4))\n+\n+  val plan = StatsTestPlan(\n+    outputList = Seq(ar),\n+    attributeStats = AttributeMap(Seq(ar -> colStat)),\n+    rowCount = 10,\n+    size = Some(10 * (8 + 4)))\n+\n+  test(\"limit estimation\") {\n+    val localLimit = LocalLimit(Literal(2), plan)\n+    val globalLimit = GlobalLimit(Literal(2), plan)\n+    // LocalLimit and GlobalLimit share the same stats estimation logic.\n+    val expected = Statistics(sizeInBytes = 24, rowCount = Some(2))\n+    checkStats(localLimit, expected)\n+    checkStats(globalLimit, expected)\n+  }\n+\n+  test(\"sample estimation\") {\n+    val sample = Sample(0.0, 0.5, withReplacement = false, (math.random * 1000).toLong, plan)()\n+    checkStats(sample, expected = Statistics(sizeInBytes = 60, rowCount = Some(5)))\n+\n+    // Test if Sample's child doesn't have rowCount in stats\n+    val stats2 = Statistics(sizeInBytes = 120)"
+  }],
+  "prId": 16696
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "`BasicStatsEstimationSuite`?",
+    "commit": "0c42ea21b4a0756236789853092dbf0fbfa72d8a",
+    "createdAt": "2017-03-03T07:27:37Z",
+    "diffHunk": "@@ -0,0 +1,121 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst.statsEstimation\n+\n+import org.apache.spark.sql.catalyst.CatalystConf\n+import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeMap, AttributeReference, Literal}\n+import org.apache.spark.sql.catalyst.plans.logical._\n+import org.apache.spark.sql.types.IntegerType\n+\n+\n+class StatsEstimationSuite extends StatsEstimationTestBase {"
+  }, {
+    "author": {
+      "login": "wzhfy"
+    },
+    "body": "Good name:)",
+    "commit": "0c42ea21b4a0756236789853092dbf0fbfa72d8a",
+    "createdAt": "2017-03-03T09:31:07Z",
+    "diffHunk": "@@ -0,0 +1,121 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst.statsEstimation\n+\n+import org.apache.spark.sql.catalyst.CatalystConf\n+import org.apache.spark.sql.catalyst.expressions.{Attribute, AttributeMap, AttributeReference, Literal}\n+import org.apache.spark.sql.catalyst.plans.logical._\n+import org.apache.spark.sql.types.IntegerType\n+\n+\n+class StatsEstimationSuite extends StatsEstimationTestBase {"
+  }],
+  "prId": 16696
+}]

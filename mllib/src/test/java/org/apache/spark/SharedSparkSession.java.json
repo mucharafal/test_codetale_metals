@@ -1,0 +1,135 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "Many of these can be protected so please mark them as such.\n",
+    "commit": "138818bc1aba76bc17738612e5bd98538856fef1",
+    "createdAt": "2016-05-19T18:42:39Z",
+    "diffHunk": "@@ -0,0 +1,59 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark;\n+\n+import java.io.IOException;\n+\n+import org.junit.After;\n+import org.junit.Before;\n+\n+import org.apache.spark.api.java.JavaSparkContext;\n+import org.apache.spark.sql.SparkSession;\n+\n+public class SharedSparkSession {\n+\n+  public transient SparkSession spark;\n+  public transient JavaSparkContext jsc;\n+\n+  @Before\n+  public void setUp() throws IOException {\n+    spark = SparkSession.builder()\n+      .master(\"local\")\n+      .appName(\"shared-spark-session\")\n+      .getOrCreate();\n+    jsc = new JavaSparkContext(spark.sparkContext());\n+\n+    customSetUp();\n+    customSetUpWithException();\n+  }\n+\n+  public void customSetUp() {}"
+  }],
+  "prId": 13101
+}, {
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "this is really weird... just make the normal `doSetup` throw `IOException`\n",
+    "commit": "138818bc1aba76bc17738612e5bd98538856fef1",
+    "createdAt": "2016-05-19T18:43:13Z",
+    "diffHunk": "@@ -0,0 +1,59 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark;\n+\n+import java.io.IOException;\n+\n+import org.junit.After;\n+import org.junit.Before;\n+\n+import org.apache.spark.api.java.JavaSparkContext;\n+import org.apache.spark.sql.SparkSession;\n+\n+public class SharedSparkSession {\n+\n+  public transient SparkSession spark;\n+  public transient JavaSparkContext jsc;\n+\n+  @Before\n+  public void setUp() throws IOException {\n+    spark = SparkSession.builder()\n+      .master(\"local\")\n+      .appName(\"shared-spark-session\")\n+      .getOrCreate();\n+    jsc = new JavaSparkContext(spark.sparkContext());\n+\n+    customSetUp();\n+    customSetUpWithException();\n+  }\n+\n+  public void customSetUp() {}\n+\n+  // TODO: Remove this once we have a way to use customSetUp that Exception\n+  public void customSetUpWithException() throws IOException {}"
+  }],
+  "prId": 13101
+}, {
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "I talked to @mengxr actually and perhaps a more common practice here is to just override `setUp()` and call `super.setUp()` in the first line. Same with `tearDown`. Then we don't need these custom things. Also please make this an abstract class.\n",
+    "commit": "138818bc1aba76bc17738612e5bd98538856fef1",
+    "createdAt": "2016-05-19T21:36:46Z",
+    "diffHunk": "@@ -0,0 +1,55 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark;\n+\n+import java.io.IOException;\n+\n+import org.junit.After;\n+import org.junit.Before;\n+\n+import org.apache.spark.api.java.JavaSparkContext;\n+import org.apache.spark.sql.SparkSession;\n+\n+public class SharedSparkSession {\n+\n+  public transient SparkSession spark;\n+  public transient JavaSparkContext jsc;\n+\n+  @Before\n+  public void setUp() throws IOException {\n+    spark = SparkSession.builder()\n+      .master(\"local\")\n+      .appName(\"shared-spark-session\")\n+      .getOrCreate();\n+    jsc = new JavaSparkContext(spark.sparkContext());\n+\n+    customSetUp();\n+  }\n+\n+  protected void customSetUp() throws IOException {}"
+  }, {
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "Shall we let the test to call `super.setUp()` instead?\n",
+    "commit": "138818bc1aba76bc17738612e5bd98538856fef1",
+    "createdAt": "2016-05-19T21:44:20Z",
+    "diffHunk": "@@ -0,0 +1,55 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark;\n+\n+import java.io.IOException;\n+\n+import org.junit.After;\n+import org.junit.Before;\n+\n+import org.apache.spark.api.java.JavaSparkContext;\n+import org.apache.spark.sql.SparkSession;\n+\n+public class SharedSparkSession {\n+\n+  public transient SparkSession spark;\n+  public transient JavaSparkContext jsc;\n+\n+  @Before\n+  public void setUp() throws IOException {\n+    spark = SparkSession.builder()\n+      .master(\"local\")\n+      .appName(\"shared-spark-session\")\n+      .getOrCreate();\n+    jsc = new JavaSparkContext(spark.sparkContext());\n+\n+    customSetUp();\n+  }\n+\n+  protected void customSetUp() throws IOException {}"
+  }],
+  "prId": 13101
+}, {
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "Ditto. It is more like a pattern choice. For tearing down, users might want to insert some operations before `spark` is gone out of scope. So let users choose where to call `super.tearDown()` seems more reasonable here.\n",
+    "commit": "138818bc1aba76bc17738612e5bd98538856fef1",
+    "createdAt": "2016-05-19T21:45:37Z",
+    "diffHunk": "@@ -0,0 +1,55 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark;\n+\n+import java.io.IOException;\n+\n+import org.junit.After;\n+import org.junit.Before;\n+\n+import org.apache.spark.api.java.JavaSparkContext;\n+import org.apache.spark.sql.SparkSession;\n+\n+public class SharedSparkSession {\n+\n+  public transient SparkSession spark;\n+  public transient JavaSparkContext jsc;\n+\n+  @Before\n+  public void setUp() throws IOException {\n+    spark = SparkSession.builder()\n+      .master(\"local\")\n+      .appName(\"shared-spark-session\")\n+      .getOrCreate();\n+    jsc = new JavaSparkContext(spark.sparkContext());\n+\n+    customSetUp();\n+  }\n+\n+  protected void customSetUp() throws IOException {}\n+\n+  @After\n+  public void tearDown() {\n+    spark.stop();\n+    spark = null;\n+\n+    customTearDown();"
+  }],
+  "prId": 13101
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "This can set the app name to the name of the test class with `getClass.getSimpleName`\n",
+    "commit": "138818bc1aba76bc17738612e5bd98538856fef1",
+    "createdAt": "2016-05-20T00:47:25Z",
+    "diffHunk": "@@ -0,0 +1,47 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark;\n+\n+import java.io.IOException;\n+\n+import org.junit.After;\n+import org.junit.Before;\n+\n+import org.apache.spark.api.java.JavaSparkContext;\n+import org.apache.spark.sql.SparkSession;\n+\n+public abstract class SharedSparkSession {\n+\n+  public transient SparkSession spark;\n+  public transient JavaSparkContext jsc;\n+\n+  @Before\n+  public void setUp() throws IOException {\n+    spark = SparkSession.builder()\n+      .master(\"local\")\n+      .appName(\"shared-spark-session\")"
+  }, {
+    "author": {
+      "login": "techaddict"
+    },
+    "body": "Done 👍 \n",
+    "commit": "138818bc1aba76bc17738612e5bd98538856fef1",
+    "createdAt": "2016-05-20T00:56:59Z",
+    "diffHunk": "@@ -0,0 +1,47 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark;\n+\n+import java.io.IOException;\n+\n+import org.junit.After;\n+import org.junit.Before;\n+\n+import org.apache.spark.api.java.JavaSparkContext;\n+import org.apache.spark.sql.SparkSession;\n+\n+public abstract class SharedSparkSession {\n+\n+  public transient SparkSession spark;\n+  public transient JavaSparkContext jsc;\n+\n+  @Before\n+  public void setUp() throws IOException {\n+    spark = SparkSession.builder()\n+      .master(\"local\")\n+      .appName(\"shared-spark-session\")"
+  }],
+  "prId": 13101
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "jsc needs to be stopped too? \n",
+    "commit": "138818bc1aba76bc17738612e5bd98538856fef1",
+    "createdAt": "2016-05-20T00:47:50Z",
+    "diffHunk": "@@ -0,0 +1,47 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark;\n+\n+import java.io.IOException;\n+\n+import org.junit.After;\n+import org.junit.Before;\n+\n+import org.apache.spark.api.java.JavaSparkContext;\n+import org.apache.spark.sql.SparkSession;\n+\n+public abstract class SharedSparkSession {\n+\n+  public transient SparkSession spark;\n+  public transient JavaSparkContext jsc;\n+\n+  @Before\n+  public void setUp() throws IOException {\n+    spark = SparkSession.builder()\n+      .master(\"local\")\n+      .appName(\"shared-spark-session\")\n+      .getOrCreate();\n+    jsc = new JavaSparkContext(spark.sparkContext());"
+  }, {
+    "author": {
+      "login": "techaddict"
+    },
+    "body": "all jsc.stop will do is stop the underlying sparkContext which is anyways done by sparkSession.\n",
+    "commit": "138818bc1aba76bc17738612e5bd98538856fef1",
+    "createdAt": "2016-05-20T00:51:40Z",
+    "diffHunk": "@@ -0,0 +1,47 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark;\n+\n+import java.io.IOException;\n+\n+import org.junit.After;\n+import org.junit.Before;\n+\n+import org.apache.spark.api.java.JavaSparkContext;\n+import org.apache.spark.sql.SparkSession;\n+\n+public abstract class SharedSparkSession {\n+\n+  public transient SparkSession spark;\n+  public transient JavaSparkContext jsc;\n+\n+  @Before\n+  public void setUp() throws IOException {\n+    spark = SparkSession.builder()\n+      .master(\"local\")\n+      .appName(\"shared-spark-session\")\n+      .getOrCreate();\n+    jsc = new JavaSparkContext(spark.sparkContext());"
+  }],
+  "prId": 13101
+}, {
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "Some tests depend on the default number of partitions. So it would be better to say `local[2]` instead of local.\n",
+    "commit": "138818bc1aba76bc17738612e5bd98538856fef1",
+    "createdAt": "2016-05-20T01:17:52Z",
+    "diffHunk": "@@ -0,0 +1,47 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark;\n+\n+import java.io.IOException;\n+\n+import org.junit.After;\n+import org.junit.Before;\n+\n+import org.apache.spark.api.java.JavaSparkContext;\n+import org.apache.spark.sql.SparkSession;\n+\n+public abstract class SharedSparkSession {\n+\n+  public transient SparkSession spark;\n+  public transient JavaSparkContext jsc;\n+\n+  @Before\n+  public void setUp() throws IOException {\n+    spark = SparkSession.builder()\n+      .master(\"local\")"
+  }],
+  "prId": 13101
+}, {
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "Shall we include `implements Serializable` to save some code?\n",
+    "commit": "138818bc1aba76bc17738612e5bd98538856fef1",
+    "createdAt": "2016-05-20T01:19:22Z",
+    "diffHunk": "@@ -0,0 +1,47 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark;\n+\n+import java.io.IOException;\n+\n+import org.junit.After;\n+import org.junit.Before;\n+\n+import org.apache.spark.api.java.JavaSparkContext;\n+import org.apache.spark.sql.SparkSession;\n+\n+public abstract class SharedSparkSession {"
+  }],
+  "prId": 13101
+}, {
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "minor: This should be protected.\n",
+    "commit": "138818bc1aba76bc17738612e5bd98538856fef1",
+    "createdAt": "2016-05-20T01:19:43Z",
+    "diffHunk": "@@ -0,0 +1,47 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark;\n+\n+import java.io.IOException;\n+\n+import org.junit.After;\n+import org.junit.Before;\n+\n+import org.apache.spark.api.java.JavaSparkContext;\n+import org.apache.spark.sql.SparkSession;\n+\n+public abstract class SharedSparkSession {\n+\n+  public transient SparkSession spark;"
+  }],
+  "prId": 13101
+}, {
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "Ditto.\n",
+    "commit": "138818bc1aba76bc17738612e5bd98538856fef1",
+    "createdAt": "2016-05-20T01:19:49Z",
+    "diffHunk": "@@ -0,0 +1,47 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark;\n+\n+import java.io.IOException;\n+\n+import org.junit.After;\n+import org.junit.Before;\n+\n+import org.apache.spark.api.java.JavaSparkContext;\n+import org.apache.spark.sql.SparkSession;\n+\n+public abstract class SharedSparkSession {\n+\n+  public transient SparkSession spark;\n+  public transient JavaSparkContext jsc;"
+  }],
+  "prId": 13101
+}]

@@ -1,0 +1,42 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "tdas"
+    },
+    "body": "What does this function do? Either make the name more meaningful (like `waitUntilMetadataIsPropagated`) or add scala docs.\n",
+    "commit": "803aa2ccb31c909b046727c28eca2c08ce279e6f",
+    "createdAt": "2015-04-29T09:06:34Z",
+    "diffHunk": "@@ -227,10 +229,33 @@ private class KafkaTestUtils extends Logging {\n     tryAgain(1)\n   }\n \n+  def waitUntilLeaderOffset("
+  }],
+  "prId": 4537
+}, {
+  "comments": [{
+    "author": {
+      "login": "tdas"
+    },
+    "body": "Could you put this big piece of code in a separate `def` (can be inside `waitUntilMetadata..`) outside the eventually, and then the assert just calls that function? Much easier to read.\n",
+    "commit": "803aa2ccb31c909b046727c28eca2c08ce279e6f",
+    "createdAt": "2015-05-01T20:55:20Z",
+    "diffHunk": "@@ -227,10 +229,34 @@ private class KafkaTestUtils extends Logging {\n     tryAgain(1)\n   }\n \n+  /** wait until the leader offset for the given topic/partition equals the specified offset */\n+  def waitUntilLeaderOffset(\n+      topic: String,\n+      partition: Int,\n+      offset: Long): Unit = {\n+    eventually(Time(10000), Time(100)) {\n+      val kc = new KafkaCluster(Map(\"metadata.broker.list\" -> brokerAddress))\n+      val tp = TopicAndPartition(topic, partition)\n+      val llo = kc.getLatestLeaderOffsets(Set(tp)).right.get.apply(tp).offset\n+      assert(\n+        llo == offset,\n+        s\"$topic $partition $offset not reached after timeout\")\n+    }\n+  }\n+\n   private def waitUntilMetadataIsPropagated(topic: String, partition: Int): Unit = {\n     eventually(Time(10000), Time(100)) {\n       assert(\n-        server.apis.metadataCache.containsTopicAndPartition(topic, partition),\n+        server.apis.metadataCache.getPartitionInfo(topic, partition) match {"
+  }, {
+    "author": {
+      "login": "tdas"
+    },
+    "body": "And also explain in a comment what this code does? For example, I am not sure what is `isr` in `leaderAndIsr`. And what are all these conditions &&-ed together.\n",
+    "commit": "803aa2ccb31c909b046727c28eca2c08ce279e6f",
+    "createdAt": "2015-05-01T21:07:01Z",
+    "diffHunk": "@@ -227,10 +229,34 @@ private class KafkaTestUtils extends Logging {\n     tryAgain(1)\n   }\n \n+  /** wait until the leader offset for the given topic/partition equals the specified offset */\n+  def waitUntilLeaderOffset(\n+      topic: String,\n+      partition: Int,\n+      offset: Long): Unit = {\n+    eventually(Time(10000), Time(100)) {\n+      val kc = new KafkaCluster(Map(\"metadata.broker.list\" -> brokerAddress))\n+      val tp = TopicAndPartition(topic, partition)\n+      val llo = kc.getLatestLeaderOffsets(Set(tp)).right.get.apply(tp).offset\n+      assert(\n+        llo == offset,\n+        s\"$topic $partition $offset not reached after timeout\")\n+    }\n+  }\n+\n   private def waitUntilMetadataIsPropagated(topic: String, partition: Int): Unit = {\n     eventually(Time(10000), Time(100)) {\n       assert(\n-        server.apis.metadataCache.containsTopicAndPartition(topic, partition),\n+        server.apis.metadataCache.getPartitionInfo(topic, partition) match {"
+  }],
+  "prId": 4537
+}, {
+  "comments": [{
+    "author": {
+      "login": "tdas"
+    },
+    "body": "Nit: wait --> Wait\n",
+    "commit": "803aa2ccb31c909b046727c28eca2c08ce279e6f",
+    "createdAt": "2015-05-01T20:57:57Z",
+    "diffHunk": "@@ -227,10 +229,34 @@ private class KafkaTestUtils extends Logging {\n     tryAgain(1)\n   }\n \n+  /** wait until the leader offset for the given topic/partition equals the specified offset */"
+  }],
+  "prId": 4537
+}]

@@ -1,0 +1,13 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "liancheng"
+    },
+    "body": "Nit: add a newline.\n",
+    "commit": "1c47b2a3e88579b0868564a5c598f90465b6d84a",
+    "createdAt": "2015-03-13T07:45:34Z",
+    "diffHunk": "@@ -220,3 +227,42 @@ private[hive] class SparkExecuteStatementOperation(\n     setState(OperationState.FINISHED)\n   }\n }\n+\n+private[hive] class SparkSQLSessionManager(hiveContext: HiveContext)\n+  extends SessionManager\n+  with ReflectedCompositeService {\n+\n+  private lazy val sparkSqlOperationManager = new SparkSQLOperationManager(hiveContext)\n+\n+  override def init(hiveConf: HiveConf) {\n+    setSuperField(this, \"hiveConf\", hiveConf)\n+\n+    val backgroundPoolSize = hiveConf.getIntVar(ConfVars.HIVE_SERVER2_ASYNC_EXEC_THREADS)\n+    setSuperField(this, \"backgroundOperationPool\", Executors.newFixedThreadPool(backgroundPoolSize))\n+    getAncestorField[Log](this, 3, \"LOG\").info(\n+      s\"HiveServer2: Async execution pool size $backgroundPoolSize\")\n+\n+    setSuperField(this, \"operationManager\", sparkSqlOperationManager)\n+    addService(sparkSqlOperationManager)\n+\n+    initCompositeService(hiveConf)\n+  }\n+\n+  override def openSession(\n+      username: String,\n+      passwd: String,\n+      sessionConf: java.util.Map[String, String],\n+      withImpersonation: Boolean,\n+      delegationToken: String): SessionHandle = {\n+    hiveContext.openSession()\n+\n+    super.openSession(username, passwd, sessionConf, withImpersonation, delegationToken)\n+  }\n+\n+  override def closeSession(sessionHandle: SessionHandle) {\n+    super.closeSession(sessionHandle)\n+    sparkSqlOperationManager.sessionToActivePool -= sessionHandle\n+\n+    hiveContext.detachSession()\n+  }\n+}",
+    "line": 67
+  }],
+  "prId": 4885
+}]

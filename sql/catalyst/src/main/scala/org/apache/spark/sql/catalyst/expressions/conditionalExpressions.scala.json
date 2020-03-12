@@ -1,0 +1,135 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "viirya"
+    },
+    "body": "We can move this condition above  and reuse it.",
+    "commit": "5466ef0914e8e702d43019995067ef49ecb90696",
+    "createdAt": "2017-07-17T02:35:01Z",
+    "diffHunk": "@@ -273,12 +274,31 @@ case class CaseWhenCodegen(\n     val cases = branches.map { case (condExpr, valueExpr) =>\n       val cond = condExpr.genCode(ctx)\n       val res = valueExpr.genCode(ctx)\n+      val (condFunc, condIsNull, condValue) = if ((cond.code.length >= 512) &&\n+        // Split these expressions only if they are created from a row object\n+        (ctx.INPUT_ROW != null && ctx.currentVars == null)) {\n+        val (funcName, globalIsNull, globalValue) =\n+          CondExpression.createAndAddFunction(ctx, cond, condExpr.dataType, \"caseWhenCondExpr\")\n+        (s\"$funcName(${ctx.INPUT_ROW});\", globalIsNull, globalValue)\n+      } else {\n+        (cond.code, cond.isNull, cond.value)\n+      }\n+      val (resFunc, resIsNull, resValue) = if ((res.code.length >= 512) &&\n+        // Split these expressions only if they are created from a row object\n+        (ctx.INPUT_ROW != null && ctx.currentVars == null)) {"
+  }],
+  "prId": 18641
+}, {
+  "comments": [{
+    "author": {
+      "login": "viirya"
+    },
+    "body": "Shall we check `INPUT_ROW` too for these three functions?",
+    "commit": "5466ef0914e8e702d43019995067ef49ecb90696",
+    "createdAt": "2017-07-17T02:35:53Z",
+    "diffHunk": "@@ -72,11 +72,11 @@ case class If(predicate: Expression, trueValue: Expression, falseValue: Expressi\n       (ctx.INPUT_ROW != null && ctx.currentVars == null)) {\n \n       val (condFuncName, condGlobalIsNull, condGlobalValue) =\n-        createAndAddFunction(ctx, condEval, predicate.dataType, \"evalIfCondExpr\")\n+        CondExpression.createAndAddFunction(ctx, condEval, predicate.dataType, \"evalIfCondExpr\")"
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "NVM. I saw there's the check already.",
+    "commit": "5466ef0914e8e702d43019995067ef49ecb90696",
+    "createdAt": "2017-07-17T02:36:57Z",
+    "diffHunk": "@@ -72,11 +72,11 @@ case class If(predicate: Expression, trueValue: Expression, falseValue: Expressi\n       (ctx.INPUT_ROW != null && ctx.currentVars == null)) {\n \n       val (condFuncName, condGlobalIsNull, condGlobalValue) =\n-        createAndAddFunction(ctx, condEval, predicate.dataType, \"evalIfCondExpr\")\n+        CondExpression.createAndAddFunction(ctx, condEval, predicate.dataType, \"evalIfCondExpr\")"
+  }],
+  "prId": 18641
+}, {
+  "comments": [{
+    "author": {
+      "login": "viirya"
+    },
+    "body": "Is it enough to only consider the generated code of individual condition? If it is less than 512, e.g, 500, but the combination of all conditions can still be large to cause the same issue.",
+    "commit": "5466ef0914e8e702d43019995067ef49ecb90696",
+    "createdAt": "2017-07-17T02:40:34Z",
+    "diffHunk": "@@ -273,12 +274,31 @@ case class CaseWhenCodegen(\n     val cases = branches.map { case (condExpr, valueExpr) =>\n       val cond = condExpr.genCode(ctx)\n       val res = valueExpr.genCode(ctx)\n+      val (condFunc, condIsNull, condValue) = if ((cond.code.length >= 512) &&"
+  }, {
+    "author": {
+      "login": "kiszk"
+    },
+    "body": "Good catch. Now, I updated it to use the same logic as `if`.",
+    "commit": "5466ef0914e8e702d43019995067ef49ecb90696",
+    "createdAt": "2017-07-17T06:28:24Z",
+    "diffHunk": "@@ -273,12 +274,31 @@ case class CaseWhenCodegen(\n     val cases = branches.map { case (condExpr, valueExpr) =>\n       val cond = condExpr.genCode(ctx)\n       val res = valueExpr.genCode(ctx)\n+      val (condFunc, condIsNull, condValue) = if ((cond.code.length >= 512) &&"
+  }],
+  "prId": 18641
+}, {
+  "comments": [{
+    "author": {
+      "login": "viirya"
+    },
+    "body": "Actually my previous comment meant the sum of generated codes of all branches.\r\n\r\nWith latest commit, it is possible that the code size of each branch is in the range, but the sum of all branches still breaks 64KB limit.",
+    "commit": "5466ef0914e8e702d43019995067ef49ecb90696",
+    "createdAt": "2017-07-18T12:52:17Z",
+    "diffHunk": "@@ -273,12 +274,26 @@ case class CaseWhenCodegen(\n     val cases = branches.map { case (condExpr, valueExpr) =>\n       val cond = condExpr.genCode(ctx)\n       val res = valueExpr.genCode(ctx)\n+      val (condFunc, condIsNull, condValue, resFunc, resIsNull, resValue ) =\n+        if ((cond.code.length + res.code.length) > 1024 &&"
+  }, {
+    "author": {
+      "login": "kiszk"
+    },
+    "body": "Ah, got it. You mean that we have to split super deeply-nested if-then-else statements into multiple methods, too.\r\nI will work for that.\r\n",
+    "commit": "5466ef0914e8e702d43019995067ef49ecb90696",
+    "createdAt": "2017-07-18T13:58:51Z",
+    "diffHunk": "@@ -273,12 +274,26 @@ case class CaseWhenCodegen(\n     val cases = branches.map { case (condExpr, valueExpr) =>\n       val cond = condExpr.genCode(ctx)\n       val res = valueExpr.genCode(ctx)\n+      val (condFunc, condIsNull, condValue, resFunc, resIsNull, resValue ) =\n+        if ((cond.code.length + res.code.length) > 1024 &&"
+  }, {
+    "author": {
+      "login": "kiszk"
+    },
+    "body": "@viirya I worked for possible three cases that may break 64KB limit.",
+    "commit": "5466ef0914e8e702d43019995067ef49ecb90696",
+    "createdAt": "2017-07-19T17:15:01Z",
+    "diffHunk": "@@ -273,12 +274,26 @@ case class CaseWhenCodegen(\n     val cases = branches.map { case (condExpr, valueExpr) =>\n       val cond = condExpr.genCode(ctx)\n       val res = valueExpr.genCode(ctx)\n+      val (condFunc, condIsNull, condValue, resFunc, resIsNull, resValue ) =\n+        if ((cond.code.length + res.code.length) > 1024 &&"
+  }],
+  "prId": 18641
+}, {
+  "comments": [{
+    "author": {
+      "login": "viirya"
+    },
+    "body": "This comment is put at wrong place?",
+    "commit": "5466ef0914e8e702d43019995067ef49ecb90696",
+    "createdAt": "2017-07-26T03:20:08Z",
+    "diffHunk": "@@ -270,37 +271,91 @@ case class CaseWhenCodegen(\n     //     }\n     //   }\n     // }\n+\n+    val isNull = ctx.freshName(\"caseWhenIsNull\")\n+    val value = ctx.freshName(\"caseWhenValue\")\n+    // Split these expressions only if they are created from a row object"
+  }, {
+    "author": {
+      "login": "kiszk"
+    },
+    "body": "good catch. done.",
+    "commit": "5466ef0914e8e702d43019995067ef49ecb90696",
+    "createdAt": "2017-07-29T15:45:48Z",
+    "diffHunk": "@@ -270,37 +271,91 @@ case class CaseWhenCodegen(\n     //     }\n     //   }\n     // }\n+\n+    val isNull = ctx.freshName(\"caseWhenIsNull\")\n+    val value = ctx.freshName(\"caseWhenValue\")\n+    // Split these expressions only if they are created from a row object"
+  }],
+  "prId": 18641
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "Can we follow what we did for `And` and `Or`, and just check the code length at the beginning? TBH I don't understand your change after several minutes reading.",
+    "commit": "5466ef0914e8e702d43019995067ef49ecb90696",
+    "createdAt": "2017-11-14T10:03:56Z",
+    "diffHunk": "@@ -262,37 +262,91 @@ case class CaseWhenCodegen(\n     //     }\n     //   }\n     // }\n+\n+    val isNull = ctx.freshName(\"caseWhenIsNull\")\n+    val value = ctx.freshName(\"caseWhenValue\")\n+\n     val cases = branches.map { case (condExpr, valueExpr) =>",
+    "line": 8
+  }, {
+    "author": {
+      "login": "kiszk"
+    },
+    "body": "For `CaseWhen`, the code bloat occurs in one case class. The `CaseWhenCodegen.doGenCode` can generate deeply-nested `if-then-else` statements as above in the comment. Each element in `cases` has only a `if-then`.  Thus, it is not possible to insert code check here. Since `And` and `Or` generates deeply nested `if-then-else` by calling `doGenCode` many times, to check code size here works well.\r\n\r\n[This line](https://github.com/apache/spark/pull/18641/files#diff-a966ee88604a834221e82916ec051d7dR286) generates the nested `if-then-else`. Thus, after this line, code size check is performed.\r\n\r\nWhat do you think?\r\n",
+    "commit": "5466ef0914e8e702d43019995067ef49ecb90696",
+    "createdAt": "2017-11-14T14:22:13Z",
+    "diffHunk": "@@ -262,37 +262,91 @@ case class CaseWhenCodegen(\n     //     }\n     //   }\n     // }\n+\n+    val isNull = ctx.freshName(\"caseWhenIsNull\")\n+    val value = ctx.freshName(\"caseWhenValue\")\n+\n     val cases = branches.map { case (condExpr, valueExpr) =>",
+    "line": 8
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "We only codegen CASE WHEN if the case branches are less than 20, I think check code size here is good enough.",
+    "commit": "5466ef0914e8e702d43019995067ef49ecb90696",
+    "createdAt": "2017-11-14T14:58:26Z",
+    "diffHunk": "@@ -262,37 +262,91 @@ case class CaseWhenCodegen(\n     //     }\n     //   }\n     // }\n+\n+    val isNull = ctx.freshName(\"caseWhenIsNull\")\n+    val value = ctx.freshName(\"caseWhenValue\")\n+\n     val cases = branches.map { case (condExpr, valueExpr) =>",
+    "line": 8
+  }, {
+    "author": {
+      "login": "kiszk"
+    },
+    "body": "I see. Do you want to add such a code?\r\n```\r\nval cases = ...\r\nval genCode = if (cases.map(s => s.length).sum <= 1024) {\r\n  cases.mkString(\"\\nelse {\\n\")\r\n} else {\r\n  // current code\r\n  var isGlobalVariable = false\r\n  ...\r\n  generatedCode\r\n}\r\n```",
+    "commit": "5466ef0914e8e702d43019995067ef49ecb90696",
+    "createdAt": "2017-11-14T15:22:35Z",
+    "diffHunk": "@@ -262,37 +262,91 @@ case class CaseWhenCodegen(\n     //     }\n     //   }\n     // }\n+\n+    val isNull = ctx.freshName(\"caseWhenIsNull\")\n+    val value = ctx.freshName(\"caseWhenValue\")\n+\n     val cases = branches.map { case (condExpr, valueExpr) =>",
+    "line": 8
+  }],
+  "prId": 18641
+}]

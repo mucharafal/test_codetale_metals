@@ -1,0 +1,39 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "Can you to `(0 to numMaps).map{}` to eliminate the need for this mutable variable?\n",
+    "commit": "2b24a9729d5f7ed976b704b6779434a0c804419e",
+    "createdAt": "2015-07-15T18:49:19Z",
+    "diffHunk": "@@ -117,9 +117,13 @@ class HashShuffleReaderSuite extends SparkFunSuite with LocalSparkContext {\n     val mapOutputTracker = mock(classOf[MapOutputTracker])\n     // Test a scenario where all data is local, just to avoid creating a bunch of additional mocks\n     // for the code to read data over the network.\n-    val statuses: Array[(BlockManagerId, Long)] =\n-      Array.fill(numMaps)((localBlockManagerId, byteOutputStream.size().toLong))\n-    when(mapOutputTracker.getServerStatuses(shuffleId, reduceId)).thenReturn(statuses)\n+    var mapId = 0"
+  }, {
+    "author": {
+      "login": "kayousterhout"
+    },
+    "body": "Done!\n",
+    "commit": "2b24a9729d5f7ed976b704b6779434a0c804419e",
+    "createdAt": "2015-07-15T20:45:50Z",
+    "diffHunk": "@@ -117,9 +117,13 @@ class HashShuffleReaderSuite extends SparkFunSuite with LocalSparkContext {\n     val mapOutputTracker = mock(classOf[MapOutputTracker])\n     // Test a scenario where all data is local, just to avoid creating a bunch of additional mocks\n     // for the code to read data over the network.\n-    val statuses: Array[(BlockManagerId, Long)] =\n-      Array.fill(numMaps)((localBlockManagerId, byteOutputStream.size().toLong))\n-    when(mapOutputTracker.getServerStatuses(shuffleId, reduceId)).thenReturn(statuses)\n+    var mapId = 0"
+  }],
+  "prId": 7268
+}, {
+  "comments": [{
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "Minor style thing: I'm not sure whether we have a convention for this, but I think that you can do `.thenReturn { definitionOfStatuses }` to reduce the scope of `statuses` here.\n",
+    "commit": "2b24a9729d5f7ed976b704b6779434a0c804419e",
+    "createdAt": "2015-07-15T18:51:31Z",
+    "diffHunk": "@@ -117,9 +117,13 @@ class HashShuffleReaderSuite extends SparkFunSuite with LocalSparkContext {\n     val mapOutputTracker = mock(classOf[MapOutputTracker])\n     // Test a scenario where all data is local, just to avoid creating a bunch of additional mocks\n     // for the code to read data over the network.\n-    val statuses: Array[(BlockManagerId, Long)] =\n-      Array.fill(numMaps)((localBlockManagerId, byteOutputStream.size().toLong))\n-    when(mapOutputTracker.getServerStatuses(shuffleId, reduceId)).thenReturn(statuses)\n+    var mapId = 0\n+    val statuses = Seq((localBlockManagerId, Seq.fill(numMaps) {\n+      val shuffleBlockId = ShuffleBlockId(shuffleId, mapId, reduceId)\n+      mapId += 1\n+      (shuffleBlockId, byteOutputStream.size().toLong)\n+    }))\n+    when(mapOutputTracker.getMapSizesByExecutorId(shuffleId, reduceId)).thenReturn(statuses)"
+  }, {
+    "author": {
+      "login": "kayousterhout"
+    },
+    "body": "Done\n",
+    "commit": "2b24a9729d5f7ed976b704b6779434a0c804419e",
+    "createdAt": "2015-07-15T20:45:55Z",
+    "diffHunk": "@@ -117,9 +117,13 @@ class HashShuffleReaderSuite extends SparkFunSuite with LocalSparkContext {\n     val mapOutputTracker = mock(classOf[MapOutputTracker])\n     // Test a scenario where all data is local, just to avoid creating a bunch of additional mocks\n     // for the code to read data over the network.\n-    val statuses: Array[(BlockManagerId, Long)] =\n-      Array.fill(numMaps)((localBlockManagerId, byteOutputStream.size().toLong))\n-    when(mapOutputTracker.getServerStatuses(shuffleId, reduceId)).thenReturn(statuses)\n+    var mapId = 0\n+    val statuses = Seq((localBlockManagerId, Seq.fill(numMaps) {\n+      val shuffleBlockId = ShuffleBlockId(shuffleId, mapId, reduceId)\n+      mapId += 1\n+      (shuffleBlockId, byteOutputStream.size().toLong)\n+    }))\n+    when(mapOutputTracker.getMapSizesByExecutorId(shuffleId, reduceId)).thenReturn(statuses)"
+  }],
+  "prId": 7268
+}]

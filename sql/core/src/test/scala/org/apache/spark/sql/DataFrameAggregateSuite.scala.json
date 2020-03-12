@@ -1,0 +1,74 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "Can we add a test with `null` as well?",
+    "commit": "c0a32897b108c2a0c90e6f32e0dd5bee8509e3be",
+    "createdAt": "2019-05-24T03:20:23Z",
+    "diffHunk": "@@ -894,4 +894,29 @@ class DataFrameAggregateSuite extends QueryTest with SharedSQLContext {\n         error.message.contains(\"function min_by does not support ordering on type map<int,string>\"))\n     }\n   }\n+\n+  test(\"SPARK-27425: count_if function\") {\n+    def checkError(df: => DataFrame): Unit = {\n+      val thrownException = the [AnalysisException] thrownBy df.queryExecution.analyzed\n+      assert(thrownException.message.contains(\"function count_if requires boolean type\"))\n+    }\n+\n+    checkAnswer(\n+      testData.agg(count_if('key % 2 === 0), count_if('key > 50), count_if('key < 50)),\n+      Row(50L, 50L, 49L))\n+    checkAnswer(\n+      sql(\"SELECT COUNT_IF(key % 2 = 0), COUNT_IF(key > 50), COUNT_IF(key < 50) FROM testData\"),\n+      Row(50L, 50L, 49L))\n+\n+    checkAnswer(\n+      testData2.groupBy('a).agg(count_if('b % 2 === 0)),\n+      Seq(Row(1, 1L), Row(2, 1L), Row(3, 1L)))\n+    checkAnswer(\n+      sql(\"SELECT a, COUNT_IF(b % 2 = 0) FROM testData2 GROUP BY a\"),\n+      Seq(Row(1, 1L), Row(2, 1L), Row(3, 1L)))"
+  }, {
+    "author": {
+      "login": "cryeo"
+    },
+    "body": "OK. I'll add it.",
+    "commit": "c0a32897b108c2a0c90e6f32e0dd5bee8509e3be",
+    "createdAt": "2019-05-27T03:44:20Z",
+    "diffHunk": "@@ -894,4 +894,29 @@ class DataFrameAggregateSuite extends QueryTest with SharedSQLContext {\n         error.message.contains(\"function min_by does not support ordering on type map<int,string>\"))\n     }\n   }\n+\n+  test(\"SPARK-27425: count_if function\") {\n+    def checkError(df: => DataFrame): Unit = {\n+      val thrownException = the [AnalysisException] thrownBy df.queryExecution.analyzed\n+      assert(thrownException.message.contains(\"function count_if requires boolean type\"))\n+    }\n+\n+    checkAnswer(\n+      testData.agg(count_if('key % 2 === 0), count_if('key > 50), count_if('key < 50)),\n+      Row(50L, 50L, 49L))\n+    checkAnswer(\n+      sql(\"SELECT COUNT_IF(key % 2 = 0), COUNT_IF(key > 50), COUNT_IF(key < 50) FROM testData\"),\n+      Row(50L, 50L, 49L))\n+\n+    checkAnswer(\n+      testData2.groupBy('a).agg(count_if('b % 2 === 0)),\n+      Seq(Row(1, 1L), Row(2, 1L), Row(3, 1L)))\n+    checkAnswer(\n+      sql(\"SELECT a, COUNT_IF(b % 2 = 0) FROM testData2 GROUP BY a\"),\n+      Seq(Row(1, 1L), Row(2, 1L), Row(3, 1L)))"
+  }],
+  "prId": 24335
+}, {
+  "comments": [{
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "In general, we don't use SPARK JIRA id for new feature test case name. Could you remove `SPARK-27425: `?",
+    "commit": "c0a32897b108c2a0c90e6f32e0dd5bee8509e3be",
+    "createdAt": "2019-06-07T02:14:52Z",
+    "diffHunk": "@@ -894,4 +894,30 @@ class DataFrameAggregateSuite extends QueryTest with SharedSQLContext {\n         error.message.contains(\"function min_by does not support ordering on type map<int,string>\"))\n     }\n   }\n+\n+  test(\"SPARK-27425: count_if function\") {"
+  }],
+  "prId": 24335
+}, {
+  "comments": [{
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "Let's not declare a function which is used once.",
+    "commit": "c0a32897b108c2a0c90e6f32e0dd5bee8509e3be",
+    "createdAt": "2019-06-07T02:16:10Z",
+    "diffHunk": "@@ -894,4 +894,30 @@ class DataFrameAggregateSuite extends QueryTest with SharedSQLContext {\n         error.message.contains(\"function min_by does not support ordering on type map<int,string>\"))\n     }\n   }\n+\n+  test(\"SPARK-27425: count_if function\") {\n+    def checkError(df: => DataFrame): Unit = {\n+      val thrownException = the [AnalysisException] thrownBy df.queryExecution.analyzed\n+      assert(thrownException.message.contains(\"function count_if requires boolean type\"))\n+    }"
+  }],
+  "prId": 24335
+}, {
+  "comments": [{
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "We usually test like the following.\r\n```scala\r\nval m = intercept[AnalysisException] {\r\n  sql(\"SELECT COUNT_IF(x) FROM tempView\")\r\n}.getMessage\r\nassert(m.contains(\"function count_if requires boolean type\"))\r\n```",
+    "commit": "c0a32897b108c2a0c90e6f32e0dd5bee8509e3be",
+    "createdAt": "2019-06-07T02:20:02Z",
+    "diffHunk": "@@ -894,4 +894,30 @@ class DataFrameAggregateSuite extends QueryTest with SharedSQLContext {\n         error.message.contains(\"function min_by does not support ordering on type map<int,string>\"))\n     }\n   }\n+\n+  test(\"SPARK-27425: count_if function\") {\n+    def checkError(df: => DataFrame): Unit = {\n+      val thrownException = the [AnalysisException] thrownBy df.queryExecution.analyzed\n+      assert(thrownException.message.contains(\"function count_if requires boolean type\"))\n+    }\n+\n+    withTempView(\"tempView\") {\n+      Seq((\"a\", None), (\"a\", Some(1)), (\"a\", Some(2)), (\"a\", Some(3)),\n+        (\"b\", None), (\"b\", Some(4)), (\"b\", Some(5)), (\"b\", Some(6)))\n+        .toDF(\"x\", \"y\")\n+        .createOrReplaceTempView(\"tempView\")\n+\n+      checkAnswer(\n+        sql(\"SELECT COUNT_IF(NULL), COUNT_IF(y % 2 = 0), COUNT_IF(y % 2 <> 0), \" +\n+          \"COUNT_IF(y IS NULL) FROM tempView\"),\n+        Row(0L, 3L, 3L, 2L))\n+\n+      checkAnswer(\n+        sql(\"SELECT x, COUNT_IF(NULL), COUNT_IF(y % 2 = 0), COUNT_IF(y % 2 <> 0), \" +\n+          \"COUNT_IF(y IS NULL) FROM tempView GROUP BY x\"),\n+        Row(\"a\", 0L, 1L, 2L, 1L) :: Row(\"b\", 0L, 2L, 1L, 1L) :: Nil)\n+\n+      checkError(sql(\"SELECT COUNT_IF(x) FROM tempView\"))"
+  }],
+  "prId": 24335
+}, {
+  "comments": [{
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "Since `COUNT_IF` can be used in `HAVING` clauses, could you add more tests like the followings?\r\n```scala\r\nscala> sql(\"SELECT x FROM tempView GROUP BY x HAVING COUNT_IF(y % 2 = 0) = 1\").show\r\n+---+\r\n|  x|\r\n+---+\r\n|  a|\r\n+---+\r\n\r\nscala> sql(\"SELECT x FROM tempView GROUP BY x HAVING COUNT_IF(y % 2 = 0) = 2\").show\r\n+---+\r\n|  x|\r\n+---+\r\n|  b|\r\n+---+\r\n```\r\n",
+    "commit": "c0a32897b108c2a0c90e6f32e0dd5bee8509e3be",
+    "createdAt": "2019-06-07T16:52:05Z",
+    "diffHunk": "@@ -894,4 +894,28 @@ class DataFrameAggregateSuite extends QueryTest with SharedSQLContext {\n         error.message.contains(\"function min_by does not support ordering on type map<int,string>\"))\n     }\n   }\n+\n+  test(\"count_if\") {\n+    withTempView(\"tempView\") {\n+      Seq((\"a\", None), (\"a\", Some(1)), (\"a\", Some(2)), (\"a\", Some(3)),\n+        (\"b\", None), (\"b\", Some(4)), (\"b\", Some(5)), (\"b\", Some(6)))\n+        .toDF(\"x\", \"y\")\n+        .createOrReplaceTempView(\"tempView\")\n+\n+      checkAnswer(\n+        sql(\"SELECT COUNT_IF(NULL), COUNT_IF(y % 2 = 0), COUNT_IF(y % 2 <> 0), \" +\n+          \"COUNT_IF(y IS NULL) FROM tempView\"),\n+        Row(0L, 3L, 3L, 2L))\n+\n+      checkAnswer(\n+        sql(\"SELECT x, COUNT_IF(NULL), COUNT_IF(y % 2 = 0), COUNT_IF(y % 2 <> 0), \" +\n+          \"COUNT_IF(y IS NULL) FROM tempView GROUP BY x\"),\n+        Row(\"a\", 0L, 1L, 2L, 1L) :: Row(\"b\", 0L, 2L, 1L, 1L) :: Nil)",
+    "line": 20
+  }, {
+    "author": {
+      "login": "cryeo"
+    },
+    "body": "Ok, I just added additional cases.",
+    "commit": "c0a32897b108c2a0c90e6f32e0dd5bee8509e3be",
+    "createdAt": "2019-06-07T19:29:11Z",
+    "diffHunk": "@@ -894,4 +894,28 @@ class DataFrameAggregateSuite extends QueryTest with SharedSQLContext {\n         error.message.contains(\"function min_by does not support ordering on type map<int,string>\"))\n     }\n   }\n+\n+  test(\"count_if\") {\n+    withTempView(\"tempView\") {\n+      Seq((\"a\", None), (\"a\", Some(1)), (\"a\", Some(2)), (\"a\", Some(3)),\n+        (\"b\", None), (\"b\", Some(4)), (\"b\", Some(5)), (\"b\", Some(6)))\n+        .toDF(\"x\", \"y\")\n+        .createOrReplaceTempView(\"tempView\")\n+\n+      checkAnswer(\n+        sql(\"SELECT COUNT_IF(NULL), COUNT_IF(y % 2 = 0), COUNT_IF(y % 2 <> 0), \" +\n+          \"COUNT_IF(y IS NULL) FROM tempView\"),\n+        Row(0L, 3L, 3L, 2L))\n+\n+      checkAnswer(\n+        sql(\"SELECT x, COUNT_IF(NULL), COUNT_IF(y % 2 = 0), COUNT_IF(y % 2 <> 0), \" +\n+          \"COUNT_IF(y IS NULL) FROM tempView GROUP BY x\"),\n+        Row(\"a\", 0L, 1L, 2L, 1L) :: Row(\"b\", 0L, 2L, 1L, 1L) :: Nil)",
+    "line": 20
+  }],
+  "prId": 24335
+}]

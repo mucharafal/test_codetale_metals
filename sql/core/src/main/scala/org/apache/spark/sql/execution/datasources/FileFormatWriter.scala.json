@@ -1,0 +1,25 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "chrysan"
+    },
+    "body": "Removing SortExec here and adding it in EnsureRequirements Strategy will have impact on many other DataWritingCommands which depends on FileFormatWriter, like CreateDataSourceTableAsSelectCommand. To fix it code changes are needed onto such DataWritingCommand implementations to export requiredDistribution and requiredOrdering.",
+    "commit": "d37eb8b3359981756c923948fe12833a56b61865",
+    "createdAt": "2018-03-19T07:46:31Z",
+    "diffHunk": "@@ -156,40 +144,14 @@ object FileFormatWriter extends Logging {\n       statsTrackers = statsTrackers\n     )\n \n-    // We should first sort by partition columns, then bucket id, and finally sorting columns.\n-    val requiredOrdering = partitionColumns ++ bucketIdExpression ++ sortColumns\n-    // the sort order doesn't matter\n-    val actualOrdering = plan.outputOrdering.map(_.child)\n-    val orderingMatched = if (requiredOrdering.length > actualOrdering.length) {\n-      false\n-    } else {\n-      requiredOrdering.zip(actualOrdering).forall {\n-        case (requiredOrder, childOutputOrder) =>\n-          requiredOrder.semanticEquals(childOutputOrder)\n-      }\n-    }\n-\n     SQLExecution.checkSQLExecutionId(sparkSession)\n \n     // This call shouldn't be put into the `try` block below because it only initializes and\n     // prepares the job, any exception thrown from here shouldn't cause abortJob() to be called.\n     committer.setupJob(job)\n \n     try {\n-      val rdd = if (orderingMatched) {\n-        plan.execute()\n-      } else {\n-        // SPARK-21165: the `requiredOrdering` is based on the attributes from analyzed plan, and\n-        // the physical plan may have different attribute ids due to optimizer removing some\n-        // aliases. Here we bind the expression ahead to avoid potential attribute ids mismatch.\n-        val orderingExpr = requiredOrdering\n-          .map(SortOrder(_, Ascending))\n-          .map(BindReferences.bindReference(_, outputSpec.outputColumns))\n-        SortExec(",
+    "line": 75
+  }],
+  "prId": 19001
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "Can we send an individual PR to do this? i.e. do the sorting via `requiredOrdering` instead of doing it manually.",
+    "commit": "d37eb8b3359981756c923948fe12833a56b61865",
+    "createdAt": "2018-04-25T06:19:07Z",
+    "diffHunk": "@@ -156,40 +144,14 @@ object FileFormatWriter extends Logging {\n       statsTrackers = statsTrackers\n     )\n \n-    // We should first sort by partition columns, then bucket id, and finally sorting columns.\n-    val requiredOrdering = partitionColumns ++ bucketIdExpression ++ sortColumns",
+    "line": 47
+  }],
+  "prId": 19001
+}]

@@ -1,0 +1,47 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "marmbrus"
+    },
+    "body": "This file is not a great example of this, but we should always use `checkAnswer` in unit tests because it provides much better failure messages than the default ScalaTest asserts.\n",
+    "commit": "7f4a08554969c5c9ea94bf53da0fa5328fbae651",
+    "createdAt": "2015-12-21T22:19:24Z",
+    "diffHunk": "@@ -194,4 +194,45 @@ class DataFrameNaFunctionsSuite extends QueryTest with SharedSQLContext {\n     assert(out1(4) === Row(\"Amy\", null, null))\n     assert(out1(5) === Row(null, null, null))\n   }\n+\n+  test(\"Spark-12231: dropna with partitionBy and groupBy\") {\n+    withTempPath { dir =>\n+      val df = sqlContext.range(10)\n+      val df1 = df.withColumn(\"a\", $\"id\".cast(\"int\"))\n+      df1.write.partitionBy(\"id\").parquet(dir.getCanonicalPath)\n+      val df2 = sqlContext.read.parquet(dir.getCanonicalPath)\n+      val group = df2.na.drop().groupBy().count().collect()"
+  }, {
+    "author": {
+      "login": "marmbrus"
+    },
+    "body": "Instead of just seeing the stack trace you get this:\n\n```\n[info] - Spark-12231: dropna with partitionBy and groupBy *** FAILED *** (1 second, 773 milliseconds)\n[info]   Exception thrown while executing query:\n[info]   == Parsed Logical Plan ==\n[info]   Aggregate [(count(1),mode=Complete,isDistinct=false) AS count#72L]\n[info]   +- Filter AtLeastNNulls(n, a#70,id#71)\n[info]      +- Relation[a#70,id#71] ParquetRelation\n[info]   \n[info]   == Analyzed Logical Plan ==\n[info]   count: bigint\n[info]   Aggregate [(count(1),mode=Complete,isDistinct=false) AS count#72L]\n[info]   +- Filter AtLeastNNulls(n, a#70,id#71)\n[info]      +- Relation[a#70,id#71] ParquetRelation\n[info]   \n[info]   == Optimized Logical Plan ==\n[info]   Aggregate [(count(1),mode=Complete,isDistinct=false) AS count#72L]\n[info]   +- Project\n[info]      +- Filter AtLeastNNulls(n, a#70,id#71)\n[info]         +- Relation[a#70,id#71] ParquetRelation\n[info]   \n[info]   == Physical Plan ==\n[info]   TungstenAggregate(key=[], functions=[(count(1),mode=Final,isDistinct=false)], output=[count#72L])\n[info]   +- TungstenExchange SinglePartition, None\n[info]      +- TungstenAggregate(key=[], functions=[(count(1),mode=Partial,isDistinct=false)], output=[count#75L])\n[info]         +- !Filter AtLeastNNulls(n, a#70,id#71)\n[info]            +- Scan ParquetRelation[] InputPaths: file:/Users/marmbrus/workspace/spark/target/tmp/spark-28f5676f-6232-440f-8753-60f6e1aacc26\n[info]   == Exception ==\n[info]   org.apache.spark.SparkException: Job aborted due to stage failure: Task 0 in stage 14.0 failed 1 times, most recent failure: Lost task 0.0 in stage 14.0 (TID 25, localhost): org.apache.spark.sql.catalyst.errors.package$TreeNodeException: Binding attribute, tree: a#70\n...\n```\n",
+    "commit": "7f4a08554969c5c9ea94bf53da0fa5328fbae651",
+    "createdAt": "2015-12-21T22:21:27Z",
+    "diffHunk": "@@ -194,4 +194,45 @@ class DataFrameNaFunctionsSuite extends QueryTest with SharedSQLContext {\n     assert(out1(4) === Row(\"Amy\", null, null))\n     assert(out1(5) === Row(null, null, null))\n   }\n+\n+  test(\"Spark-12231: dropna with partitionBy and groupBy\") {\n+    withTempPath { dir =>\n+      val df = sqlContext.range(10)\n+      val df1 = df.withColumn(\"a\", $\"id\".cast(\"int\"))\n+      df1.write.partitionBy(\"id\").parquet(dir.getCanonicalPath)\n+      val df2 = sqlContext.read.parquet(dir.getCanonicalPath)\n+      val group = df2.na.drop().groupBy().count().collect()"
+  }, {
+    "author": {
+      "login": "kevinyu98"
+    },
+    "body": "Hi Michael: Sure, will change the testcase.\n",
+    "commit": "7f4a08554969c5c9ea94bf53da0fa5328fbae651",
+    "createdAt": "2015-12-22T08:22:27Z",
+    "diffHunk": "@@ -194,4 +194,45 @@ class DataFrameNaFunctionsSuite extends QueryTest with SharedSQLContext {\n     assert(out1(4) === Row(\"Amy\", null, null))\n     assert(out1(5) === Row(null, null, null))\n   }\n+\n+  test(\"Spark-12231: dropna with partitionBy and groupBy\") {\n+    withTempPath { dir =>\n+      val df = sqlContext.range(10)\n+      val df1 = df.withColumn(\"a\", $\"id\".cast(\"int\"))\n+      df1.write.partitionBy(\"id\").parquet(dir.getCanonicalPath)\n+      val df2 = sqlContext.read.parquet(dir.getCanonicalPath)\n+      val group = df2.na.drop().groupBy().count().collect()"
+  }],
+  "prId": 10388
+}, {
+  "comments": [{
+    "author": {
+      "login": "marmbrus"
+    },
+    "body": "It would be better to distill this down to its core and put the tests with the other DataSource tests.  In particular it seems like the actual but occurs when there are predicates that hit both partition and normal columns and nothing to do with `na.drop`.  Is that correct?\n",
+    "commit": "7f4a08554969c5c9ea94bf53da0fa5328fbae651",
+    "createdAt": "2015-12-21T22:44:18Z",
+    "diffHunk": "@@ -194,4 +194,45 @@ class DataFrameNaFunctionsSuite extends QueryTest with SharedSQLContext {\n     assert(out1(4) === Row(\"Amy\", null, null))\n     assert(out1(5) === Row(null, null, null))\n   }\n+\n+  test(\"Spark-12231: dropna with partitionBy and groupBy\") {"
+  }, {
+    "author": {
+      "login": "kevinyu98"
+    },
+    "body": "You are right, this problem is not related to na.drop. At that time, I was not sure where I can put the test case, so I just keep here. Thanks for the suggestion about putting with the other DataSource tests, I will change the test case and look for the place around the DataSource tests. Thanks very much !\n",
+    "commit": "7f4a08554969c5c9ea94bf53da0fa5328fbae651",
+    "createdAt": "2015-12-22T08:30:45Z",
+    "diffHunk": "@@ -194,4 +194,45 @@ class DataFrameNaFunctionsSuite extends QueryTest with SharedSQLContext {\n     assert(out1(4) === Row(\"Amy\", null, null))\n     assert(out1(5) === Row(null, null, null))\n   }\n+\n+  test(\"Spark-12231: dropna with partitionBy and groupBy\") {"
+  }],
+  "prId": 10388
+}]

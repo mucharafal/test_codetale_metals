@@ -1,0 +1,25 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Nit: space before parens",
+    "commit": "0a15c24a4c689b06028c51d52afade9b7b9559ba",
+    "createdAt": "2019-08-29T14:36:56Z",
+    "diffHunk": "@@ -18,26 +18,114 @@\n package org.apache.spark.serializer\n \n import org.apache.spark.{SparkConf, SparkFunSuite}\n+import org.apache.spark.internal.config.JAVA_SERIALIZER_CACHE_RESOLVED_CLASSES\n \n class JavaSerializerSuite extends SparkFunSuite {\n-  test(\"JavaSerializer instances are serializable\") {\n-    val serializer = new JavaSerializer(new SparkConf())\n+  test(\"JavaSerializer(without resolve class cache) instances are serializable\") {",
+    "line": 9
+  }],
+  "prId": 25470
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Do these need to be lazy, to defer instantiation?",
+    "commit": "0a15c24a4c689b06028c51d52afade9b7b9559ba",
+    "createdAt": "2019-08-29T14:37:29Z",
+    "diffHunk": "@@ -18,26 +18,114 @@\n package org.apache.spark.serializer\n \n import org.apache.spark.{SparkConf, SparkFunSuite}\n+import org.apache.spark.internal.config.JAVA_SERIALIZER_CACHE_RESOLVED_CLASSES\n \n class JavaSerializerSuite extends SparkFunSuite {\n-  test(\"JavaSerializer instances are serializable\") {\n-    val serializer = new JavaSerializer(new SparkConf())\n+  test(\"JavaSerializer(without resolve class cache) instances are serializable\") {\n+    val serializer = getSerializer(false)\n     val instance = serializer.newInstance()\n     val obj = instance.deserialize[JavaSerializer](instance.serialize(serializer))\n     // enforce class cast\n     obj.getClass\n   }\n \n-  test(\"Deserialize object containing a primitive Class as attribute\") {\n-    val serializer = new JavaSerializer(new SparkConf())\n+  test(\"JavaSerializer(with resolve class cache) instances are serializable\") {\n+    val serializer = getSerializer(true)\n+    val instance = serializer.newInstance()\n+    val obj = instance.deserialize[JavaSerializer](instance.serialize(serializer))\n+    // enforce class cast\n+    obj.getClass\n+  }\n+\n+  test(\"Deserialize(without resolve class cache) object containing a primitive \" +\n+    \"Class as attribute\") {\n+    val serializer = getSerializer(false)\n+    val instance = serializer.newInstance()\n+    val obj = instance.deserialize[ContainsPrimitiveClass](instance.serialize(\n+      new ContainsPrimitiveClass()))\n+    // enforce class cast\n+    obj.getClass\n+  }\n+\n+  test(\"Deserialize(with resolve class cache) object containing a primitive \" +\n+    \"Class as attribute\") {\n+    val serializer = getSerializer(true)\n     val instance = serializer.newInstance()\n     val obj = instance.deserialize[ContainsPrimitiveClass](instance.serialize(\n       new ContainsPrimitiveClass()))\n     // enforce class cast\n     obj.getClass\n   }\n+\n+  test (\"Deserialize(without resolve class cache) object with provider ClassLoader\") {\n+    val serializer = getSerializer(false)\n+    val instance = serializer.newInstance()\n+    deserializeWithClassLoader(instance)\n+    deserializeWithClassLoader(instance)\n+  }\n+\n+  test (\"Deserialize(with resolve class cache) object with provider ClassLoader\") {\n+    val serializer = getSerializer(true)\n+    val instance = serializer.newInstance()\n+    deserializeWithClassLoader(instance)\n+    deserializeWithClassLoader(instance)\n+  }\n+\n+  private def deserializeWithClassLoader(instance: SerializerInstance): Unit = {\n+    val myClass1Instance1 = new MyClass1\n+    val myClass2Instance1 = new MyClass2\n+    val bytes1 = instance.serialize(myClass1Instance1)\n+    val bytes2 = instance.serialize(myClass2Instance1)\n+    val deserialized1 = instance.deserialize[MyClass1](bytes1, loader1)\n+    val deserialized2 = instance.deserialize[MyClass2](bytes2, loader2)\n+    deserialized1.getClass\n+    deserialized2.getClass\n+\n+    bytes1.rewind()\n+    bytes2.rewind()\n+\n+    val thrown1 = intercept[ClassNotFoundException] {\n+      instance.deserialize(bytes1, loader2)\n+    }\n+    assert(thrown1.getMessage.contains(\"ClassLoader2 can't load class\"))\n+\n+    val thrown2 = intercept[ClassNotFoundException] {\n+      instance.deserialize(bytes2, loader1)\n+    }\n+    assert(thrown2.getMessage.contains(\"ClassLoader1 can't load class\"))\n+  }\n+\n+  def getSerializer(cache: Boolean): JavaSerializer = {\n+    val conf = new SparkConf()\n+    conf.set(JAVA_SERIALIZER_CACHE_RESOLVED_CLASSES, cache)\n+\n+    new JavaSerializer(conf)\n+  }\n+\n+  lazy val loader1 = new ClassLoader(null) {\n+    override def loadClass(name: String): Class[_] = {\n+      if (classOf[MyClass1].getName == name) {\n+        classOf[MyClass1]\n+      } else {\n+        throw new ClassNotFoundException(s\"ClassLoader1 can't load class :${name}\")\n+      }\n+    }\n+  }\n+\n+  lazy val loader2 = new ClassLoader(null) {",
+    "line": 102
+  }],
+  "prId": 25470
+}]

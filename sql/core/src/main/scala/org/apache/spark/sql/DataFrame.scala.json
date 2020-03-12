@@ -1,0 +1,61 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "liancheng"
+    },
+    "body": "This file should be renamed to Dataset.scala. Didn't do this yet for better diff view.\n",
+    "commit": "7d29c0637222e9a87755a50785c0580c3cf8fcb0",
+    "createdAt": "2016-03-09T16:36:12Z",
+    "diffHunk": "@@ -19,6 +19,7 @@ package org.apache.spark.sql\n ",
+    "line": 1
+  }],
+  "prId": 11443
+}, {
+  "comments": [{
+    "author": {
+      "login": "vlad17"
+    },
+    "body": "I don't think this is ever called. `select(Column*)` will always be preferred:\n\nhttps://gist.github.com/vlad17/93f1cb57aad42eb7de33f92d6282a44f\n",
+    "commit": "7d29c0637222e9a87755a50785c0580c3cf8fcb0",
+    "createdAt": "2016-08-01T20:38:30Z",
+    "diffHunk": "@@ -745,6 +825,80 @@ class DataFrame private[sql](\n   }\n \n   /**\n+   * Returns a new [[Dataset]] by computing the given [[Column]] expression for each element.\n+   *\n+   * {{{\n+   *   val ds = Seq(1, 2, 3).toDS()\n+   *   val newDS = ds.select(expr(\"value + 1\").as[Int])\n+   * }}}\n+   * @since 1.6.0\n+   */\n+  def select[U1: Encoder](c1: TypedColumn[T, U1]): Dataset[U1] = {",
+    "line": 326
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "I tried a simpler case, seems this works?\n\n```\nval ds = ....\nds.select($\"a\") // will call select(Column*)\nds.select($\"a\".as[Int]) // will call select[U1: Encoder](c1: TypedColumn[T, U1])\n```\n",
+    "commit": "7d29c0637222e9a87755a50785c0580c3cf8fcb0",
+    "createdAt": "2016-08-02T06:44:53Z",
+    "diffHunk": "@@ -745,6 +825,80 @@ class DataFrame private[sql](\n   }\n \n   /**\n+   * Returns a new [[Dataset]] by computing the given [[Column]] expression for each element.\n+   *\n+   * {{{\n+   *   val ds = Seq(1, 2, 3).toDS()\n+   *   val newDS = ds.select(expr(\"value + 1\").as[Int])\n+   * }}}\n+   * @since 1.6.0\n+   */\n+  def select[U1: Encoder](c1: TypedColumn[T, U1]): Dataset[U1] = {",
+    "line": 326
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "Weird, I tried your example, it does fail. Seems the `TypedColumn` returned by `Aggregator.toColumn` can't work here.\n",
+    "commit": "7d29c0637222e9a87755a50785c0580c3cf8fcb0",
+    "createdAt": "2016-08-02T06:52:30Z",
+    "diffHunk": "@@ -745,6 +825,80 @@ class DataFrame private[sql](\n   }\n \n   /**\n+   * Returns a new [[Dataset]] by computing the given [[Column]] expression for each element.\n+   *\n+   * {{{\n+   *   val ds = Seq(1, 2, 3).toDS()\n+   *   val newDS = ds.select(expr(\"value + 1\").as[Int])\n+   * }}}\n+   * @since 1.6.0\n+   */\n+  def select[U1: Encoder](c1: TypedColumn[T, U1]): Dataset[U1] = {",
+    "line": 326
+  }, {
+    "author": {
+      "login": "liancheng"
+    },
+    "body": "@vlad17 The reason why the snippet in your Gist fails is that `(1 to 10).toDS` is a `Dataset[Int]`, while `agg.toColumn` is a `TypedColumn[Long, Long]`. Thus the `select` call is dispatched to the untyped one. The following one works:\n\n```\nscala> spark.range(10).as[Long].select(agg.toColumn).show()\n+---------------+\n|$anon$1(bigint)|\n+---------------+\n|             10|\n+---------------+\n```\n",
+    "commit": "7d29c0637222e9a87755a50785c0580c3cf8fcb0",
+    "createdAt": "2016-08-02T07:42:52Z",
+    "diffHunk": "@@ -745,6 +825,80 @@ class DataFrame private[sql](\n   }\n \n   /**\n+   * Returns a new [[Dataset]] by computing the given [[Column]] expression for each element.\n+   *\n+   * {{{\n+   *   val ds = Seq(1, 2, 3).toDS()\n+   *   val newDS = ds.select(expr(\"value + 1\").as[Int])\n+   * }}}\n+   * @since 1.6.0\n+   */\n+  def select[U1: Encoder](c1: TypedColumn[T, U1]): Dataset[U1] = {",
+    "line": 326
+  }, {
+    "author": {
+      "login": "vlad17"
+    },
+    "body": "@liancheng Yup, I suppose that's working as expected then. It's a bit confusing since aggregator has an implicitcastinputtypes mixin.\n\nPerhaps it would be better for c1 to be TypedColumn[_, U1]?\n",
+    "commit": "7d29c0637222e9a87755a50785c0580c3cf8fcb0",
+    "createdAt": "2016-08-02T16:49:38Z",
+    "diffHunk": "@@ -745,6 +825,80 @@ class DataFrame private[sql](\n   }\n \n   /**\n+   * Returns a new [[Dataset]] by computing the given [[Column]] expression for each element.\n+   *\n+   * {{{\n+   *   val ds = Seq(1, 2, 3).toDS()\n+   *   val newDS = ds.select(expr(\"value + 1\").as[Int])\n+   * }}}\n+   * @since 1.6.0\n+   */\n+  def select[U1: Encoder](c1: TypedColumn[T, U1]): Dataset[U1] = {",
+    "line": 326
+  }],
+  "prId": 11443
+}]

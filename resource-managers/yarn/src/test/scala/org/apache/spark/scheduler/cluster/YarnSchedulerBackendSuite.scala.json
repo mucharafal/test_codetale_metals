@@ -1,0 +1,59 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Do you need the extra variable here, vs assigning to `yarnSchedulerBackend`? I don't see that they are used separately.",
+    "commit": "1ff92bf4e895122855754834b1faab94813046ab",
+    "createdAt": "2019-02-17T18:39:40Z",
+    "diffHunk": "@@ -32,15 +33,33 @@ import org.apache.spark.ui.TestFilter\n \n class YarnSchedulerBackendSuite extends SparkFunSuite with MockitoSugar with LocalSparkContext {\n \n+  private var yarnSchedulerBackend: YarnSchedulerBackend = _\n+\n+  override def afterEach() {\n+    try {\n+      yarnSchedulerBackend.stop()\n+    } finally {\n+      super.afterEach()\n+    }\n+  }\n+\n   test(\"RequestExecutors reflects node blacklist and is serializable\") {\n     sc = new SparkContext(\"local\", \"YarnSchedulerBackendSuite\")\n-    val sched = mock[TaskSchedulerImpl]\n-    when(sched.sc).thenReturn(sc)\n-    val yarnSchedulerBackend = new YarnSchedulerBackend(sched, sc) {\n+    // Subclassing the TaskSchedulerImpl here instead of using Mockito. For details see SPARK-26891.\n+    val sched = new TaskSchedulerImpl(sc) {\n+      val blacklistedNodes = new AtomicReference[Set[String]]()\n+\n+      def setNodeBlacklist(nodeBlacklist: Set[String]): Unit = blacklistedNodes.set(nodeBlacklist)\n+\n+      override def nodeBlacklist(): Set[String] = blacklistedNodes.get()\n+    }\n+\n+    val yarnSchedulerBackendExtended = new YarnSchedulerBackend(sched, sc) {",
+    "line": 38
+  }, {
+    "author": {
+      "login": "attilapiros"
+    },
+    "body": "It is needed because of the different type: the `yarnSchedulerBackend` type is `YarnSchedulerBackend` but `yarnSchedulerBackendExtended` type is an anonim subclass of `YarnSchedulerBackend` with the extra def `setNodeBlacklist`. On `yarnSchedulerBackend` I cannot call this extra method.\r\n",
+    "commit": "1ff92bf4e895122855754834b1faab94813046ab",
+    "createdAt": "2019-02-17T18:48:16Z",
+    "diffHunk": "@@ -32,15 +33,33 @@ import org.apache.spark.ui.TestFilter\n \n class YarnSchedulerBackendSuite extends SparkFunSuite with MockitoSugar with LocalSparkContext {\n \n+  private var yarnSchedulerBackend: YarnSchedulerBackend = _\n+\n+  override def afterEach() {\n+    try {\n+      yarnSchedulerBackend.stop()\n+    } finally {\n+      super.afterEach()\n+    }\n+  }\n+\n   test(\"RequestExecutors reflects node blacklist and is serializable\") {\n     sc = new SparkContext(\"local\", \"YarnSchedulerBackendSuite\")\n-    val sched = mock[TaskSchedulerImpl]\n-    when(sched.sc).thenReturn(sc)\n-    val yarnSchedulerBackend = new YarnSchedulerBackend(sched, sc) {\n+    // Subclassing the TaskSchedulerImpl here instead of using Mockito. For details see SPARK-26891.\n+    val sched = new TaskSchedulerImpl(sc) {\n+      val blacklistedNodes = new AtomicReference[Set[String]]()\n+\n+      def setNodeBlacklist(nodeBlacklist: Set[String]): Unit = blacklistedNodes.set(nodeBlacklist)\n+\n+      override def nodeBlacklist(): Set[String] = blacklistedNodes.get()\n+    }\n+\n+    val yarnSchedulerBackendExtended = new YarnSchedulerBackend(sched, sc) {",
+    "line": 38
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "If so then how is it assigned in the next line? a subclass of `YarnSchedulerBackend` is still assignable to `YarnSchedulerBackend`. I might be missing something obvious here.",
+    "commit": "1ff92bf4e895122855754834b1faab94813046ab",
+    "createdAt": "2019-02-17T18:51:57Z",
+    "diffHunk": "@@ -32,15 +33,33 @@ import org.apache.spark.ui.TestFilter\n \n class YarnSchedulerBackendSuite extends SparkFunSuite with MockitoSugar with LocalSparkContext {\n \n+  private var yarnSchedulerBackend: YarnSchedulerBackend = _\n+\n+  override def afterEach() {\n+    try {\n+      yarnSchedulerBackend.stop()\n+    } finally {\n+      super.afterEach()\n+    }\n+  }\n+\n   test(\"RequestExecutors reflects node blacklist and is serializable\") {\n     sc = new SparkContext(\"local\", \"YarnSchedulerBackendSuite\")\n-    val sched = mock[TaskSchedulerImpl]\n-    when(sched.sc).thenReturn(sc)\n-    val yarnSchedulerBackend = new YarnSchedulerBackend(sched, sc) {\n+    // Subclassing the TaskSchedulerImpl here instead of using Mockito. For details see SPARK-26891.\n+    val sched = new TaskSchedulerImpl(sc) {\n+      val blacklistedNodes = new AtomicReference[Set[String]]()\n+\n+      def setNodeBlacklist(nodeBlacklist: Set[String]): Unit = blacklistedNodes.set(nodeBlacklist)\n+\n+      override def nodeBlacklist(): Set[String] = blacklistedNodes.get()\n+    }\n+\n+    val yarnSchedulerBackendExtended = new YarnSchedulerBackend(sched, sc) {",
+    "line": 38
+  }, {
+    "author": {
+      "login": "attilapiros"
+    },
+    "body": "It is assignable as `yarnSchedulerBackendExtended` is an instance of `YarnSchedulerBackend` too, although not a direct one.  ",
+    "commit": "1ff92bf4e895122855754834b1faab94813046ab",
+    "createdAt": "2019-02-17T19:10:01Z",
+    "diffHunk": "@@ -32,15 +33,33 @@ import org.apache.spark.ui.TestFilter\n \n class YarnSchedulerBackendSuite extends SparkFunSuite with MockitoSugar with LocalSparkContext {\n \n+  private var yarnSchedulerBackend: YarnSchedulerBackend = _\n+\n+  override def afterEach() {\n+    try {\n+      yarnSchedulerBackend.stop()\n+    } finally {\n+      super.afterEach()\n+    }\n+  }\n+\n   test(\"RequestExecutors reflects node blacklist and is serializable\") {\n     sc = new SparkContext(\"local\", \"YarnSchedulerBackendSuite\")\n-    val sched = mock[TaskSchedulerImpl]\n-    when(sched.sc).thenReturn(sc)\n-    val yarnSchedulerBackend = new YarnSchedulerBackend(sched, sc) {\n+    // Subclassing the TaskSchedulerImpl here instead of using Mockito. For details see SPARK-26891.\n+    val sched = new TaskSchedulerImpl(sc) {\n+      val blacklistedNodes = new AtomicReference[Set[String]]()\n+\n+      def setNodeBlacklist(nodeBlacklist: Set[String]): Unit = blacklistedNodes.set(nodeBlacklist)\n+\n+      override def nodeBlacklist(): Set[String] = blacklistedNodes.get()\n+    }\n+\n+    val yarnSchedulerBackendExtended = new YarnSchedulerBackend(sched, sc) {",
+    "line": 38
+  }],
+  "prId": 23801
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Should this check if it's null, in case some tests don't set it? they might all do so now.",
+    "commit": "1ff92bf4e895122855754834b1faab94813046ab",
+    "createdAt": "2019-02-17T18:39:57Z",
+    "diffHunk": "@@ -32,15 +33,33 @@ import org.apache.spark.ui.TestFilter\n \n class YarnSchedulerBackendSuite extends SparkFunSuite with MockitoSugar with LocalSparkContext {\n \n+  private var yarnSchedulerBackend: YarnSchedulerBackend = _\n+\n+  override def afterEach() {\n+    try {\n+      yarnSchedulerBackend.stop()"
+  }, {
+    "author": {
+      "login": "attilapiros"
+    },
+    "body": "You are right It is better to have it so I add it soon.",
+    "commit": "1ff92bf4e895122855754834b1faab94813046ab",
+    "createdAt": "2019-02-17T18:50:13Z",
+    "diffHunk": "@@ -32,15 +33,33 @@ import org.apache.spark.ui.TestFilter\n \n class YarnSchedulerBackendSuite extends SparkFunSuite with MockitoSugar with LocalSparkContext {\n \n+  private var yarnSchedulerBackend: YarnSchedulerBackend = _\n+\n+  override def afterEach() {\n+    try {\n+      yarnSchedulerBackend.stop()"
+  }],
+  "prId": 23801
+}]

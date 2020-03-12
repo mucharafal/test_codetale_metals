@@ -1,0 +1,13 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "attilapiros"
+    },
+    "body": "As I have see `DELTA_BYTE_ARRAY`  will used for the types `BINARY` and `FIXED_LEN_BYTE_ARRAY` and they are also handled differently in `VectorizedDeltaByteArrayReader#readBinary`.\r\n\r\nIs it possible to test both cases?",
+    "commit": "35fc3029de19bbd7b5326b1d962cc29af8be7cbd",
+    "createdAt": "2019-03-26T13:43:28Z",
+    "diffHunk": "@@ -114,4 +118,36 @@ class ParquetEncodingSuite extends ParquetCompatibilityTest with SharedSQLContex\n       }\n     }\n   }\n+\n+  test(\"parquet v2 pages - delta encoding\") {\n+    val extraOptions = Map[String, String](\n+      ParquetOutputFormat.WRITER_VERSION -> ParquetProperties.WriterVersion.PARQUET_2_0.toString,\n+      ParquetOutputFormat.ENABLE_DICTIONARY -> \"false\"\n+    )\n+\n+    val hadoopConf = spark.sessionState.newHadoopConfWithOptions(extraOptions)\n+    withSQLConf(SQLConf.PARQUET_VECTORIZED_READER_ENABLED.key -> \"true\",\n+      ParquetOutputFormat.JOB_SUMMARY_LEVEL -> \"ALL\") {\n+      withTempPath { dir =>\n+        val path = s\"${dir.getCanonicalPath}/test.parquet\"\n+        val data = (1 to 3).map { i =>\n+          (i, i.toLong, s\"test_${i}\")\n+        }\n+\n+        spark.createDataFrame(data).write.options(extraOptions).mode(\"overwrite\").parquet(path)\n+\n+        val blockMetadata = readFooter(new Path(path), hadoopConf).getBlocks.asScala.head\n+        val columnChunkMetadataList = blockMetadata.getColumns.asScala\n+\n+        // Verify that indeed delta encoding is used for each column\n+        assert(columnChunkMetadataList.length === 3)\n+        assert(columnChunkMetadataList(0).getEncodings.contains(Encoding.DELTA_BINARY_PACKED))\n+        assert(columnChunkMetadataList(1).getEncodings.contains(Encoding.DELTA_BINARY_PACKED))\n+        assert(columnChunkMetadataList(2).getEncodings.contains(Encoding.DELTA_BYTE_ARRAY))",
+    "line": 42
+  }],
+  "prId": 23988
+}]

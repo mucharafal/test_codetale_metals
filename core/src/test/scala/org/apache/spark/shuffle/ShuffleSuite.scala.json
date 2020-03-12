@@ -1,0 +1,24 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "squito"
+    },
+    "body": "This is the most important new test.  It makes sure that we can have multiple shuffle writers executing concurrently, and the output of both can be read.\n\n`multipleAttempConfs` is just to make sure we can test different code paths from different confs, in particular in the `Unsafe` shuffle.\n",
+    "commit": "fbd129b37fbb821053088bb5b704611262029dd0",
+    "createdAt": "2015-06-09T14:58:49Z",
+    "diffHunk": "@@ -315,8 +320,115 @@ abstract class ShuffleSuite extends SparkFunSuite with Matchers with LocalSparkC\n     assert(metrics.bytesWritten === metrics.byresRead)\n     assert(metrics.bytesWritten > 0)\n   }\n+\n+  def multipleAttemptConfs: Seq[(String, SparkConf)] = Seq(\"basic\" -> conf)\n+\n+  multipleAttemptConfs.foreach { case (name, multipleAttemptConf) =>\n+    test(\"multiple attempts for one task: conf = \" + name) {\n+      sc = new SparkContext(\"local\", \"test\", multipleAttemptConf)",
+    "line": 45
+  }],
+  "prId": 6648
+}, {
+  "comments": [{
+    "author": {
+      "login": "squito"
+    },
+    "body": "This also tests that the output gets cleaned up properly from all attempts.  To test that, I added a somewhat hacky `getShuffleFiles` method to `ShuffleManager`.  A shuffle manager could easily game this test, since the only purpose the method serves is for this test ... but there are some checks below to make sure its doing something reasonable, so I think its OK.  open to other suggestions\n",
+    "commit": "fbd129b37fbb821053088bb5b704611262029dd0",
+    "createdAt": "2015-06-09T15:00:50Z",
+    "diffHunk": "@@ -315,8 +320,115 @@ abstract class ShuffleSuite extends SparkFunSuite with Matchers with LocalSparkC\n     assert(metrics.bytesWritten === metrics.byresRead)\n     assert(metrics.bytesWritten > 0)\n   }\n+\n+  def multipleAttemptConfs: Seq[(String, SparkConf)] = Seq(\"basic\" -> conf)\n+\n+  multipleAttemptConfs.foreach { case (name, multipleAttemptConf) =>\n+    test(\"multiple attempts for one task: conf = \" + name) {\n+      sc = new SparkContext(\"local\", \"test\", multipleAttemptConf)\n+      val mapTrackerMaster = sc.env.mapOutputTracker.asInstanceOf[MapOutputTrackerMaster]\n+      val manager = sc.env.shuffleManager\n+      val taskMemoryManager = new TaskMemoryManager(sc.env.executorMemoryManager)\n+      val shuffleMapRdd = new MyRDD(sc, 1, Nil)\n+      val shuffleDep = new ShuffleDependency(shuffleMapRdd, new HashPartitioner(1))\n+      val shuffleHandle = manager.registerShuffle(0, 1, shuffleDep)\n+\n+      // first attempt -- its successful\n+      val writer1 = manager.getWriter[Int, Int](shuffleHandle, 0, 0,\n+        new TaskContextImpl(0, 0, 0L, 0, taskMemoryManager, false, stageAttemptId = 0,\n+          taskMetrics = new TaskMetrics))\n+      val data1 = (1 to 10).map { x => x -> x}\n+\n+      // second attempt -- also successful.  We'll write out different data,\n+      // just to simulate the fact that the records may get written differently\n+      // depending on what gets spilled, what gets combined, etc.\n+      val writer2 = manager.getWriter[Int, Int](shuffleHandle, 0, 1,\n+        new TaskContextImpl(0, 0, 1L, 0, taskMemoryManager, false, stageAttemptId = 1,\n+          taskMetrics = new TaskMetrics))\n+      val data2 = (11 to 20).map { x => x -> x}\n+\n+      // interleave writes of both attempts -- we want to test that both attempts can occur\n+      // simultaneously, and everything is still OK\n+      val interleaver = new InterleavingIterator(\n+        data1, {iter: Iterator[(Int, Int)] => writer1.write(iter); writer1.stop(true)},\n+        data2, {iter: Iterator[(Int, Int)] => writer2.write(iter); writer2.stop(true)})\n+      val (mapOutput1, mapOutput2) = interleaver.run()\n+\n+\n+      // register the output from attempt 1, and try to read it\n+      mapOutput1.foreach { mapStatus => mapTrackerMaster.registerMapOutputs(0, Array(mapStatus))}\n+      val reader1 = manager.getReader[Int, Int](shuffleHandle, 0, 1,\n+        new TaskContextImpl(1, 0, 2L, 0, taskMemoryManager, false, taskMetrics = new TaskMetrics))\n+      reader1.read().toIndexedSeq should be (data1.toIndexedSeq)\n+\n+      // now for attempt 2 (registeringMapOutputs always blows away all previous outputs, so we\n+      // won't find the output for attempt 1)\n+      mapOutput2.foreach { mapStatus => mapTrackerMaster.registerMapOutputs(0, Array(mapStatus))}\n+\n+      val reader2 = manager.getReader[Int, Int](shuffleHandle, 0, 1,\n+        new TaskContextImpl(1, 0, 2L, 0, taskMemoryManager, false, taskMetrics = new TaskMetrics))\n+      reader2.read().toIndexedSeq should be(data2.toIndexedSeq)\n+\n+\n+      // make sure that when the shuffle gets unregistered, we cleanup from all attempts\n+      val shuffleFiles1 = manager.getShuffleFiles(shuffleHandle, 0, 0, 0)"
+  }],
+  "prId": 6648
+}]

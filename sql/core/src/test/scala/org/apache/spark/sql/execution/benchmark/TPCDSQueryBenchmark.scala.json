@@ -1,0 +1,172 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "maropu"
+    },
+    "body": "This change is not directly related to this pr though, I added this log here cuz this change is much trivial and I think this log helps to easily check which query fails.",
+    "commit": "b543e710dae79da33a9334d5bbe4bb474a44b39c",
+    "createdAt": "2017-09-11T07:45:41Z",
+    "diffHunk": "@@ -32,76 +33,76 @@ import org.apache.spark.util.Benchmark\n  * Benchmark to measure TPCDS query performance.\n  * To run this:\n  *  spark-submit --class <this class> --jars <spark sql test jar>\n+ *\n+ * By default, this class runs all the TPC-DS queries. If you want to run some of them,\n+ * you can use an option to filter the queries that it runs, e.g.,\n+ * to run q2, q4, and q6 only:\n+ *  spark-submit --class <this class> --conf spark.sql.tpcds.queryFilter=\"q2,q4,q6\"\n+ *    --jars <spark sql test jar>\n  */\n-object TPCDSQueryBenchmark {\n-  val conf =\n-    new SparkConf()\n-      .setMaster(\"local[1]\")\n-      .setAppName(\"test-sql-context\")\n-      .set(\"spark.sql.parquet.compression.codec\", \"snappy\")\n-      .set(\"spark.sql.shuffle.partitions\", \"4\")\n-      .set(\"spark.driver.memory\", \"3g\")\n-      .set(\"spark.executor.memory\", \"3g\")\n-      .set(\"spark.sql.autoBroadcastJoinThreshold\", (20 * 1024 * 1024).toString)\n-      .set(\"spark.sql.crossJoin.enabled\", \"true\")\n-\n-  val spark = SparkSession.builder.config(conf).getOrCreate()\n+object TPCDSQueryBenchmark extends Logging {\n \n-  val tables = Seq(\"catalog_page\", \"catalog_returns\", \"customer\", \"customer_address\",\n-    \"customer_demographics\", \"date_dim\", \"household_demographics\", \"inventory\", \"item\",\n-    \"promotion\", \"store\", \"store_returns\", \"catalog_sales\", \"web_sales\", \"store_sales\",\n-    \"web_returns\", \"web_site\", \"reason\", \"call_center\", \"warehouse\", \"ship_mode\", \"income_band\",\n-    \"time_dim\", \"web_page\")\n-\n-  def setupTables(dataLocation: String): Map[String, Long] = {\n-    tables.map { tableName =>\n-      spark.read.parquet(s\"$dataLocation/$tableName\").createOrReplaceTempView(tableName)\n-      tableName -> spark.table(tableName).count()\n-    }.toMap\n-  }\n+  case class TpcdsQueries(spark: SparkSession, queries: Seq[String], dataLocation: String) {\n \n-  def tpcdsAll(dataLocation: String, queries: Seq[String]): Unit = {\n     require(dataLocation.nonEmpty,\n       \"please modify the value of dataLocation to point to your local TPCDS data\")\n-    val tableSizes = setupTables(dataLocation)\n-    queries.foreach { name =>\n-      val queryString = fileToString(new File(Thread.currentThread().getContextClassLoader\n-        .getResource(s\"tpcds/$name.sql\").getFile))\n-\n-      // This is an indirect hack to estimate the size of each query's input by traversing the\n-      // logical plan and adding up the sizes of all tables that appear in the plan. Note that this\n-      // currently doesn't take WITH subqueries into account which might lead to fairly inaccurate\n-      // per-row processing time for those cases.\n-      val queryRelations = scala.collection.mutable.HashSet[String]()\n-      spark.sql(queryString).queryExecution.logical.map {\n-        case UnresolvedRelation(t: TableIdentifier) =>\n-          queryRelations.add(t.table)\n-        case lp: LogicalPlan =>\n-          lp.expressions.foreach { _ foreach {\n-            case subquery: SubqueryExpression =>\n-              subquery.plan.foreach {\n-                case UnresolvedRelation(t: TableIdentifier) =>\n-                  queryRelations.add(t.table)\n-                case _ =>\n-              }\n-            case _ =>\n+\n+    private val tables = Seq(\"catalog_page\", \"catalog_returns\", \"customer\", \"customer_address\",\n+      \"customer_demographics\", \"date_dim\", \"household_demographics\", \"inventory\", \"item\",\n+      \"promotion\", \"store\", \"store_returns\", \"catalog_sales\", \"web_sales\", \"store_sales\",\n+      \"web_returns\", \"web_site\", \"reason\", \"call_center\", \"warehouse\", \"ship_mode\", \"income_band\",\n+      \"time_dim\", \"web_page\")\n+\n+    private def setupTables(dataLocation: String): Map[String, Long] = {\n+      tables.map { tableName =>\n+        spark.read.parquet(s\"$dataLocation/$tableName\").createOrReplaceTempView(tableName)\n+        tableName -> spark.table(tableName).count()\n+      }.toMap\n+    }\n+\n+    def run(): Unit = {\n+      val tableSizes = setupTables(dataLocation)\n+      queries.foreach { name =>\n+        val queryString = fileToString(new File(Thread.currentThread().getContextClassLoader\n+          .getResource(s\"tpcds/$name.sql\").getFile))\n+\n+        // This is an indirect hack to estimate the size of each query's input by traversing the\n+        // logical plan and adding up the sizes of all tables that appear in the plan. Note that this\n+        // currently doesn't take WITH subqueries into account which might lead to fairly inaccurate\n+        // per-row processing time for those cases.\n+        val queryRelations = scala.collection.mutable.HashSet[String]()\n+        spark.sql(queryString).queryExecution.logical.map {\n+          case UnresolvedRelation(t: TableIdentifier) =>\n+            queryRelations.add(t.table)\n+          case lp: LogicalPlan =>\n+            lp.expressions.foreach { _ foreach {\n+              case subquery: SubqueryExpression =>\n+                subquery.plan.foreach {\n+                  case UnresolvedRelation(t: TableIdentifier) =>\n+                    queryRelations.add(t.table)\n+                  case _ =>\n+                }\n+              case _ =>\n+            }\n           }\n+          case _ =>\n         }\n-        case _ =>\n-      }\n-      val numRows = queryRelations.map(tableSizes.getOrElse(_, 0L)).sum\n-      val benchmark = new Benchmark(s\"TPCDS Snappy\", numRows, 5)\n-      benchmark.addCase(name) { i =>\n-        spark.sql(queryString).collect()\n+        val numRows = queryRelations.map(tableSizes.getOrElse(_, 0L)).sum\n+        val benchmark = new Benchmark(s\"TPCDS Snappy\", numRows, 5)\n+        benchmark.addCase(name) { i =>\n+          spark.sql(queryString).collect()\n+        }\n+        logInfo(s\"\\n\\n===== TPCDS QUERY BENCHMARK OUTPUT FOR $name =====\\n\")"
+  }],
+  "prId": 19188
+}, {
+  "comments": [{
+    "author": {
+      "login": "kiszk"
+    },
+    "body": "nit: `class` -> `variable`?",
+    "commit": "b543e710dae79da33a9334d5bbe4bb474a44b39c",
+    "createdAt": "2017-09-11T08:35:55Z",
+    "diffHunk": "@@ -113,12 +114,40 @@ object TPCDSQueryBenchmark {\n       \"q81\", \"q82\", \"q83\", \"q84\", \"q85\", \"q86\", \"q87\", \"q88\", \"q89\", \"q90\",\n       \"q91\", \"q92\", \"q93\", \"q94\", \"q95\", \"q96\", \"q97\", \"q98\", \"q99\")\n \n+    val sparkConf = new SparkConf()\n+      .setMaster(\"local[1]\")\n+      .setAppName(\"test-sql-context\")\n+      .set(\"spark.sql.parquet.compression.codec\", \"snappy\")\n+      .set(\"spark.sql.shuffle.partitions\", \"4\")\n+      .set(\"spark.driver.memory\", \"3g\")\n+      .set(\"spark.executor.memory\", \"3g\")\n+      .set(\"spark.sql.autoBroadcastJoinThreshold\", (20 * 1024 * 1024).toString)\n+      .set(\"spark.sql.crossJoin.enabled\", \"true\")\n+\n+    // If `spark.sql.tpcds.queryFilter` defined, this class filters the queries that"
+  }],
+  "prId": 19188
+}, {
+  "comments": [{
+    "author": {
+      "login": "kiszk"
+    },
+    "body": "nit: Do we need `queries =`?",
+    "commit": "b543e710dae79da33a9334d5bbe4bb474a44b39c",
+    "createdAt": "2017-09-11T08:40:20Z",
+    "diffHunk": "@@ -113,12 +114,40 @@ object TPCDSQueryBenchmark {\n       \"q81\", \"q82\", \"q83\", \"q84\", \"q85\", \"q86\", \"q87\", \"q88\", \"q89\", \"q90\",\n       \"q91\", \"q92\", \"q93\", \"q94\", \"q95\", \"q96\", \"q97\", \"q98\", \"q99\")\n \n+    val sparkConf = new SparkConf()\n+      .setMaster(\"local[1]\")\n+      .setAppName(\"test-sql-context\")\n+      .set(\"spark.sql.parquet.compression.codec\", \"snappy\")\n+      .set(\"spark.sql.shuffle.partitions\", \"4\")\n+      .set(\"spark.driver.memory\", \"3g\")\n+      .set(\"spark.executor.memory\", \"3g\")\n+      .set(\"spark.sql.autoBroadcastJoinThreshold\", (20 * 1024 * 1024).toString)\n+      .set(\"spark.sql.crossJoin.enabled\", \"true\")\n+\n+    // If `spark.sql.tpcds.queryFilter` defined, this class filters the queries that\n+    // this option selects.\n+    val queryFilter = sparkConf\n+      .getOption(\"spark.sql.tpcds.queryFilter\").map(_.split(\",\").map(_.trim).toSet)\n+      .getOrElse(Set.empty)\n+\n+    val queriesToRun = if (queryFilter.nonEmpty) {\n+      val queries = tpcdsAllQueries.filter { case queryName => queryFilter.contains(queryName) }\n+      if (queries.isEmpty) {\n+        throw new RuntimeException(\"Bad query name filter: \" + queryFilter)\n+      }\n+      queries\n+    } else {\n+      tpcdsAllQueries\n+    }\n+\n     // In order to run this benchmark, please follow the instructions at\n     // https://github.com/databricks/spark-sql-perf/blob/master/README.md to generate the TPCDS data\n     // locally (preferably with a scale factor of 5 for benchmarking). Thereafter, the value of\n     // dataLocation below needs to be set to the location where the generated data is stored.\n     val dataLocation = \"\"\n \n-    tpcdsAll(dataLocation, queries = tpcdsQueries)\n+    val spark = SparkSession.builder.config(sparkConf).getOrCreate()\n+    val tpcdsQueries = TpcdsQueries(spark, queries = queriesToRun, dataLocation)"
+  }],
+  "prId": 19188
+}, {
+  "comments": [{
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "Could we add an argument, instead of using the SQLConf? See https://github.com/apache/spark/pull/18592#discussion_r138217049",
+    "commit": "b543e710dae79da33a9334d5bbe4bb474a44b39c",
+    "createdAt": "2017-09-11T23:19:58Z",
+    "diffHunk": "@@ -113,12 +114,39 @@ object TPCDSQueryBenchmark {\n       \"q81\", \"q82\", \"q83\", \"q84\", \"q85\", \"q86\", \"q87\", \"q88\", \"q89\", \"q90\",\n       \"q91\", \"q92\", \"q93\", \"q94\", \"q95\", \"q96\", \"q97\", \"q98\", \"q99\")\n \n+    val sparkConf = new SparkConf()"
+  }, {
+    "author": {
+      "login": "maropu"
+    },
+    "body": "ok",
+    "commit": "b543e710dae79da33a9334d5bbe4bb474a44b39c",
+    "createdAt": "2017-09-11T23:52:19Z",
+    "diffHunk": "@@ -113,12 +114,39 @@ object TPCDSQueryBenchmark {\n       \"q81\", \"q82\", \"q83\", \"q84\", \"q85\", \"q86\", \"q87\", \"q88\", \"q89\", \"q90\",\n       \"q91\", \"q92\", \"q93\", \"q94\", \"q95\", \"q96\", \"q97\", \"q98\", \"q99\")\n \n+    val sparkConf = new SparkConf()"
+  }],
+  "prId": 19188
+}, {
+  "comments": [{
+    "author": {
+      "login": "maropu"
+    },
+    "body": "See https://github.com/apache/spark/pull/19188#discussion_r137999669",
+    "commit": "b543e710dae79da33a9334d5bbe4bb474a44b39c",
+    "createdAt": "2017-09-13T02:25:41Z",
+    "diffHunk": "@@ -90,7 +91,9 @@ object TPCDSQueryBenchmark {\n       benchmark.addCase(name) { i =>\n         spark.sql(queryString).collect()\n       }\n+      logInfo(s\"\\n\\n===== TPCDS QUERY BENCHMARK OUTPUT FOR $name =====\\n\")",
+    "line": 24
+  }],
+  "prId": 19188
+}, {
+  "comments": [{
+    "author": {
+      "login": "viirya"
+    },
+    "body": "Add case insensitive?",
+    "commit": "b543e710dae79da33a9334d5bbe4bb474a44b39c",
+    "createdAt": "2017-09-13T02:28:31Z",
+    "diffHunk": "@@ -110,6 +113,19 @@ object TPCDSQueryBenchmark {\n       \"q81\", \"q82\", \"q83\", \"q84\", \"q85\", \"q86\", \"q87\", \"q88\", \"q89\", \"q90\",\n       \"q91\", \"q92\", \"q93\", \"q94\", \"q95\", \"q96\", \"q97\", \"q98\", \"q99\")\n \n-    tpcdsAll(benchmarkArgs.dataLocation, queries = tpcdsQueries)\n+    // If `--query-filter` defined, filters the queries that this option selects\n+    val queriesToRun = if (benchmarkArgs.queryFilter.nonEmpty) {\n+      val queries = tpcdsQueries.filter { case queryName =>\n+        benchmarkArgs.queryFilter.contains(queryName)",
+    "line": 38
+  }, {
+    "author": {
+      "login": "maropu"
+    },
+    "body": "yea, I like the idea.",
+    "commit": "b543e710dae79da33a9334d5bbe4bb474a44b39c",
+    "createdAt": "2017-09-13T02:52:15Z",
+    "diffHunk": "@@ -110,6 +113,19 @@ object TPCDSQueryBenchmark {\n       \"q81\", \"q82\", \"q83\", \"q84\", \"q85\", \"q86\", \"q87\", \"q88\", \"q89\", \"q90\",\n       \"q91\", \"q92\", \"q93\", \"q94\", \"q95\", \"q96\", \"q97\", \"q98\", \"q99\")\n \n-    tpcdsAll(benchmarkArgs.dataLocation, queries = tpcdsQueries)\n+    // If `--query-filter` defined, filters the queries that this option selects\n+    val queriesToRun = if (benchmarkArgs.queryFilter.nonEmpty) {\n+      val queries = tpcdsQueries.filter { case queryName =>\n+        benchmarkArgs.queryFilter.contains(queryName)",
+    "line": 38
+  }],
+  "prId": 19188
+}, {
+  "comments": [{
+    "author": {
+      "login": "viirya"
+    },
+    "body": "`\"Empty queries to run. Bad query name filter: \" + benchmarkArgs.queryFilter`.",
+    "commit": "b543e710dae79da33a9334d5bbe4bb474a44b39c",
+    "createdAt": "2017-09-13T02:31:11Z",
+    "diffHunk": "@@ -110,6 +113,19 @@ object TPCDSQueryBenchmark {\n       \"q81\", \"q82\", \"q83\", \"q84\", \"q85\", \"q86\", \"q87\", \"q88\", \"q89\", \"q90\",\n       \"q91\", \"q92\", \"q93\", \"q94\", \"q95\", \"q96\", \"q97\", \"q98\", \"q99\")\n \n-    tpcdsAll(benchmarkArgs.dataLocation, queries = tpcdsQueries)\n+    // If `--query-filter` defined, filters the queries that this option selects\n+    val queriesToRun = if (benchmarkArgs.queryFilter.nonEmpty) {\n+      val queries = tpcdsQueries.filter { case queryName =>\n+        benchmarkArgs.queryFilter.contains(queryName)\n+      }\n+      if (queries.isEmpty) {\n+        throw new RuntimeException(\"Bad query name filter: \" + benchmarkArgs.queryFilter)"
+  }, {
+    "author": {
+      "login": "maropu"
+    },
+    "body": "ok",
+    "commit": "b543e710dae79da33a9334d5bbe4bb474a44b39c",
+    "createdAt": "2017-09-13T02:52:00Z",
+    "diffHunk": "@@ -110,6 +113,19 @@ object TPCDSQueryBenchmark {\n       \"q81\", \"q82\", \"q83\", \"q84\", \"q85\", \"q86\", \"q87\", \"q88\", \"q89\", \"q90\",\n       \"q91\", \"q92\", \"q93\", \"q94\", \"q95\", \"q96\", \"q97\", \"q98\", \"q99\")\n \n-    tpcdsAll(benchmarkArgs.dataLocation, queries = tpcdsQueries)\n+    // If `--query-filter` defined, filters the queries that this option selects\n+    val queriesToRun = if (benchmarkArgs.queryFilter.nonEmpty) {\n+      val queries = tpcdsQueries.filter { case queryName =>\n+        benchmarkArgs.queryFilter.contains(queryName)\n+      }\n+      if (queries.isEmpty) {\n+        throw new RuntimeException(\"Bad query name filter: \" + benchmarkArgs.queryFilter)"
+  }],
+  "prId": 19188
+}, {
+  "comments": [{
+    "author": {
+      "login": "viirya"
+    },
+    "body": "Update this usage text too?",
+    "commit": "b543e710dae79da33a9334d5bbe4bb474a44b39c",
+    "createdAt": "2017-09-13T02:34:31Z",
+    "diffHunk": "@@ -31,7 +32,7 @@ import org.apache.spark.util.Benchmark\n  * To run this:\n  *  spark-submit --class <this class> <spark sql test jar> <TPCDS data location>"
+  }, {
+    "author": {
+      "login": "maropu"
+    },
+    "body": "ok",
+    "commit": "b543e710dae79da33a9334d5bbe4bb474a44b39c",
+    "createdAt": "2017-09-13T02:51:50Z",
+    "diffHunk": "@@ -31,7 +32,7 @@ import org.apache.spark.util.Benchmark\n  * To run this:\n  *  spark-submit --class <this class> <spark sql test jar> <TPCDS data location>"
+  }],
+  "prId": 19188
+}, {
+  "comments": [{
+    "author": {
+      "login": "viirya"
+    },
+    "body": "This looks incorrect?",
+    "commit": "b543e710dae79da33a9334d5bbe4bb474a44b39c",
+    "createdAt": "2017-09-13T07:41:04Z",
+    "diffHunk": "@@ -29,9 +30,9 @@ import org.apache.spark.util.Benchmark\n /**\n  * Benchmark to measure TPCDS query performance.\n  * To run this:\n- *  spark-submit --class <this class> <spark sql test jar> <TPCDS data location>\n+ *  spark-submit --class <this class> <spark sql test jar> --data-location <TPCDS data location>",
+    "line": 13
+  }, {
+    "author": {
+      "login": "maropu"
+    },
+    "body": "sorry, but I missed your point. what's correct?",
+    "commit": "b543e710dae79da33a9334d5bbe4bb474a44b39c",
+    "createdAt": "2017-09-13T07:48:07Z",
+    "diffHunk": "@@ -29,9 +30,9 @@ import org.apache.spark.util.Benchmark\n /**\n  * Benchmark to measure TPCDS query performance.\n  * To run this:\n- *  spark-submit --class <this class> <spark sql test jar> <TPCDS data location>\n+ *  spark-submit --class <this class> <spark sql test jar> --data-location <TPCDS data location>",
+    "line": 13
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "`--data-location <TPCDS data location> [--query-filter Queries to filter]`?",
+    "commit": "b543e710dae79da33a9334d5bbe4bb474a44b39c",
+    "createdAt": "2017-09-13T07:51:07Z",
+    "diffHunk": "@@ -29,9 +30,9 @@ import org.apache.spark.util.Benchmark\n /**\n  * Benchmark to measure TPCDS query performance.\n  * To run this:\n- *  spark-submit --class <this class> <spark sql test jar> <TPCDS data location>\n+ *  spark-submit --class <this class> <spark sql test jar> --data-location <TPCDS data location>",
+    "line": 13
+  }, {
+    "author": {
+      "login": "maropu"
+    },
+    "body": "aha, thanks. better to add optional parameters here? I like a simple example here.",
+    "commit": "b543e710dae79da33a9334d5bbe4bb474a44b39c",
+    "createdAt": "2017-09-13T07:53:30Z",
+    "diffHunk": "@@ -29,9 +30,9 @@ import org.apache.spark.util.Benchmark\n /**\n  * Benchmark to measure TPCDS query performance.\n  * To run this:\n- *  spark-submit --class <this class> <spark sql test jar> <TPCDS data location>\n+ *  spark-submit --class <this class> <spark sql test jar> --data-location <TPCDS data location>",
+    "line": 13
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "OK. I see.",
+    "commit": "b543e710dae79da33a9334d5bbe4bb474a44b39c",
+    "createdAt": "2017-09-13T07:55:06Z",
+    "diffHunk": "@@ -29,9 +30,9 @@ import org.apache.spark.util.Benchmark\n /**\n  * Benchmark to measure TPCDS query performance.\n  * To run this:\n- *  spark-submit --class <this class> <spark sql test jar> <TPCDS data location>\n+ *  spark-submit --class <this class> <spark sql test jar> --data-location <TPCDS data location>",
+    "line": 13
+  }],
+  "prId": 19188
+}]

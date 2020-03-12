@@ -1,0 +1,117 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "dilipbiswal"
+    },
+    "body": "@seancxmao Thanks for adding the doc. Can a small example here help illustrate this better ?",
+    "commit": "26b4dee5cd8e4e5fe7e1a34543bad17e05b9b783",
+    "createdAt": "2018-10-28T21:25:28Z",
+    "diffHunk": "@@ -51,6 +51,9 @@ Spark SQL supports the vast majority of Hive features, such as:\n * Explain\n * Partitioned tables including dynamic partition insertion\n * View\n+  * If column aliases are not specified in view definition queries, both Spark and Hive will\n+    generate alias names, but in different ways. In order for Spark to be able to read views created\n+    by Hive, users should explicitly specify column aliases in view definition queries."
+  }, {
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "+1",
+    "commit": "26b4dee5cd8e4e5fe7e1a34543bad17e05b9b783",
+    "createdAt": "2018-10-29T01:10:53Z",
+    "diffHunk": "@@ -51,6 +51,9 @@ Spark SQL supports the vast majority of Hive features, such as:\n * Explain\n * Partitioned tables including dynamic partition insertion\n * View\n+  * If column aliases are not specified in view definition queries, both Spark and Hive will\n+    generate alias names, but in different ways. In order for Spark to be able to read views created\n+    by Hive, users should explicitly specify column aliases in view definition queries."
+  }, {
+    "author": {
+      "login": "seancxmao"
+    },
+    "body": "Good idea. I have added an example.",
+    "commit": "26b4dee5cd8e4e5fe7e1a34543bad17e05b9b783",
+    "createdAt": "2018-10-29T09:15:07Z",
+    "diffHunk": "@@ -51,6 +51,9 @@ Spark SQL supports the vast majority of Hive features, such as:\n * Explain\n * Partitioned tables including dynamic partition insertion\n * View\n+  * If column aliases are not specified in view definition queries, both Spark and Hive will\n+    generate alias names, but in different ways. In order for Spark to be able to read views created\n+    by Hive, users should explicitly specify column aliases in view definition queries."
+  }],
+  "prId": 22868
+}, {
+  "comments": [{
+    "author": {
+      "login": "dilipbiswal"
+    },
+    "body": "nit : We could perhaps simplify the query to : \r\n```\r\nCREATE VIEW v1 AS (SELECT c1 + 1, upper(c2) FROM t1);\r\n```\r\nwhat do you think ?",
+    "commit": "26b4dee5cd8e4e5fe7e1a34543bad17e05b9b783",
+    "createdAt": "2018-10-29T18:39:59Z",
+    "diffHunk": "@@ -53,7 +53,20 @@ Spark SQL supports the vast majority of Hive features, such as:\n * View\n   * If column aliases are not specified in view definition queries, both Spark and Hive will\n     generate alias names, but in different ways. In order for Spark to be able to read views created\n-    by Hive, users should explicitly specify column aliases in view definition queries.\n+    by Hive, users should explicitly specify column aliases in view definition queries. As an\n+    example, Spark cannot read `v1` created as below by Hive.\n+\n+    ```\n+    CREATE TABLE t1 (c1 INT, c2 STRING);\n+    CREATE VIEW v1 AS SELECT * FROM (SELECT c1 + 1, upper(c2) FROM t1) t2;"
+  }, {
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "BTW, @dilipbiswal . The above query `CREATE VIEW v1 AS (SELECT c1 + 1, upper(c2) FROM t1);` seems to fail at Hive 1.2.2.",
+    "commit": "26b4dee5cd8e4e5fe7e1a34543bad17e05b9b783",
+    "createdAt": "2018-10-29T19:08:30Z",
+    "diffHunk": "@@ -53,7 +53,20 @@ Spark SQL supports the vast majority of Hive features, such as:\n * View\n   * If column aliases are not specified in view definition queries, both Spark and Hive will\n     generate alias names, but in different ways. In order for Spark to be able to read views created\n-    by Hive, users should explicitly specify column aliases in view definition queries.\n+    by Hive, users should explicitly specify column aliases in view definition queries. As an\n+    example, Spark cannot read `v1` created as below by Hive.\n+\n+    ```\n+    CREATE TABLE t1 (c1 INT, c2 STRING);\n+    CREATE VIEW v1 AS SELECT * FROM (SELECT c1 + 1, upper(c2) FROM t1) t2;"
+  }, {
+    "author": {
+      "login": "dilipbiswal"
+    },
+    "body": "@dongjoon-hyun oh.. thanks .. because it requires an explicit correlation ? Sorry, don't have  1.2.2 env to try out ..",
+    "commit": "26b4dee5cd8e4e5fe7e1a34543bad17e05b9b783",
+    "createdAt": "2018-10-29T19:17:43Z",
+    "diffHunk": "@@ -53,7 +53,20 @@ Spark SQL supports the vast majority of Hive features, such as:\n * View\n   * If column aliases are not specified in view definition queries, both Spark and Hive will\n     generate alias names, but in different ways. In order for Spark to be able to read views created\n-    by Hive, users should explicitly specify column aliases in view definition queries.\n+    by Hive, users should explicitly specify column aliases in view definition queries. As an\n+    example, Spark cannot read `v1` created as below by Hive.\n+\n+    ```\n+    CREATE TABLE t1 (c1 INT, c2 STRING);\n+    CREATE VIEW v1 AS SELECT * FROM (SELECT c1 + 1, upper(c2) FROM t1) t2;"
+  }, {
+    "author": {
+      "login": "seancxmao"
+    },
+    "body": "It seems Hive 1.x does not allow `(` following `CREATE VIEW ... AS`, while Hive 2.x just works well. The following works on Hive 1.2.1, 1.2.2 and 2.3.3.\r\n\r\n```\r\nCREATE VIEW v1 AS SELECT c1 + 1, upper(c2) FROM t1;\r\n```\r\n\r\nAnother finding is that the above view is readable by Spark though view column names are weird (`_c0`, `_c1`). Because Spark will add a `Project` between `View` and view definition query if their output attributes do not match. \r\n\r\n```\r\nspark-sql> explain extended v1;\r\n...\r\n== Analyzed Logical Plan ==\r\n_c0: int, _c1: string\r\nProject [_c0#44, _c1#45]\r\n+- SubqueryAlias v1\r\n   +- View (`default`.`v1`, [_c0#44,_c1#45])\r\n      +- Project [cast((c1 + 1)#48 as int) AS _c0#44, cast(upper(c2)#49 as string) AS _c1#45] // this is added by AliasViewChild rule\r\n         +- Project [(c1#46 + 1) AS (c1 + 1)#48, upper(c2#47) AS upper(c2)#49]\r\n            +- SubqueryAlias t1\r\n               +- HiveTableRelation `default`.`t1`, org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe, [c1#46, c2#47]\r\n...\r\n```\r\n\r\nBut, if column aliases in subqueries of the view definition query are missing, Spark will not be able to read the view.",
+    "commit": "26b4dee5cd8e4e5fe7e1a34543bad17e05b9b783",
+    "createdAt": "2018-10-30T02:02:16Z",
+    "diffHunk": "@@ -53,7 +53,20 @@ Spark SQL supports the vast majority of Hive features, such as:\n * View\n   * If column aliases are not specified in view definition queries, both Spark and Hive will\n     generate alias names, but in different ways. In order for Spark to be able to read views created\n-    by Hive, users should explicitly specify column aliases in view definition queries.\n+    by Hive, users should explicitly specify column aliases in view definition queries. As an\n+    example, Spark cannot read `v1` created as below by Hive.\n+\n+    ```\n+    CREATE TABLE t1 (c1 INT, c2 STRING);\n+    CREATE VIEW v1 AS SELECT * FROM (SELECT c1 + 1, upper(c2) FROM t1) t2;"
+  }],
+  "prId": 22868
+}, {
+  "comments": [{
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "Could you simplify more by removing `CREATE TABLE` and using the following view creation?\r\n```sql\r\nCREATE VIEW v1 AS SELECT * FROM (SELECT c + 1, upper(c) FROM (SELECT 1 c) t1) t2;\r\n```",
+    "commit": "26b4dee5cd8e4e5fe7e1a34543bad17e05b9b783",
+    "createdAt": "2018-10-29T19:03:18Z",
+    "diffHunk": "@@ -51,6 +51,22 @@ Spark SQL supports the vast majority of Hive features, such as:\n * Explain\n * Partitioned tables including dynamic partition insertion\n * View\n+  * If column aliases are not specified in view definition queries, both Spark and Hive will\n+    generate alias names, but in different ways. In order for Spark to be able to read views created\n+    by Hive, users should explicitly specify column aliases in view definition queries. As an\n+    example, Spark cannot read `v1` created as below by Hive.\n+\n+    ```\n+    CREATE TABLE t1 (c1 INT, c2 STRING);\n+    CREATE VIEW v1 AS SELECT * FROM (SELECT c1 + 1, upper(c2) FROM t1) t2;"
+  }, {
+    "author": {
+      "login": "dilipbiswal"
+    },
+    "body": "@dongjoon-hyun i was thinking, calling upper on a int column is probably not very intuitive :-)\r\nWhat do you think about adding a string literal in the projection ?\r\n\r\n```\r\nSELECT c + 1, upper(d) FROM select 1 c, 'test' as d \r\n```",
+    "commit": "26b4dee5cd8e4e5fe7e1a34543bad17e05b9b783",
+    "createdAt": "2018-10-29T19:15:12Z",
+    "diffHunk": "@@ -51,6 +51,22 @@ Spark SQL supports the vast majority of Hive features, such as:\n * Explain\n * Partitioned tables including dynamic partition insertion\n * View\n+  * If column aliases are not specified in view definition queries, both Spark and Hive will\n+    generate alias names, but in different ways. In order for Spark to be able to read views created\n+    by Hive, users should explicitly specify column aliases in view definition queries. As an\n+    example, Spark cannot read `v1` created as below by Hive.\n+\n+    ```\n+    CREATE TABLE t1 (c1 INT, c2 STRING);\n+    CREATE VIEW v1 AS SELECT * FROM (SELECT c1 + 1, upper(c2) FROM t1) t2;"
+  }, {
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "Thanks for the finding. I'd like to remove `upper(c)` like the following.\r\n```sql\r\nCREATE VIEW v1 AS SELECT * FROM (SELECT c + 1 FROM (SELECT 1 c) t1) t2;\r\n```",
+    "commit": "26b4dee5cd8e4e5fe7e1a34543bad17e05b9b783",
+    "createdAt": "2018-10-29T19:21:27Z",
+    "diffHunk": "@@ -51,6 +51,22 @@ Spark SQL supports the vast majority of Hive features, such as:\n * Explain\n * Partitioned tables including dynamic partition insertion\n * View\n+  * If column aliases are not specified in view definition queries, both Spark and Hive will\n+    generate alias names, but in different ways. In order for Spark to be able to read views created\n+    by Hive, users should explicitly specify column aliases in view definition queries. As an\n+    example, Spark cannot read `v1` created as below by Hive.\n+\n+    ```\n+    CREATE TABLE t1 (c1 INT, c2 STRING);\n+    CREATE VIEW v1 AS SELECT * FROM (SELECT c1 + 1, upper(c2) FROM t1) t2;"
+  }, {
+    "author": {
+      "login": "seancxmao"
+    },
+    "body": "Good ideas. I have simplified the example. and tested the example above using Hive 2.3.3 and Spark 2.3.1.",
+    "commit": "26b4dee5cd8e4e5fe7e1a34543bad17e05b9b783",
+    "createdAt": "2018-10-30T01:24:03Z",
+    "diffHunk": "@@ -51,6 +51,22 @@ Spark SQL supports the vast majority of Hive features, such as:\n * Explain\n * Partitioned tables including dynamic partition insertion\n * View\n+  * If column aliases are not specified in view definition queries, both Spark and Hive will\n+    generate alias names, but in different ways. In order for Spark to be able to read views created\n+    by Hive, users should explicitly specify column aliases in view definition queries. As an\n+    example, Spark cannot read `v1` created as below by Hive.\n+\n+    ```\n+    CREATE TABLE t1 (c1 INT, c2 STRING);\n+    CREATE VIEW v1 AS SELECT * FROM (SELECT c1 + 1, upper(c2) FROM t1) t2;"
+  }],
+  "prId": 22868
+}, {
+  "comments": [{
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "Also, let's update this one together.",
+    "commit": "26b4dee5cd8e4e5fe7e1a34543bad17e05b9b783",
+    "createdAt": "2018-10-29T19:03:45Z",
+    "diffHunk": "@@ -51,6 +51,22 @@ Spark SQL supports the vast majority of Hive features, such as:\n * Explain\n * Partitioned tables including dynamic partition insertion\n * View\n+  * If column aliases are not specified in view definition queries, both Spark and Hive will\n+    generate alias names, but in different ways. In order for Spark to be able to read views created\n+    by Hive, users should explicitly specify column aliases in view definition queries. As an\n+    example, Spark cannot read `v1` created as below by Hive.\n+\n+    ```\n+    CREATE TABLE t1 (c1 INT, c2 STRING);\n+    CREATE VIEW v1 AS SELECT * FROM (SELECT c1 + 1, upper(c2) FROM t1) t2;\n+    ```\n+\n+    Instead, you should create `v1` as below with column aliases explicitly specified.\n+\n+    ```\n+    CREATE VIEW v1 AS SELECT * FROM (SELECT c1 + 1 AS inc_c1, upper(c2) AS upper_c2 FROM t1) t2;"
+  }, {
+    "author": {
+      "login": "seancxmao"
+    },
+    "body": "Sure, updated as well.",
+    "commit": "26b4dee5cd8e4e5fe7e1a34543bad17e05b9b783",
+    "createdAt": "2018-10-30T02:09:51Z",
+    "diffHunk": "@@ -51,6 +51,22 @@ Spark SQL supports the vast majority of Hive features, such as:\n * Explain\n * Partitioned tables including dynamic partition insertion\n * View\n+  * If column aliases are not specified in view definition queries, both Spark and Hive will\n+    generate alias names, but in different ways. In order for Spark to be able to read views created\n+    by Hive, users should explicitly specify column aliases in view definition queries. As an\n+    example, Spark cannot read `v1` created as below by Hive.\n+\n+    ```\n+    CREATE TABLE t1 (c1 INT, c2 STRING);\n+    CREATE VIEW v1 AS SELECT * FROM (SELECT c1 + 1, upper(c2) FROM t1) t2;\n+    ```\n+\n+    Instead, you should create `v1` as below with column aliases explicitly specified.\n+\n+    ```\n+    CREATE VIEW v1 AS SELECT * FROM (SELECT c1 + 1 AS inc_c1, upper(c2) AS upper_c2 FROM t1) t2;"
+  }],
+  "prId": 22868
+}]

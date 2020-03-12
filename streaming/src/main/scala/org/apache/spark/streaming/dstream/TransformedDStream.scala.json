@@ -1,0 +1,94 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "I don't have a strong opinion on this, but this could be done with `require`. Generates a different exception -- `IllegalArgumentException`, but a lower-level generic exception seems pretty reasonable.\n\nCan I suggest tightening the text to something like \"Transform function may not return null. Return RDD.empty to return no elements as the result of the transformation.\"\n",
+    "commit": "2cc4faba0da2f8a137ab3c00ce9da32cbf37126e",
+    "createdAt": "2015-09-27T20:29:43Z",
+    "diffHunk": "@@ -38,6 +39,12 @@ class TransformedDStream[U: ClassTag] (\n \n   override def compute(validTime: Time): Option[RDD[U]] = {\n     val parentRDDs = parents.map(_.getOrCompute(validTime).orNull).toSeq\n-    Some(transformFunc(parentRDDs, validTime))\n+    val transformedRDD = transformFunc(parentRDDs, validTime)\n+    if (transformedRDD == null) {",
+    "line": 19
+  }],
+  "prId": 8881
+}, {
+  "comments": [{
+    "author": {
+      "login": "tdas"
+    },
+    "body": "I would say \"must not return null\". Saying \"may not\" is a little ambiguous.\n",
+    "commit": "2cc4faba0da2f8a137ab3c00ce9da32cbf37126e",
+    "createdAt": "2015-10-05T19:56:28Z",
+    "diffHunk": "@@ -38,6 +39,11 @@ class TransformedDStream[U: ClassTag] (\n \n   override def compute(validTime: Time): Option[RDD[U]] = {\n     val parentRDDs = parents.map(_.getOrCompute(validTime).orNull).toSeq\n-    Some(transformFunc(parentRDDs, validTime))\n+    val transformedRDD = transformFunc(parentRDDs, validTime)\n+    if (transformedRDD == null) {\n+      throw new SparkException(\"Transform function may not return null. \" +"
+  }],
+  "prId": 8881
+}, {
+  "comments": [{
+    "author": {
+      "login": "jerryshao"
+    },
+    "body": "May not relevant to this PR, it would be better to rearrange the import ordering.\n",
+    "commit": "2cc4faba0da2f8a137ab3c00ce9da32cbf37126e",
+    "createdAt": "2015-10-08T06:57:16Z",
+    "diffHunk": "@@ -17,6 +17,7 @@\n \n package org.apache.spark.streaming.dstream\n \n+import org.apache.spark.SparkException\n import org.apache.spark.rdd.{PairRDDFunctions, RDD}\n import org.apache.spark.streaming.{Duration, Time}\n import scala.reflect.ClassTag"
+  }, {
+    "author": {
+      "login": "jhu-chang"
+    },
+    "body": "Do you mean to import the scala lib first and others in alpha order?\n",
+    "commit": "2cc4faba0da2f8a137ab3c00ce9da32cbf37126e",
+    "createdAt": "2015-10-08T09:22:23Z",
+    "diffHunk": "@@ -17,6 +17,7 @@\n \n package org.apache.spark.streaming.dstream\n \n+import org.apache.spark.SparkException\n import org.apache.spark.rdd.{PairRDDFunctions, RDD}\n import org.apache.spark.streaming.{Duration, Time}\n import scala.reflect.ClassTag"
+  }, {
+    "author": {
+      "login": "jerryshao"
+    },
+    "body": "Yes, you could refer to other source codes to change the import ordering like that.\n",
+    "commit": "2cc4faba0da2f8a137ab3c00ce9da32cbf37126e",
+    "createdAt": "2015-10-08T09:24:47Z",
+    "diffHunk": "@@ -17,6 +17,7 @@\n \n package org.apache.spark.streaming.dstream\n \n+import org.apache.spark.SparkException\n import org.apache.spark.rdd.{PairRDDFunctions, RDD}\n import org.apache.spark.streaming.{Duration, Time}\n import scala.reflect.ClassTag"
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "The `SparkException` was in the right place; it's really alpha by package, and then alpha within the package. At least, that's the convention. But the `scala` import can stand alone in a section above these.\n",
+    "commit": "2cc4faba0da2f8a137ab3c00ce9da32cbf37126e",
+    "createdAt": "2015-10-08T09:48:49Z",
+    "diffHunk": "@@ -17,6 +17,7 @@\n \n package org.apache.spark.streaming.dstream\n \n+import org.apache.spark.SparkException\n import org.apache.spark.rdd.{PairRDDFunctions, RDD}\n import org.apache.spark.streaming.{Duration, Time}\n import scala.reflect.ClassTag"
+  }, {
+    "author": {
+      "login": "jhu-chang"
+    },
+    "body": "I reverted the import and move the scala import before the spark import. @srowen @jerryshao could you please check if it is ok? \n",
+    "commit": "2cc4faba0da2f8a137ab3c00ce9da32cbf37126e",
+    "createdAt": "2015-10-09T03:30:51Z",
+    "diffHunk": "@@ -17,6 +17,7 @@\n \n package org.apache.spark.streaming.dstream\n \n+import org.apache.spark.SparkException\n import org.apache.spark.rdd.{PairRDDFunctions, RDD}\n import org.apache.spark.streaming.{Duration, Time}\n import scala.reflect.ClassTag"
+  }],
+  "prId": 8881
+}, {
+  "comments": [{
+    "author": {
+      "login": "jerryshao"
+    },
+    "body": "\"Return RDD.empty instead to represent no element as the result of transformation\" ?\n",
+    "commit": "2cc4faba0da2f8a137ab3c00ce9da32cbf37126e",
+    "createdAt": "2015-10-08T07:01:31Z",
+    "diffHunk": "@@ -38,6 +39,11 @@ class TransformedDStream[U: ClassTag] (\n \n   override def compute(validTime: Time): Option[RDD[U]] = {\n     val parentRDDs = parents.map(_.getOrCompute(validTime).orNull).toSeq\n-    Some(transformFunc(parentRDDs, validTime))\n+    val transformedRDD = transformFunc(parentRDDs, validTime)\n+    if (transformedRDD == null) {\n+      throw new SparkException(\"Transform function must not return null. \" +\n+        \"Return RDD.empty to return no elements as the result of the transformation.\")"
+  }, {
+    "author": {
+      "login": "tdas"
+    },
+    "body": "I am sooo sorry for the correction, but its not RDD.empty, but `SparkContext.emptyRDD()`. Can you fix it? Everything else is LGTM.\n",
+    "commit": "2cc4faba0da2f8a137ab3c00ce9da32cbf37126e",
+    "createdAt": "2015-10-08T23:57:00Z",
+    "diffHunk": "@@ -38,6 +39,11 @@ class TransformedDStream[U: ClassTag] (\n \n   override def compute(validTime: Time): Option[RDD[U]] = {\n     val parentRDDs = parents.map(_.getOrCompute(validTime).orNull).toSeq\n-    Some(transformFunc(parentRDDs, validTime))\n+    val transformedRDD = transformFunc(parentRDDs, validTime)\n+    if (transformedRDD == null) {\n+      throw new SparkException(\"Transform function must not return null. \" +\n+        \"Return RDD.empty to return no elements as the result of the transformation.\")"
+  }, {
+    "author": {
+      "login": "jhu-chang"
+    },
+    "body": "@tdas I corrected the message, could you please check again?\n",
+    "commit": "2cc4faba0da2f8a137ab3c00ce9da32cbf37126e",
+    "createdAt": "2015-10-09T03:31:38Z",
+    "diffHunk": "@@ -38,6 +39,11 @@ class TransformedDStream[U: ClassTag] (\n \n   override def compute(validTime: Time): Option[RDD[U]] = {\n     val parentRDDs = parents.map(_.getOrCompute(validTime).orNull).toSeq\n-    Some(transformFunc(parentRDDs, validTime))\n+    val transformedRDD = transformFunc(parentRDDs, validTime)\n+    if (transformedRDD == null) {\n+      throw new SparkException(\"Transform function must not return null. \" +\n+        \"Return RDD.empty to return no elements as the result of the transformation.\")"
+  }],
+  "prId": 8881
+}]

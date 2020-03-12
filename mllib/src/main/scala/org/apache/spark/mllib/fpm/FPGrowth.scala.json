@@ -1,0 +1,13 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "feynmanliang"
+    },
+    "body": "This code assumes that items are a primitive type, but items are currently arbitrary. We should discuss on the JIRA whether it's acceptable to restrict items to be primitives / types supported in `spark.sql.types`\n",
+    "commit": "7598a74045bf01f8a3977698ca7558ad624c0d25",
+    "createdAt": "2015-08-24T23:33:41Z",
+    "diffHunk": "@@ -52,8 +62,74 @@ class FPGrowthModel[Item: ClassTag](val freqItemsets: RDD[FreqItemset[Item]]) ex\n     val associationRules = new AssociationRules(confidence)\n     associationRules.run(freqItemsets)\n   }\n+  override def save(sc: SparkContext, path: String): Unit = {\n+    FPGrowthModel.SaveLoadV1_0.save(sc, this, path)\n+  }\n+\n+  override protected def formatVersion: String = \"1.0\"\n }\n \n+object FPGrowthModel extends Loader[FPGrowthModel[FreqItemset[Any]]] {\n+\n+  override def load(sc: SparkContext, path: String): FPGrowthModel[FreqItemset[Any]] = {\n+        FPGrowthModel.SaveLoadV1_0.load(sc, path)\n+      }\n+\n+      private case class itemCountPair[Item](items: Array[Item], freq: Long)\n+\n+    private[fpm]\n+    object SaveLoadV1_0 {\n+\n+      private val thisFormatVersion = \"1.0\"\n+\n+      private[fpm]\n+      val thisClassName = \"org.apache.spark.mllib.fpm.FPGrowthModel\"\n+\n+      def save[Item: ClassTag](sc: SparkContext, model: FPGrowthModel[Item], path: String): Unit = {\n+        val sqlContext = new SQLContext(sc)\n+\n+        val metadata = compact(render(\n+          (\"class\" -> thisClassName) ~ (\"version\" -> thisFormatVersion) ~\n+            (\"frequentItemsCount\" -> model.freqItemsets.count())))\n+        sc.parallelize(Seq(metadata), 1).saveAsTextFile(Loader.metadataPath(path))\n+        val sqlType = model.freqItemsets.first().items(0) match {\n+          case _: java.lang.String => StringType",
+    "line": 73
+  }],
+  "prId": 7320
+}]

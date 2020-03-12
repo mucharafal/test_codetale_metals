@@ -1,0 +1,59 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Not that it matters much, but do you need a separate reusable byte buffer? I guess that makes sure we don't accidentally change one and affect the other, but it wouldn't change?",
+    "commit": "cf8023a3926823a34a2d0661ff52b1ea203333b1",
+    "createdAt": "2019-10-13T20:47:42Z",
+    "diffHunk": "@@ -73,6 +73,9 @@ class ParquetWriteSupport extends WriteSupport[InternalRow] with Logging {\n   // Reusable byte array used to write timestamps as Parquet INT96 values\n   private val timestampBuffer = new Array[Byte](12)\n \n+  // Reusable byte array used to write intervals as Parquet FIXED_LEN_BYTE_ARRAY values\n+  private val intervalBuffer = new Array[Byte](12)"
+  }, {
+    "author": {
+      "login": "MaxGekk"
+    },
+    "body": "I will combine the buffers.",
+    "commit": "cf8023a3926823a34a2d0661ff52b1ea203333b1",
+    "createdAt": "2019-10-13T21:37:24Z",
+    "diffHunk": "@@ -73,6 +73,9 @@ class ParquetWriteSupport extends WriteSupport[InternalRow] with Logging {\n   // Reusable byte array used to write timestamps as Parquet INT96 values\n   private val timestampBuffer = new Array[Byte](12)\n \n+  // Reusable byte array used to write intervals as Parquet FIXED_LEN_BYTE_ARRAY values\n+  private val intervalBuffer = new Array[Byte](12)"
+  }],
+  "prId": 26102
+}, {
+  "comments": [{
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "@MaxGekk the doc(https://github.com/apache/parquet-format/blob/master/LogicalTypes.md#interval) says:\r\n\r\n> three little-endian unsigned integers\r\n\r\nwhat happens if we set negative values for some parts in the interval and negative values are written here?",
+    "commit": "cf8023a3926823a34a2d0661ff52b1ea203333b1",
+    "createdAt": "2019-11-15T07:58:22Z",
+    "diffHunk": "@@ -207,7 +208,16 @@ class ParquetWriteSupport extends WriteSupport[InternalRow] with Logging {\n \n       case t: UserDefinedType[_] => makeWriter(t.sqlType)\n \n-      // TODO Adds IntervalType support\n+      case CalendarIntervalType =>\n+        (row: SpecializedGetters, ordinal: Int) =>\n+          val interval = row.getInterval(ordinal)\n+          val buf = ByteBuffer.wrap(reusableBuffer)\n+          buf.order(ByteOrder.LITTLE_ENDIAN)\n+            .putInt((interval.milliseconds()).toInt)",
+    "line": 32
+  }, {
+    "author": {
+      "login": "MaxGekk"
+    },
+    "body": "Spark will read them back as negative values: https://github.com/apache/spark/pull/26102/files#diff-35a70bb270f17ea3a1d964c4bec0e0a2R912 . I don't know about other systems.",
+    "commit": "cf8023a3926823a34a2d0661ff52b1ea203333b1",
+    "createdAt": "2019-11-15T08:06:18Z",
+    "diffHunk": "@@ -207,7 +208,16 @@ class ParquetWriteSupport extends WriteSupport[InternalRow] with Logging {\n \n       case t: UserDefinedType[_] => makeWriter(t.sqlType)\n \n-      // TODO Adds IntervalType support\n+      case CalendarIntervalType =>\n+        (row: SpecializedGetters, ordinal: Int) =>\n+          val interval = row.getInterval(ordinal)\n+          val buf = ByteBuffer.wrap(reusableBuffer)\n+          buf.order(ByteOrder.LITTLE_ENDIAN)\n+            .putInt((interval.milliseconds()).toInt)",
+    "line": 32
+  }, {
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "Hm, shouldn't we maybe add an assert to reject negative parts for now? Seems it doesn't comply parquet format. I'm just worried about the case we have to explain this multiple times to users later like https://issues.apache.org/jira/browse/SPARK-20937 and https://issues.apache.org/jira/browse/SPARK-20297\r\n\r\nDo you think it is common to use negative parts? If not, let's just disallow.",
+    "commit": "cf8023a3926823a34a2d0661ff52b1ea203333b1",
+    "createdAt": "2019-11-18T05:21:36Z",
+    "diffHunk": "@@ -207,7 +208,16 @@ class ParquetWriteSupport extends WriteSupport[InternalRow] with Logging {\n \n       case t: UserDefinedType[_] => makeWriter(t.sqlType)\n \n-      // TODO Adds IntervalType support\n+      case CalendarIntervalType =>\n+        (row: SpecializedGetters, ordinal: Int) =>\n+          val interval = row.getInterval(ordinal)\n+          val buf = ByteBuffer.wrap(reusableBuffer)\n+          buf.order(ByteOrder.LITTLE_ENDIAN)\n+            .putInt((interval.milliseconds()).toInt)",
+    "line": 32
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "we should use strict toInt so that we can fail earlier if out of range.",
+    "commit": "cf8023a3926823a34a2d0661ff52b1ea203333b1",
+    "createdAt": "2019-11-18T07:01:20Z",
+    "diffHunk": "@@ -207,7 +208,16 @@ class ParquetWriteSupport extends WriteSupport[InternalRow] with Logging {\n \n       case t: UserDefinedType[_] => makeWriter(t.sqlType)\n \n-      // TODO Adds IntervalType support\n+      case CalendarIntervalType =>\n+        (row: SpecializedGetters, ordinal: Int) =>\n+          val interval = row.getInterval(ordinal)\n+          val buf = ByteBuffer.wrap(reusableBuffer)\n+          buf.order(ByteOrder.LITTLE_ENDIAN)\n+            .putInt((interval.milliseconds()).toInt)",
+    "line": 32
+  }],
+  "prId": 26102
+}]

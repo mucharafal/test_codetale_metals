@@ -1,0 +1,95 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "MaxGekk"
+    },
+    "body": "```suggestion\r\n    val dayPart = if (interval.days != 0) interval.days.toString else \"\"\r\n```",
+    "commit": "0f54af89b8641ee7df80991dcca63e183a03d5ff",
+    "createdAt": "2019-11-07T06:15:00Z",
+    "diffHunk": "@@ -388,4 +389,41 @@ object IntervalUtils {\n   def divide(interval: CalendarInterval, num: Double): CalendarInterval = {\n     fromDoubles(interval.months / num, interval.days / num, interval.microseconds / num)\n   }\n+\n+  def toSqlStandardString(interval: CalendarInterval): String = {\n+    val yearMonthPart = if (interval.months != 0) {\n+      interval.months / 12 + \"-\" + math.abs(interval.months) % 12\n+    } else {\n+      \"\"\n+    }\n+\n+    val dayPart = if (interval.days!= 0) interval.days.toString else \"\""
+  }],
+  "prId": 26418
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "we can move `CalendarInterval.toString` to here with name `toMultiUnitsString`. `CalendarInterval.toString` should be as simple as `CalendarInterval(months = ..., days = ..., microseconds = ...)`",
+    "commit": "0f54af89b8641ee7df80991dcca63e183a03d5ff",
+    "createdAt": "2019-11-07T08:47:30Z",
+    "diffHunk": "@@ -391,6 +392,43 @@ object IntervalUtils {\n     fromDoubles(interval.months / num, interval.days / num, interval.microseconds / num)\n   }\n \n+  def toSqlStandardString(interval: CalendarInterval): String = {",
+    "line": 41
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "We can do it in a followup",
+    "commit": "0f54af89b8641ee7df80991dcca63e183a03d5ff",
+    "createdAt": "2019-11-07T08:47:42Z",
+    "diffHunk": "@@ -391,6 +392,43 @@ object IntervalUtils {\n     fromDoubles(interval.months / num, interval.days / num, interval.microseconds / num)\n   }\n \n+  def toSqlStandardString(interval: CalendarInterval): String = {",
+    "line": 41
+  }, {
+    "author": {
+      "login": "yaooqinn"
+    },
+    "body": "Yea sounds great",
+    "commit": "0f54af89b8641ee7df80991dcca63e183a03d5ff",
+    "createdAt": "2019-11-07T08:51:40Z",
+    "diffHunk": "@@ -391,6 +392,43 @@ object IntervalUtils {\n     fromDoubles(interval.months / num, interval.days / num, interval.microseconds / num)\n   }\n \n+  def toSqlStandardString(interval: CalendarInterval): String = {",
+    "line": 41
+  }],
+  "prId": 26418
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "shouldn't we add `-`?",
+    "commit": "0f54af89b8641ee7df80991dcca63e183a03d5ff",
+    "createdAt": "2019-11-12T16:52:34Z",
+    "diffHunk": "@@ -424,6 +425,111 @@ object IntervalUtils {\n     fromDoubles(interval.months / num, interval.days / num, interval.microseconds / num)\n   }\n \n+  def toMultiUnitsString(interval: CalendarInterval): String = {\n+    if (interval.months == 0 && interval.days == 0 && interval.microseconds == 0) {\n+      return \"0 seconds\"\n+    }\n+    val sb = new StringBuilder\n+    if (interval.months != 0) {\n+      appendUnit(sb, interval.months / 12, \"years\")\n+      appendUnit(sb, interval.months % 12, \"months\")\n+    }\n+    appendUnit(sb, interval.days, \"days\")\n+    if (interval.microseconds != 0) {\n+      var rest = interval.microseconds\n+      appendUnit(sb, rest / MICROS_PER_HOUR, \"hours\")\n+      rest %= MICROS_PER_HOUR\n+      appendUnit(sb, rest / MICROS_PER_MINUTE, \"minutes\")\n+      rest %= MICROS_PER_MINUTE\n+      if (rest != 0) {\n+        val s = BigDecimal.valueOf(rest, 6).stripTrailingZeros.toPlainString\n+        sb.append(s).append(\" seconds \")\n+      }\n+    }\n+    sb.setLength(sb.length - 1)\n+    sb.toString\n+  }\n+\n+  private def appendUnit(sb: StringBuilder, value: Long, unit: String): Unit = {\n+    if (value != 0) sb.append(value).append(' ').append(unit).append(' ')\n+  }\n+\n+  def toSqlStandardString(interval: CalendarInterval): String = {\n+    val yearMonthPart = if (interval.months < 0) {\n+      val ma = math.abs(interval.months)\n+      \"-\" + ma / 12 + \"-\" + ma % 12\n+    } else if (interval.months > 0) {\n+      \"+\" + interval.months / 12 + \"-\" + interval.months % 12\n+    } else {\n+      \"\"\n+    }\n+\n+    val dayPart = if (interval.days < 0) {\n+      interval.days.toString",
+    "line": 52
+  }, {
+    "author": {
+      "login": "yaooqinn"
+    },
+    "body": "yes it is likely `-1.toString` here",
+    "commit": "0f54af89b8641ee7df80991dcca63e183a03d5ff",
+    "createdAt": "2019-11-13T02:17:59Z",
+    "diffHunk": "@@ -424,6 +425,111 @@ object IntervalUtils {\n     fromDoubles(interval.months / num, interval.days / num, interval.microseconds / num)\n   }\n \n+  def toMultiUnitsString(interval: CalendarInterval): String = {\n+    if (interval.months == 0 && interval.days == 0 && interval.microseconds == 0) {\n+      return \"0 seconds\"\n+    }\n+    val sb = new StringBuilder\n+    if (interval.months != 0) {\n+      appendUnit(sb, interval.months / 12, \"years\")\n+      appendUnit(sb, interval.months % 12, \"months\")\n+    }\n+    appendUnit(sb, interval.days, \"days\")\n+    if (interval.microseconds != 0) {\n+      var rest = interval.microseconds\n+      appendUnit(sb, rest / MICROS_PER_HOUR, \"hours\")\n+      rest %= MICROS_PER_HOUR\n+      appendUnit(sb, rest / MICROS_PER_MINUTE, \"minutes\")\n+      rest %= MICROS_PER_MINUTE\n+      if (rest != 0) {\n+        val s = BigDecimal.valueOf(rest, 6).stripTrailingZeros.toPlainString\n+        sb.append(s).append(\" seconds \")\n+      }\n+    }\n+    sb.setLength(sb.length - 1)\n+    sb.toString\n+  }\n+\n+  private def appendUnit(sb: StringBuilder, value: Long, unit: String): Unit = {\n+    if (value != 0) sb.append(value).append(' ').append(unit).append(' ')\n+  }\n+\n+  def toSqlStandardString(interval: CalendarInterval): String = {\n+    val yearMonthPart = if (interval.months < 0) {\n+      val ma = math.abs(interval.months)\n+      \"-\" + ma / 12 + \"-\" + ma % 12\n+    } else if (interval.months > 0) {\n+      \"+\" + interval.months / 12 + \"-\" + interval.months % 12\n+    } else {\n+      \"\"\n+    }\n+\n+    val dayPart = if (interval.days < 0) {\n+      interval.days.toString",
+    "line": 52
+  }],
+  "prId": 26418
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "nit: `rest %= ...`",
+    "commit": "0f54af89b8641ee7df80991dcca63e183a03d5ff",
+    "createdAt": "2019-11-12T16:53:31Z",
+    "diffHunk": "@@ -424,6 +425,111 @@ object IntervalUtils {\n     fromDoubles(interval.months / num, interval.days / num, interval.microseconds / num)\n   }\n \n+  def toMultiUnitsString(interval: CalendarInterval): String = {\n+    if (interval.months == 0 && interval.days == 0 && interval.microseconds == 0) {\n+      return \"0 seconds\"\n+    }\n+    val sb = new StringBuilder\n+    if (interval.months != 0) {\n+      appendUnit(sb, interval.months / 12, \"years\")\n+      appendUnit(sb, interval.months % 12, \"months\")\n+    }\n+    appendUnit(sb, interval.days, \"days\")\n+    if (interval.microseconds != 0) {\n+      var rest = interval.microseconds\n+      appendUnit(sb, rest / MICROS_PER_HOUR, \"hours\")\n+      rest %= MICROS_PER_HOUR\n+      appendUnit(sb, rest / MICROS_PER_MINUTE, \"minutes\")\n+      rest %= MICROS_PER_MINUTE\n+      if (rest != 0) {\n+        val s = BigDecimal.valueOf(rest, 6).stripTrailingZeros.toPlainString\n+        sb.append(s).append(\" seconds \")\n+      }\n+    }\n+    sb.setLength(sb.length - 1)\n+    sb.toString\n+  }\n+\n+  private def appendUnit(sb: StringBuilder, value: Long, unit: String): Unit = {\n+    if (value != 0) sb.append(value).append(' ').append(unit).append(' ')\n+  }\n+\n+  def toSqlStandardString(interval: CalendarInterval): String = {\n+    val yearMonthPart = if (interval.months < 0) {\n+      val ma = math.abs(interval.months)\n+      \"-\" + ma / 12 + \"-\" + ma % 12\n+    } else if (interval.months > 0) {\n+      \"+\" + interval.months / 12 + \"-\" + interval.months % 12\n+    } else {\n+      \"\"\n+    }\n+\n+    val dayPart = if (interval.days < 0) {\n+      interval.days.toString\n+    } else if (interval.days > 0) {\n+      \"+\" + interval.days\n+    } else {\n+      \"\"\n+    }\n+\n+    val timePart = if (interval.microseconds != 0) {\n+      val sign = if (interval.microseconds > 0) \"+\" else \"-\"\n+      val sb = new StringBuilder(sign)\n+      var rest = math.abs(interval.microseconds)\n+      sb.append(rest / MICROS_PER_HOUR)\n+      sb.append(':')\n+      rest = rest % MICROS_PER_HOUR"
+  }],
+  "prId": 26418
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "wow, a single `0` is also SQL standard?",
+    "commit": "0f54af89b8641ee7df80991dcca63e183a03d5ff",
+    "createdAt": "2019-11-12T16:54:41Z",
+    "diffHunk": "@@ -424,6 +425,111 @@ object IntervalUtils {\n     fromDoubles(interval.months / num, interval.days / num, interval.microseconds / num)\n   }\n \n+  def toMultiUnitsString(interval: CalendarInterval): String = {\n+    if (interval.months == 0 && interval.days == 0 && interval.microseconds == 0) {\n+      return \"0 seconds\"\n+    }\n+    val sb = new StringBuilder\n+    if (interval.months != 0) {\n+      appendUnit(sb, interval.months / 12, \"years\")\n+      appendUnit(sb, interval.months % 12, \"months\")\n+    }\n+    appendUnit(sb, interval.days, \"days\")\n+    if (interval.microseconds != 0) {\n+      var rest = interval.microseconds\n+      appendUnit(sb, rest / MICROS_PER_HOUR, \"hours\")\n+      rest %= MICROS_PER_HOUR\n+      appendUnit(sb, rest / MICROS_PER_MINUTE, \"minutes\")\n+      rest %= MICROS_PER_MINUTE\n+      if (rest != 0) {\n+        val s = BigDecimal.valueOf(rest, 6).stripTrailingZeros.toPlainString\n+        sb.append(s).append(\" seconds \")\n+      }\n+    }\n+    sb.setLength(sb.length - 1)\n+    sb.toString\n+  }\n+\n+  private def appendUnit(sb: StringBuilder, value: Long, unit: String): Unit = {\n+    if (value != 0) sb.append(value).append(' ').append(unit).append(' ')\n+  }\n+\n+  def toSqlStandardString(interval: CalendarInterval): String = {\n+    val yearMonthPart = if (interval.months < 0) {\n+      val ma = math.abs(interval.months)\n+      \"-\" + ma / 12 + \"-\" + ma % 12\n+    } else if (interval.months > 0) {\n+      \"+\" + interval.months / 12 + \"-\" + interval.months % 12\n+    } else {\n+      \"\"\n+    }\n+\n+    val dayPart = if (interval.days < 0) {\n+      interval.days.toString\n+    } else if (interval.days > 0) {\n+      \"+\" + interval.days\n+    } else {\n+      \"\"\n+    }\n+\n+    val timePart = if (interval.microseconds != 0) {\n+      val sign = if (interval.microseconds > 0) \"+\" else \"-\"\n+      val sb = new StringBuilder(sign)\n+      var rest = math.abs(interval.microseconds)\n+      sb.append(rest / MICROS_PER_HOUR)\n+      sb.append(':')\n+      rest = rest % MICROS_PER_HOUR\n+      val minutes = rest / MICROS_PER_MINUTE;\n+      if (minutes < 10) {\n+        sb.append(0)\n+      }\n+      sb.append(minutes)\n+      sb.append(':')\n+      rest %= MICROS_PER_MINUTE\n+      val bd = BigDecimal.valueOf(rest, 6)\n+      if (bd.compareTo(new BigDecimal(10)) < 0) {\n+        sb.append(0)\n+      }\n+      val s = bd.stripTrailingZeros().toPlainString\n+      sb.append(s)\n+      sb.toString()\n+    } else {\n+      \"\"\n+    }\n+\n+    val intervalList = Seq(yearMonthPart, dayPart, timePart).filter(_.nonEmpty)\n+    if (intervalList.nonEmpty) intervalList.mkString(\" \") else \"0\"",
+    "line": 85
+  }, {
+    "author": {
+      "login": "yaooqinn"
+    },
+    "body": "```sql\r\npostgres=# set IntervalStyle=sql_standard;\r\nSET\r\npostgres=# select interval '0';\r\n interval\r\n----------\r\n 0\r\n(1 row)\r\n\r\npostgres=# set IntervalStyle=postgres;\r\nSET\r\npostgres=# select interval '0';\r\n interval\r\n----------\r\n 00:00:00\r\n(1 row)\r\n```",
+    "commit": "0f54af89b8641ee7df80991dcca63e183a03d5ff",
+    "createdAt": "2019-11-13T02:15:59Z",
+    "diffHunk": "@@ -424,6 +425,111 @@ object IntervalUtils {\n     fromDoubles(interval.months / num, interval.days / num, interval.microseconds / num)\n   }\n \n+  def toMultiUnitsString(interval: CalendarInterval): String = {\n+    if (interval.months == 0 && interval.days == 0 && interval.microseconds == 0) {\n+      return \"0 seconds\"\n+    }\n+    val sb = new StringBuilder\n+    if (interval.months != 0) {\n+      appendUnit(sb, interval.months / 12, \"years\")\n+      appendUnit(sb, interval.months % 12, \"months\")\n+    }\n+    appendUnit(sb, interval.days, \"days\")\n+    if (interval.microseconds != 0) {\n+      var rest = interval.microseconds\n+      appendUnit(sb, rest / MICROS_PER_HOUR, \"hours\")\n+      rest %= MICROS_PER_HOUR\n+      appendUnit(sb, rest / MICROS_PER_MINUTE, \"minutes\")\n+      rest %= MICROS_PER_MINUTE\n+      if (rest != 0) {\n+        val s = BigDecimal.valueOf(rest, 6).stripTrailingZeros.toPlainString\n+        sb.append(s).append(\" seconds \")\n+      }\n+    }\n+    sb.setLength(sb.length - 1)\n+    sb.toString\n+  }\n+\n+  private def appendUnit(sb: StringBuilder, value: Long, unit: String): Unit = {\n+    if (value != 0) sb.append(value).append(' ').append(unit).append(' ')\n+  }\n+\n+  def toSqlStandardString(interval: CalendarInterval): String = {\n+    val yearMonthPart = if (interval.months < 0) {\n+      val ma = math.abs(interval.months)\n+      \"-\" + ma / 12 + \"-\" + ma % 12\n+    } else if (interval.months > 0) {\n+      \"+\" + interval.months / 12 + \"-\" + interval.months % 12\n+    } else {\n+      \"\"\n+    }\n+\n+    val dayPart = if (interval.days < 0) {\n+      interval.days.toString\n+    } else if (interval.days > 0) {\n+      \"+\" + interval.days\n+    } else {\n+      \"\"\n+    }\n+\n+    val timePart = if (interval.microseconds != 0) {\n+      val sign = if (interval.microseconds > 0) \"+\" else \"-\"\n+      val sb = new StringBuilder(sign)\n+      var rest = math.abs(interval.microseconds)\n+      sb.append(rest / MICROS_PER_HOUR)\n+      sb.append(':')\n+      rest = rest % MICROS_PER_HOUR\n+      val minutes = rest / MICROS_PER_MINUTE;\n+      if (minutes < 10) {\n+        sb.append(0)\n+      }\n+      sb.append(minutes)\n+      sb.append(':')\n+      rest %= MICROS_PER_MINUTE\n+      val bd = BigDecimal.valueOf(rest, 6)\n+      if (bd.compareTo(new BigDecimal(10)) < 0) {\n+        sb.append(0)\n+      }\n+      val s = bd.stripTrailingZeros().toPlainString\n+      sb.append(s)\n+      sb.toString()\n+    } else {\n+      \"\"\n+    }\n+\n+    val intervalList = Seq(yearMonthPart, dayPart, timePart).filter(_.nonEmpty)\n+    if (intervalList.nonEmpty) intervalList.mkString(\" \") else \"0\"",
+    "line": 85
+  }],
+  "prId": 26418
+}]

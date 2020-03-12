@@ -1,0 +1,12 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "soulcutter"
+    },
+    "body": "This sentence looks like it got mangled during editing somehow.\n",
+    "commit": "970f690c1834303b7be31a106aaec19258403e12",
+    "createdAt": "2016-02-29T16:14:09Z",
+    "diffHunk": "@@ -221,13 +237,51 @@ private[kinesis] object KinesisTestUtils {\n       case Failure(e) =>\n         throw new Exception(\n           s\"\"\"\n-             |Kinesis tests enabled using environment variable $envVarNameForEnablingTests\n-             |but could not find AWS credentials. Please follow instructions in AWS documentation\n-             |to set the credentials in your system such that the DefaultAWSCredentialsProviderChain\n-             |can find the credentials.\n+              |Kinesis tests that actually send data has been enabled by setting the environment\n+              |variable $envVarNameForEnablingTests to 1. This will create Kinesis Streams and\n+              |DynamoDB tables in AWS. Please be aware that this may incur some AWS costs.\n+              |By default, the tests use the endpoint URL $defaultEndpointUrl to create Kinesis streams.\n+              |To change this endpoint URL to a different region, you can set the environment variable\n+              |$endVarNameForEndpoint to the desired endpoint URL\n+              |(e.g. $endVarNameForEndpoint=\"https://kinesis.us-west-2.amazonaws.com\").\n            \"\"\".stripMargin)\n     }\n   }\n+\n+  def getAWSProfileCredentials(profile: String): AWSCredentials = {\n+    Try { new ProfileCredentialsProvider(profile).getCredentials() } match {\n+      case Success(cred) => {\n+        if (profile.equals(KinesisTestUtils.DYNAMODB_PROFILE)) {\n+          KinesisTestUtils.cleanUpProfileDynamoTables = true;\n+        }\n+        cred\n+      }\n+      case Failure(e) =>\n+        println(\n+          s\"\"\"\n+            |Could not load the AWS credentials for profile $profile.\n+            |\n+            |Credentialpool tests verify the ability to uses Kinesis stream, Dynamo DB and CloudWatch Metrics in\n+            |separate AWS accounts. This requires a separate set of AWS credentials to be stored in system with the profile\n+            |names \"dynamoDB\" and \"cloudWatch\" along with the default credentials. The test assumes that the Kinesis stream \n+            |in the  In absence of this only the underlying API will be tested. "
+  }],
+  "prId": 11215
+}]

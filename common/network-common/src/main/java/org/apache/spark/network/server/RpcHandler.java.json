@@ -1,0 +1,77 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "space before `(`",
+    "commit": "cd11abc3261d6f37731aa4574705119e0ac57a93",
+    "createdAt": "2018-05-25T20:08:53Z",
+    "diffHunk": "@@ -38,15 +38,24 @@\n    *\n    * This method will not be called in parallel for a single TransportClient (i.e., channel).\n    *\n+   * The rpc *might* included a data stream in <code>streamData</code>(eg. for uploading a large"
+  }],
+  "prId": 21346
+}, {
+  "comments": [{
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "Perhaps naive question: what are the implications of this? Is this referring to a scenario where we've multiplexed multiple asynchronous requests / responses over a single network connection? I think I understand _why_ the failure mode is as stated (we're worried about leaving non-consumed leftover data in the channel) but I just wanted to ask about the implications of failing other in-flight RPCs.",
+    "commit": "cd11abc3261d6f37731aa4574705119e0ac57a93",
+    "createdAt": "2018-05-30T22:23:23Z",
+    "diffHunk": "@@ -38,15 +38,24 @@\n    *\n    * This method will not be called in parallel for a single TransportClient (i.e., channel).\n    *\n+   * The rpc *might* included a data stream in <code>streamData</code> (eg. for uploading a large\n+   * amount of data which should not be buffered in memory here).  Any errors while handling the\n+   * streamData will lead to failing this entire connection -- all other in-flight rpcs will fail."
+  }, {
+    "author": {
+      "login": "squito"
+    },
+    "body": "pretty good question actually :)\r\n\r\nI will take a closer look at this myself but I believe this connection is shared by other tasks running on the same executor which are trying to talk to the same destination.  So that might mean another task which is replicating to the same destination, or reading data from that same remote executor.  those don't have specific retry behavior for connection closed -- that might result in the data just not getting replicated, fetching data from elsewhere, or the task getting retried.\r\n\r\nI think this is actually OK -- the existing code could cause an OOM on the remote end anyway, which obviously would fail a lot more.   This failure behavior seems reasonable.",
+    "commit": "cd11abc3261d6f37731aa4574705119e0ac57a93",
+    "createdAt": "2018-05-31T03:34:06Z",
+    "diffHunk": "@@ -38,15 +38,24 @@\n    *\n    * This method will not be called in parallel for a single TransportClient (i.e., channel).\n    *\n+   * The rpc *might* included a data stream in <code>streamData</code> (eg. for uploading a large\n+   * amount of data which should not be buffered in memory here).  Any errors while handling the\n+   * streamData will lead to failing this entire connection -- all other in-flight rpcs will fail."
+  }, {
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "I'm trying to think through whether we'll risk introducing any weird new failure modes (or increasing the occurrence of existing-but-improbable failure modes). For example, causing in-flight RPCs to fail could surface latent RPC timeout issues: if we have a timeout which is way too long and we drop in-flight responses on the floor without sending back negative ACKs then we could see (finite but potentially long) hangs.\r\n\r\nOn the other hand, this pathway is used for executor <-> executor transfers and generally not executor <-> driver transfers, so my understanding is that failures in this channel generally won't impact control RPCs.",
+    "commit": "cd11abc3261d6f37731aa4574705119e0ac57a93",
+    "createdAt": "2018-06-02T17:55:37Z",
+    "diffHunk": "@@ -38,15 +38,24 @@\n    *\n    * This method will not be called in parallel for a single TransportClient (i.e., channel).\n    *\n+   * The rpc *might* included a data stream in <code>streamData</code> (eg. for uploading a large\n+   * amount of data which should not be buffered in memory here).  Any errors while handling the\n+   * streamData will lead to failing this entire connection -- all other in-flight rpcs will fail."
+  }, {
+    "author": {
+      "login": "squito"
+    },
+    "body": "you bring up a good point here.  I was thinking about how the places we might have an error occur:\r\n\r\n1) while reading the stream data (ie. StreamCallback.onData).  In the intended use case, this is basically just opening a file and writing bytes to it.\r\n\r\n2) post-processing the complete data (StreamCallback.onComplete).  This is doing the whole BlockManager.put, which can be rather complex.\r\n\r\nFailures in (1) are unlikely and are difficult to recover; failures in (2) are more likely, but the channel should be totally fine.  I've updated the code, comments,  and test to make sure things are OK for (2).  https://github.com/apache/spark/pull/21346/commits/6c086c51873c72fa0cf9f373afd069ac63de3b75\r\n\r\nthough your points are still valid for (1), though I think we can live with it.",
+    "commit": "cd11abc3261d6f37731aa4574705119e0ac57a93",
+    "createdAt": "2018-06-04T16:05:39Z",
+    "diffHunk": "@@ -38,15 +38,24 @@\n    *\n    * This method will not be called in parallel for a single TransportClient (i.e., channel).\n    *\n+   * The rpc *might* included a data stream in <code>streamData</code> (eg. for uploading a large\n+   * amount of data which should not be buffered in memory here).  Any errors while handling the\n+   * streamData will lead to failing this entire connection -- all other in-flight rpcs will fail."
+  }],
+  "prId": 21346
+}, {
+  "comments": [{
+    "author": {
+      "login": "squito"
+    },
+    "body": "moving discussion from here: https://github.com/apache/spark/pull/21451#discussion_r191628993\r\n\r\n@witgo suggested the `message` could be moved inside `streamData` -- any particular reason to do that?  It would work fine to do it that way as well, though I don't see any advantage.  I guess I'm in favor of keeping it this way.",
+    "commit": "cd11abc3261d6f37731aa4574705119e0ac57a93",
+    "createdAt": "2018-06-04T16:09:29Z",
+    "diffHunk": "@@ -38,15 +38,28 @@\n    *\n    * This method will not be called in parallel for a single TransportClient (i.e., channel).\n    *\n+   * The rpc *might* included a data stream in <code>streamData</code> (eg. for uploading a large\n+   * amount of data which should not be buffered in memory here).  An error while reading data from\n+   * the stream ({@link org.apache.spark.network.client.StreamCallback#onData(String, ByteBuffer)})\n+   * will fail the entire channel.  A failure in \"post-processing\" the stream in\n+   * {@link org.apache.spark.network.client.StreamCallback#onComplete(String)} will result in an\n+   * rpcFailure, but the channel will remain active.\n+   *\n+   * If streamData is not null, you *must* call <code>streamData.registerStreamCallback</code>\n+   * before this method returns.\n+   *\n    * @param client A channel client which enables the handler to make requests back to the sender\n    *               of this RPC. This will always be the exact same object for a particular channel.\n    * @param message The serialized bytes of the RPC.\n+   * @param streamData StreamData if there is data which is meant to be read via a StreamCallback;\n+   *                   otherwise it is null.\n    * @param callback Callback which should be invoked exactly once upon success or failure of the\n    *                 RPC.\n    */\n   public abstract void receive(\n       TransportClient client,\n       ByteBuffer message,\n+      StreamData streamData,"
+  }],
+  "prId": 21346
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "I'm wondering if a separate callback for these streams wouldn't be better. It would at the very least avoid having to change all the existing handlers.\r\n\r\nBut it would also make it clearer what the contract is. For example, the callback could return the stream callback to be registered. \r\n\r\nIt also doesn't seem like `StreamData` itself has a lot of useful information other than the registration method, so it could be replaced with parameters in the new callback, avoiding having to expose that type to RPC handlers.",
+    "commit": "cd11abc3261d6f37731aa4574705119e0ac57a93",
+    "createdAt": "2018-06-04T17:47:02Z",
+    "diffHunk": "@@ -38,15 +38,28 @@\n    *\n    * This method will not be called in parallel for a single TransportClient (i.e., channel).\n    *\n+   * The rpc *might* included a data stream in <code>streamData</code> (eg. for uploading a large\n+   * amount of data which should not be buffered in memory here).  An error while reading data from\n+   * the stream ({@link org.apache.spark.network.client.StreamCallback#onData(String, ByteBuffer)})\n+   * will fail the entire channel.  A failure in \"post-processing\" the stream in\n+   * {@link org.apache.spark.network.client.StreamCallback#onComplete(String)} will result in an\n+   * rpcFailure, but the channel will remain active.\n+   *\n+   * If streamData is not null, you *must* call <code>streamData.registerStreamCallback</code>\n+   * before this method returns.\n+   *\n    * @param client A channel client which enables the handler to make requests back to the sender\n    *               of this RPC. This will always be the exact same object for a particular channel.\n    * @param message The serialized bytes of the RPC.\n+   * @param streamData StreamData if there is data which is meant to be read via a StreamCallback;"
+  }, {
+    "author": {
+      "login": "squito"
+    },
+    "body": "I've done this refactoring, and I agree it made the change significantly simpler.",
+    "commit": "cd11abc3261d6f37731aa4574705119e0ac57a93",
+    "createdAt": "2018-06-14T15:20:42Z",
+    "diffHunk": "@@ -38,15 +38,28 @@\n    *\n    * This method will not be called in parallel for a single TransportClient (i.e., channel).\n    *\n+   * The rpc *might* included a data stream in <code>streamData</code> (eg. for uploading a large\n+   * amount of data which should not be buffered in memory here).  An error while reading data from\n+   * the stream ({@link org.apache.spark.network.client.StreamCallback#onData(String, ByteBuffer)})\n+   * will fail the entire channel.  A failure in \"post-processing\" the stream in\n+   * {@link org.apache.spark.network.client.StreamCallback#onComplete(String)} will result in an\n+   * rpcFailure, but the channel will remain active.\n+   *\n+   * If streamData is not null, you *must* call <code>streamData.registerStreamCallback</code>\n+   * before this method returns.\n+   *\n    * @param client A channel client which enables the handler to make requests back to the sender\n    *               of this RPC. This will always be the exact same object for a particular channel.\n    * @param message The serialized bytes of the RPC.\n+   * @param streamData StreamData if there is data which is meant to be read via a StreamCallback;"
+  }],
+  "prId": 21346
+}]

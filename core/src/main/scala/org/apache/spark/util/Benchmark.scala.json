@@ -1,0 +1,72 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "hvanhovell"
+    },
+    "body": "This is a left-over from the previous version. Any idea why it was added? One warm-up period?\n",
+    "commit": "2d248421d7a2f8ece5acebc19d389adcfb9bc9d6",
+    "createdAt": "2016-06-02T21:15:43Z",
+    "diffHunk": "@@ -97,6 +111,39 @@ private[spark] class Benchmark(\n     println\n     // scalastyle:on\n   }\n+\n+  /**\n+   * Runs a single function `f` for iters, returning the average time the function took and\n+   * the rate of the function.\n+   */\n+  def measure(num: Long, overrideNumIters: Int)(f: Timer => Unit): Result = {\n+    System.gc()  // ensures garbage from previous cases don't impact this one\n+    val minIters = if (overrideNumIters != 0) overrideNumIters else minNumIters\n+    val minDuration = if (overrideNumIters != 0) 0.seconds.fromNow else minTime.fromNow\n+    val runTimes = ArrayBuffer[Long]()\n+    var i = 0\n+    while (i < minIters || !minDuration.isOverdue) {\n+      val timer = new Benchmark.Timer(i)\n+      f(timer)\n+      val runTime = timer.totalTime()\n+      if (i > 0) {"
+  }, {
+    "author": {
+      "login": "ericl"
+    },
+    "body": "I believe so. I would not be opposed to removing it.\n",
+    "commit": "2d248421d7a2f8ece5acebc19d389adcfb9bc9d6",
+    "createdAt": "2016-06-02T22:46:15Z",
+    "diffHunk": "@@ -97,6 +111,39 @@ private[spark] class Benchmark(\n     println\n     // scalastyle:on\n   }\n+\n+  /**\n+   * Runs a single function `f` for iters, returning the average time the function took and\n+   * the rate of the function.\n+   */\n+  def measure(num: Long, overrideNumIters: Int)(f: Timer => Unit): Result = {\n+    System.gc()  // ensures garbage from previous cases don't impact this one\n+    val minIters = if (overrideNumIters != 0) overrideNumIters else minNumIters\n+    val minDuration = if (overrideNumIters != 0) 0.seconds.fromNow else minTime.fromNow\n+    val runTimes = ArrayBuffer[Long]()\n+    var i = 0\n+    while (i < minIters || !minDuration.isOverdue) {\n+      val timer = new Benchmark.Timer(i)\n+      f(timer)\n+      val runTime = timer.totalTime()\n+      if (i > 0) {"
+  }],
+  "prId": 13472
+}, {
+  "comments": [{
+    "author": {
+      "login": "hvanhovell"
+    },
+    "body": "It is quite likely that we will also add unoptimized results here. Is that a problem? Or are we only interested in the `best`  runtime?\n",
+    "commit": "2d248421d7a2f8ece5acebc19d389adcfb9bc9d6",
+    "createdAt": "2016-06-02T21:16:49Z",
+    "diffHunk": "@@ -97,6 +111,39 @@ private[spark] class Benchmark(\n     println\n     // scalastyle:on\n   }\n+\n+  /**\n+   * Runs a single function `f` for iters, returning the average time the function took and\n+   * the rate of the function.\n+   */\n+  def measure(num: Long, overrideNumIters: Int)(f: Timer => Unit): Result = {\n+    System.gc()  // ensures garbage from previous cases don't impact this one\n+    val minIters = if (overrideNumIters != 0) overrideNumIters else minNumIters\n+    val minDuration = if (overrideNumIters != 0) 0.seconds.fromNow else minTime.fromNow\n+    val runTimes = ArrayBuffer[Long]()\n+    var i = 0\n+    while (i < minIters || !minDuration.isOverdue) {\n+      val timer = new Benchmark.Timer(i)\n+      f(timer)\n+      val runTime = timer.totalTime()\n+      if (i > 0) {\n+        runTimes += runTime"
+  }, {
+    "author": {
+      "login": "ericl"
+    },
+    "body": "We could extend the warmup period from 1 iteration to a specified time, not sure if it's worth it though.\n",
+    "commit": "2d248421d7a2f8ece5acebc19d389adcfb9bc9d6",
+    "createdAt": "2016-06-02T22:47:39Z",
+    "diffHunk": "@@ -97,6 +111,39 @@ private[spark] class Benchmark(\n     println\n     // scalastyle:on\n   }\n+\n+  /**\n+   * Runs a single function `f` for iters, returning the average time the function took and\n+   * the rate of the function.\n+   */\n+  def measure(num: Long, overrideNumIters: Int)(f: Timer => Unit): Result = {\n+    System.gc()  // ensures garbage from previous cases don't impact this one\n+    val minIters = if (overrideNumIters != 0) overrideNumIters else minNumIters\n+    val minDuration = if (overrideNumIters != 0) 0.seconds.fromNow else minTime.fromNow\n+    val runTimes = ArrayBuffer[Long]()\n+    var i = 0\n+    while (i < minIters || !minDuration.isOverdue) {\n+      val timer = new Benchmark.Timer(i)\n+      f(timer)\n+      val runTime = timer.totalTime()\n+      if (i > 0) {\n+        runTimes += runTime"
+  }],
+  "prId": 13472
+}, {
+  "comments": [{
+    "author": {
+      "login": "kiszk"
+    },
+    "body": "I like to add a warmup period, but is it better to 2 second as default. It depends on machine, program (we can specify a value explicitly), and others.\nAre there any other thoughts?\n",
+    "commit": "2d248421d7a2f8ece5acebc19d389adcfb9bc9d6",
+    "createdAt": "2016-06-04T16:29:02Z",
+    "diffHunk": "@@ -33,18 +38,37 @@ import org.apache.commons.lang3.SystemUtils\n  *\n  * The benchmark function takes one argument that is the iteration that's being run.\n  *\n- * If outputPerIteration is true, the timing for each run will be printed to stdout.\n+ * @param name name of this benchmark.\n+ * @param valuesPerIteration number of values used in the test case, used to compute rows/s.\n+ * @param minNumIters the min number of iterations that will be run per case, not counting warm-up.\n+ * @param warmupTime amount of time to spend running dummy case iterations for JIT warm-up.\n+ * @param minTime further iterations will be run for each case until this time is used up.\n+ * @param outputPerIteration if true, the timing for each run will be printed to stdout.\n+ * @param output optional output stream to write benchmark results to\n  */\n private[spark] class Benchmark(\n     name: String,\n     valuesPerIteration: Long,\n-    defaultNumIters: Int = 5,\n-    outputPerIteration: Boolean = false) {\n+    minNumIters: Int = 2,\n+    warmupTime: FiniteDuration = 2.seconds,",
+    "line": 34
+  }, {
+    "author": {
+      "login": "ericl"
+    },
+    "body": "I suppose the relevant tradeoff here is accuracy vs time added to benchmark. I'd like to pick a value that is a reasonable default for most benchmarks - probably 2-5 seconds to warm up the jit reasonably depending on the program. Those with specialized needs can override it as needed.\n",
+    "commit": "2d248421d7a2f8ece5acebc19d389adcfb9bc9d6",
+    "createdAt": "2016-06-05T18:02:00Z",
+    "diffHunk": "@@ -33,18 +38,37 @@ import org.apache.commons.lang3.SystemUtils\n  *\n  * The benchmark function takes one argument that is the iteration that's being run.\n  *\n- * If outputPerIteration is true, the timing for each run will be printed to stdout.\n+ * @param name name of this benchmark.\n+ * @param valuesPerIteration number of values used in the test case, used to compute rows/s.\n+ * @param minNumIters the min number of iterations that will be run per case, not counting warm-up.\n+ * @param warmupTime amount of time to spend running dummy case iterations for JIT warm-up.\n+ * @param minTime further iterations will be run for each case until this time is used up.\n+ * @param outputPerIteration if true, the timing for each run will be printed to stdout.\n+ * @param output optional output stream to write benchmark results to\n  */\n private[spark] class Benchmark(\n     name: String,\n     valuesPerIteration: Long,\n-    defaultNumIters: Int = 5,\n-    outputPerIteration: Boolean = false) {\n+    minNumIters: Int = 2,\n+    warmupTime: FiniteDuration = 2.seconds,",
+    "line": 34
+  }],
+  "prId": 13472
+}, {
+  "comments": [{
+    "author": {
+      "login": "kiszk"
+    },
+    "body": "ditto.\n",
+    "commit": "2d248421d7a2f8ece5acebc19d389adcfb9bc9d6",
+    "createdAt": "2016-06-04T16:29:11Z",
+    "diffHunk": "@@ -33,18 +38,37 @@ import org.apache.commons.lang3.SystemUtils\n  *\n  * The benchmark function takes one argument that is the iteration that's being run.\n  *\n- * If outputPerIteration is true, the timing for each run will be printed to stdout.\n+ * @param name name of this benchmark.\n+ * @param valuesPerIteration number of values used in the test case, used to compute rows/s.\n+ * @param minNumIters the min number of iterations that will be run per case, not counting warm-up.\n+ * @param warmupTime amount of time to spend running dummy case iterations for JIT warm-up.\n+ * @param minTime further iterations will be run for each case until this time is used up.\n+ * @param outputPerIteration if true, the timing for each run will be printed to stdout.\n+ * @param output optional output stream to write benchmark results to\n  */\n private[spark] class Benchmark(\n     name: String,\n     valuesPerIteration: Long,\n-    defaultNumIters: Int = 5,\n-    outputPerIteration: Boolean = false) {\n+    minNumIters: Int = 2,\n+    warmupTime: FiniteDuration = 2.seconds,\n+    minTime: FiniteDuration = 2.seconds,",
+    "line": 35
+  }],
+  "prId": 13472
+}]

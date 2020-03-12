@@ -1,0 +1,44 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "tdas"
+    },
+    "body": "Why is this a var not a val?\n",
+    "commit": "78dfdac7216c3e68a42c6534f497289212a31a8a",
+    "createdAt": "2015-06-30T09:22:16Z",
+    "diffHunk": "@@ -53,6 +43,8 @@ class FlumePollingStreamSuite extends SparkFunSuite with BeforeAndAfter with Log\n     .setMaster(\"local[2]\")\n     .setAppName(this.getClass.getSimpleName)\n \n+  var utils = new PollingFlumeTestUtils"
+  }],
+  "prId": 6830
+}, {
+  "comments": [{
+    "author": {
+      "login": "tdas"
+    },
+    "body": "Isnt this better done in scala tests `after`?\n",
+    "commit": "78dfdac7216c3e68a42c6534f497289212a31a8a",
+    "createdAt": "2015-06-30T09:24:32Z",
+    "diffHunk": "@@ -89,146 +81,55 @@ class FlumePollingStreamSuite extends SparkFunSuite with BeforeAndAfter with Log\n   }\n \n   private def testFlumePolling(): Unit = {\n-    // Start the channel and sink.\n-    val context = new Context()\n-    context.put(\"capacity\", channelCapacity.toString)\n-    context.put(\"transactionCapacity\", \"1000\")\n-    context.put(\"keep-alive\", \"0\")\n-    val channel = new MemoryChannel()\n-    Configurables.configure(channel, context)\n-\n-    val sink = new SparkSink()\n-    context.put(SparkSinkConfig.CONF_HOSTNAME, \"localhost\")\n-    context.put(SparkSinkConfig.CONF_PORT, String.valueOf(0))\n-    Configurables.configure(sink, context)\n-    sink.setChannel(channel)\n-    sink.start()\n-\n-    writeAndVerify(Seq(sink), Seq(channel))\n-    assertChannelIsEmpty(channel)\n-    sink.stop()\n-    channel.stop()\n+    try {\n+      val port = utils.startSingleSink()\n+\n+      writeAndVerify(Seq(port))\n+      utils.assertChannelsAreEmpty()\n+    } finally {\n+      utils.close()",
+    "line": 81
+  }, {
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "`testFlumePolling` and `testFlumePollingMultipleHost` will be called multiple times in a single test but `utils.close()` should be called every time.\n",
+    "commit": "78dfdac7216c3e68a42c6534f497289212a31a8a",
+    "createdAt": "2015-06-30T10:09:10Z",
+    "diffHunk": "@@ -89,146 +81,55 @@ class FlumePollingStreamSuite extends SparkFunSuite with BeforeAndAfter with Log\n   }\n \n   private def testFlumePolling(): Unit = {\n-    // Start the channel and sink.\n-    val context = new Context()\n-    context.put(\"capacity\", channelCapacity.toString)\n-    context.put(\"transactionCapacity\", \"1000\")\n-    context.put(\"keep-alive\", \"0\")\n-    val channel = new MemoryChannel()\n-    Configurables.configure(channel, context)\n-\n-    val sink = new SparkSink()\n-    context.put(SparkSinkConfig.CONF_HOSTNAME, \"localhost\")\n-    context.put(SparkSinkConfig.CONF_PORT, String.valueOf(0))\n-    Configurables.configure(sink, context)\n-    sink.setChannel(channel)\n-    sink.start()\n-\n-    writeAndVerify(Seq(sink), Seq(channel))\n-    assertChannelIsEmpty(channel)\n-    sink.stop()\n-    channel.stop()\n+    try {\n+      val port = utils.startSingleSink()\n+\n+      writeAndVerify(Seq(port))\n+      utils.assertChannelsAreEmpty()\n+    } finally {\n+      utils.close()",
+    "line": 81
+  }],
+  "prId": 6830
+}, {
+  "comments": [{
+    "author": {
+      "login": "tdas"
+    },
+    "body": "I think that can be moved into the `conf` above and before can be removed. Mind doing this small additional change?\n",
+    "commit": "78dfdac7216c3e68a42c6534f497289212a31a8a",
+    "createdAt": "2015-06-30T09:26:02Z",
+    "diffHunk": "@@ -53,6 +43,8 @@ class FlumePollingStreamSuite extends SparkFunSuite with BeforeAndAfter with Log\n     .setMaster(\"local[2]\")\n     .setAppName(this.getClass.getSimpleName)\n \n+  var utils = new PollingFlumeTestUtils\n+\n   def beforeFunction() {\n     logInfo(\"Using manual clock\")\n     conf.set(\"spark.streaming.clock\", \"org.apache.spark.util.ManualClock\")"
+  }],
+  "prId": 6830
+}]

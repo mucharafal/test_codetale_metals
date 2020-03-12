@@ -1,0 +1,73 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "I do not think Spark has something like `SESSION_USER`. Thus, this impl is wrong.",
+    "commit": "6b0b6bd9299c637be30407570d410f2134d8a48f",
+    "createdAt": "2017-09-09T06:44:32Z",
+    "diffHunk": "@@ -0,0 +1,47 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst.expressions\n+\n+import org.apache.spark.SparkContext\n+import org.apache.spark.sql.catalyst.InternalRow\n+import org.apache.spark.sql.catalyst.expressions.codegen.CodegenFallback\n+import org.apache.spark.sql.types.{DataType, StringType}\n+\n+/**\n+ * Return the user executing the current query.\n+ *\n+ * There is no code generation since this expression should get constant folded by the optimizer.\n+ */\n+@ExpressionDescription(\n+  usage = \"\"\"\n+    _FUNC_() - Returns the current user executing the query.",
+    "line": 32
+  }],
+  "prId": 19169
+}, {
+  "comments": [{
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "This is from Spark Context. All the sessions share the same user names. I am afraid this value is misleading to our end users. cc @rxin ",
+    "commit": "6b0b6bd9299c637be30407570d410f2134d8a48f",
+    "createdAt": "2017-09-09T06:49:09Z",
+    "diffHunk": "@@ -0,0 +1,47 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst.expressions\n+\n+import org.apache.spark.SparkContext\n+import org.apache.spark.sql.catalyst.InternalRow\n+import org.apache.spark.sql.catalyst.expressions.codegen.CodegenFallback\n+import org.apache.spark.sql.types.{DataType, StringType}\n+\n+/**\n+ * Return the user executing the current query.\n+ *\n+ * There is no code generation since this expression should get constant folded by the optimizer.\n+ */\n+@ExpressionDescription(\n+  usage = \"\"\"\n+    _FUNC_() - Returns the current user executing the query.\n+  \"\"\",\n+  since = \"2.3.0\")\n+case class CurrentUser() extends LeafExpression with CodegenFallback {\n+  override def foldable: Boolean = true\n+  override def nullable: Boolean = false\n+  override def dataType: DataType = StringType\n+\n+  /** Returns the result of evaluating this expression on a given input Row */\n+  override def eval(input: InternalRow): Any = {\n+    SparkContext.getActive.map(_.sparkUser).getOrElse(\"\")",
+    "line": 42
+  }, {
+    "author": {
+      "login": "mgaido91"
+    },
+    "body": "This is actually the user which executes the query. I agree that may be misleading that a user can connect to STS with his credentials and then the queries are run with a superuser, but this is how Spark works at the moment and the user which actually runs the query is the superuser. If we don't think to STS, in the other use cases the user which runs a query is the user who started the session.",
+    "commit": "6b0b6bd9299c637be30407570d410f2134d8a48f",
+    "createdAt": "2017-09-09T09:33:17Z",
+    "diffHunk": "@@ -0,0 +1,47 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst.expressions\n+\n+import org.apache.spark.SparkContext\n+import org.apache.spark.sql.catalyst.InternalRow\n+import org.apache.spark.sql.catalyst.expressions.codegen.CodegenFallback\n+import org.apache.spark.sql.types.{DataType, StringType}\n+\n+/**\n+ * Return the user executing the current query.\n+ *\n+ * There is no code generation since this expression should get constant folded by the optimizer.\n+ */\n+@ExpressionDescription(\n+  usage = \"\"\"\n+    _FUNC_() - Returns the current user executing the query.\n+  \"\"\",\n+  since = \"2.3.0\")\n+case class CurrentUser() extends LeafExpression with CodegenFallback {\n+  override def foldable: Boolean = true\n+  override def nullable: Boolean = false\n+  override def dataType: DataType = StringType\n+\n+  /** Returns the result of evaluating this expression on a given input Row */\n+  override def eval(input: InternalRow): Any = {\n+    SparkContext.getActive.map(_.sparkUser).getOrElse(\"\")",
+    "line": 42
+  }, {
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "Sorry, I do not think we should support it until we provide session-specific user management.",
+    "commit": "6b0b6bd9299c637be30407570d410f2134d8a48f",
+    "createdAt": "2017-09-09T16:22:35Z",
+    "diffHunk": "@@ -0,0 +1,47 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst.expressions\n+\n+import org.apache.spark.SparkContext\n+import org.apache.spark.sql.catalyst.InternalRow\n+import org.apache.spark.sql.catalyst.expressions.codegen.CodegenFallback\n+import org.apache.spark.sql.types.{DataType, StringType}\n+\n+/**\n+ * Return the user executing the current query.\n+ *\n+ * There is no code generation since this expression should get constant folded by the optimizer.\n+ */\n+@ExpressionDescription(\n+  usage = \"\"\"\n+    _FUNC_() - Returns the current user executing the query.\n+  \"\"\",\n+  since = \"2.3.0\")\n+case class CurrentUser() extends LeafExpression with CodegenFallback {\n+  override def foldable: Boolean = true\n+  override def nullable: Boolean = false\n+  override def dataType: DataType = StringType\n+\n+  /** Returns the result of evaluating this expression on a given input Row */\n+  override def eval(input: InternalRow): Any = {\n+    SparkContext.getActive.map(_.sparkUser).getOrElse(\"\")",
+    "line": 42
+  }, {
+    "author": {
+      "login": "mgaido91"
+    },
+    "body": "ok, thanks. Then is there any plan to support session-specific user management? If so, can I help somehow? Thanks.",
+    "commit": "6b0b6bd9299c637be30407570d410f2134d8a48f",
+    "createdAt": "2017-09-11T08:17:33Z",
+    "diffHunk": "@@ -0,0 +1,47 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst.expressions\n+\n+import org.apache.spark.SparkContext\n+import org.apache.spark.sql.catalyst.InternalRow\n+import org.apache.spark.sql.catalyst.expressions.codegen.CodegenFallback\n+import org.apache.spark.sql.types.{DataType, StringType}\n+\n+/**\n+ * Return the user executing the current query.\n+ *\n+ * There is no code generation since this expression should get constant folded by the optimizer.\n+ */\n+@ExpressionDescription(\n+  usage = \"\"\"\n+    _FUNC_() - Returns the current user executing the query.\n+  \"\"\",\n+  since = \"2.3.0\")\n+case class CurrentUser() extends LeafExpression with CodegenFallback {\n+  override def foldable: Boolean = true\n+  override def nullable: Boolean = false\n+  override def dataType: DataType = StringType\n+\n+  /** Returns the result of evaluating this expression on a given input Row */\n+  override def eval(input: InternalRow): Any = {\n+    SparkContext.getActive.map(_.sparkUser).getOrElse(\"\")",
+    "line": 42
+  }, {
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "So far, it is not in our plan.",
+    "commit": "6b0b6bd9299c637be30407570d410f2134d8a48f",
+    "createdAt": "2017-10-23T23:30:02Z",
+    "diffHunk": "@@ -0,0 +1,47 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst.expressions\n+\n+import org.apache.spark.SparkContext\n+import org.apache.spark.sql.catalyst.InternalRow\n+import org.apache.spark.sql.catalyst.expressions.codegen.CodegenFallback\n+import org.apache.spark.sql.types.{DataType, StringType}\n+\n+/**\n+ * Return the user executing the current query.\n+ *\n+ * There is no code generation since this expression should get constant folded by the optimizer.\n+ */\n+@ExpressionDescription(\n+  usage = \"\"\"\n+    _FUNC_() - Returns the current user executing the query.\n+  \"\"\",\n+  since = \"2.3.0\")\n+case class CurrentUser() extends LeafExpression with CodegenFallback {\n+  override def foldable: Boolean = true\n+  override def nullable: Boolean = false\n+  override def dataType: DataType = StringType\n+\n+  /** Returns the result of evaluating this expression on a given input Row */\n+  override def eval(input: InternalRow): Any = {\n+    SparkContext.getActive.map(_.sparkUser).getOrElse(\"\")",
+    "line": 42
+  }],
+  "prId": 19169
+}, {
+  "comments": [{
+    "author": {
+      "login": "wangyum"
+    },
+    "body": "Add this class to https://github.com/apache/spark/blob/master/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/expressions/misc.scala?",
+    "commit": "6b0b6bd9299c637be30407570d410f2134d8a48f",
+    "createdAt": "2017-09-11T05:29:39Z",
+    "diffHunk": "@@ -0,0 +1,47 @@\n+/*",
+    "line": 1
+  }],
+  "prId": 19169
+}]

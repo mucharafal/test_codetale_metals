@@ -1,0 +1,49 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "tdas"
+    },
+    "body": "@andrewor14 @kayousterhout \nCan you take a look at this change?\n",
+    "commit": "46c5197c946cbed75ac28e1b60e64266ca070ee1",
+    "createdAt": "2015-10-20T19:38:57Z",
+    "diffHunk": "@@ -65,7 +70,15 @@ private[spark] object TaskLocation {\n   def apply(str: String): TaskLocation = {\n     val hstr = str.stripPrefix(inMemoryLocationTag)\n     if (hstr.equals(str)) {\n-      new HostTaskLocation(str)\n+      if (str.startsWith(executorLocationTag)) {\n+        val splits = str.split(\"_\")\n+        if (splits.length != 3) {\n+          throw new IllegalArgumentException(\"Illegal executor location format: \" + str)\n+        }\n+        new ExecutorCacheTaskLocation(splits(1), splits(2))\n+      } else {\n+        new HostTaskLocation(str)\n+      }\n     } else {",
+    "line": 35
+  }, {
+    "author": {
+      "login": "kayousterhout"
+    },
+    "body": "Is this necessary because previously, we didn't allow the user to pass in ExecutorCacheTaskLocations and we just tried to figure them out automatically? (and why doesn't that work here?)\n",
+    "commit": "46c5197c946cbed75ac28e1b60e64266ca070ee1",
+    "createdAt": "2015-10-20T21:02:19Z",
+    "diffHunk": "@@ -65,7 +70,15 @@ private[spark] object TaskLocation {\n   def apply(str: String): TaskLocation = {\n     val hstr = str.stripPrefix(inMemoryLocationTag)\n     if (hstr.equals(str)) {\n-      new HostTaskLocation(str)\n+      if (str.startsWith(executorLocationTag)) {\n+        val splits = str.split(\"_\")\n+        if (splits.length != 3) {\n+          throw new IllegalArgumentException(\"Illegal executor location format: \" + str)\n+        }\n+        new ExecutorCacheTaskLocation(splits(1), splits(2))\n+      } else {\n+        new HostTaskLocation(str)\n+      }\n     } else {",
+    "line": 35
+  }, {
+    "author": {
+      "login": "tdas"
+    },
+    "body": "The goal of this PR is to enable the streaming scheduler to place receivers (which run as tasks) in specific executors. Basically, I want to have more control on the placement of the receivers such that they are evenly distributed among the executors. We tried to do this without changing the core scheduling logic. But it does not allow specifying particular executor as preferred location, only at the host level. So if there are two executors in the same host, and I want two receivers to run on them (one on each executor), I cannot specify that. Current code only specifies the host as preference, which may end up launching both receivers on the same executor. We try to work around it but restarting a receiver when it does not launch in the desired executor and hope that next time it will be started in the right one. But that cause lots of restarts, and delays in correctly launching the receiver.\n\nSo this change, would allow the streaming scheduler to specify the exact executor as the preferred location. Also this is not exposed to the user, only the streaming scheduler uses this.\n",
+    "commit": "46c5197c946cbed75ac28e1b60e64266ca070ee1",
+    "createdAt": "2015-10-20T21:47:09Z",
+    "diffHunk": "@@ -65,7 +70,15 @@ private[spark] object TaskLocation {\n   def apply(str: String): TaskLocation = {\n     val hstr = str.stripPrefix(inMemoryLocationTag)\n     if (hstr.equals(str)) {\n-      new HostTaskLocation(str)\n+      if (str.startsWith(executorLocationTag)) {\n+        val splits = str.split(\"_\")\n+        if (splits.length != 3) {\n+          throw new IllegalArgumentException(\"Illegal executor location format: \" + str)\n+        }\n+        new ExecutorCacheTaskLocation(splits(1), splits(2))\n+      } else {\n+        new HostTaskLocation(str)\n+      }\n     } else {",
+    "line": 35
+  }, {
+    "author": {
+      "login": "kayousterhout"
+    },
+    "body": "Ok sounds good -- can you add this description to the JIRA and to the pull request description (so that it will be in the commit message)?  Scheduler changes LGTM.\n",
+    "commit": "46c5197c946cbed75ac28e1b60e64266ca070ee1",
+    "createdAt": "2015-10-20T22:27:34Z",
+    "diffHunk": "@@ -65,7 +70,15 @@ private[spark] object TaskLocation {\n   def apply(str: String): TaskLocation = {\n     val hstr = str.stripPrefix(inMemoryLocationTag)\n     if (hstr.equals(str)) {\n-      new HostTaskLocation(str)\n+      if (str.startsWith(executorLocationTag)) {\n+        val splits = str.split(\"_\")\n+        if (splits.length != 3) {\n+          throw new IllegalArgumentException(\"Illegal executor location format: \" + str)\n+        }\n+        new ExecutorCacheTaskLocation(splits(1), splits(2))\n+      } else {\n+        new HostTaskLocation(str)\n+      }\n     } else {",
+    "line": 35
+  }, {
+    "author": {
+      "login": "tdas"
+    },
+    "body": "@zsxwing Please do so. :)\n",
+    "commit": "46c5197c946cbed75ac28e1b60e64266ca070ee1",
+    "createdAt": "2015-10-20T23:21:16Z",
+    "diffHunk": "@@ -65,7 +70,15 @@ private[spark] object TaskLocation {\n   def apply(str: String): TaskLocation = {\n     val hstr = str.stripPrefix(inMemoryLocationTag)\n     if (hstr.equals(str)) {\n-      new HostTaskLocation(str)\n+      if (str.startsWith(executorLocationTag)) {\n+        val splits = str.split(\"_\")\n+        if (splits.length != 3) {\n+          throw new IllegalArgumentException(\"Illegal executor location format: \" + str)\n+        }\n+        new ExecutorCacheTaskLocation(splits(1), splits(2))\n+      } else {\n+        new HostTaskLocation(str)\n+      }\n     } else {",
+    "line": 35
+  }],
+  "prId": 9181
+}]

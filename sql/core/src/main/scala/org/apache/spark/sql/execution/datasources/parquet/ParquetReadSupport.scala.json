@@ -1,0 +1,35 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "nit: I would remove this brace per https://github.com/databricks/scala-style-guide#anonymous-methods",
+    "commit": "0176d296bfa861ce71cc09e61be76e8bca761801",
+    "createdAt": "2018-08-20T03:59:50Z",
+    "diffHunk": "@@ -277,14 +291,38 @@ private[parquet] object ParquetReadSupport {\n    * @return A list of clipped [[GroupType]] fields, which can be empty.\n    */\n   private def clipParquetGroupFields(\n-      parquetRecord: GroupType, structType: StructType): Seq[Type] = {\n-    val parquetFieldMap = parquetRecord.getFields.asScala.map(f => f.getName -> f).toMap\n+      parquetRecord: GroupType, structType: StructType, caseSensitive: Boolean): Seq[Type] = {\n     val toParquet = new SparkToParquetSchemaConverter(writeLegacyParquetFormat = false)\n-    structType.map { f =>\n-      parquetFieldMap\n-        .get(f.name)\n-        .map(clipParquetType(_, f.dataType))\n-        .getOrElse(toParquet.convertField(f))\n+    if (caseSensitive) {\n+      val caseSensitiveParquetFieldMap =\n+        parquetRecord.getFields.asScala.map(f => f.getName -> f).toMap\n+      structType.map { f => {\n+        caseSensitiveParquetFieldMap\n+          .get(f.name)\n+          .map(clipParquetType(_, f.dataType, caseSensitive))\n+          .getOrElse(toParquet.convertField(f))\n+      }",
+    "line": 163
+  }],
+  "prId": 22148
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "nit: `toLowerCase(Locale.ROOT)`",
+    "commit": "0176d296bfa861ce71cc09e61be76e8bca761801",
+    "createdAt": "2018-08-20T06:09:03Z",
+    "diffHunk": "@@ -277,14 +291,35 @@ private[parquet] object ParquetReadSupport {\n    * @return A list of clipped [[GroupType]] fields, which can be empty.\n    */\n   private def clipParquetGroupFields(\n-      parquetRecord: GroupType, structType: StructType): Seq[Type] = {\n-    val parquetFieldMap = parquetRecord.getFields.asScala.map(f => f.getName -> f).toMap\n+      parquetRecord: GroupType, structType: StructType, caseSensitive: Boolean): Seq[Type] = {\n     val toParquet = new SparkToParquetSchemaConverter(writeLegacyParquetFormat = false)\n-    structType.map { f =>\n-      parquetFieldMap\n-        .get(f.name)\n-        .map(clipParquetType(_, f.dataType))\n-        .getOrElse(toParquet.convertField(f))\n+    if (caseSensitive) {\n+      val caseSensitiveParquetFieldMap =\n+        parquetRecord.getFields.asScala.map(f => f.getName -> f).toMap\n+      structType.map { f =>\n+        caseSensitiveParquetFieldMap\n+          .get(f.name)\n+          .map(clipParquetType(_, f.dataType, caseSensitive))\n+          .getOrElse(toParquet.convertField(f))\n+      }\n+    } else {\n+      // Do case-insensitive resolution only if in case-insensitive mode\n+      val caseInsensitiveParquetFieldMap =\n+        parquetRecord.getFields.asScala.groupBy(_.getName.toLowerCase)"
+  }],
+  "prId": 22148
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "This is triggered at runtime at executor side, we should probably use `RuntimeException` here.",
+    "commit": "0176d296bfa861ce71cc09e61be76e8bca761801",
+    "createdAt": "2018-08-20T06:12:51Z",
+    "diffHunk": "@@ -277,14 +291,35 @@ private[parquet] object ParquetReadSupport {\n    * @return A list of clipped [[GroupType]] fields, which can be empty.\n    */\n   private def clipParquetGroupFields(\n-      parquetRecord: GroupType, structType: StructType): Seq[Type] = {\n-    val parquetFieldMap = parquetRecord.getFields.asScala.map(f => f.getName -> f).toMap\n+      parquetRecord: GroupType, structType: StructType, caseSensitive: Boolean): Seq[Type] = {\n     val toParquet = new SparkToParquetSchemaConverter(writeLegacyParquetFormat = false)\n-    structType.map { f =>\n-      parquetFieldMap\n-        .get(f.name)\n-        .map(clipParquetType(_, f.dataType))\n-        .getOrElse(toParquet.convertField(f))\n+    if (caseSensitive) {\n+      val caseSensitiveParquetFieldMap =\n+        parquetRecord.getFields.asScala.map(f => f.getName -> f).toMap\n+      structType.map { f =>\n+        caseSensitiveParquetFieldMap\n+          .get(f.name)\n+          .map(clipParquetType(_, f.dataType, caseSensitive))\n+          .getOrElse(toParquet.convertField(f))\n+      }\n+    } else {\n+      // Do case-insensitive resolution only if in case-insensitive mode\n+      val caseInsensitiveParquetFieldMap =\n+        parquetRecord.getFields.asScala.groupBy(_.getName.toLowerCase)\n+      structType.map { f =>\n+        caseInsensitiveParquetFieldMap\n+          .get(f.name.toLowerCase)\n+          .map { parquetTypes =>\n+            if (parquetTypes.size > 1) {\n+              // Need to fail if there is ambiguity, i.e. more than one field is matched\n+              val parquetTypesString = parquetTypes.map(_.getName).mkString(\"[\", \", \", \"]\")\n+              throw new AnalysisException(s\"\"\"Found duplicate field(s) \"${f.name}\": \"\"\" +"
+  }],
+  "prId": 22148
+}]

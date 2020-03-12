@@ -1,0 +1,22 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "liancheng"
+    },
+    "body": "Does HDFS guarantee that the result of `listStatus()` is always sorted? If not, we probably need to sort these `FileStatus`es.\n",
+    "commit": "32dfb87ce36a093c54d4a3dfd39ccbc00c417af9",
+    "createdAt": "2015-11-09T06:51:37Z",
+    "diffHunk": "@@ -461,13 +461,29 @@ private[sql] class ParquetRelation(\n           // You should enable this configuration only if you are very sure that for the parquet\n           // part-files to read there are corresponding summary files containing correct schema.\n \n+          // As filed in SPARK-11500, the order of files to touch is a matter, which might affect\n+          // the ordering of the output columns. There are several things to mention here.\n+          //\n+          //  1. If mergeRespectSummaries config is false, then it merges schemas by reducing from\n+          //     the first part-file so that the columns of the first file show first.\n+          //\n+          //  2. If mergeRespectSummaries config is true, then there should be, at least,\n+          //     \"_metadata\"s for all given files. So, we can ensure the columns of the first file\n+          //     show first.\n+          //\n+          //  3. If shouldMergeSchemas is false, but when multiple files are given, there is\n+          //     no guarantee of the output order, since there might not be a summary file for the\n+          //     first file, which ends up putting ahead the columns of the other files. However,\n+          //     this should be okay since not enabling shouldMergeSchemas means (assumes) all the\n+          //     files have the same schemas.\n+\n           val needMerged: Seq[FileStatus] =\n             if (mergeRespectSummaries) {\n               Seq()\n             } else {\n               dataStatuses\n             }\n-          (metadataStatuses ++ commonMetadataStatuses ++ needMerged).toSeq\n+          needMerged ++ metadataStatuses ++ commonMetadataStatuses",
+    "line": 53
+  }, {
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "Yes, I think I should sort them.\nIt looks it is not really recommended just to use it as it is, although they are sorted, assuming from [this link](http://lucene.472066.n3.nabble.com/FileSystem-contract-of-listStatus-td3475540.html). \n",
+    "commit": "32dfb87ce36a093c54d4a3dfd39ccbc00c417af9",
+    "createdAt": "2015-11-09T07:34:57Z",
+    "diffHunk": "@@ -461,13 +461,29 @@ private[sql] class ParquetRelation(\n           // You should enable this configuration only if you are very sure that for the parquet\n           // part-files to read there are corresponding summary files containing correct schema.\n \n+          // As filed in SPARK-11500, the order of files to touch is a matter, which might affect\n+          // the ordering of the output columns. There are several things to mention here.\n+          //\n+          //  1. If mergeRespectSummaries config is false, then it merges schemas by reducing from\n+          //     the first part-file so that the columns of the first file show first.\n+          //\n+          //  2. If mergeRespectSummaries config is true, then there should be, at least,\n+          //     \"_metadata\"s for all given files. So, we can ensure the columns of the first file\n+          //     show first.\n+          //\n+          //  3. If shouldMergeSchemas is false, but when multiple files are given, there is\n+          //     no guarantee of the output order, since there might not be a summary file for the\n+          //     first file, which ends up putting ahead the columns of the other files. However,\n+          //     this should be okay since not enabling shouldMergeSchemas means (assumes) all the\n+          //     files have the same schemas.\n+\n           val needMerged: Seq[FileStatus] =\n             if (mergeRespectSummaries) {\n               Seq()\n             } else {\n               dataStatuses\n             }\n-          (metadataStatuses ++ commonMetadataStatuses ++ needMerged).toSeq\n+          needMerged ++ metadataStatuses ++ commonMetadataStatuses",
+    "line": 53
+  }],
+  "prId": 9517
+}]

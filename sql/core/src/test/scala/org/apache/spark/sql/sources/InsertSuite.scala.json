@@ -1,0 +1,13 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "let's also test \"write timestamp to date column\"",
+    "commit": "af0f7390e61455682cb5089f8e8dd3c0e60d32b1",
+    "createdAt": "2019-08-27T08:00:42Z",
+    "diffHunk": "@@ -582,6 +582,45 @@ class InsertSuite extends DataSourceTest with SharedSparkSession {\n     }\n   }\n \n+  test(\"Throw exception on unsafe cast with ANSI casting policy\") {\n+    withSQLConf(\n+      SQLConf.USE_V1_SOURCE_WRITER_LIST.key -> \"parquet\",\n+      SQLConf.STORE_ASSIGNMENT_POLICY.key -> SQLConf.StoreAssignmentPolicy.ANSI.toString) {\n+      withTable(\"t\") {\n+        sql(\"create table t(i int, d double) using parquet\")\n+        var msg = intercept[AnalysisException] {\n+          sql(\"insert into t values('a', 'b')\")\n+        }.getMessage\n+        assert(msg.contains(\"Cannot cast 'i': StringType to IntegerType\") &&\n+          msg.contains(\"Cannot cast 'd': StringType to DoubleType\"))\n+        msg = intercept[AnalysisException] {\n+          sql(\"insert into t values(now(), now())\")\n+        }.getMessage\n+        assert(msg.contains(\"Cannot cast 'i': TimestampType to IntegerType\") &&\n+          msg.contains(\"Cannot cast 'd': TimestampType to DoubleType\"))\n+        msg = intercept[AnalysisException] {\n+          sql(\"insert into t values(true, false)\")\n+        }.getMessage\n+        assert(msg.contains(\"Cannot cast 'i': BooleanType to IntegerType\") &&\n+          msg.contains(\"Cannot cast 'd': BooleanType to DoubleType\"))\n+      }\n+    }\n+  }\n+\n+  test(\"Allow on writing any numeric value to numeric type with ANSI policy\") {",
+    "line": 37
+  }],
+  "prId": 25581
+}]

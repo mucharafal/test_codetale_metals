@@ -1,0 +1,89 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "This doesn't agree with the signature",
+    "commit": "2407e05d4bfbbe71359cf5a57a856ab5514998cb",
+    "createdAt": "2018-08-26T17:33:09Z",
+    "diffHunk": "@@ -61,6 +61,18 @@ class AssociationRules private[fpm] (\n    */\n   @Since(\"1.5.0\")\n   def run[Item: ClassTag](freqItemsets: RDD[FreqItemset[Item]]): RDD[Rule[Item]] = {\n+    run(freqItemsets, Map.empty[Item, Long])\n+  }\n+\n+  /**\n+   * Computes the association rules with confidence above `minConfidence`.\n+   * @param freqItemsets frequent itemset model obtained from [[FPGrowth]]\n+   * @return a `Set[Rule[Item]]` containing the association rules. The rules will be able to"
+  }, {
+    "author": {
+      "login": "mgaido91"
+    },
+    "body": "nice catch, thanks, I'll correct also the original one I took this from.",
+    "commit": "2407e05d4bfbbe71359cf5a57a856ab5514998cb",
+    "createdAt": "2018-08-27T10:48:07Z",
+    "diffHunk": "@@ -61,6 +61,18 @@ class AssociationRules private[fpm] (\n    */\n   @Since(\"1.5.0\")\n   def run[Item: ClassTag](freqItemsets: RDD[FreqItemset[Item]]): RDD[Rule[Item]] = {\n+    run(freqItemsets, Map.empty[Item, Long])\n+  }\n+\n+  /**\n+   * Computes the association rules with confidence above `minConfidence`.\n+   * @param freqItemsets frequent itemset model obtained from [[FPGrowth]]\n+   * @return a `Set[Rule[Item]]` containing the association rules. The rules will be able to"
+  }],
+  "prId": 22236
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Wouldn't we now always know the frequency of the consequent?",
+    "commit": "2407e05d4bfbbe71359cf5a57a856ab5514998cb",
+    "createdAt": "2018-08-26T17:48:07Z",
+    "diffHunk": "@@ -107,7 +124,8 @@ object AssociationRules {\n       @Since(\"1.5.0\") val antecedent: Array[Item],\n       @Since(\"1.5.0\") val consequent: Array[Item],\n       freqUnion: Double,\n-      freqAntecedent: Double) extends Serializable {\n+      freqAntecedent: Double,\n+      freqConsequent: Option[Long]) extends Serializable {"
+  }, {
+    "author": {
+      "login": "mgaido91"
+    },
+    "body": "now we do, but for existing application using old methods it may not be available.",
+    "commit": "2407e05d4bfbbe71359cf5a57a856ab5514998cb",
+    "createdAt": "2018-08-27T11:14:03Z",
+    "diffHunk": "@@ -107,7 +124,8 @@ object AssociationRules {\n       @Since(\"1.5.0\") val antecedent: Array[Item],\n       @Since(\"1.5.0\") val consequent: Array[Item],\n       freqUnion: Double,\n-      freqAntecedent: Double) extends Serializable {\n+      freqAntecedent: Double,\n+      freqConsequent: Option[Long]) extends Serializable {"
+  }],
+  "prId": 22236
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "So if I understand this correctly, and I may not, FPGrowthModel just holds frequent item sets. It's only association rules where the lift computation is needed. In the course of computing association rules, you can compute item support here. Why does it need to be saved with the model? I can see it might be an optimization but also introduces complexity (and compatibility issues?) here. It may be pretty fast to compute right here though. You already end up with `(..., (consequent, count))` in candidates, from which you can get the total consequent counts directly.",
+    "commit": "2407e05d4bfbbe71359cf5a57a856ab5514998cb",
+    "createdAt": "2018-08-26T17:50:33Z",
+    "diffHunk": "@@ -61,6 +61,18 @@ class AssociationRules private[fpm] (\n    */\n   @Since(\"1.5.0\")\n   def run[Item: ClassTag](freqItemsets: RDD[FreqItemset[Item]]): RDD[Rule[Item]] = {\n+    run(freqItemsets, Map.empty[Item, Long])\n+  }\n+\n+  /**\n+   * Computes the association rules with confidence above `minConfidence`.\n+   * @param freqItemsets frequent itemset model obtained from [[FPGrowth]]\n+   * @return a `Set[Rule[Item]]` containing the association rules. The rules will be able to\n+   *         compute also the lift metric.\n+   */\n+  @Since(\"2.4.0\")\n+  def run[Item: ClassTag](freqItemsets: RDD[FreqItemset[Item]],\n+      itemSupport: Map[Item, Long]): RDD[Rule[Item]] = {"
+  }, {
+    "author": {
+      "login": "mgaido91"
+    },
+    "body": "Actually we can compute it by filtering the `freqItemsets` and get the items with length one. The reason why I haven't done that is to avoid performance regression. Since we already computed this before, it seems a unneeded waste to recompute it here.\r\n\r\nI can use this approach of computing them when loading the model, though, I agree. Also in that case I haven't done for optimization reasons (since we would need to read 2 times the freqItemsets dataset which is surely much larger).\r\n\r\nIf you think this is needed, I can change it, but for performance reasons I prefer the current approach, in order not to affect existing users not interested in the `lift` metric. I don't think any compatibility issue can arise as if the value is not preset, null is returned for the lift metric.",
+    "commit": "2407e05d4bfbbe71359cf5a57a856ab5514998cb",
+    "createdAt": "2018-08-27T11:12:33Z",
+    "diffHunk": "@@ -61,6 +61,18 @@ class AssociationRules private[fpm] (\n    */\n   @Since(\"1.5.0\")\n   def run[Item: ClassTag](freqItemsets: RDD[FreqItemset[Item]]): RDD[Rule[Item]] = {\n+    run(freqItemsets, Map.empty[Item, Long])\n+  }\n+\n+  /**\n+   * Computes the association rules with confidence above `minConfidence`.\n+   * @param freqItemsets frequent itemset model obtained from [[FPGrowth]]\n+   * @return a `Set[Rule[Item]]` containing the association rules. The rules will be able to\n+   *         compute also the lift metric.\n+   */\n+  @Since(\"2.4.0\")\n+  def run[Item: ClassTag](freqItemsets: RDD[FreqItemset[Item]],\n+      itemSupport: Map[Item, Long]): RDD[Rule[Item]] = {"
+  }],
+  "prId": 22236
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Ideally these frequencies would have been Longs I think, but too late. Yes, stay consistent.",
+    "commit": "2407e05d4bfbbe71359cf5a57a856ab5514998cb",
+    "createdAt": "2018-08-29T01:53:55Z",
+    "diffHunk": "@@ -107,7 +125,8 @@ object AssociationRules {\n       @Since(\"1.5.0\") val antecedent: Array[Item],\n       @Since(\"1.5.0\") val consequent: Array[Item],\n       freqUnion: Double,\n-      freqAntecedent: Double) extends Serializable {\n+      freqAntecedent: Double,",
+    "line": 47
+  }],
+  "prId": 22236
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "I suppose this `.toDouble` is redundant actually!",
+    "commit": "2407e05d4bfbbe71359cf5a57a856ab5514998cb",
+    "createdAt": "2018-08-29T01:54:10Z",
+    "diffHunk": "@@ -116,6 +135,9 @@ object AssociationRules {\n     @Since(\"1.5.0\")\n     def confidence: Double = freqUnion.toDouble / freqAntecedent"
+  }, {
+    "author": {
+      "login": "mgaido91"
+    },
+    "body": "yes, it is not related to this PR but I can  remove it.",
+    "commit": "2407e05d4bfbbe71359cf5a57a856ab5514998cb",
+    "createdAt": "2018-08-29T07:34:43Z",
+    "diffHunk": "@@ -116,6 +135,9 @@ object AssociationRules {\n     @Since(\"1.5.0\")\n     def confidence: Double = freqUnion.toDouble / freqAntecedent"
+  }],
+  "prId": 22236
+}]

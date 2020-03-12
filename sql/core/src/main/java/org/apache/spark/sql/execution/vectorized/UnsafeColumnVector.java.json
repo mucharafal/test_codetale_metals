@@ -1,0 +1,40 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "viirya"
+    },
+    "body": "This abstraction looks confused at first glance. It seems not following some `ColumnVector` APIs usage. Looks like this uses `putByteArray` to set up byte array `data` which stores the data of this array column.\r\n\r\nIIUC, this is proposed to represent only array column, but some APIs implementation looks weird. For example, `getBoolean` respects `rowId` parameter and `getBooleans` doesn't.",
+    "commit": "20d2ba2819f9f6c5c10752df2d5f9ca450b0ad51",
+    "createdAt": "2017-11-16T03:51:12Z",
+    "diffHunk": "@@ -0,0 +1,517 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+package org.apache.spark.sql.execution.vectorized;\n+\n+import java.nio.ByteBuffer;\n+\n+import org.apache.commons.lang.NotImplementedException;\n+\n+import org.apache.spark.sql.catalyst.expressions.UnsafeArrayData;\n+import org.apache.spark.sql.types.*;\n+import org.apache.spark.unsafe.Platform;\n+\n+/**\n+ * A column backed by UnsafeArrayData on byte[].\n+ */\n+public final class UnsafeColumnVector extends WritableColumnVector {",
+    "line": 31
+  }, {
+    "author": {
+      "login": "kiszk"
+    },
+    "body": "As you pointed out, `UnsafeColumnVector.putByteArray` is used to put the array for all of the rows in `byte[]` for `UnsafeArrayData` instead of copying data for given row. To copy data for a row causes performance degradation.  \r\nI will put some comment to explain the usage of this API to make it clear.\r\n\r\nGood catch for `getBooleans`. It seems to be my fault since it has to take care of `rowId`. I will fix this.",
+    "commit": "20d2ba2819f9f6c5c10752df2d5f9ca450b0ad51",
+    "createdAt": "2017-11-16T05:49:31Z",
+    "diffHunk": "@@ -0,0 +1,517 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+package org.apache.spark.sql.execution.vectorized;\n+\n+import java.nio.ByteBuffer;\n+\n+import org.apache.commons.lang.NotImplementedException;\n+\n+import org.apache.spark.sql.catalyst.expressions.UnsafeArrayData;\n+import org.apache.spark.sql.types.*;\n+import org.apache.spark.unsafe.Platform;\n+\n+/**\n+ * A column backed by UnsafeArrayData on byte[].\n+ */\n+public final class UnsafeColumnVector extends WritableColumnVector {",
+    "line": 31
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "Since this `UnsafeColumnVector` represents array column, will we use the APIs like `getBoolean`, `getBooleans`...etc.? I think those APIs are for primitive column.",
+    "commit": "20d2ba2819f9f6c5c10752df2d5f9ca450b0ad51",
+    "createdAt": "2017-11-16T06:22:17Z",
+    "diffHunk": "@@ -0,0 +1,517 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+package org.apache.spark.sql.execution.vectorized;\n+\n+import java.nio.ByteBuffer;\n+\n+import org.apache.commons.lang.NotImplementedException;\n+\n+import org.apache.spark.sql.catalyst.expressions.UnsafeArrayData;\n+import org.apache.spark.sql.types.*;\n+import org.apache.spark.unsafe.Platform;\n+\n+/**\n+ * A column backed by UnsafeArrayData on byte[].\n+ */\n+public final class UnsafeColumnVector extends WritableColumnVector {",
+    "line": 31
+  }, {
+    "author": {
+      "login": "kiszk"
+    },
+    "body": "These two methods `getBoolean` and `getBooleans` are used [here](github.com/apache/spark/blob/dce1610ae376af00712ba7f4c99bfb4c006dbaec/sql/core/src/main/java/org/apache/spark/sql/execution/vectorized/ColumnarArray.java) and [there](github.com/apache/spark/blob/dce1610ae376af00712ba7f4c99bfb4c006dbaec/sql/core/src/main/java/org/apache/spark/sql/execution/vectorized/ColumnarArray.java) in `ColumnarArray`.",
+    "commit": "20d2ba2819f9f6c5c10752df2d5f9ca450b0ad51",
+    "createdAt": "2017-11-16T13:03:05Z",
+    "diffHunk": "@@ -0,0 +1,517 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+package org.apache.spark.sql.execution.vectorized;\n+\n+import java.nio.ByteBuffer;\n+\n+import org.apache.commons.lang.NotImplementedException;\n+\n+import org.apache.spark.sql.catalyst.expressions.UnsafeArrayData;\n+import org.apache.spark.sql.types.*;\n+import org.apache.spark.unsafe.Platform;\n+\n+/**\n+ * A column backed by UnsafeArrayData on byte[].\n+ */\n+public final class UnsafeColumnVector extends WritableColumnVector {",
+    "line": 31
+  }],
+  "prId": 19601
+}]

@@ -1,0 +1,80 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "tgravescs"
+    },
+    "body": "I don't want to add support for the env variables for yarn-cluster mode.  We only support them on yarn-client mode for backwards compatibility. Can you remove this.\n",
+    "commit": "8117765daa02b03b81c12c1869ef75eda6653392",
+    "createdAt": "2014-06-13T15:26:57Z",
+    "diffHunk": "@@ -45,6 +44,14 @@ class ClientArguments(val args: Array[String], val sparkConf: SparkConf) {\n \n   parseArgs(args.toList)\n \n+  files = Option(files).getOrElse(sys.env.get(\"SPARK_YARN_DIST_FILES\").orNull)"
+  }],
+  "prId": 969
+}, {
+  "comments": [{
+    "author": {
+      "login": "tgravescs"
+    },
+    "body": "same as above comment.\n",
+    "commit": "8117765daa02b03b81c12c1869ef75eda6653392",
+    "createdAt": "2014-06-13T15:27:14Z",
+    "diffHunk": "@@ -45,6 +44,14 @@ class ClientArguments(val args: Array[String], val sparkConf: SparkConf) {\n \n   parseArgs(args.toList)\n \n+  files = Option(files).getOrElse(sys.env.get(\"SPARK_YARN_DIST_FILES\").orNull)\n+  files = Option(files).getOrElse(sparkConf.getOption(\"spark.yarn.dist.files\").orNull)\n+  files = Option(files).map(p => Utils.resolveURIs(p)).orNull\n+\n+  archives = Option(archives).getOrElse(sys.env.get(\"SPARK_YARN_DIST_ARCHIVES\").orNull)"
+  }],
+  "prId": 969
+}, {
+  "comments": [{
+    "author": {
+      "login": "witgo"
+    },
+    "body": "@tgravescs   `Utils.resolveURIs` method, unless expressly stated, all other are local path.\n",
+    "commit": "8117765daa02b03b81c12c1869ef75eda6653392",
+    "createdAt": "2014-06-13T18:06:02Z",
+    "diffHunk": "@@ -45,6 +44,12 @@ class ClientArguments(val args: Array[String], val sparkConf: SparkConf) {\n \n   parseArgs(args.toList)\n \n+  files = Option(files).getOrElse(sparkConf.getOption(\"spark.yarn.dist.files\").orNull)\n+  files = Option(files).map(p => Utils.resolveURIs(p)).orNull"
+  }, {
+    "author": {
+      "login": "tgravescs"
+    },
+    "body": "thanks @witgo, you are right, I actually had it backwards.  Because of this line it always make it default to file://.  When we use the env variable for yarn-client or if its specified via the --archives/--files option with spark-class it should default to look in hdfs. That is the previous behavior from 0.9.   \n\nso we should change this to only do the map(p => Utils.resolveURIs(p)) if it is actually reading it from spark.yarn.dist.files.  If its specified in --archives/--files then we shouldn't resolveURI's.\n\nI think we also still need to change YarnClientSchedulerBackend to ignore spark.yarn.dist.*, otherwise it will pass it on --archives/--files and it won't be resolveURI it and it will default to hdfs.\n",
+    "commit": "8117765daa02b03b81c12c1869ef75eda6653392",
+    "createdAt": "2014-06-13T19:11:48Z",
+    "diffHunk": "@@ -45,6 +44,12 @@ class ClientArguments(val args: Array[String], val sparkConf: SparkConf) {\n \n   parseArgs(args.toList)\n \n+  files = Option(files).getOrElse(sparkConf.getOption(\"spark.yarn.dist.files\").orNull)\n+  files = Option(files).map(p => Utils.resolveURIs(p)).orNull"
+  }, {
+    "author": {
+      "login": "witgo"
+    },
+    "body": "  files = Option(files).getOrElse(sparkConf.getOption(\"spark.yarn.dist.files\").\n    map(p => Utils.resolveURIs(p)).orNull)\nAs you say the code should look like this\n\n``` scala\n  files = Option(files).getOrElse(sparkConf.getOption(\"spark.yarn.dist.files\").\n    map(p => Utils.resolveURIs(p)).orNull)\n\n  archives = Option(archives).getOrElse(sparkConf.getOption(\"spark.yarn.dist.archives\").\n    map(p => Utils.resolveURIs(p)).orNull)\n```\n\n`spark.yarn.dist.*`  and `--archives/--files` behavior is different, this is a bit strange.\n",
+    "commit": "8117765daa02b03b81c12c1869ef75eda6653392",
+    "createdAt": "2014-06-14T00:36:22Z",
+    "diffHunk": "@@ -45,6 +44,12 @@ class ClientArguments(val args: Array[String], val sparkConf: SparkConf) {\n \n   parseArgs(args.toList)\n \n+  files = Option(files).getOrElse(sparkConf.getOption(\"spark.yarn.dist.files\").orNull)\n+  files = Option(files).map(p => Utils.resolveURIs(p)).orNull"
+  }, {
+    "author": {
+      "login": "witgo"
+    },
+    "body": "This `Utils.resolveURIs(p)` will change the behavior of `YarnClientSchedulerBackend` ,should be removed .\n",
+    "commit": "8117765daa02b03b81c12c1869ef75eda6653392",
+    "createdAt": "2014-06-15T03:54:32Z",
+    "diffHunk": "@@ -45,6 +44,12 @@ class ClientArguments(val args: Array[String], val sparkConf: SparkConf) {\n \n   parseArgs(args.toList)\n \n+  files = Option(files).getOrElse(sparkConf.getOption(\"spark.yarn.dist.files\").orNull)\n+  files = Option(files).map(p => Utils.resolveURIs(p)).orNull"
+  }],
+  "prId": 969
+}, {
+  "comments": [{
+    "author": {
+      "login": "tgravescs"
+    },
+    "body": "this logic is already handled by spark-submit, no reason to duplicate\n",
+    "commit": "8117765daa02b03b81c12c1869ef75eda6653392",
+    "createdAt": "2014-06-17T15:29:41Z",
+    "diffHunk": "@@ -45,6 +44,25 @@ class ClientArguments(val args: Array[String], val sparkConf: SparkConf) {\n \n   parseArgs(args.toList)\n \n+  // -archives/--files via spark submit or yarn-client defaults to use file:// if not specified\n+  if (sys.props.contains(\"SPARK_SUBMIT\") || (sparkConf.getOption(\"spark.master\").isDefined &&"
+  }],
+  "prId": 969
+}, {
+  "comments": [{
+    "author": {
+      "login": "tgravescs"
+    },
+    "body": "again this is already handled in the YarnClientSchedulerBackend. It reads the env variables and passes in the --files/--archives without being resolveURI extended.  The issue with that code is that it also looks at spark.yarn.dist.archives and spark.yarn.dist.files and doesn't resolveURI extend them. \n",
+    "commit": "8117765daa02b03b81c12c1869ef75eda6653392",
+    "createdAt": "2014-06-17T15:32:55Z",
+    "diffHunk": "@@ -45,6 +44,25 @@ class ClientArguments(val args: Array[String], val sparkConf: SparkConf) {\n \n   parseArgs(args.toList)\n \n+  // -archives/--files via spark submit or yarn-client defaults to use file:// if not specified\n+  if (sys.props.contains(\"SPARK_SUBMIT\") || (sparkConf.getOption(\"spark.master\").isDefined &&\n+    sparkConf.get(\"spark.master\") == \"yarn-client\")) {\n+    files = Option(files).map(p => Utils.resolveURIs(p)).orNull\n+    archives = Option(archives).map(p => Utils.resolveURIs(p)).orNull\n+  }\n+\n+  // env variable SPARK_YARN_DIST_ARCHIVES/SPARK_YARN_DIST_FILES set in yarn-client then\n+  // it should default to hdfs://\n+  files = Option(files).getOrElse(sys.env.get(\"SPARK_YARN_DIST_FILES\").orNull)"
+  }],
+  "prId": 969
+}]

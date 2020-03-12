@@ -1,0 +1,12 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "fits in previous line",
+    "commit": "fb79d0ac15c6f572ec3d26fde4e73727cff95a9d",
+    "createdAt": "2019-11-21T19:37:44Z",
+    "diffHunk": "@@ -166,34 +167,46 @@ boolean isCipherValid() {\n \n     @Override\n     public void channelRead(ChannelHandlerContext ctx, Object data) throws Exception {\n-      if (!isCipherValid) {\n-        throw new IOException(\"Cipher is in invalid state.\");\n-      }\n-      byteChannel.feedData((ByteBuf) data);\n-\n-      byte[] decryptedData = new byte[byteChannel.readableBytes()];\n-      int offset = 0;\n-      while (offset < decryptedData.length) {\n-        // SPARK-25535: workaround for CRYPTO-141.\n-        try {\n-          offset += cis.read(decryptedData, offset, decryptedData.length - offset);\n-        } catch (InternalError ie) {\n-          isCipherValid = false;\n-          throw ie;\n+      ByteBuf buffer = (ByteBuf) data;\n+\n+      try {\n+        if (!isCipherValid) {\n+          throw new IOException(\"Cipher is in invalid state.\");\n+        }\n+        byte[] decryptedData = new byte[buffer.readableBytes()];\n+        byteChannel.feedData(buffer);\n+\n+        int offset = 0;\n+        while (offset < decryptedData.length) {\n+          // SPARK-25535: workaround for CRYPTO-141.\n+          try {\n+            offset += cis.read(decryptedData, offset, decryptedData.length - offset);\n+          } catch (InternalError ie) {\n+            isCipherValid = false;\n+            throw ie;\n+          }\n         }\n-      }\n \n-      ctx.fireChannelRead(Unpooled.wrappedBuffer(decryptedData, 0, decryptedData.length));\n+        ctx.fireChannelRead(Unpooled.wrappedBuffer(decryptedData, 0, decryptedData.length));\n+      } finally {\n+        buffer.release();\n+      }\n     }\n \n     @Override\n-    public void channelInactive(ChannelHandlerContext ctx) throws Exception {\n+    public void handlerRemoved(ChannelHandlerContext ctx) throws Exception {\n+      // We do the closing of the stream / channel in handlerRemoved(...) as\n+      // this method will be called\n+      // in all cases:"
+  }],
+  "prId": 26609
+}]

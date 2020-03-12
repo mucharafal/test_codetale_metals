@@ -1,0 +1,31 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "tdas"
+    },
+    "body": "Looking at this PR and prev PRs, I think the names `UnsafeRowWriter` and `UnsafeRowReader` are not right. The basic interfaces `ContinuousShuffleReader/Writer` take UnsafeRows, hence that's not unique to this implementation (that is, all implementation of these interfaces will read/write UnsafeRows). What's unique is that this implementation uses RPC mechanism to read/write. So it may be more accurate to name them `RPCContinuousShuffleReader/Writer`, or something like that.",
+    "commit": "cff37c45f084d50a0844fbe8481565f6a9985302",
+    "createdAt": "2018-05-25T22:05:24Z",
+    "diffHunk": "@@ -0,0 +1,54 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.execution.streaming.continuous.shuffle\n+\n+import org.apache.spark.Partitioner\n+import org.apache.spark.rpc.RpcEndpointRef\n+import org.apache.spark.sql.catalyst.expressions.UnsafeRow\n+\n+/**\n+ * A [[ContinuousShuffleWriter]] sending data to [[UnsafeRowReceiver]] instances.\n+ *\n+ * @param writerId The partition ID of this writer.\n+ * @param outputPartitioner The partitioner on the reader side of the shuffle.\n+ * @param endpoints The [[UnsafeRowReceiver]] endpoints to write to. Indexed by partition ID within\n+ *                  outputPartitioner.\n+ */\n+class UnsafeRowWriter("
+  }],
+  "prId": 21428
+}, {
+  "comments": [{
+    "author": {
+      "login": "tdas"
+    },
+    "body": "Another thought, not something that needs to be done now. But it might be overall cleaner if the ContinuousShuffleWriter and Reader are coupled together in a joint interface. This is because each writer implementation is always tied to a specific reader implementation, so they are always coupled together. Consider something like this. \r\n\r\n```\r\ntrait ContinuousShuffleManager {\r\n  def createWriter(writerId: Int, numReaders: Int): ContinuousShuffleWriter \r\n  def createReader(readerId: Int, numWriters: Int): ContinuousShuffleReader\r\n}\r\n```\r\n\r\nI am just guessing that the params on the createX interfaces, I might be missing something. But I feel that a small set of params should be sufficient for any implementation figure out everything else. Also, other management/control layer stuff will go into the manager implementation. Like, for example, if the writers and readers need to exchange initial setup information (e.g. RPC endpoint details) through the driver, then the implementation of that would go into the manager. \r\n\r\nThink about it as your building out rest of the architecture.\r\n\r\n",
+    "commit": "cff37c45f084d50a0844fbe8481565f6a9985302",
+    "createdAt": "2018-05-25T22:14:25Z",
+    "diffHunk": "@@ -0,0 +1,54 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.execution.streaming.continuous.shuffle\n+\n+import org.apache.spark.Partitioner\n+import org.apache.spark.rpc.RpcEndpointRef\n+import org.apache.spark.sql.catalyst.expressions.UnsafeRow\n+\n+/**\n+ * A [[ContinuousShuffleWriter]] sending data to [[UnsafeRowReceiver]] instances."
+  }, {
+    "author": {
+      "login": "jose-torres"
+    },
+    "body": "Agreed.",
+    "commit": "cff37c45f084d50a0844fbe8481565f6a9985302",
+    "createdAt": "2018-05-25T23:06:01Z",
+    "diffHunk": "@@ -0,0 +1,54 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.execution.streaming.continuous.shuffle\n+\n+import org.apache.spark.Partitioner\n+import org.apache.spark.rpc.RpcEndpointRef\n+import org.apache.spark.sql.catalyst.expressions.UnsafeRow\n+\n+/**\n+ * A [[ContinuousShuffleWriter]] sending data to [[UnsafeRowReceiver]] instances."
+  }],
+  "prId": 21428
+}]

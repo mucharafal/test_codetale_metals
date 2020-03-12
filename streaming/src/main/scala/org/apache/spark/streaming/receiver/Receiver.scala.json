@@ -1,0 +1,107 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "tdas"
+    },
+    "body": "Can you mark these new ones as experimental API? See how I have marked them in the FlumeUtils, in the other PR #807 \n",
+    "commit": "7cc31ca0c05ee41c1fa25d8701bbf5a0e1e5a975",
+    "createdAt": "2014-07-22T21:04:17Z",
+    "diffHunk": "@@ -125,6 +125,15 @@ abstract class Receiver[T](val storageLevel: StorageLevel) extends Serializable\n   }\n \n   /**\n+   * Store an ArrayBuffer of received data as a data block into Spark's memory. The callback is\n+   * called when the data is safely stored. This callback can be used to commit transactions\n+   * with systems from which data is being sent etc.\n+   */\n+  def storeReliably(dataBuffer: ArrayBuffer[T], callback: Option[() => Unit]) {"
+  }],
+  "prId": 1195
+}, {
+  "comments": [{
+    "author": {
+      "login": "tdas"
+    },
+    "body": "Why is the callback an Option. What is the meaning of calling storeReliably(buffer, None) ? Wouldnt that be same as store(buffer)?\n",
+    "commit": "7cc31ca0c05ee41c1fa25d8701bbf5a0e1e5a975",
+    "createdAt": "2014-07-28T22:12:34Z",
+    "diffHunk": "@@ -125,6 +125,16 @@ abstract class Receiver[T](val storageLevel: StorageLevel) extends Serializable\n   }\n \n   /**\n+   * Store an ArrayBuffer of received data as a data block into Spark's memory. The callback is\n+   * called when the data is safely stored. This callback can be used to commit transactions\n+   * with systems from which data is being sent etc.\n+   */\n+  @Experimental\n+  def storeReliably(dataBuffer: ArrayBuffer[T], callback: Option[() => Unit]) {"
+  }, {
+    "author": {
+      "login": "harishreedharan"
+    },
+    "body": "The only issue is that there is nothing that stops a buggy receiver to call storeReliably(buffer, null). This just protects against this - else we'd have to explicitly do a null check.\n",
+    "commit": "7cc31ca0c05ee41c1fa25d8701bbf5a0e1e5a975",
+    "createdAt": "2014-07-28T22:15:50Z",
+    "diffHunk": "@@ -125,6 +125,16 @@ abstract class Receiver[T](val storageLevel: StorageLevel) extends Serializable\n   }\n \n   /**\n+   * Store an ArrayBuffer of received data as a data block into Spark's memory. The callback is\n+   * called when the data is safely stored. This callback can be used to commit transactions\n+   * with systems from which data is being sent etc.\n+   */\n+  @Experimental\n+  def storeReliably(dataBuffer: ArrayBuffer[T], callback: Option[() => Unit]) {"
+  }, {
+    "author": {
+      "login": "tdas"
+    },
+    "body": "We can use  `executor.pushArrayBuffer(dataBuffer, None, None, Option(callback))`  to take care of it inside this function. Thats prevents us from the issue without making public API confusing.\n",
+    "commit": "7cc31ca0c05ee41c1fa25d8701bbf5a0e1e5a975",
+    "createdAt": "2014-07-28T22:18:52Z",
+    "diffHunk": "@@ -125,6 +125,16 @@ abstract class Receiver[T](val storageLevel: StorageLevel) extends Serializable\n   }\n \n   /**\n+   * Store an ArrayBuffer of received data as a data block into Spark's memory. The callback is\n+   * called when the data is safely stored. This callback can be used to commit transactions\n+   * with systems from which data is being sent etc.\n+   */\n+  @Experimental\n+  def storeReliably(dataBuffer: ArrayBuffer[T], callback: Option[() => Unit]) {"
+  }],
+  "prId": 1195
+}, {
+  "comments": [{
+    "author": {
+      "login": "tdas"
+    },
+    "body": "This is small style preference of mine (so no strong arguments), but could you put all the \"storeReliably\" function together rather than inter-mixed with store function?\n",
+    "commit": "7cc31ca0c05ee41c1fa25d8701bbf5a0e1e5a975",
+    "createdAt": "2014-07-28T22:17:52Z",
+    "diffHunk": "@@ -133,12 +143,34 @@ abstract class Receiver[T](val storageLevel: StorageLevel) extends Serializable\n     executor.pushArrayBuffer(dataBuffer, Some(metadata), None)\n   }\n \n+  /**\n+   * Store an ArrayBuffer of received data as a data block into Spark's memory.\n+   * The metadata will be associated with this block of data\n+   * for being used in the corresponding InputDStream. The callback is\n+   * called when the data is safely stored. This callback can be used to commit transactions\n+   * with systems from which data is being sent etc.\n+   */\n+  @Experimental\n+  def storeReliably(dataBuffer: ArrayBuffer[T], metadata: Any, callback: Option[() => Unit]) {"
+  }],
+  "prId": 1195
+}, {
+  "comments": [{
+    "author": {
+      "login": "tdas"
+    },
+    "body": "This function needs to be callable from Java. But Java cant call () => Unit, so have to use Java-friendly Function.\n",
+    "commit": "7cc31ca0c05ee41c1fa25d8701bbf5a0e1e5a975",
+    "createdAt": "2014-07-28T22:30:24Z",
+    "diffHunk": "@@ -147,12 +179,34 @@ abstract class Receiver[T](val storageLevel: StorageLevel) extends Serializable\n     executor.pushIterator(dataIterator, Some(metadata), None)\n   }\n \n+  /**\n+   * Store an iterator of received data as a data block into Spark's memory.\n+   * The metadata will be associated with this block of data\n+   * for being used in the corresponding InputDStream. The callback is\n+   * called when the data is safely stored. This callback can be used to commit transactions\n+   * with systems from which data is being sent etc.\n+   */\n+  @Experimental\n+  def storeReliably(dataIterator: java.util.Iterator[T], metadata: Any,\n+    callback: Option[() => Unit]) {"
+  }, {
+    "author": {
+      "login": "harishreedharan"
+    },
+    "body": "Any pointers as to what the Java-friendly way is? Should we wrap this in a class with a call method?\n",
+    "commit": "7cc31ca0c05ee41c1fa25d8701bbf5a0e1e5a975",
+    "createdAt": "2014-07-28T22:32:13Z",
+    "diffHunk": "@@ -147,12 +179,34 @@ abstract class Receiver[T](val storageLevel: StorageLevel) extends Serializable\n     executor.pushIterator(dataIterator, Some(metadata), None)\n   }\n \n+  /**\n+   * Store an iterator of received data as a data block into Spark's memory.\n+   * The metadata will be associated with this block of data\n+   * for being used in the corresponding InputDStream. The callback is\n+   * called when the data is safely stored. This callback can be used to commit transactions\n+   * with systems from which data is being sent etc.\n+   */\n+  @Experimental\n+  def storeReliably(dataIterator: java.util.Iterator[T], metadata: Any,\n+    callback: Option[() => Unit]) {"
+  }, {
+    "author": {
+      "login": "tdas"
+    },
+    "body": "https://github.com/apache/spark/tree/master/core/src/main/java/org/apache/spark/api/java/function\n",
+    "commit": "7cc31ca0c05ee41c1fa25d8701bbf5a0e1e5a975",
+    "createdAt": "2014-07-29T01:48:25Z",
+    "diffHunk": "@@ -147,12 +179,34 @@ abstract class Receiver[T](val storageLevel: StorageLevel) extends Serializable\n     executor.pushIterator(dataIterator, Some(metadata), None)\n   }\n \n+  /**\n+   * Store an iterator of received data as a data block into Spark's memory.\n+   * The metadata will be associated with this block of data\n+   * for being used in the corresponding InputDStream. The callback is\n+   * called when the data is safely stored. This callback can be used to commit transactions\n+   * with systems from which data is being sent etc.\n+   */\n+  @Experimental\n+  def storeReliably(dataIterator: java.util.Iterator[T], metadata: Any,\n+    callback: Option[() => Unit]) {"
+  }, {
+    "author": {
+      "login": "tdas"
+    },
+    "body": "These are used all throughout the RDD and DStream Java API\n",
+    "commit": "7cc31ca0c05ee41c1fa25d8701bbf5a0e1e5a975",
+    "createdAt": "2014-07-29T01:48:53Z",
+    "diffHunk": "@@ -147,12 +179,34 @@ abstract class Receiver[T](val storageLevel: StorageLevel) extends Serializable\n     executor.pushIterator(dataIterator, Some(metadata), None)\n   }\n \n+  /**\n+   * Store an iterator of received data as a data block into Spark's memory.\n+   * The metadata will be associated with this block of data\n+   * for being used in the corresponding InputDStream. The callback is\n+   * called when the data is safely stored. This callback can be used to commit transactions\n+   * with systems from which data is being sent etc.\n+   */\n+  @Experimental\n+  def storeReliably(dataIterator: java.util.Iterator[T], metadata: Any,\n+    callback: Option[() => Unit]) {"
+  }],
+  "prId": 1195
+}, {
+  "comments": [{
+    "author": {
+      "login": "tdas"
+    },
+    "body": "Please add to the scala doc what reliably means, and tie it with the Future that is returned. For all the `storeReliably`\n",
+    "commit": "7cc31ca0c05ee41c1fa25d8701bbf5a0e1e5a975",
+    "createdAt": "2014-07-30T20:09:01Z",
+    "diffHunk": "@@ -179,6 +181,80 @@ abstract class Receiver[T](val storageLevel: StorageLevel) extends Serializable\n     executor.pushBytes(bytes, Some(metadata), None)\n   }\n \n+  /**\n+   * Store an ArrayBuffer of received data as a data block into Spark's memory."
+  }],
+  "prId": 1195
+}, {
+  "comments": [{
+    "author": {
+      "login": "tdas"
+    },
+    "body": "Returning a Future[Boolean] does not expose the exception. Maybe its better to return something like a StoreResult that has a boolean field and an exception field. And this change will the API breaking change, so better to do it now rather than later.\n",
+    "commit": "7cc31ca0c05ee41c1fa25d8701bbf5a0e1e5a975",
+    "createdAt": "2014-07-30T20:27:59Z",
+    "diffHunk": "@@ -179,6 +181,80 @@ abstract class Receiver[T](val storageLevel: StorageLevel) extends Serializable\n     executor.pushBytes(bytes, Some(metadata), None)\n   }\n \n+  /**\n+   * Store an ArrayBuffer of received data as a data block into Spark's memory.\n+   */\n+  @Experimental\n+  def storeReliably(dataBuffer: ArrayBuffer[T]): Future[Boolean] = {\n+    executor.pushArrayBufferReliably(dataBuffer, None, None)\n+  }\n+\n+  /**\n+   * Store an ArrayBuffer of received data as a data block into Spark's memory.\n+   * The metadata will be associated with this block of data\n+   * for being used in the corresponding InputDStream.\n+   */\n+  @Experimental\n+  def storeReliably(dataBuffer: ArrayBuffer[T], metadata: Any): Future[Boolean] = {\n+    executor.pushArrayBufferReliably(dataBuffer, Some(metadata), None)"
+  }],
+  "prId": 1195
+}]

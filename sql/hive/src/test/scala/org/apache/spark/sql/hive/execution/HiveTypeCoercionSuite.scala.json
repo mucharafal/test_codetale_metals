@@ -1,0 +1,23 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "liancheng"
+    },
+    "body": "`fail(s\"unexpected cast $c\")` would be more concise.\n",
+    "commit": "f8583fdf77812cf5fcc6e7d1e79c9dd73afa0169",
+    "createdAt": "2014-06-20T06:01:23Z",
+    "diffHunk": "@@ -28,4 +32,23 @@ class HiveTypeCoercionSuite extends HiveComparisonTest {\n       createQueryTest(s\"$i + $j\", s\"SELECT $i + $j FROM src LIMIT 1\")\n     }\n   }\n+\n+  test(\"[SPARK-2210] boolean cast on boolean value should be removed\") {\n+    val q = \"select cast(cast(key=0 as boolean) as boolean) from src\"\n+    val project = TestHive.hql(q).queryExecution.executedPlan.collect { case e: Project => e }.head\n+\n+    // No cast expression introduced\n+    project.transformAllExpressions { case c: Cast =>\n+      assert(false, \"unexpected cast \" + c)"
+  }],
+  "prId": 1146
+}, {
+  "comments": [{
+    "author": {
+      "login": "liancheng"
+    },
+    "body": "I think this can be simplified to:\n\n``` scala\nassert(project.collect { case e: EqualsTo => e }.size === 1)\n```\n",
+    "commit": "f8583fdf77812cf5fcc6e7d1e79c9dd73afa0169",
+    "createdAt": "2014-06-20T06:03:17Z",
+    "diffHunk": "@@ -28,4 +32,23 @@ class HiveTypeCoercionSuite extends HiveComparisonTest {\n       createQueryTest(s\"$i + $j\", s\"SELECT $i + $j FROM src LIMIT 1\")\n     }\n   }\n+\n+  test(\"[SPARK-2210] boolean cast on boolean value should be removed\") {\n+    val q = \"select cast(cast(key=0 as boolean) as boolean) from src\"\n+    val project = TestHive.hql(q).queryExecution.executedPlan.collect { case e: Project => e }.head\n+\n+    // No cast expression introduced\n+    project.transformAllExpressions { case c: Cast =>\n+      assert(false, \"unexpected cast \" + c)\n+      c\n+    }\n+\n+    // Only one EqualsTo\n+    var numEquals = 0\n+    project.transformAllExpressions { case e: EqualsTo =>\n+      numEquals += 1\n+      e\n+    }\n+    assert(numEquals === 1)"
+  }],
+  "prId": 1146
+}]

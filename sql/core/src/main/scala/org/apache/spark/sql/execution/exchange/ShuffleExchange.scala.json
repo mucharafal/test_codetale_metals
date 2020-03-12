@@ -1,0 +1,39 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "AFAIK IntelliJ might give a \"suspicious variable shadowing\" warning RE: this name, since `shuffleRDD` is also defined as a field on this class.\n",
+    "commit": "7cd6844bb405bfe66285a60b58cd583f86f1a2cb",
+    "createdAt": "2016-03-08T22:14:52Z",
+    "diffHunk": "@@ -103,16 +101,25 @@ case class ShuffleExchange(\n     new ShuffledRowRDD(shuffleDependency, specifiedPartitionStartIndices)\n   }\n \n+  /**\n+   * Caches the created ShuffleRowRDD so we can reuse that.\n+   */\n+  private var shuffleRDD: ShuffledRowRDD = null\n+\n   protected override def doExecute(): RDD[InternalRow] = attachTree(this, \"execute\") {\n-    coordinator match {\n-      case Some(exchangeCoordinator) =>\n-        val shuffleRDD = exchangeCoordinator.postShuffleRDD(this)\n-        assert(shuffleRDD.partitions.length == newPartitioning.numPartitions)\n-        shuffleRDD\n-      case None =>\n-        val shuffleDependency = prepareShuffleDependency()\n-        preparePostShuffleRDD(shuffleDependency)\n+    // Returns the same ShuffleRowRDD if this plan is used by multiple plans.\n+    if (shuffleRDD == null) {\n+      shuffleRDD = coordinator match {\n+        case Some(exchangeCoordinator) =>\n+          val shuffleRDD = exchangeCoordinator.postShuffleRDD(this)"
+  }, {
+    "author": {
+      "login": "davies"
+    },
+    "body": "will rename it to 'cachedShuffleRDD'\n",
+    "commit": "7cd6844bb405bfe66285a60b58cd583f86f1a2cb",
+    "createdAt": "2016-03-08T22:19:49Z",
+    "diffHunk": "@@ -103,16 +101,25 @@ case class ShuffleExchange(\n     new ShuffledRowRDD(shuffleDependency, specifiedPartitionStartIndices)\n   }\n \n+  /**\n+   * Caches the created ShuffleRowRDD so we can reuse that.\n+   */\n+  private var shuffleRDD: ShuffledRowRDD = null\n+\n   protected override def doExecute(): RDD[InternalRow] = attachTree(this, \"execute\") {\n-    coordinator match {\n-      case Some(exchangeCoordinator) =>\n-        val shuffleRDD = exchangeCoordinator.postShuffleRDD(this)\n-        assert(shuffleRDD.partitions.length == newPartitioning.numPartitions)\n-        shuffleRDD\n-      case None =>\n-        val shuffleDependency = prepareShuffleDependency()\n-        preparePostShuffleRDD(shuffleDependency)\n+    // Returns the same ShuffleRowRDD if this plan is used by multiple plans.\n+    if (shuffleRDD == null) {\n+      shuffleRDD = coordinator match {\n+        case Some(exchangeCoordinator) =>\n+          val shuffleRDD = exchangeCoordinator.postShuffleRDD(this)"
+  }],
+  "prId": 11403
+}, {
+  "comments": [{
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "Naive question, but do we need to cache the result after the `attachTree`?\n",
+    "commit": "7cd6844bb405bfe66285a60b58cd583f86f1a2cb",
+    "createdAt": "2016-03-08T22:15:48Z",
+    "diffHunk": "@@ -103,16 +101,25 @@ case class ShuffleExchange(\n     new ShuffledRowRDD(shuffleDependency, specifiedPartitionStartIndices)\n   }\n \n+  /**\n+   * Caches the created ShuffleRowRDD so we can reuse that.\n+   */\n+  private var shuffleRDD: ShuffledRowRDD = null\n+\n   protected override def doExecute(): RDD[InternalRow] = attachTree(this, \"execute\") {"
+  }, {
+    "author": {
+      "login": "davies"
+    },
+    "body": "attachTree is only used to generate better error message (show the plan), I think it do not matter here.\n",
+    "commit": "7cd6844bb405bfe66285a60b58cd583f86f1a2cb",
+    "createdAt": "2016-03-08T22:19:17Z",
+    "diffHunk": "@@ -103,16 +101,25 @@ case class ShuffleExchange(\n     new ShuffledRowRDD(shuffleDependency, specifiedPartitionStartIndices)\n   }\n \n+  /**\n+   * Caches the created ShuffleRowRDD so we can reuse that.\n+   */\n+  private var shuffleRDD: ShuffledRowRDD = null\n+\n   protected override def doExecute(): RDD[InternalRow] = attachTree(this, \"execute\") {"
+  }],
+  "prId": 11403
+}]

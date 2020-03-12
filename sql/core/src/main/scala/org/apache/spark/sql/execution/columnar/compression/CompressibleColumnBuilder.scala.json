@@ -1,0 +1,93 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "`encoder.compressionRatio < 0.8 && !misalignedArch...` is simpler\n",
+    "commit": "ea44a778c8bb70e2625343b56108a74fc7584fef",
+    "createdAt": "2016-08-23T07:04:10Z",
+    "diffHunk": "@@ -61,8 +63,16 @@ private[columnar] trait CompressibleColumnBuilder[T <: AtomicType]\n     super.initialize(initialSize, columnName, useCompression)\n   }\n \n+  /*\n+   * The various compression schemes, while saving memory use, cause all of the data within the row to become\n+   * unaligned, thus causing crashes.  Until a way of fixing the compression is found to also allow aligned accesses\n+   * this must be disabled for SPARC.\n+   */\n   protected def isWorthCompressing(encoder: Encoder[T]) = {\n-    encoder.compressionRatio < 0.8\n+    if(misalignedArch.contains(System.getProperty(\"os.arch\")))"
+  }],
+  "prId": 14762
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "`private` and a `Set`\n",
+    "commit": "ea44a778c8bb70e2625343b56108a74fc7584fef",
+    "createdAt": "2016-08-31T18:51:56Z",
+    "diffHunk": "@@ -46,6 +47,7 @@ private[columnar] trait CompressibleColumnBuilder[T <: AtomicType]\n   this: NativeColumnBuilder[T] with WithCompressionSchemes =>\n \n   var compressionEncoders: Seq[Encoder[T]] = _\n+  val misalignedArch = List(\"sparc\", \"sparcv9\")"
+  }],
+  "prId": 14762
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "You can cache whether the second clause check is true or false rather than checking it every time and looking up a system property. Probably even easier than storing a list of misaligned architectures. Can this be in an `object` anyway?\n",
+    "commit": "ea44a778c8bb70e2625343b56108a74fc7584fef",
+    "createdAt": "2016-08-31T18:52:57Z",
+    "diffHunk": "@@ -61,8 +63,12 @@ private[columnar] trait CompressibleColumnBuilder[T <: AtomicType]\n     super.initialize(initialSize, columnName, useCompression)\n   }\n \n+  // The various compression schemes, while saving memory use, cause all of the data within\n+  // the row to become unaligned, thus causing crashes.  Until a way of fixing the compression\n+  // is found to also allow aligned accesses this must be disabled for SPARC.\n+\n   protected def isWorthCompressing(encoder: Encoder[T]) = {\n-    encoder.compressionRatio < 0.8\n+    encoder.compressionRatio < 0.8 && !misalignedArch.contains(System.getProperty(\"os.arch\"))"
+  }, {
+    "author": {
+      "login": "sumansomasundar"
+    },
+    "body": "Did you mean something like this?\n\nprivate[columnar] object archType {\n  private val archList = Set(\"sparc\", \"sparcv9\")\n  val misaligned = archList.contains(System.getProperty(\"os_arch\"))\n}\n\nprotected def isWorthCompressing(encoder: Encoder[T]) = {\n  // short circuit compression check if not needed\n  !archType.misaligned && encoder.compressionRatio < 0.8\n}\n",
+    "commit": "ea44a778c8bb70e2625343b56108a74fc7584fef",
+    "createdAt": "2016-09-02T07:35:20Z",
+    "diffHunk": "@@ -61,8 +63,12 @@ private[columnar] trait CompressibleColumnBuilder[T <: AtomicType]\n     super.initialize(initialSize, columnName, useCompression)\n   }\n \n+  // The various compression schemes, while saving memory use, cause all of the data within\n+  // the row to become unaligned, thus causing crashes.  Until a way of fixing the compression\n+  // is found to also allow aligned accesses this must be disabled for SPARC.\n+\n   protected def isWorthCompressing(encoder: Encoder[T]) = {\n-    encoder.compressionRatio < 0.8\n+    encoder.compressionRatio < 0.8 && !misalignedArch.contains(System.getProperty(\"os.arch\"))"
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "No, just write `val misalignedArch = Set(\"sparc\", \"sparcv9\").contains(System.getProperty(\"os_arch\")` above, then refer to this boolean flag. Doesn't have to be more complex than that.\n",
+    "commit": "ea44a778c8bb70e2625343b56108a74fc7584fef",
+    "createdAt": "2016-09-02T08:09:17Z",
+    "diffHunk": "@@ -61,8 +63,12 @@ private[columnar] trait CompressibleColumnBuilder[T <: AtomicType]\n     super.initialize(initialSize, columnName, useCompression)\n   }\n \n+  // The various compression schemes, while saving memory use, cause all of the data within\n+  // the row to become unaligned, thus causing crashes.  Until a way of fixing the compression\n+  // is found to also allow aligned accesses this must be disabled for SPARC.\n+\n   protected def isWorthCompressing(encoder: Encoder[T]) = {\n-    encoder.compressionRatio < 0.8\n+    encoder.compressionRatio < 0.8 && !misalignedArch.contains(System.getProperty(\"os.arch\"))"
+  }, {
+    "author": {
+      "login": "sumansomasundar"
+    },
+    "body": "I have made the changes. Please take a look. @srowen \n",
+    "commit": "ea44a778c8bb70e2625343b56108a74fc7584fef",
+    "createdAt": "2016-09-13T20:20:12Z",
+    "diffHunk": "@@ -61,8 +63,12 @@ private[columnar] trait CompressibleColumnBuilder[T <: AtomicType]\n     super.initialize(initialSize, columnName, useCompression)\n   }\n \n+  // The various compression schemes, while saving memory use, cause all of the data within\n+  // the row to become unaligned, thus causing crashes.  Until a way of fixing the compression\n+  // is found to also allow aligned accesses this must be disabled for SPARC.\n+\n   protected def isWorthCompressing(encoder: Encoder[T]) = {\n-    encoder.compressionRatio < 0.8\n+    encoder.compressionRatio < 0.8 && !misalignedArch.contains(System.getProperty(\"os.arch\"))"
+  }],
+  "prId": 14762
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "This could be in a companion object\n",
+    "commit": "ea44a778c8bb70e2625343b56108a74fc7584fef",
+    "createdAt": "2016-09-15T08:06:12Z",
+    "diffHunk": "@@ -46,6 +47,7 @@ private[columnar] trait CompressibleColumnBuilder[T <: AtomicType]\n   this: NativeColumnBuilder[T] with WithCompressionSchemes =>\n \n   var compressionEncoders: Seq[Encoder[T]] = _\n+  private val alignedArch = Set(\"sparc\", \"sparcv9\").contains(System.getProperty(\"os.arch\"))"
+  }, {
+    "author": {
+      "login": "jlhitt"
+    },
+    "body": "You mentioned it could be an object 2 revisions ago, then told us to just do it as a private val instead..  \n",
+    "commit": "ea44a778c8bb70e2625343b56108a74fc7584fef",
+    "createdAt": "2016-09-15T14:21:16Z",
+    "diffHunk": "@@ -46,6 +47,7 @@ private[columnar] trait CompressibleColumnBuilder[T <: AtomicType]\n   this: NativeColumnBuilder[T] with WithCompressionSchemes =>\n \n   var compressionEncoders: Seq[Encoder[T]] = _\n+  private val alignedArch = Set(\"sparc\", \"sparcv9\").contains(System.getProperty(\"os.arch\"))"
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Not sure what you mean. In https://github.com/apache/spark/pull/14762#r77049945 I suggested the change you made here, and that it be in a companion object. But here it's in the class. I'm talking about companion objects as in \"static methods\". You don't need this same flag value in every instance of the class.\n",
+    "commit": "ea44a778c8bb70e2625343b56108a74fc7584fef",
+    "createdAt": "2016-09-15T14:25:02Z",
+    "diffHunk": "@@ -46,6 +47,7 @@ private[columnar] trait CompressibleColumnBuilder[T <: AtomicType]\n   this: NativeColumnBuilder[T] with WithCompressionSchemes =>\n \n   var compressionEncoders: Seq[Encoder[T]] = _\n+  private val alignedArch = Set(\"sparc\", \"sparcv9\").contains(System.getProperty(\"os.arch\"))"
+  }, {
+    "author": {
+      "login": "jlhitt"
+    },
+    "body": "Sorry, mis-understanding that you meant to put it into a companion object.  Will get that taken care of.\n",
+    "commit": "ea44a778c8bb70e2625343b56108a74fc7584fef",
+    "createdAt": "2016-09-15T14:39:21Z",
+    "diffHunk": "@@ -46,6 +47,7 @@ private[columnar] trait CompressibleColumnBuilder[T <: AtomicType]\n   this: NativeColumnBuilder[T] with WithCompressionSchemes =>\n \n   var compressionEncoders: Seq[Encoder[T]] = _\n+  private val alignedArch = Set(\"sparc\", \"sparcv9\").contains(System.getProperty(\"os.arch\"))"
+  }],
+  "prId": 14762
+}]

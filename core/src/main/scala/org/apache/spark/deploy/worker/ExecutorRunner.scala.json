@@ -1,0 +1,20 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "This should probably respect the `spark.files.userClassPathFirst` config.\n",
+    "commit": "770cc88c8fa1b1a489d3b4321ce60c2d66040616",
+    "createdAt": "2014-08-13T01:49:20Z",
+    "diffHunk": "@@ -114,12 +115,12 @@ private[spark] class ExecutorRunner(\n     case other => other\n   }\n \n-  def getCommandSeq = {\n+  def getCommandSeq(userJarClassPathEntries : Seq[String]) = {\n     val command = Command(\n       appDesc.command.mainClass,\n       appDesc.command.arguments.map(substituteVariables) ++ Seq(appId),\n       appDesc.command.environment,\n-      appDesc.command.classPathEntries,\n+      appDesc.command.classPathEntries ++ userJarClassPathEntries,"
+  }, {
+    "author": {
+      "login": "GrahamDennis"
+    },
+    "body": "Good point.  Also, even with the above code, `userJarClassPathEntries` will be before the output of `bin/compute-classpath.sh` (see buildJavaOpts in CommandUtils.scala).  At present, appDesc.command.classPathEntries really comes from spark.executor.extraClassPath.\n\nWhat should be the order for the two values of spark.files.userClassPathFirst?\n\nIf false, should it be `[results of bin/compute-classpath.sh, spark.executor.extraClassPath, userJars]`? (Note that this is different to the present behaviour where compute-classpath.sh comes after spark.executor.extraClassPath).  An alternative here would be `[spark.executor.extraClassPath, results of bin/compute-classpath.sh, userJars]`?\n\nIf true, should it be `[userJars, spark.extraClassPath, results of bin/compute-classpath.sh]`?\n",
+    "commit": "770cc88c8fa1b1a489d3b4321ce60c2d66040616",
+    "createdAt": "2014-08-13T02:57:50Z",
+    "diffHunk": "@@ -114,12 +115,12 @@ private[spark] class ExecutorRunner(\n     case other => other\n   }\n \n-  def getCommandSeq = {\n+  def getCommandSeq(userJarClassPathEntries : Seq[String]) = {\n     val command = Command(\n       appDesc.command.mainClass,\n       appDesc.command.arguments.map(substituteVariables) ++ Seq(appId),\n       appDesc.command.environment,\n-      appDesc.command.classPathEntries,\n+      appDesc.command.classPathEntries ++ userJarClassPathEntries,"
+  }],
+  "prId": 1890
+}]

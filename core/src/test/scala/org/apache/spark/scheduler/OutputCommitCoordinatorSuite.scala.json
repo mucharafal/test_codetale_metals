@@ -1,0 +1,72 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "ash211"
+    },
+    "body": "Reword test description to: `Duplicate calls to canCommit from the authorized committer gets idempotent responses`",
+    "commit": "69b412ac9fd6d6ebd27049cdbaf7a2c5ef75455b",
+    "createdAt": "2017-01-11T20:01:59Z",
+    "diffHunk": "@@ -189,6 +188,13 @@ class OutputCommitCoordinatorSuite extends SparkFunSuite with BeforeAndAfter {\n     assert(\n       !outputCommitCoordinator.canCommit(stage, partition, nonAuthorizedCommitter + 3))\n   }\n+\n+  test(\"Authoried commiter get true if it calls canCommit again.\") {"
+  }],
+  "prId": 16503
+}, {
+  "comments": [{
+    "author": {
+      "login": "ash211"
+    },
+    "body": "nit rename to `callCanCommitMultipleTimes`",
+    "commit": "69b412ac9fd6d6ebd27049cdbaf7a2c5ef75455b",
+    "createdAt": "2017-01-11T20:04:41Z",
+    "diffHunk": "@@ -221,6 +227,22 @@ private case class OutputCommitFunctions(tempDirPath: String) {\n       if (ctx.attemptNumber == 0) failingOutputCommitter else successfulOutputCommitter)\n   }\n \n+  // Receiver should be idempotent for AskPermissionToCommitOutput\n+  def callCanCommitMultiTimes(iter: Iterator[Int]): Unit = {"
+  }],
+  "prId": 16503
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "nit: space after `if`",
+    "commit": "69b412ac9fd6d6ebd27049cdbaf7a2c5ef75455b",
+    "createdAt": "2017-01-14T00:26:56Z",
+    "diffHunk": "@@ -221,6 +229,22 @@ private case class OutputCommitFunctions(tempDirPath: String) {\n       if (ctx.attemptNumber == 0) failingOutputCommitter else successfulOutputCommitter)\n   }\n \n+  // Receiver should be idempotent for AskPermissionToCommitOutput\n+  def callCanCommitMultipleTimes(iter: Iterator[Int]): Unit = {\n+    val ctx = TaskContext.get()\n+    val canCommit1 = SparkEnv.get.outputCommitCoordinator\n+      .canCommit(ctx.stageId(), ctx.partitionId(), ctx.attemptNumber())\n+    val canCommit2 = SparkEnv.get.outputCommitCoordinator\n+      .canCommit(ctx.stageId(), ctx.partitionId(), ctx.attemptNumber())\n+    if(canCommit1 && canCommit2) {"
+  }],
+  "prId": 16503
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Do you need this? Can you just assert that you got permission both times (and rely on the exception causing the `runJob` call to fail in the caller)?",
+    "commit": "69b412ac9fd6d6ebd27049cdbaf7a2c5ef75455b",
+    "createdAt": "2017-01-14T00:27:26Z",
+    "diffHunk": "@@ -221,6 +229,22 @@ private case class OutputCommitFunctions(tempDirPath: String) {\n       if (ctx.attemptNumber == 0) failingOutputCommitter else successfulOutputCommitter)\n   }\n \n+  // Receiver should be idempotent for AskPermissionToCommitOutput\n+  def callCanCommitMultipleTimes(iter: Iterator[Int]): Unit = {\n+    val ctx = TaskContext.get()\n+    val canCommit1 = SparkEnv.get.outputCommitCoordinator\n+      .canCommit(ctx.stageId(), ctx.partitionId(), ctx.attemptNumber())\n+    val canCommit2 = SparkEnv.get.outputCommitCoordinator\n+      .canCommit(ctx.stageId(), ctx.partitionId(), ctx.attemptNumber())\n+    if(canCommit1 && canCommit2) {\n+      Utils.createDirectory(tempDirPath)"
+  }, {
+    "author": {
+      "login": "jinxing64"
+    },
+    "body": "Yes, using `assert` is better here.",
+    "commit": "69b412ac9fd6d6ebd27049cdbaf7a2c5ef75455b",
+    "createdAt": "2017-01-15T00:20:46Z",
+    "diffHunk": "@@ -221,6 +229,22 @@ private case class OutputCommitFunctions(tempDirPath: String) {\n       if (ctx.attemptNumber == 0) failingOutputCommitter else successfulOutputCommitter)\n   }\n \n+  // Receiver should be idempotent for AskPermissionToCommitOutput\n+  def callCanCommitMultipleTimes(iter: Iterator[Int]): Unit = {\n+    val ctx = TaskContext.get()\n+    val canCommit1 = SparkEnv.get.outputCommitCoordinator\n+      .canCommit(ctx.stageId(), ctx.partitionId(), ctx.attemptNumber())\n+    val canCommit2 = SparkEnv.get.outputCommitCoordinator\n+      .canCommit(ctx.stageId(), ctx.partitionId(), ctx.attemptNumber())\n+    if(canCommit1 && canCommit2) {\n+      Utils.createDirectory(tempDirPath)"
+  }],
+  "prId": 16503
+}, {
+  "comments": [{
+    "author": {
+      "login": "jinxing64"
+    },
+    "body": "Attempt which failed to get the permission will be failed.",
+    "commit": "69b412ac9fd6d6ebd27049cdbaf7a2c5ef75455b",
+    "createdAt": "2017-01-14T17:03:48Z",
+    "diffHunk": "@@ -221,6 +232,17 @@ private case class OutputCommitFunctions(tempDirPath: String) {\n       if (ctx.attemptNumber == 0) failingOutputCommitter else successfulOutputCommitter)\n   }\n \n+  // Receiver should be idempotent for AskPermissionToCommitOutput\n+  def callCanCommitMultipleTimes(iter: Iterator[Int]): Unit = {\n+    val ctx = TaskContext.get()\n+    val canCommit1 = SparkEnv.get.outputCommitCoordinator\n+      .canCommit(ctx.stageId(), ctx.partitionId(), ctx.attemptNumber())\n+    val canCommit2 = SparkEnv.get.outputCommitCoordinator\n+      .canCommit(ctx.stageId(), ctx.partitionId(), ctx.attemptNumber())\n+    assert(canCommit1 == true && canCommit2 == true)"
+  }, {
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "This should be either `assert(canCommit1 && canCommit2)` or use `===`. (Slight preference for the former.)",
+    "commit": "69b412ac9fd6d6ebd27049cdbaf7a2c5ef75455b",
+    "createdAt": "2017-01-17T19:17:36Z",
+    "diffHunk": "@@ -221,6 +232,17 @@ private case class OutputCommitFunctions(tempDirPath: String) {\n       if (ctx.attemptNumber == 0) failingOutputCommitter else successfulOutputCommitter)\n   }\n \n+  // Receiver should be idempotent for AskPermissionToCommitOutput\n+  def callCanCommitMultipleTimes(iter: Iterator[Int]): Unit = {\n+    val ctx = TaskContext.get()\n+    val canCommit1 = SparkEnv.get.outputCommitCoordinator\n+      .canCommit(ctx.stageId(), ctx.partitionId(), ctx.attemptNumber())\n+    val canCommit2 = SparkEnv.get.outputCommitCoordinator\n+      .canCommit(ctx.stageId(), ctx.partitionId(), ctx.attemptNumber())\n+    assert(canCommit1 == true && canCommit2 == true)"
+  }],
+  "prId": 16503
+}]

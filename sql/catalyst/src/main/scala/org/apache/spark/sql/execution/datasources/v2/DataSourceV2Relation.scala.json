@@ -1,0 +1,98 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "nit: `IllegalStateException` is more precise here as it indicates a bug (normally this code path should never be hit).",
+    "commit": "c223e0537796c1e0a52bc5a655660f89ab539192",
+    "createdAt": "2019-10-07T06:47:48Z",
+    "diffHunk": "@@ -55,7 +56,52 @@ case class DataSourceV2Relation(\n   }\n \n   override def computeStats(): Statistics = {\n-    val scan = newScanBuilder().build()\n+    if (Utils.isTesting) {\n+      // when testing, throw an exception if this computeStats method is called because stats should\n+      // not be accessed before pushing the projection and filters to create a scan. otherwise, the\n+      // stats are not accurate because they are based on a full table scan of all columns.\n+      throw new UnsupportedOperationException("
+  }, {
+    "author": {
+      "login": "rdblue"
+    },
+    "body": "Fixed",
+    "commit": "c223e0537796c1e0a52bc5a655660f89ab539192",
+    "createdAt": "2019-10-15T22:51:01Z",
+    "diffHunk": "@@ -55,7 +56,52 @@ case class DataSourceV2Relation(\n   }\n \n   override def computeStats(): Statistics = {\n-    val scan = newScanBuilder().build()\n+    if (Utils.isTesting) {\n+      // when testing, throw an exception if this computeStats method is called because stats should\n+      // not be accessed before pushing the projection and filters to create a scan. otherwise, the\n+      // stats are not accurate because they are based on a full table scan of all columns.\n+      throw new UnsupportedOperationException("
+  }],
+  "prId": 25955
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "shall we mark `newScanBuilder` as private if it's only used here?",
+    "commit": "c223e0537796c1e0a52bc5a655660f89ab539192",
+    "createdAt": "2019-10-07T06:48:42Z",
+    "diffHunk": "@@ -55,7 +56,52 @@ case class DataSourceV2Relation(\n   }\n \n   override def computeStats(): Statistics = {\n-    val scan = newScanBuilder().build()\n+    if (Utils.isTesting) {\n+      // when testing, throw an exception if this computeStats method is called because stats should\n+      // not be accessed before pushing the projection and filters to create a scan. otherwise, the\n+      // stats are not accurate because they are based on a full table scan of all columns.\n+      throw new UnsupportedOperationException(\n+        s\"BUG: computeStats called before pushdown on DSv2 relation: $name\")\n+    } else {\n+      // when not testing, return stats because bad stats are better than failing a query\n+      newScanBuilder() match {"
+  }, {
+    "author": {
+      "login": "rdblue"
+    },
+    "body": "I inlined it since the method was small.",
+    "commit": "c223e0537796c1e0a52bc5a655660f89ab539192",
+    "createdAt": "2019-10-15T22:43:07Z",
+    "diffHunk": "@@ -55,7 +56,52 @@ case class DataSourceV2Relation(\n   }\n \n   override def computeStats(): Statistics = {\n-    val scan = newScanBuilder().build()\n+    if (Utils.isTesting) {\n+      // when testing, throw an exception if this computeStats method is called because stats should\n+      // not be accessed before pushing the projection and filters to create a scan. otherwise, the\n+      // stats are not accurate because they are based on a full table scan of all columns.\n+      throw new UnsupportedOperationException(\n+        s\"BUG: computeStats called before pushdown on DSv2 relation: $name\")\n+    } else {\n+      // when not testing, return stats because bad stats are better than failing a query\n+      newScanBuilder() match {"
+  }],
+  "prId": 25955
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "It seems to me that the maintenance cost is high if we have 2 nodes for ds v2 relation. Whenever we need to pattern match the v2 relation node, we need to take care of the 2 nodes both.\r\n\r\nHow about\r\n```\r\ncase class DataSourceV2Relation(\r\n    table: Table,\r\n    output: Seq[AttributeReference],\r\n    options: CaseInsensitiveStringMap,\r\n    createdScan: Option[Scan])\r\n\r\ndef getScan() = {\r\n  if (isTest) {\r\n    assert(createdScan.isDefined)\r\n    createdScan.get\r\n  } else {\r\n    createdScan.getOrElse ...\r\n  }\r\n}\r\n```",
+    "commit": "c223e0537796c1e0a52bc5a655660f89ab539192",
+    "createdAt": "2019-10-07T06:56:26Z",
+    "diffHunk": "@@ -55,7 +56,52 @@ case class DataSourceV2Relation(\n   }\n \n   override def computeStats(): Statistics = {\n-    val scan = newScanBuilder().build()\n+    if (Utils.isTesting) {\n+      // when testing, throw an exception if this computeStats method is called because stats should\n+      // not be accessed before pushing the projection and filters to create a scan. otherwise, the\n+      // stats are not accurate because they are based on a full table scan of all columns.\n+      throw new UnsupportedOperationException(\n+        s\"BUG: computeStats called before pushdown on DSv2 relation: $name\")\n+    } else {\n+      // when not testing, return stats because bad stats are better than failing a query\n+      newScanBuilder() match {\n+        case r: SupportsReportStatistics =>\n+          val statistics = r.estimateStatistics()\n+          DataSourceV2Relation.transformV2Stats(statistics, None, conf.defaultSizeInBytes)\n+        case _ =>\n+          Statistics(sizeInBytes = conf.defaultSizeInBytes)\n+      }\n+    }\n+  }\n+\n+  override def newInstance(): DataSourceV2Relation = {\n+    copy(output = output.map(_.newInstance()))\n+  }\n+}\n+\n+/**\n+ * A logical plan for a DSv2 table with a scan already created.\n+ *\n+ * This is used in the optimizer to push filters and projection down before conversion to physical\n+ * plan. This ensures that the stats that are used by the optimizer account for the filters and\n+ * projection that will be pushed down.\n+ *\n+ * @param table a DSv2 [[Table]]\n+ * @param scan a DSv2 [[Scan]]\n+ * @param output the output attributes of this relation\n+ */\n+case class DataSourceV2ScanRelation(",
+    "line": 49
+  }, {
+    "author": {
+      "login": "rdblue"
+    },
+    "body": "This should be a separate node to avoid correctness problems. Otherwise, it is easy to accidentally write rules that match both `DataSourceV2Relation` and `DataSourceV2ScanRelation` but does not handle the case where operators have already been pushed.\r\n\r\nWhen a filter is pushed down, it is also removed from the filters on top of the scan. If push-down happens a second time because rules match the same node, then it is easy for a mistake to ignore the original pushed filter and create a second independent scan. That's a correctness bug that is easy to introduce by accident.\r\n\r\nUsing a separate relation type requires rules to choose whether to support a relation after push-down, or just a relation before push-down. The trade-off is that some places need to match both, but those cases are few and worth the trade.",
+    "commit": "c223e0537796c1e0a52bc5a655660f89ab539192",
+    "createdAt": "2019-10-10T21:42:07Z",
+    "diffHunk": "@@ -55,7 +56,52 @@ case class DataSourceV2Relation(\n   }\n \n   override def computeStats(): Statistics = {\n-    val scan = newScanBuilder().build()\n+    if (Utils.isTesting) {\n+      // when testing, throw an exception if this computeStats method is called because stats should\n+      // not be accessed before pushing the projection and filters to create a scan. otherwise, the\n+      // stats are not accurate because they are based on a full table scan of all columns.\n+      throw new UnsupportedOperationException(\n+        s\"BUG: computeStats called before pushdown on DSv2 relation: $name\")\n+    } else {\n+      // when not testing, return stats because bad stats are better than failing a query\n+      newScanBuilder() match {\n+        case r: SupportsReportStatistics =>\n+          val statistics = r.estimateStatistics()\n+          DataSourceV2Relation.transformV2Stats(statistics, None, conf.defaultSizeInBytes)\n+        case _ =>\n+          Statistics(sizeInBytes = conf.defaultSizeInBytes)\n+      }\n+    }\n+  }\n+\n+  override def newInstance(): DataSourceV2Relation = {\n+    copy(output = output.map(_.newInstance()))\n+  }\n+}\n+\n+/**\n+ * A logical plan for a DSv2 table with a scan already created.\n+ *\n+ * This is used in the optimizer to push filters and projection down before conversion to physical\n+ * plan. This ensures that the stats that are used by the optimizer account for the filters and\n+ * projection that will be pushed down.\n+ *\n+ * @param table a DSv2 [[Table]]\n+ * @param scan a DSv2 [[Scan]]\n+ * @param output the output attributes of this relation\n+ */\n+case class DataSourceV2ScanRelation(",
+    "line": 49
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "Makes sense. But it's still better to reduce the maintenance cost a bit. How about we clearly define the life cycle of a v2 relation as: `UnresolvedRelation` (before analysis) -> `DataSourceV2Relation` (after analysis) -> `DataSourceV2ScanRelation` (after optimization) -> the physical scan node.\r\n\r\nThen we only need to match one node:\r\n1. if dealing with `analyzedPlan`, match `DataSourceV2Relation`\r\n2. if dealing with `optimizedPlan`, match `DataSourceV2ScanRelation`",
+    "commit": "c223e0537796c1e0a52bc5a655660f89ab539192",
+    "createdAt": "2019-10-11T12:20:18Z",
+    "diffHunk": "@@ -55,7 +56,52 @@ case class DataSourceV2Relation(\n   }\n \n   override def computeStats(): Statistics = {\n-    val scan = newScanBuilder().build()\n+    if (Utils.isTesting) {\n+      // when testing, throw an exception if this computeStats method is called because stats should\n+      // not be accessed before pushing the projection and filters to create a scan. otherwise, the\n+      // stats are not accurate because they are based on a full table scan of all columns.\n+      throw new UnsupportedOperationException(\n+        s\"BUG: computeStats called before pushdown on DSv2 relation: $name\")\n+    } else {\n+      // when not testing, return stats because bad stats are better than failing a query\n+      newScanBuilder() match {\n+        case r: SupportsReportStatistics =>\n+          val statistics = r.estimateStatistics()\n+          DataSourceV2Relation.transformV2Stats(statistics, None, conf.defaultSizeInBytes)\n+        case _ =>\n+          Statistics(sizeInBytes = conf.defaultSizeInBytes)\n+      }\n+    }\n+  }\n+\n+  override def newInstance(): DataSourceV2Relation = {\n+    copy(output = output.map(_.newInstance()))\n+  }\n+}\n+\n+/**\n+ * A logical plan for a DSv2 table with a scan already created.\n+ *\n+ * This is used in the optimizer to push filters and projection down before conversion to physical\n+ * plan. This ensures that the stats that are used by the optimizer account for the filters and\n+ * projection that will be pushed down.\n+ *\n+ * @param table a DSv2 [[Table]]\n+ * @param scan a DSv2 [[Scan]]\n+ * @param output the output attributes of this relation\n+ */\n+case class DataSourceV2ScanRelation(",
+    "line": 49
+  }, {
+    "author": {
+      "login": "rdblue"
+    },
+    "body": "I did this to simplify the code. Now places that use `optimizedPlan` expect the scan relation.\r\n\r\nThere was one minor problem with this. To address the concern about relations used by DDL commands like `AlterTable` getting modified, those plans no longer list the relation as a child, so rules are not automatically run on it. For those DDL commands, `DataSourceV2Relation` is still in the optimized plan because it is no longer converted. I think this is correct behavior.",
+    "commit": "c223e0537796c1e0a52bc5a655660f89ab539192",
+    "createdAt": "2019-10-17T23:44:01Z",
+    "diffHunk": "@@ -55,7 +56,52 @@ case class DataSourceV2Relation(\n   }\n \n   override def computeStats(): Statistics = {\n-    val scan = newScanBuilder().build()\n+    if (Utils.isTesting) {\n+      // when testing, throw an exception if this computeStats method is called because stats should\n+      // not be accessed before pushing the projection and filters to create a scan. otherwise, the\n+      // stats are not accurate because they are based on a full table scan of all columns.\n+      throw new UnsupportedOperationException(\n+        s\"BUG: computeStats called before pushdown on DSv2 relation: $name\")\n+    } else {\n+      // when not testing, return stats because bad stats are better than failing a query\n+      newScanBuilder() match {\n+        case r: SupportsReportStatistics =>\n+          val statistics = r.estimateStatistics()\n+          DataSourceV2Relation.transformV2Stats(statistics, None, conf.defaultSizeInBytes)\n+        case _ =>\n+          Statistics(sizeInBytes = conf.defaultSizeInBytes)\n+      }\n+    }\n+  }\n+\n+  override def newInstance(): DataSourceV2Relation = {\n+    copy(output = output.map(_.newInstance()))\n+  }\n+}\n+\n+/**\n+ * A logical plan for a DSv2 table with a scan already created.\n+ *\n+ * This is used in the optimizer to push filters and projection down before conversion to physical\n+ * plan. This ensures that the stats that are used by the optimizer account for the filters and\n+ * projection that will be pushed down.\n+ *\n+ * @param table a DSv2 [[Table]]\n+ * @param scan a DSv2 [[Scan]]\n+ * @param output the output attributes of this relation\n+ */\n+case class DataSourceV2ScanRelation(",
+    "line": 49
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "I think this is fine. DDL commands don't list the relation as a child, and only the corresponding planner rule need to match the `DataSourceV2Relation`.",
+    "commit": "c223e0537796c1e0a52bc5a655660f89ab539192",
+    "createdAt": "2019-10-18T06:57:50Z",
+    "diffHunk": "@@ -55,7 +56,52 @@ case class DataSourceV2Relation(\n   }\n \n   override def computeStats(): Statistics = {\n-    val scan = newScanBuilder().build()\n+    if (Utils.isTesting) {\n+      // when testing, throw an exception if this computeStats method is called because stats should\n+      // not be accessed before pushing the projection and filters to create a scan. otherwise, the\n+      // stats are not accurate because they are based on a full table scan of all columns.\n+      throw new UnsupportedOperationException(\n+        s\"BUG: computeStats called before pushdown on DSv2 relation: $name\")\n+    } else {\n+      // when not testing, return stats because bad stats are better than failing a query\n+      newScanBuilder() match {\n+        case r: SupportsReportStatistics =>\n+          val statistics = r.estimateStatistics()\n+          DataSourceV2Relation.transformV2Stats(statistics, None, conf.defaultSizeInBytes)\n+        case _ =>\n+          Statistics(sizeInBytes = conf.defaultSizeInBytes)\n+      }\n+    }\n+  }\n+\n+  override def newInstance(): DataSourceV2Relation = {\n+    copy(output = output.map(_.newInstance()))\n+  }\n+}\n+\n+/**\n+ * A logical plan for a DSv2 table with a scan already created.\n+ *\n+ * This is used in the optimizer to push filters and projection down before conversion to physical\n+ * plan. This ensures that the stats that are used by the optimizer account for the filters and\n+ * projection that will be pushed down.\n+ *\n+ * @param table a DSv2 [[Table]]\n+ * @param scan a DSv2 [[Scan]]\n+ * @param output the output attributes of this relation\n+ */\n+case class DataSourceV2ScanRelation(",
+    "line": 49
+  }],
+  "prId": 25955
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "This was inlined in a previous commit, why it's reverted?",
+    "commit": "c223e0537796c1e0a52bc5a655660f89ab539192",
+    "createdAt": "2019-10-30T07:32:50Z",
+    "diffHunk": "@@ -55,7 +56,52 @@ case class DataSourceV2Relation(\n   }\n \n   override def computeStats(): Statistics = {\n-    val scan = newScanBuilder().build()\n+    if (Utils.isTesting) {\n+      // when testing, throw an exception if this computeStats method is called because stats should\n+      // not be accessed before pushing the projection and filters to create a scan. otherwise, the\n+      // stats are not accurate because they are based on a full table scan of all columns.\n+      throw new UnsupportedOperationException(\n+        s\"BUG: computeStats called before pushdown on DSv2 relation: $name\")\n+    } else {\n+      // when not testing, return stats because bad stats are better than failing a query\n+      newScanBuilder() match {"
+  }],
+  "prId": 25955
+}]

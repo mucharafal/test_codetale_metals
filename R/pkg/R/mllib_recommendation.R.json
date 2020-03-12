@@ -1,0 +1,98 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "deterministic?",
+    "commit": "ed2d32abe2d1af61a09fa09a48667cd8a1d0010c",
+    "createdAt": "2019-09-14T04:55:10Z",
+    "diffHunk": "@@ -82,6 +82,9 @@ setClass(\"ALSModel\", representation(jobj = \"jobj\"))\n #' statsS <- summary(modelS)\n #' }\n #' @note spark.als since 2.1.0\n+#' @note the input rating dataframe to the ALS implementation must be determinate. If the training"
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "Not sure deterministic or determinate which one is more correct. I use determinate just because RDD deterministic level has DETERMINATE, UNORDERED and INDETERMINATE.\r\n\r\nLet me change to deterministic.",
+    "commit": "ed2d32abe2d1af61a09fa09a48667cd8a1d0010c",
+    "createdAt": "2019-09-14T05:21:19Z",
+    "diffHunk": "@@ -82,6 +82,9 @@ setClass(\"ALSModel\", representation(jobj = \"jobj\"))\n #' statsS <- summary(modelS)\n #' }\n #' @note spark.als since 2.1.0\n+#' @note the input rating dataframe to the ALS implementation must be determinate. If the training"
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Yeah despite the name of the constants, I think the word here is 'deterministic'.",
+    "commit": "ed2d32abe2d1af61a09fa09a48667cd8a1d0010c",
+    "createdAt": "2019-09-14T17:22:46Z",
+    "diffHunk": "@@ -82,6 +82,9 @@ setClass(\"ALSModel\", representation(jobj = \"jobj\"))\n #' statsS <- summary(modelS)\n #' }\n #' @note spark.als since 2.1.0\n+#' @note the input rating dataframe to the ALS implementation must be determinate. If the training"
+  }],
+  "prId": 25789
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "I still think we need to say \"nondeterministic\" and give an example (randomSplit), but also tell people how to fix it. Define a partitioning? sort order?",
+    "commit": "ed2d32abe2d1af61a09fa09a48667cd8a1d0010c",
+    "createdAt": "2019-09-15T14:38:03Z",
+    "diffHunk": "@@ -82,6 +82,10 @@ setClass(\"ALSModel\", representation(jobj = \"jobj\"))\n #' statsS <- summary(modelS)\n #' }\n #' @note spark.als since 2.1.0\n+#' @note the input rating dataframe to the ALS implementation should not be indeterminate."
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "A checkpoint or a sort before sampling can help. Sampled RDD is nondeterministic when its input RDD is unordered.",
+    "commit": "ed2d32abe2d1af61a09fa09a48667cd8a1d0010c",
+    "createdAt": "2019-09-15T18:04:28Z",
+    "diffHunk": "@@ -82,6 +82,10 @@ setClass(\"ALSModel\", representation(jobj = \"jobj\"))\n #' statsS <- summary(modelS)\n #' }\n #' @note spark.als since 2.1.0\n+#' @note the input rating dataframe to the ALS implementation should not be indeterminate."
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Is there any way to make, say, the result of randomSplit deterministic after it has been computed? I understand the usual answer of caching isn't 100% foolproof. But if there is no way to do it, hm, is it worth warning? because this is just generally true of lots of things in Spark",
+    "commit": "ed2d32abe2d1af61a09fa09a48667cd8a1d0010c",
+    "createdAt": "2019-09-15T18:46:38Z",
+    "diffHunk": "@@ -82,6 +82,10 @@ setClass(\"ALSModel\", representation(jobj = \"jobj\"))\n #' statsS <- summary(modelS)\n #' }\n #' @note spark.als since 2.1.0\n+#' @note the input rating dataframe to the ALS implementation should not be indeterminate."
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "If randomSplit or sample is computed, the only way to make it deterministic is to checkpoint. But obviously we can't checkpoint for users.\r\n\r\nI think it is good to leave a clue so users can know what is going on when hit the ArrayIndexOutOfBoundsException during fitting ALS model.\r\n\r\nSince we don't want to break existing user code, a warning is the least thing we can do?\r\n\r\nI am also like to catch the exception and re-throw a meaningful message to users.",
+    "commit": "ed2d32abe2d1af61a09fa09a48667cd8a1d0010c",
+    "createdAt": "2019-09-15T18:52:06Z",
+    "diffHunk": "@@ -82,6 +82,10 @@ setClass(\"ALSModel\", representation(jobj = \"jobj\"))\n #' statsS <- summary(modelS)\n #' }\n #' @note spark.als since 2.1.0\n+#' @note the input rating dataframe to the ALS implementation should not be indeterminate."
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "But what if you lose the checkpoint? isn't this the same issue? At some level the answer is \"you can't really fix this, anywhere\", right? in practice, the fairly well understood caching/checkpoint mechanism works, everywhere. It seems inconsistent to just address this for ALS, as if it's not the same issue everywhere. It also seems hard to warn without providing any pointer to the solution, if there is one, but I can see that a warning is better than nothing.\r\n\r\nIf you're trying to fix a specific problem, maybe indeed detect the problem in question (a specific AIOOBE) and rewrap it, sure. ",
+    "commit": "ed2d32abe2d1af61a09fa09a48667cd8a1d0010c",
+    "createdAt": "2019-09-15T18:59:04Z",
+    "diffHunk": "@@ -82,6 +82,10 @@ setClass(\"ALSModel\", representation(jobj = \"jobj\"))\n #' statsS <- summary(modelS)\n #' }\n #' @note spark.als since 2.1.0\n+#' @note the input rating dataframe to the ALS implementation should not be indeterminate."
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "I think checkpoint is relatively reliable. In case of checkpoint loss, Spark job fails without rerun. So you should not get an inconsistent data once you do checkpoint.\r\n\r\nWe have two ways to fix it, one is checkpoint, another is to sort data before sample/randomSplit. I added into the updated note.\r\n\r\nSounds like targeting a specific problem here is better. I do the catching AIOOBE thing and remove the warning as it seems not too much useful.",
+    "commit": "ed2d32abe2d1af61a09fa09a48667cd8a1d0010c",
+    "createdAt": "2019-09-15T19:55:57Z",
+    "diffHunk": "@@ -82,6 +82,10 @@ setClass(\"ALSModel\", representation(jobj = \"jobj\"))\n #' statsS <- summary(modelS)\n #' }\n #' @note spark.als since 2.1.0\n+#' @note the input rating dataframe to the ALS implementation should not be indeterminate."
+  }],
+  "prId": 25789
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "not be nondeterministic -> be deterministic\r\nI might remove 'probably' below",
+    "commit": "ed2d32abe2d1af61a09fa09a48667cd8a1d0010c",
+    "createdAt": "2019-09-15T23:10:16Z",
+    "diffHunk": "@@ -82,6 +82,12 @@ setClass(\"ALSModel\", representation(jobj = \"jobj\"))\n #' statsS <- summary(modelS)\n #' }\n #' @note spark.als since 2.1.0\n+#' @note the input rating dataframe to the ALS implementation should not be nondeterministic."
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "ok.",
+    "commit": "ed2d32abe2d1af61a09fa09a48667cd8a1d0010c",
+    "createdAt": "2019-09-15T23:27:23Z",
+    "diffHunk": "@@ -82,6 +82,12 @@ setClass(\"ALSModel\", representation(jobj = \"jobj\"))\n #' statsS <- summary(modelS)\n #' }\n #' @note spark.als since 2.1.0\n+#' @note the input rating dataframe to the ALS implementation should not be nondeterministic."
+  }],
+  "prId": 25789
+}]

@@ -1,0 +1,42 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "Does it make a performance difference if we move the cast to the line where we define `readKeyFunc`?  If we did that, I think we'd be doing one cast vs. casting on each record.\n",
+    "commit": "53a5eaaf67c7ec12f9d4665b572b690bc4180863",
+    "createdAt": "2015-05-07T21:45:14Z",
+    "diffHunk": "@@ -91,26 +91,19 @@ private[sql] class Serializer2DeserializationStream(\n \n   val rowIn = new DataInputStream(new BufferedInputStream(in))\n \n-  val key = if (keySchema != null) new SpecificMutableRow(keySchema) else null\n-  val value = if (valueSchema != null) new SpecificMutableRow(valueSchema) else null\n-  val readKeyFunc = SparkSqlSerializer2.createDeserializationFunction(keySchema, rowIn, key)\n-  val readValueFunc = SparkSqlSerializer2.createDeserializationFunction(valueSchema, rowIn, value)\n+  val readKeyFunc = SparkSqlSerializer2.createDeserializationFunction(keySchema, rowIn)\n+  val readValueFunc = SparkSqlSerializer2.createDeserializationFunction(valueSchema, rowIn)\n \n   override def readObject[T: ClassTag](): T = {\n-    readKeyFunc()\n-    readValueFunc()\n-\n-    (key, value).asInstanceOf[T]\n+    (readKeyFunc(), readValueFunc()).asInstanceOf[T]\n   }\n \n   override def readKey[T: ClassTag](): T = {\n-    readKeyFunc()\n-    key.asInstanceOf[T]\n+    readKeyFunc().asInstanceOf[T]"
+  }, {
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "Ah, I guess we don't have the class tag for T when we create the deserialization function, so this approach looks fine to me.\n",
+    "commit": "53a5eaaf67c7ec12f9d4665b572b690bc4180863",
+    "createdAt": "2015-05-07T22:10:23Z",
+    "diffHunk": "@@ -91,26 +91,19 @@ private[sql] class Serializer2DeserializationStream(\n \n   val rowIn = new DataInputStream(new BufferedInputStream(in))\n \n-  val key = if (keySchema != null) new SpecificMutableRow(keySchema) else null\n-  val value = if (valueSchema != null) new SpecificMutableRow(valueSchema) else null\n-  val readKeyFunc = SparkSqlSerializer2.createDeserializationFunction(keySchema, rowIn, key)\n-  val readValueFunc = SparkSqlSerializer2.createDeserializationFunction(valueSchema, rowIn, value)\n+  val readKeyFunc = SparkSqlSerializer2.createDeserializationFunction(keySchema, rowIn)\n+  val readValueFunc = SparkSqlSerializer2.createDeserializationFunction(valueSchema, rowIn)\n \n   override def readObject[T: ClassTag](): T = {\n-    readKeyFunc()\n-    readValueFunc()\n-\n-    (key, value).asInstanceOf[T]\n+    (readKeyFunc(), readValueFunc()).asInstanceOf[T]\n   }\n \n   override def readKey[T: ClassTag](): T = {\n-    readKeyFunc()\n-    key.asInstanceOf[T]\n+    readKeyFunc().asInstanceOf[T]"
+  }],
+  "prId": 5849
+}, {
+  "comments": [{
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "Ah, nice catch; I guess that this is accounting for the fact that other code in Spark purposely avoids buffering under the assumption that the serializer does its own internal buffering; this should give a nice perf. boost in some cases, I imagine.\n",
+    "commit": "53a5eaaf67c7ec12f9d4665b572b690bc4180863",
+    "createdAt": "2015-05-07T21:46:26Z",
+    "diffHunk": "@@ -49,7 +49,7 @@ private[sql] class Serializer2SerializationStream(\n     out: OutputStream)\n   extends SerializationStream with Logging {\n \n-  val rowOut = new DataOutputStream(out)\n+  val rowOut = new DataOutputStream(new BufferedOutputStream(out))"
+  }],
+  "prId": 5849
+}, {
+  "comments": [{
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "@yhuai and I chatted about this offline.  The reason that we need to perform this copy is because this patch allows SqlSerializer2 to be used in cases where the shuffle performs a sort.  In HashShuffleReader, Spark ends up passing the iterator returned from this deserializer to ExternalSorter, which buffers rows because it needs to sort them based on their contents.\n\nI think that we only need to copy the row in cases where we're shuffling with a key ordering.  To avoid unnecessary copying in other cases, I think that we can extend `SparkSqlSerializer2`'s constructor to accept a boolean flag that indicates whether we should copy, and should thread that flag all the way down to here.  In `Exchange`, where we create the serializer, we can check whether the shuffle will use a keyOrdering; if it does, then we'll enable copying.  Avoiding this copy in other cases should provide a nice performance boost for aggregation queries.\n",
+    "commit": "53a5eaaf67c7ec12f9d4665b572b690bc4180863",
+    "createdAt": "2015-05-07T22:33:32Z",
+    "diffHunk": "@@ -323,12 +316,12 @@ private[sql] object SparkSqlSerializer2 {\n    */\n   def createDeserializationFunction(\n       schema: Array[DataType],\n-      in: DataInputStream,\n-      mutableRow: SpecificMutableRow): () => Unit = {\n+      in: DataInputStream): () => Row = {\n     () => {\n       // If the schema is null, the returned function does nothing when it get called.\n       if (schema != null) {\n         var i = 0\n+        val mutableRow = new GenericMutableRow(schema.length)"
+  }],
+  "prId": 5849
+}]

@@ -1,0 +1,96 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "So, I think the `/* And Hive is enabled */` part is kinda important, and not talking just about Hive being compiled in. What would happen if a user doesn't have any Hive services running?\n\nI'm also a little worried about precedent here... couldn't we make the same argument for acquiring HBase tokens? Solr? Somthing else? Unfortunately, I can't think of any alternative off the bat, given the way cluster mode works... :-/\n",
+    "commit": "3e9ac16a8e2e0bdd11f850428115bdc891874b1e",
+    "createdAt": "2015-03-18T20:17:51Z",
+    "diffHunk": "@@ -903,6 +908,30 @@ object Client extends Logging {\n   }\n \n   /**\n+   * Obtains token for the Hive metastore and adds them to the credentials.\n+   */\n+  private def obtainTokenForHiveMetastore(conf: Configuration, credentials: Credentials) {\n+    if (UserGroupInformation.isSecurityEnabled /* And Hive is enabled */) {"
+  }],
+  "prId": 5031
+}, {
+  "comments": [{
+    "author": {
+      "login": "tgravescs"
+    },
+    "body": "It looks like most of the existing hive condition compile stuff is just building separate jars and including them. Not ideal here unless we made separate jar for this. Seems like reflection might be the more straight forward way here. \n\nAlso on whether the hive token is required it might make sense to make a config for it (like spark.yarn.hive.token.required).  Similar to how MR has a config to get the job history token if your job is going to talk to the history server.  Its not a nice as far as automatically getting it and we could try other things like checking to see if the hive.metastore.uris config is set but it makes it obvious to the user what is going on and it won't try if not told to.  Thus avoiding issues with people have hive compiled in but not configured or when running app that doesn't require hive access.\n\nOne other thing I'm not familiar with and need to look into is the renewal of these tokens.  I know the RM doesn't renew them so is there something in hive that does, if not then the spark app could only run for 24 hours.  Or perhaps they don't expire that often.\n\nThe other option is to provide some way for user to fill in the tokens themselves.  Get any tokens they need and have spark add them. As far as I know hive and hbase don't provide command line way to get the tokens though like hdfs does. That would mean you have to write java program to fetch them first.\n\n@vanzin does secure hbase access not work either?  I haven't tried it myself but I'm guessing it doesn't.  \n",
+    "commit": "3e9ac16a8e2e0bdd11f850428115bdc891874b1e",
+    "createdAt": "2015-03-19T17:40:30Z",
+    "diffHunk": "@@ -903,6 +908,30 @@ object Client extends Logging {\n   }\n \n   /**\n+   * Obtains token for the Hive metastore and adds them to the credentials.\n+   */\n+  private def obtainTokenForHiveMetastore(conf: Configuration, credentials: Credentials) {\n+    if (UserGroupInformation.isSecurityEnabled /* And Hive is enabled */) {\n+      val hc = org.apache.hadoop.hive.ql.metadata.Hive.get\n+      val principal = hc.getConf().get(HiveConf.ConfVars.METASTORE_KERBEROS_PRINCIPAL.varname)\n+      val username = UserGroupInformation.getCurrentUser().getUserName\n+\n+      if (principal == null) {\n+        val errorMessage = \"Required hive metastore principal is not configured!\"\n+        logError(errorMessage)\n+        throw new IllegalArgumentException(errorMessage)\n+      }\n+\n+      val tokenStr = hc.getDelegationToken(username,principal)\n+      val hive2Token = new Token[DelegationTokenIdentifier]()\n+      hive2Token.decodeFromUrlString(tokenStr)\n+      credentials.addToken(new Text(\"hive.server2.delegation.token\"), hive2Token)\n+      logDebug(\"Added the Hive Server 2 token to conf.\")\n+      org.apache.hadoop.hive.ql.metadata.Hive.closeCurrent"
+  }, {
+    "author": {
+      "login": "tgravescs"
+    },
+    "body": "so I looked into the hive token renewal. It looks like they last 1 day be default and there is no automatic renewal right now. There is a Hive thrift-call to renew but nothing (like yarn RM) currently automatically calls it.   This means jobs can only run for less then 24 hours.\n",
+    "commit": "3e9ac16a8e2e0bdd11f850428115bdc891874b1e",
+    "createdAt": "2015-03-19T20:48:59Z",
+    "diffHunk": "@@ -903,6 +908,30 @@ object Client extends Logging {\n   }\n \n   /**\n+   * Obtains token for the Hive metastore and adds them to the credentials.\n+   */\n+  private def obtainTokenForHiveMetastore(conf: Configuration, credentials: Credentials) {\n+    if (UserGroupInformation.isSecurityEnabled /* And Hive is enabled */) {\n+      val hc = org.apache.hadoop.hive.ql.metadata.Hive.get\n+      val principal = hc.getConf().get(HiveConf.ConfVars.METASTORE_KERBEROS_PRINCIPAL.varname)\n+      val username = UserGroupInformation.getCurrentUser().getUserName\n+\n+      if (principal == null) {\n+        val errorMessage = \"Required hive metastore principal is not configured!\"\n+        logError(errorMessage)\n+        throw new IllegalArgumentException(errorMessage)\n+      }\n+\n+      val tokenStr = hc.getDelegationToken(username,principal)\n+      val hive2Token = new Token[DelegationTokenIdentifier]()\n+      hive2Token.decodeFromUrlString(tokenStr)\n+      credentials.addToken(new Text(\"hive.server2.delegation.token\"), hive2Token)\n+      logDebug(\"Added the Hive Server 2 token to conf.\")\n+      org.apache.hadoop.hive.ql.metadata.Hive.closeCurrent"
+  }, {
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Hbase needs its own delegation token, so I guess it wouldn't work either without some code to fetch the token.\n\nRegarding token expiry, especially for a long running process (let's say the thrift server), it would require something similar to what Hari is doing in #4688 .\n",
+    "commit": "3e9ac16a8e2e0bdd11f850428115bdc891874b1e",
+    "createdAt": "2015-03-19T20:58:57Z",
+    "diffHunk": "@@ -903,6 +908,30 @@ object Client extends Logging {\n   }\n \n   /**\n+   * Obtains token for the Hive metastore and adds them to the credentials.\n+   */\n+  private def obtainTokenForHiveMetastore(conf: Configuration, credentials: Credentials) {\n+    if (UserGroupInformation.isSecurityEnabled /* And Hive is enabled */) {\n+      val hc = org.apache.hadoop.hive.ql.metadata.Hive.get\n+      val principal = hc.getConf().get(HiveConf.ConfVars.METASTORE_KERBEROS_PRINCIPAL.varname)\n+      val username = UserGroupInformation.getCurrentUser().getUserName\n+\n+      if (principal == null) {\n+        val errorMessage = \"Required hive metastore principal is not configured!\"\n+        logError(errorMessage)\n+        throw new IllegalArgumentException(errorMessage)\n+      }\n+\n+      val tokenStr = hc.getDelegationToken(username,principal)\n+      val hive2Token = new Token[DelegationTokenIdentifier]()\n+      hive2Token.decodeFromUrlString(tokenStr)\n+      credentials.addToken(new Text(\"hive.server2.delegation.token\"), hive2Token)\n+      logDebug(\"Added the Hive Server 2 token to conf.\")\n+      org.apache.hadoop.hive.ql.metadata.Hive.closeCurrent"
+  }, {
+    "author": {
+      "login": "dougb"
+    },
+    "body": "I talked to @marmbrus and @pwendell at the Spark Summit yesterday.\nI think I'm going to take a shot at the reflection approach first. \n\nI would like to see the various delegation tokens collected automatically.\nI think it would be a burden for the users to remember to do this in every job.\n\nI also don't see anything to renew the namenode tokens. I'm still looking around to see how its handled in other projects.\n\nI think an expert user could add the delegation tokens to the conf by hand,\n if they knew what the config option was, and how to get and encode the token. \n\nI just started looking deep into spark, but it looks like delegation token management could be better. I need to look at how mapred jobs handle this. \n",
+    "commit": "3e9ac16a8e2e0bdd11f850428115bdc891874b1e",
+    "createdAt": "2015-03-19T21:06:21Z",
+    "diffHunk": "@@ -903,6 +908,30 @@ object Client extends Logging {\n   }\n \n   /**\n+   * Obtains token for the Hive metastore and adds them to the credentials.\n+   */\n+  private def obtainTokenForHiveMetastore(conf: Configuration, credentials: Credentials) {\n+    if (UserGroupInformation.isSecurityEnabled /* And Hive is enabled */) {\n+      val hc = org.apache.hadoop.hive.ql.metadata.Hive.get\n+      val principal = hc.getConf().get(HiveConf.ConfVars.METASTORE_KERBEROS_PRINCIPAL.varname)\n+      val username = UserGroupInformation.getCurrentUser().getUserName\n+\n+      if (principal == null) {\n+        val errorMessage = \"Required hive metastore principal is not configured!\"\n+        logError(errorMessage)\n+        throw new IllegalArgumentException(errorMessage)\n+      }\n+\n+      val tokenStr = hc.getDelegationToken(username,principal)\n+      val hive2Token = new Token[DelegationTokenIdentifier]()\n+      hive2Token.decodeFromUrlString(tokenStr)\n+      credentials.addToken(new Text(\"hive.server2.delegation.token\"), hive2Token)\n+      logDebug(\"Added the Hive Server 2 token to conf.\")\n+      org.apache.hadoop.hive.ql.metadata.Hive.closeCurrent"
+  }, {
+    "author": {
+      "login": "dougb"
+    },
+    "body": "I'll look at what Hari is doing.\n",
+    "commit": "3e9ac16a8e2e0bdd11f850428115bdc891874b1e",
+    "createdAt": "2015-03-19T21:13:13Z",
+    "diffHunk": "@@ -903,6 +908,30 @@ object Client extends Logging {\n   }\n \n   /**\n+   * Obtains token for the Hive metastore and adds them to the credentials.\n+   */\n+  private def obtainTokenForHiveMetastore(conf: Configuration, credentials: Credentials) {\n+    if (UserGroupInformation.isSecurityEnabled /* And Hive is enabled */) {\n+      val hc = org.apache.hadoop.hive.ql.metadata.Hive.get\n+      val principal = hc.getConf().get(HiveConf.ConfVars.METASTORE_KERBEROS_PRINCIPAL.varname)\n+      val username = UserGroupInformation.getCurrentUser().getUserName\n+\n+      if (principal == null) {\n+        val errorMessage = \"Required hive metastore principal is not configured!\"\n+        logError(errorMessage)\n+        throw new IllegalArgumentException(errorMessage)\n+      }\n+\n+      val tokenStr = hc.getDelegationToken(username,principal)\n+      val hive2Token = new Token[DelegationTokenIdentifier]()\n+      hive2Token.decodeFromUrlString(tokenStr)\n+      credentials.addToken(new Text(\"hive.server2.delegation.token\"), hive2Token)\n+      logDebug(\"Added the Hive Server 2 token to conf.\")\n+      org.apache.hadoop.hive.ql.metadata.Hive.closeCurrent"
+  }, {
+    "author": {
+      "login": "tgravescs"
+    },
+    "body": "hdfs (namenode) delegation tokens are renewed by the Yarn resourcemanager for you, up til they expire at a week. (Then you need pr4688)  Unfortunately the resourcemanager it doesn't handle hive or hbase tokens.  I personally think putting in this code for hive and then possible hbase for us to know how to get it is ok as long as the interfaces we are using are public and not likely to change.  However we should have a way to skip it if its not configured.\n\nYes, long running services should be able to renew or reacquire with what Hari is doing. \n",
+    "commit": "3e9ac16a8e2e0bdd11f850428115bdc891874b1e",
+    "createdAt": "2015-03-20T00:29:12Z",
+    "diffHunk": "@@ -903,6 +908,30 @@ object Client extends Logging {\n   }\n \n   /**\n+   * Obtains token for the Hive metastore and adds them to the credentials.\n+   */\n+  private def obtainTokenForHiveMetastore(conf: Configuration, credentials: Credentials) {\n+    if (UserGroupInformation.isSecurityEnabled /* And Hive is enabled */) {\n+      val hc = org.apache.hadoop.hive.ql.metadata.Hive.get\n+      val principal = hc.getConf().get(HiveConf.ConfVars.METASTORE_KERBEROS_PRINCIPAL.varname)\n+      val username = UserGroupInformation.getCurrentUser().getUserName\n+\n+      if (principal == null) {\n+        val errorMessage = \"Required hive metastore principal is not configured!\"\n+        logError(errorMessage)\n+        throw new IllegalArgumentException(errorMessage)\n+      }\n+\n+      val tokenStr = hc.getDelegationToken(username,principal)\n+      val hive2Token = new Token[DelegationTokenIdentifier]()\n+      hive2Token.decodeFromUrlString(tokenStr)\n+      credentials.addToken(new Text(\"hive.server2.delegation.token\"), hive2Token)\n+      logDebug(\"Added the Hive Server 2 token to conf.\")\n+      org.apache.hadoop.hive.ql.metadata.Hive.closeCurrent"
+  }],
+  "prId": 5031
+}, {
+  "comments": [{
+    "author": {
+      "login": "tgravescs"
+    },
+    "body": "add space between if and (\n",
+    "commit": "3e9ac16a8e2e0bdd11f850428115bdc891874b1e",
+    "createdAt": "2015-04-10T14:36:27Z",
+    "diffHunk": "@@ -920,6 +925,64 @@ object Client extends Logging {\n   }\n \n   /**\n+   * Obtains token for the Hive metastore and adds them to the credentials.\n+   */\n+  private def obtainTokenForHiveMetastore(conf: Configuration, credentials: Credentials) {\n+    if (UserGroupInformation.isSecurityEnabled) {\n+      val mirror = universe.runtimeMirror(getClass.getClassLoader)\n+\n+      try {\n+        val hiveClass = mirror.classLoader.loadClass(\"org.apache.hadoop.hive.ql.metadata.Hive\")\n+        val hive = hiveClass.getMethod(\"get\").invoke(null)\n+\n+        val hiveConf = hiveClass.getMethod(\"getConf\").invoke(hive)\n+        val hiveConfClass = mirror.classLoader.loadClass(\"org.apache.hadoop.hive.conf.HiveConf\")\n+\n+        val hiveConfGet = (param:String) => Option(hiveConfClass\n+          .getMethod(\"get\",classOf[java.lang.String])\n+          .invoke(hiveConf, param))\n+\n+        val metastore_uri = hiveConfGet(\"hive.metastore.uris\")\n+\n+        // Check for local metastore\n+        if(metastore_uri != None && metastore_uri.get.toString.size > 0) {"
+  }],
+  "prId": 5031
+}, {
+  "comments": [{
+    "author": {
+      "login": "tgravescs"
+    },
+    "body": "similar add spaces between if and ( and at end between ) and {\n",
+    "commit": "3e9ac16a8e2e0bdd11f850428115bdc891874b1e",
+    "createdAt": "2015-04-10T14:38:11Z",
+    "diffHunk": "@@ -920,6 +925,64 @@ object Client extends Logging {\n   }\n \n   /**\n+   * Obtains token for the Hive metastore and adds them to the credentials.\n+   */\n+  private def obtainTokenForHiveMetastore(conf: Configuration, credentials: Credentials) {\n+    if (UserGroupInformation.isSecurityEnabled) {\n+      val mirror = universe.runtimeMirror(getClass.getClassLoader)\n+\n+      try {\n+        val hiveClass = mirror.classLoader.loadClass(\"org.apache.hadoop.hive.ql.metadata.Hive\")\n+        val hive = hiveClass.getMethod(\"get\").invoke(null)\n+\n+        val hiveConf = hiveClass.getMethod(\"getConf\").invoke(hive)\n+        val hiveConfClass = mirror.classLoader.loadClass(\"org.apache.hadoop.hive.conf.HiveConf\")\n+\n+        val hiveConfGet = (param:String) => Option(hiveConfClass\n+          .getMethod(\"get\",classOf[java.lang.String])\n+          .invoke(hiveConf, param))\n+\n+        val metastore_uri = hiveConfGet(\"hive.metastore.uris\")\n+\n+        // Check for local metastore\n+        if(metastore_uri != None && metastore_uri.get.toString.size > 0) {\n+          val metastore_kerberos_principal_conf_var = mirror.classLoader\n+            .loadClass(\"org.apache.hadoop.hive.conf.HiveConf$ConfVars\")\n+            .getField(\"METASTORE_KERBEROS_PRINCIPAL\").get(\"varname\").toString\n+\n+          val principal = hiveConfGet(metastore_kerberos_principal_conf_var)\n+\n+          val username = Option(UserGroupInformation.getCurrentUser().getUserName)\n+          if(principal != None && username != None){"
+  }],
+  "prId": 5031
+}, {
+  "comments": [{
+    "author": {
+      "login": "tgravescs"
+    },
+    "body": "add space after ,\n",
+    "commit": "3e9ac16a8e2e0bdd11f850428115bdc891874b1e",
+    "createdAt": "2015-04-10T15:29:40Z",
+    "diffHunk": "@@ -920,6 +925,64 @@ object Client extends Logging {\n   }\n \n   /**\n+   * Obtains token for the Hive metastore and adds them to the credentials.\n+   */\n+  private def obtainTokenForHiveMetastore(conf: Configuration, credentials: Credentials) {\n+    if (UserGroupInformation.isSecurityEnabled) {\n+      val mirror = universe.runtimeMirror(getClass.getClassLoader)\n+\n+      try {\n+        val hiveClass = mirror.classLoader.loadClass(\"org.apache.hadoop.hive.ql.metadata.Hive\")\n+        val hive = hiveClass.getMethod(\"get\").invoke(null)\n+\n+        val hiveConf = hiveClass.getMethod(\"getConf\").invoke(hive)\n+        val hiveConfClass = mirror.classLoader.loadClass(\"org.apache.hadoop.hive.conf.HiveConf\")\n+\n+        val hiveConfGet = (param:String) => Option(hiveConfClass\n+          .getMethod(\"get\",classOf[java.lang.String])"
+  }],
+  "prId": 5031
+}]

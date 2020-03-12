@@ -1,0 +1,44 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "chenghao-intel"
+    },
+    "body": "Actually Spark SQL use the `org.apache.spark.sql.types.Decimal` for internal representation of `BigDecimal`, probably we can simplify(or remove) this file.\n",
+    "commit": "07a124c4ac57e933d9b645fc43953dc035bab147",
+    "createdAt": "2015-06-23T06:54:45Z",
+    "diffHunk": "@@ -0,0 +1,60 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst.util\n+\n+trait BigDecimalConverter[T] {\n+  def toBigDecimal(in: T): BigDecimal\n+  def fromBigDecimal(bd: BigDecimal): T\n+}\n+\n+/**\n+ * Helper type converters to work with BigDecimal\n+ * from http://stackoverflow.com/a/30979266/1115193\n+ */\n+object BigDecimalConverter {"
+  }, {
+    "author": {
+      "login": "yjshen"
+    },
+    "body": "I've found `o.a.s.s.types.Decimal` not working with `Byte\\ Short\\ Float` and would fail if the precision increase in `changePrecision`, any ideas?\n",
+    "commit": "07a124c4ac57e933d9b645fc43953dc035bab147",
+    "createdAt": "2015-06-23T07:05:07Z",
+    "diffHunk": "@@ -0,0 +1,60 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst.util\n+\n+trait BigDecimalConverter[T] {\n+  def toBigDecimal(in: T): BigDecimal\n+  def fromBigDecimal(bd: BigDecimal): T\n+}\n+\n+/**\n+ * Helper type converters to work with BigDecimal\n+ * from http://stackoverflow.com/a/30979266/1115193\n+ */\n+object BigDecimalConverter {"
+  }, {
+    "author": {
+      "login": "yjshen"
+    },
+    "body": "And also, I've found #6836 also use BigDecimal.setScale to do round. when it comes to deal more dataTypes, rather than just Decimal Float and Double, I would prefer to generalize like this.\n",
+    "commit": "07a124c4ac57e933d9b645fc43953dc035bab147",
+    "createdAt": "2015-06-23T07:16:11Z",
+    "diffHunk": "@@ -0,0 +1,60 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst.util\n+\n+trait BigDecimalConverter[T] {\n+  def toBigDecimal(in: T): BigDecimal\n+  def fromBigDecimal(bd: BigDecimal): T\n+}\n+\n+/**\n+ * Helper type converters to work with BigDecimal\n+ * from http://stackoverflow.com/a/30979266/1115193\n+ */\n+object BigDecimalConverter {"
+  }, {
+    "author": {
+      "login": "chenghao-intel"
+    },
+    "body": "This class seems currently only used by `Round`, move it with `Round`. And we can move it back when we find it will be used by some others in the future.\n",
+    "commit": "07a124c4ac57e933d9b645fc43953dc035bab147",
+    "createdAt": "2015-06-23T11:42:07Z",
+    "diffHunk": "@@ -0,0 +1,60 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst.util\n+\n+trait BigDecimalConverter[T] {\n+  def toBigDecimal(in: T): BigDecimal\n+  def fromBigDecimal(bd: BigDecimal): T\n+}\n+\n+/**\n+ * Helper type converters to work with BigDecimal\n+ * from http://stackoverflow.com/a/30979266/1115193\n+ */\n+object BigDecimalConverter {"
+  }, {
+    "author": {
+      "login": "rxin"
+    },
+    "body": "I think we should just remove this class, and inline everything into round companion object.\n\nNo need for the implicit magic here.\n",
+    "commit": "07a124c4ac57e933d9b645fc43953dc035bab147",
+    "createdAt": "2015-07-09T06:11:59Z",
+    "diffHunk": "@@ -0,0 +1,60 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst.util\n+\n+trait BigDecimalConverter[T] {\n+  def toBigDecimal(in: T): BigDecimal\n+  def fromBigDecimal(bd: BigDecimal): T\n+}\n+\n+/**\n+ * Helper type converters to work with BigDecimal\n+ * from http://stackoverflow.com/a/30979266/1115193\n+ */\n+object BigDecimalConverter {"
+  }],
+  "prId": 6938
+}]

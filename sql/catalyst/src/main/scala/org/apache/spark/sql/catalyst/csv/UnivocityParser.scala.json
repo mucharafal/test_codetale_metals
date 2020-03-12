@@ -1,0 +1,90 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "not a big deal but I would just name it `decimalFormat`",
+    "commit": "521bd45c95f56d5bff3656d0af018f963c524605",
+    "createdAt": "2018-11-11T12:47:35Z",
+    "diffHunk": "@@ -104,6 +105,12 @@ class UnivocityParser(\n     requiredSchema.map(f => makeConverter(f.name, f.dataType, f.nullable, options)).toArray\n   }\n \n+  private val decimalParser = {\n+    val df = new DecimalFormat(\"\", new DecimalFormatSymbols(options.locale))"
+  }],
+  "prId": 22979
+}, {
+  "comments": [{
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "@MaxGekk, is it safe that we assume this `Number` is `BigDecimal`? Looks there are some possibilities that it can return other types.",
+    "commit": "521bd45c95f56d5bff3656d0af018f963c524605",
+    "createdAt": "2018-11-11T12:49:22Z",
+    "diffHunk": "@@ -149,8 +156,8 @@ class UnivocityParser(\n \n     case dt: DecimalType => (d: String) =>\n       nullSafeDatum(d, name, nullable, options) { datum =>\n-        val value = new BigDecimal(datum.replaceAll(\",\", \"\"))\n-        Decimal(value, dt.precision, dt.scale)\n+        val bigDecimal = decimalParser.parse(datum).asInstanceOf[BigDecimal]"
+  }, {
+    "author": {
+      "login": "MaxGekk"
+    },
+    "body": "> is it safe that we assume this Number is BigDecimal?\r\n\r\nI am not absolutely sure that it always return `BigDecimal`. Found this at https://docs.oracle.com/javase/8/docs/api/java/text/DecimalFormat.html#parse(java.lang.String,java.text.ParsePosition) :\r\n```\r\nIf isParseBigDecimal() is true, values are returned as BigDecimal objects. The values are the ones constructed by BigDecimal.BigDecimal(String) for corresponding strings in locale-independent format. The special cases negative and positive infinity and NaN are returned as Double instances holding the values of the corresponding Double constants.\r\n```\r\nSo, `isParseBigDecimal()` returns `true` when `setParseBigDecimal` was called with `true` as in the PR.\r\n\r\n> Looks there are some possibilities that it can return other types.\r\n\r\nIn that case we just fail with a cast exception and the record will be handled as a bad record. or you want to see more clear message in the exception?",
+    "commit": "521bd45c95f56d5bff3656d0af018f963c524605",
+    "createdAt": "2018-11-11T13:16:07Z",
+    "diffHunk": "@@ -149,8 +156,8 @@ class UnivocityParser(\n \n     case dt: DecimalType => (d: String) =>\n       nullSafeDatum(d, name, nullable, options) { datum =>\n-        val value = new BigDecimal(datum.replaceAll(\",\", \"\"))\n-        Decimal(value, dt.precision, dt.scale)\n+        val bigDecimal = decimalParser.parse(datum).asInstanceOf[BigDecimal]"
+  }, {
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "Ah, right. The previous codes will anyway throw an exception, I see. One thing I am a little bit unsure is how much different the behaviour is. For instance, looks the previous one handles sign character as well (`+` and `-`).\r\n\r\nLet me take a closer look. I think I need to.",
+    "commit": "521bd45c95f56d5bff3656d0af018f963c524605",
+    "createdAt": "2018-11-11T13:23:13Z",
+    "diffHunk": "@@ -149,8 +156,8 @@ class UnivocityParser(\n \n     case dt: DecimalType => (d: String) =>\n       nullSafeDatum(d, name, nullable, options) { datum =>\n-        val value = new BigDecimal(datum.replaceAll(\",\", \"\"))\n-        Decimal(value, dt.precision, dt.scale)\n+        val bigDecimal = decimalParser.parse(datum).asInstanceOf[BigDecimal]"
+  }, {
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "For instance, there was a similar try to change the date parsing library (https://github.com/apache/spark/pull/21363). I already know the different is quite breaking and the workaround is difficult as far as I know - so I suggested to add a configuration or fallback for now. Probably we should similarily just document the behaviour change in the migration guide but actually less sure yet even about this. anyway will take another look shortly.",
+    "commit": "521bd45c95f56d5bff3656d0af018f963c524605",
+    "createdAt": "2018-11-11T13:25:28Z",
+    "diffHunk": "@@ -149,8 +156,8 @@ class UnivocityParser(\n \n     case dt: DecimalType => (d: String) =>\n       nullSafeDatum(d, name, nullable, options) { datum =>\n-        val value = new BigDecimal(datum.replaceAll(\",\", \"\"))\n-        Decimal(value, dt.precision, dt.scale)\n+        val bigDecimal = decimalParser.parse(datum).asInstanceOf[BigDecimal]"
+  }, {
+    "author": {
+      "login": "MaxGekk"
+    },
+    "body": "> so I suggested to add a configuration or fallback for now ...\r\n\r\nWhat about SQL config `spark.sql.legacy.decimalParsing.enabled` with default value `false`.",
+    "commit": "521bd45c95f56d5bff3656d0af018f963c524605",
+    "createdAt": "2018-11-11T17:29:44Z",
+    "diffHunk": "@@ -149,8 +156,8 @@ class UnivocityParser(\n \n     case dt: DecimalType => (d: String) =>\n       nullSafeDatum(d, name, nullable, options) { datum =>\n-        val value = new BigDecimal(datum.replaceAll(\",\", \"\"))\n-        Decimal(value, dt.precision, dt.scale)\n+        val bigDecimal = decimalParser.parse(datum).asInstanceOf[BigDecimal]"
+  }, {
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "Sounds good if that's not difficult.",
+    "commit": "521bd45c95f56d5bff3656d0af018f963c524605",
+    "createdAt": "2018-11-12T02:14:37Z",
+    "diffHunk": "@@ -149,8 +156,8 @@ class UnivocityParser(\n \n     case dt: DecimalType => (d: String) =>\n       nullSafeDatum(d, name, nullable, options) { datum =>\n-        val value = new BigDecimal(datum.replaceAll(\",\", \"\"))\n-        Decimal(value, dt.precision, dt.scale)\n+        val bigDecimal = decimalParser.parse(datum).asInstanceOf[BigDecimal]"
+  }],
+  "prId": 22979
+}, {
+  "comments": [{
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "@MaxGekk, looks we should do the same thing in schema inference path as well.",
+    "commit": "521bd45c95f56d5bff3656d0af018f963c524605",
+    "createdAt": "2018-11-13T12:02:15Z",
+    "diffHunk": "@@ -104,6 +106,14 @@ class UnivocityParser(\n     requiredSchema.map(f => makeConverter(f.name, f.dataType, f.nullable, options)).toArray\n   }\n \n+  private val decimalParser = if (SQLConf.get.legacyDecimalParsing) {\n+    (s: String) => new BigDecimal(s.replaceAll(\",\", \"\"))"
+  }, {
+    "author": {
+      "login": "MaxGekk"
+    },
+    "body": "I made some changes but a few tests in `CSVSuite` failed because Decimal type is inferred from a timestamps. For example, `2015` from `2015-08-20 15:57:00.0`.",
+    "commit": "521bd45c95f56d5bff3656d0af018f963c524605",
+    "createdAt": "2018-11-13T22:12:49Z",
+    "diffHunk": "@@ -104,6 +106,14 @@ class UnivocityParser(\n     requiredSchema.map(f => makeConverter(f.name, f.dataType, f.nullable, options)).toArray\n   }\n \n+  private val decimalParser = if (SQLConf.get.legacyDecimalParsing) {\n+    (s: String) => new BigDecimal(s.replaceAll(\",\", \"\"))"
+  }, {
+    "author": {
+      "login": "MaxGekk"
+    },
+    "body": "I made parsing more strict. Should be fine now.",
+    "commit": "521bd45c95f56d5bff3656d0af018f963c524605",
+    "createdAt": "2018-11-14T08:39:35Z",
+    "diffHunk": "@@ -104,6 +106,14 @@ class UnivocityParser(\n     requiredSchema.map(f => makeConverter(f.name, f.dataType, f.nullable, options)).toArray\n   }\n \n+  private val decimalParser = if (SQLConf.get.legacyDecimalParsing) {\n+    (s: String) => new BigDecimal(s.replaceAll(\",\", \"\"))"
+  }],
+  "prId": 22979
+}]

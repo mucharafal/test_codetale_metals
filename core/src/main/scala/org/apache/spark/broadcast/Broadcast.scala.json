@@ -1,0 +1,58 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "pwendell"
+    },
+    "body": "should we only expose a version where blocking is set to true for users? It seems like asynchronous destroy is a bit more complex. @shivaram does your app need the async version?\n",
+    "commit": "a11ababb21a0c2378a4d2f665f16d16112d7b469",
+    "createdAt": "2014-10-24T06:53:29Z",
+    "diffHunk": "@@ -87,10 +91,13 @@ abstract class Broadcast[T: ClassTag](val id: Long) extends Serializable {\n   /**\n    * Destroy all data and metadata related to this broadcast variable. Use this with caution;\n    * once a broadcast variable has been destroyed, it cannot be used again.\n+   * @param blocking Whether to block until destroy has completed\n    */\n-  private[spark] def destroy(blocking: Boolean) {\n+  def destroy(blocking: Boolean) {"
+  }, {
+    "author": {
+      "login": "shivaram"
+    },
+    "body": "No - I actually prefer the synchronous version in my applications. I will add another destroy() which is always synchronous and make it public.\n",
+    "commit": "a11ababb21a0c2378a4d2f665f16d16112d7b469",
+    "createdAt": "2014-10-25T04:35:41Z",
+    "diffHunk": "@@ -87,10 +91,13 @@ abstract class Broadcast[T: ClassTag](val id: Long) extends Serializable {\n   /**\n    * Destroy all data and metadata related to this broadcast variable. Use this with caution;\n    * once a broadcast variable has been destroyed, it cannot be used again.\n+   * @param blocking Whether to block until destroy has completed\n    */\n-  private[spark] def destroy(blocking: Boolean) {\n+  def destroy(blocking: Boolean) {"
+  }, {
+    "author": {
+      "login": "pwendell"
+    },
+    "body": "Okay if that's the case I'd propose making `destroy()` public and keeping `destroy(blocking: Boolean)` as private. That way we minimize the surface area of public APIs.\n",
+    "commit": "a11ababb21a0c2378a4d2f665f16d16112d7b469",
+    "createdAt": "2014-10-26T17:37:07Z",
+    "diffHunk": "@@ -87,10 +91,13 @@ abstract class Broadcast[T: ClassTag](val id: Long) extends Serializable {\n   /**\n    * Destroy all data and metadata related to this broadcast variable. Use this with caution;\n    * once a broadcast variable has been destroyed, it cannot be used again.\n+   * @param blocking Whether to block until destroy has completed\n    */\n-  private[spark] def destroy(blocking: Boolean) {\n+  def destroy(blocking: Boolean) {"
+  }],
+  "prId": 2922
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "How useful is it to store this? it only helps in case of an invalid `Broadcast` instance. (PS you can use string interpolation instead of `format` in these changes if you care to)\n",
+    "commit": "a11ababb21a0c2378a4d2f665f16d16112d7b469",
+    "createdAt": "2014-10-24T14:22:10Z",
+    "diffHunk": "@@ -60,6 +62,8 @@ abstract class Broadcast[T: ClassTag](val id: Long) extends Serializable {\n    */\n   @volatile private var _isValid = true\n \n+  private var _destroySite = \"\"",
+    "line": 22
+  }, {
+    "author": {
+      "login": "shivaram"
+    },
+    "body": "@pwendell requested this in the JIRA -- The main reason is that we'd like to make it easy to debug if users call `destroy` by mistake. \n\nOh and I used `.format` to be consistent with the rest of the file. I'm not very sure what our policy is on this ?\n",
+    "commit": "a11ababb21a0c2378a4d2f665f16d16112d7b469",
+    "createdAt": "2014-10-25T04:43:06Z",
+    "diffHunk": "@@ -60,6 +62,8 @@ abstract class Broadcast[T: ClassTag](val id: Long) extends Serializable {\n    */\n   @volatile private var _isValid = true\n \n+  private var _destroySite = \"\"",
+    "line": 22
+  }, {
+    "author": {
+      "login": "pwendell"
+    },
+    "body": "@srowen yeah I asked for tracking the callsite because we now have this case where someone can try to use a destroyed broadcast (destroyed by e.g. another thread) and it will be very hard for users to debug this. Tracking the callsite has almost no overhead here and it seemed like it might be useful for debugging.\n",
+    "commit": "a11ababb21a0c2378a4d2f665f16d16112d7b469",
+    "createdAt": "2014-10-26T17:36:23Z",
+    "diffHunk": "@@ -60,6 +62,8 @@ abstract class Broadcast[T: ClassTag](val id: Long) extends Serializable {\n    */\n   @volatile private var _isValid = true\n \n+  private var _destroySite = \"\"",
+    "line": 22
+  }],
+  "prId": 2922
+}]

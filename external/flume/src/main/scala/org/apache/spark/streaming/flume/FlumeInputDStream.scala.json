@@ -1,0 +1,77 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "tdas"
+    },
+    "body": "No need for `()` when no parameters are present.\n",
+    "commit": "b626656d9a231524a074411aae11cb9c18d1a032",
+    "createdAt": "2014-04-28T05:50:41Z",
+    "diffHunk": "@@ -153,3 +181,15 @@ class FlumeReceiver(\n \n   override def preferredLocation = Some(host)\n }\n+\n+private[streaming]\n+class CompressionChannelPipelineFactory() extends ChannelPipelineFactory {"
+  }, {
+    "author": {
+      "login": "tmalaska"
+    },
+    "body": "Done\n",
+    "commit": "b626656d9a231524a074411aae11cb9c18d1a032",
+    "createdAt": "2014-04-28T12:48:38Z",
+    "diffHunk": "@@ -153,3 +181,15 @@ class FlumeReceiver(\n \n   override def preferredLocation = Some(host)\n }\n+\n+private[streaming]\n+class CompressionChannelPipelineFactory() extends ChannelPipelineFactory {"
+  }],
+  "prId": 566
+}, {
+  "comments": [{
+    "author": {
+      "login": "tdas"
+    },
+    "body": "Formatting issue. 2 space indents required.\n",
+    "commit": "b626656d9a231524a074411aae11cb9c18d1a032",
+    "createdAt": "2014-06-20T20:42:08Z",
+    "diffHunk": "@@ -134,22 +144,64 @@ private[streaming]\n class FlumeReceiver(\n     host: String,\n     port: Int,\n-    storageLevel: StorageLevel\n+    storageLevel: StorageLevel,\n+    enableDecompression: Boolean\n   ) extends Receiver[SparkFlumeEvent](storageLevel) with Logging {\n \n   lazy val responder = new SpecificResponder(\n     classOf[AvroSourceProtocol], new FlumeEventServer(this))\n-  lazy val server = new NettyServer(responder, new InetSocketAddress(host, port))\n+  var server: NettyServer = null\n+\n+  private def initServer() = {\n+    if (enableDecompression) {\n+      val channelFactory = new NioServerSocketChannelFactory\n+        (Executors.newCachedThreadPool(), Executors.newCachedThreadPool());\n+      val channelPipelieFactory = new CompressionChannelPipelineFactory()\n+      \n+      new NettyServer(\n+        responder, \n+        new InetSocketAddress(host, port),\n+        channelFactory, \n+        channelPipelieFactory, \n+        null)\n+    } else {\n+      new NettyServer(responder, new InetSocketAddress(host, port))\n+    }\n+  }\n \n   def onStart() {\n-    server.start()\n+    synchronized {\n+      if (server == null) {\n+        server = initServer()\n+        server.start()\n+      } else {\n+        logWarning(\"Flume receiver being asked to start more then once with out close\")\n+      }\n+    }\n     logInfo(\"Flume receiver started\")\n   }\n \n   def onStop() {\n-    server.close()\n+    synchronized {\n+      if (server != null) {\n+        server.close()\n+        server = null\n+      }\n+    }\n     logInfo(\"Flume receiver stopped\")\n   }\n \n   override def preferredLocation = Some(host)\n }\n+\n+private[streaming]\n+class CompressionChannelPipelineFactory extends ChannelPipelineFactory {\n+\n+  def getPipeline() = {\n+      val pipeline = Channels.pipeline()",
+    "line": 92
+  }],
+  "prId": 566
+}, {
+  "comments": [{
+    "author": {
+      "login": "tdas"
+    },
+    "body": "Can you add comments to this class, explaining what this class does and why it is necessary?\n",
+    "commit": "b626656d9a231524a074411aae11cb9c18d1a032",
+    "createdAt": "2014-06-20T20:43:15Z",
+    "diffHunk": "@@ -134,22 +144,64 @@ private[streaming]\n class FlumeReceiver(\n     host: String,\n     port: Int,\n-    storageLevel: StorageLevel\n+    storageLevel: StorageLevel,\n+    enableDecompression: Boolean\n   ) extends Receiver[SparkFlumeEvent](storageLevel) with Logging {\n \n   lazy val responder = new SpecificResponder(\n     classOf[AvroSourceProtocol], new FlumeEventServer(this))\n-  lazy val server = new NettyServer(responder, new InetSocketAddress(host, port))\n+  var server: NettyServer = null\n+\n+  private def initServer() = {\n+    if (enableDecompression) {\n+      val channelFactory = new NioServerSocketChannelFactory\n+        (Executors.newCachedThreadPool(), Executors.newCachedThreadPool());\n+      val channelPipelieFactory = new CompressionChannelPipelineFactory()\n+      \n+      new NettyServer(\n+        responder, \n+        new InetSocketAddress(host, port),\n+        channelFactory, \n+        channelPipelieFactory, \n+        null)\n+    } else {\n+      new NettyServer(responder, new InetSocketAddress(host, port))\n+    }\n+  }\n \n   def onStart() {\n-    server.start()\n+    synchronized {\n+      if (server == null) {\n+        server = initServer()\n+        server.start()\n+      } else {\n+        logWarning(\"Flume receiver being asked to start more then once with out close\")\n+      }\n+    }\n     logInfo(\"Flume receiver started\")\n   }\n \n   def onStop() {\n-    server.close()\n+    synchronized {\n+      if (server != null) {\n+        server.close()\n+        server = null\n+      }\n+    }\n     logInfo(\"Flume receiver stopped\")\n   }\n \n   override def preferredLocation = Some(host)\n }\n+\n+private[streaming]",
+    "line": 88
+  }],
+  "prId": 566
+}, {
+  "comments": [{
+    "author": {
+      "login": "tdas"
+    },
+    "body": "Just a line of comment saying what pipeline does this return. For Flume noob's like me ;)\n",
+    "commit": "b626656d9a231524a074411aae11cb9c18d1a032",
+    "createdAt": "2014-06-20T20:43:46Z",
+    "diffHunk": "@@ -134,22 +144,64 @@ private[streaming]\n class FlumeReceiver(\n     host: String,\n     port: Int,\n-    storageLevel: StorageLevel\n+    storageLevel: StorageLevel,\n+    enableDecompression: Boolean\n   ) extends Receiver[SparkFlumeEvent](storageLevel) with Logging {\n \n   lazy val responder = new SpecificResponder(\n     classOf[AvroSourceProtocol], new FlumeEventServer(this))\n-  lazy val server = new NettyServer(responder, new InetSocketAddress(host, port))\n+  var server: NettyServer = null\n+\n+  private def initServer() = {\n+    if (enableDecompression) {\n+      val channelFactory = new NioServerSocketChannelFactory\n+        (Executors.newCachedThreadPool(), Executors.newCachedThreadPool());\n+      val channelPipelieFactory = new CompressionChannelPipelineFactory()\n+      \n+      new NettyServer(\n+        responder, \n+        new InetSocketAddress(host, port),\n+        channelFactory, \n+        channelPipelieFactory, \n+        null)\n+    } else {\n+      new NettyServer(responder, new InetSocketAddress(host, port))\n+    }\n+  }\n \n   def onStart() {\n-    server.start()\n+    synchronized {\n+      if (server == null) {\n+        server = initServer()\n+        server.start()\n+      } else {\n+        logWarning(\"Flume receiver being asked to start more then once with out close\")\n+      }\n+    }\n     logInfo(\"Flume receiver started\")\n   }\n \n   def onStop() {\n-    server.close()\n+    synchronized {\n+      if (server != null) {\n+        server.close()\n+        server = null\n+      }\n+    }\n     logInfo(\"Flume receiver stopped\")\n   }\n \n   override def preferredLocation = Some(host)\n }\n+\n+private[streaming]\n+class CompressionChannelPipelineFactory extends ChannelPipelineFactory {\n+\n+  def getPipeline() = {",
+    "line": 91
+  }, {
+    "author": {
+      "login": "tmalaska"
+    },
+    "body": "Cool will do before the weekend is done.  Thanks\n",
+    "commit": "b626656d9a231524a074411aae11cb9c18d1a032",
+    "createdAt": "2014-06-20T20:47:34Z",
+    "diffHunk": "@@ -134,22 +144,64 @@ private[streaming]\n class FlumeReceiver(\n     host: String,\n     port: Int,\n-    storageLevel: StorageLevel\n+    storageLevel: StorageLevel,\n+    enableDecompression: Boolean\n   ) extends Receiver[SparkFlumeEvent](storageLevel) with Logging {\n \n   lazy val responder = new SpecificResponder(\n     classOf[AvroSourceProtocol], new FlumeEventServer(this))\n-  lazy val server = new NettyServer(responder, new InetSocketAddress(host, port))\n+  var server: NettyServer = null\n+\n+  private def initServer() = {\n+    if (enableDecompression) {\n+      val channelFactory = new NioServerSocketChannelFactory\n+        (Executors.newCachedThreadPool(), Executors.newCachedThreadPool());\n+      val channelPipelieFactory = new CompressionChannelPipelineFactory()\n+      \n+      new NettyServer(\n+        responder, \n+        new InetSocketAddress(host, port),\n+        channelFactory, \n+        channelPipelieFactory, \n+        null)\n+    } else {\n+      new NettyServer(responder, new InetSocketAddress(host, port))\n+    }\n+  }\n \n   def onStart() {\n-    server.start()\n+    synchronized {\n+      if (server == null) {\n+        server = initServer()\n+        server.start()\n+      } else {\n+        logWarning(\"Flume receiver being asked to start more then once with out close\")\n+      }\n+    }\n     logInfo(\"Flume receiver started\")\n   }\n \n   def onStop() {\n-    server.close()\n+    synchronized {\n+      if (server != null) {\n+        server.close()\n+        server = null\n+      }\n+    }\n     logInfo(\"Flume receiver stopped\")\n   }\n \n   override def preferredLocation = Some(host)\n }\n+\n+private[streaming]\n+class CompressionChannelPipelineFactory extends ChannelPipelineFactory {\n+\n+  def getPipeline() = {",
+    "line": 91
+  }],
+  "prId": 566
+}, {
+  "comments": [{
+    "author": {
+      "login": "tdas"
+    },
+    "body": "please dedup, and sort. see import style in https://cwiki.apache.org/confluence/display/SPARK/Spark+Code+Style+Guide\n",
+    "commit": "b626656d9a231524a074411aae11cb9c18d1a032",
+    "createdAt": "2014-06-20T20:49:43Z",
+    "diffHunk": "@@ -36,17 +36,27 @@ import org.apache.spark.streaming.StreamingContext\n import org.apache.spark.streaming.dstream._\n import org.apache.spark.Logging\n import org.apache.spark.streaming.receiver.Receiver\n+import org.jboss.netty.channel.socket.nio.NioServerSocketChannelFactory\n+import org.jboss.netty.channel.ChannelPipelineFactory\n+import java.util.concurrent.Executors\n+import org.jboss.netty.channel.Channels\n+import org.jboss.netty.handler.codec.compression.ZlibDecoder",
+    "line": 8
+  }],
+  "prId": 566
+}]

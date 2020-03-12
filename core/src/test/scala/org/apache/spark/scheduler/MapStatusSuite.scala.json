@@ -1,0 +1,99 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "nit: `val status2 = objectInput.readObject().asInstanceOf[HighlyCompressedMapStatus]`",
+    "commit": "b07a3b61ba483989b2c205e88cf9fdc73a4205df",
+    "createdAt": "2017-05-05T08:47:33Z",
+    "diffHunk": "@@ -128,4 +130,23 @@ class MapStatusSuite extends SparkFunSuite {\n     assert(size1 === size2)\n     assert(!success)\n   }\n+\n+  test(\"Blocks which are bigger than 2 * average size should not be underestimated.\") {\n+    val sizes = Array.concat(Array.fill[Long](1000)(1L), (1000L to 2000L).toArray)\n+    val status1 = MapStatus(BlockManagerId(\"exec-0\", \"host-0\", 100), sizes)\n+    val arrayStream = new ByteArrayOutputStream(102400)\n+    val objectOutputStream = new ObjectOutputStream(arrayStream)\n+    assert(status1.isInstanceOf[HighlyCompressedMapStatus])\n+    status1.asInstanceOf[HighlyCompressedMapStatus].writeExternal(objectOutputStream)\n+    objectOutputStream.flush()\n+    val array = arrayStream.toByteArray\n+    val objectInput = new ObjectInputStream(new ByteArrayInputStream(array))\n+    val status2 = new HighlyCompressedMapStatus()\n+    status2.readExternal(objectInput)"
+  }, {
+    "author": {
+      "login": "jinxing64"
+    },
+    "body": "I'm a little bit confused and hesitant here.\r\nWe `writeExternal` for serialization and do initialization in `readExternal` when deserialize, right?\r\n`objectInput.readObject().asInstanceOf[HighlyCompressedMapStatus]` is not ok, I think?",
+    "commit": "b07a3b61ba483989b2c205e88cf9fdc73a4205df",
+    "createdAt": "2017-05-05T10:01:51Z",
+    "diffHunk": "@@ -128,4 +130,23 @@ class MapStatusSuite extends SparkFunSuite {\n     assert(size1 === size2)\n     assert(!success)\n   }\n+\n+  test(\"Blocks which are bigger than 2 * average size should not be underestimated.\") {\n+    val sizes = Array.concat(Array.fill[Long](1000)(1L), (1000L to 2000L).toArray)\n+    val status1 = MapStatus(BlockManagerId(\"exec-0\", \"host-0\", 100), sizes)\n+    val arrayStream = new ByteArrayOutputStream(102400)\n+    val objectOutputStream = new ObjectOutputStream(arrayStream)\n+    assert(status1.isInstanceOf[HighlyCompressedMapStatus])\n+    status1.asInstanceOf[HighlyCompressedMapStatus].writeExternal(objectOutputStream)\n+    objectOutputStream.flush()\n+    val array = arrayStream.toByteArray\n+    val objectInput = new ObjectInputStream(new ByteArrayInputStream(array))\n+    val status2 = new HighlyCompressedMapStatus()\n+    status2.readExternal(objectInput)"
+  }],
+  "prId": 16989
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "I see the problem. This is not the normal process for serializing java objects, `writeExternal`/`readExternal` should be called by java serialization framework, instead of being called manually. We should do `objectOutputStream.writeObject(status1)`",
+    "commit": "b07a3b61ba483989b2c205e88cf9fdc73a4205df",
+    "createdAt": "2017-05-05T14:42:10Z",
+    "diffHunk": "@@ -128,4 +130,23 @@ class MapStatusSuite extends SparkFunSuite {\n     assert(size1 === size2)\n     assert(!success)\n   }\n+\n+  test(\"Blocks which are bigger than 2 * average size should not be underestimated.\") {\n+    val sizes = Array.concat(Array.fill[Long](1000)(1L), (1000L to 2000L).toArray)\n+    val status1 = MapStatus(BlockManagerId(\"exec-0\", \"host-0\", 100), sizes)\n+    val arrayStream = new ByteArrayOutputStream(102400)\n+    val objectOutputStream = new ObjectOutputStream(arrayStream)\n+    assert(status1.isInstanceOf[HighlyCompressedMapStatus])\n+    status1.asInstanceOf[HighlyCompressedMapStatus].writeExternal(objectOutputStream)"
+  }, {
+    "author": {
+      "login": "jinxing64"
+    },
+    "body": "Yes, I should refine this.",
+    "commit": "b07a3b61ba483989b2c205e88cf9fdc73a4205df",
+    "createdAt": "2017-05-05T15:05:00Z",
+    "diffHunk": "@@ -128,4 +130,23 @@ class MapStatusSuite extends SparkFunSuite {\n     assert(size1 === size2)\n     assert(!success)\n   }\n+\n+  test(\"Blocks which are bigger than 2 * average size should not be underestimated.\") {\n+    val sizes = Array.concat(Array.fill[Long](1000)(1L), (1000L to 2000L).toArray)\n+    val status1 = MapStatus(BlockManagerId(\"exec-0\", \"host-0\", 100), sizes)\n+    val arrayStream = new ByteArrayOutputStream(102400)\n+    val objectOutputStream = new ObjectOutputStream(arrayStream)\n+    assert(status1.isInstanceOf[HighlyCompressedMapStatus])\n+    status1.asInstanceOf[HighlyCompressedMapStatus].writeExternal(objectOutputStream)"
+  }],
+  "prId": 16989
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "add some comments to explain that the index of the `sizes` array is the value of that element.",
+    "commit": "b07a3b61ba483989b2c205e88cf9fdc73a4205df",
+    "createdAt": "2017-05-08T10:40:22Z",
+    "diffHunk": "@@ -128,4 +130,22 @@ class MapStatusSuite extends SparkFunSuite {\n     assert(size1 === size2)\n     assert(!success)\n   }\n+\n+  test(\"Blocks which are bigger than 2 * average size should not be underestimated.\") {\n+    val sizes = Array.concat(Array.fill[Long](1000)(1L), (1000L to 2000L).toArray)\n+    val status1 = MapStatus(BlockManagerId(\"exec-0\", \"host-0\", 100), sizes)\n+    val arrayStream = new ByteArrayOutputStream(102400)\n+    val objectOutputStream = new ObjectOutputStream(arrayStream)\n+    assert(status1.isInstanceOf[HighlyCompressedMapStatus])\n+    objectOutputStream.writeObject(status1)\n+    objectOutputStream.flush()\n+    val array = arrayStream.toByteArray\n+    val objectInput = new ObjectInputStream(new ByteArrayInputStream(array))\n+    val status2 = objectInput.readObject().asInstanceOf[HighlyCompressedMapStatus]\n+    val avg = sizes.sum / 2001\n+    ((2 * avg + 1) to 2000).foreach {"
+  }, {
+    "author": {
+      "login": "jinxing64"
+    },
+    "body": "Yes, I should refine.",
+    "commit": "b07a3b61ba483989b2c205e88cf9fdc73a4205df",
+    "createdAt": "2017-05-08T11:51:31Z",
+    "diffHunk": "@@ -128,4 +130,22 @@ class MapStatusSuite extends SparkFunSuite {\n     assert(size1 === size2)\n     assert(!success)\n   }\n+\n+  test(\"Blocks which are bigger than 2 * average size should not be underestimated.\") {\n+    val sizes = Array.concat(Array.fill[Long](1000)(1L), (1000L to 2000L).toArray)\n+    val status1 = MapStatus(BlockManagerId(\"exec-0\", \"host-0\", 100), sizes)\n+    val arrayStream = new ByteArrayOutputStream(102400)\n+    val objectOutputStream = new ObjectOutputStream(arrayStream)\n+    assert(status1.isInstanceOf[HighlyCompressedMapStatus])\n+    objectOutputStream.writeObject(status1)\n+    objectOutputStream.flush()\n+    val array = arrayStream.toByteArray\n+    val objectInput = new ObjectInputStream(new ByteArrayInputStream(array))\n+    val status2 = objectInput.readObject().asInstanceOf[HighlyCompressedMapStatus]\n+    val avg = sizes.sum / 2001\n+    ((2 * avg + 1) to 2000).foreach {"
+  }],
+  "prId": 16989
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "`equal or above`? I think it's always equal to the index?",
+    "commit": "b07a3b61ba483989b2c205e88cf9fdc73a4205df",
+    "createdAt": "2017-05-08T13:37:41Z",
+    "diffHunk": "@@ -128,4 +130,23 @@ class MapStatusSuite extends SparkFunSuite {\n     assert(size1 === size2)\n     assert(!success)\n   }\n+\n+  test(\"Blocks which are bigger than 2 * average size should not be underestimated.\") {\n+    // Value of element in sizes is equal or above the corresponding index when index>=1000."
+  }],
+  "prId": 16989
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "`xx.set(SHUFFLE_ACCURATE_BLOCK_THRESHOLD, 1000)`",
+    "commit": "b07a3b61ba483989b2c205e88cf9fdc73a4205df",
+    "createdAt": "2017-05-17T03:35:26Z",
+    "diffHunk": "@@ -128,4 +138,27 @@ class MapStatusSuite extends SparkFunSuite {\n     assert(size1 === size2)\n     assert(!success)\n   }\n+\n+  test(\"Blocks which are bigger than spark.shuffle.accurateBlkThreshold should not be \" +\n+    \"underestimated\") {\n+    val conf = new SparkConf().set(\"spark.shuffle.accurateBlkThreshold\", \"1000\")"
+  }, {
+    "author": {
+      "login": "jinxing64"
+    },
+    "body": "Yes, I will refine this.",
+    "commit": "b07a3b61ba483989b2c205e88cf9fdc73a4205df",
+    "createdAt": "2017-05-17T04:13:45Z",
+    "diffHunk": "@@ -128,4 +138,27 @@ class MapStatusSuite extends SparkFunSuite {\n     assert(size1 === size2)\n     assert(!success)\n   }\n+\n+  test(\"Blocks which are bigger than spark.shuffle.accurateBlkThreshold should not be \" +\n+    \"underestimated\") {\n+    val conf = new SparkConf().set(\"spark.shuffle.accurateBlkThreshold\", \"1000\")"
+  }],
+  "prId": 16989
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "nit: put this in the same line of the `case part`",
+    "commit": "b07a3b61ba483989b2c205e88cf9fdc73a4205df",
+    "createdAt": "2017-05-17T03:35:50Z",
+    "diffHunk": "@@ -128,4 +138,27 @@ class MapStatusSuite extends SparkFunSuite {\n     assert(size1 === size2)\n     assert(!success)\n   }\n+\n+  test(\"Blocks which are bigger than spark.shuffle.accurateBlkThreshold should not be \" +\n+    \"underestimated\") {\n+    val conf = new SparkConf().set(\"spark.shuffle.accurateBlkThreshold\", \"1000\")\n+    val env = mock(classOf[SparkEnv])\n+    doReturn(conf).when(env).conf\n+    SparkEnv.set(env)\n+    // Value of element in sizes is equal to the corresponding index.\n+    val sizes = (0L to 2000L).toArray\n+    val status1 = MapStatus(BlockManagerId(\"exec-0\", \"host-0\", 100), sizes)\n+    val arrayStream = new ByteArrayOutputStream(102400)\n+    val objectOutputStream = new ObjectOutputStream(arrayStream)\n+    assert(status1.isInstanceOf[HighlyCompressedMapStatus])\n+    objectOutputStream.writeObject(status1)\n+    objectOutputStream.flush()\n+    val array = arrayStream.toByteArray\n+    val objectInput = new ObjectInputStream(new ByteArrayInputStream(array))\n+    val status2 = objectInput.readObject().asInstanceOf[HighlyCompressedMapStatus]\n+    (1001 to 2000).foreach {\n+      case part =>\n+        assert(status2.getSizeForBlock(part) >= sizes(part))"
+  }],
+  "prId": 16989
+}]

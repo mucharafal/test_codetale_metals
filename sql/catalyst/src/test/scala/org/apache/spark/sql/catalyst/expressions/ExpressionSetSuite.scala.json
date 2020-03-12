@@ -1,0 +1,92 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "These test cases are covered previously correctly. Actually, this PR simplifies the logics only. Am I right?",
+    "commit": "c5fc394a2ba1bfcaafa9d19bd92c449639a5d576",
+    "createdAt": "2017-01-27T19:56:38Z",
+    "diffHunk": "@@ -75,10 +107,14 @@ class ExpressionSetSuite extends SparkFunSuite {\n   setTest(1, aUpper >= bUpper, bUpper <= aUpper)\n \n   // `Not` canonicalization\n-  setTest(1, Not(aUpper > 1), aUpper <= 1, Not(Literal(1) < aUpper), Literal(1) >= aUpper)\n-  setTest(1, Not(aUpper < 1), aUpper >= 1, Not(Literal(1) > aUpper), Literal(1) <= aUpper)\n-  setTest(1, Not(aUpper >= 1), aUpper < 1, Not(Literal(1) <= aUpper), Literal(1) > aUpper)\n-  setTest(1, Not(aUpper <= 1), aUpper > 1, Not(Literal(1) >= aUpper), Literal(1) < aUpper)\n+  setTest(1, Not(maxHash > 1), maxHash <= 1, Not(Literal(1) < maxHash), Literal(1) >= maxHash)\n+  setTest(1, Not(minHash > 1), minHash <= 1, Not(Literal(1) < minHash), Literal(1) >= minHash)\n+  setTest(1, Not(maxHash < 1), maxHash >= 1, Not(Literal(1) > maxHash), Literal(1) <= maxHash)\n+  setTest(1, Not(minHash < 1), minHash >= 1, Not(Literal(1) > minHash), Literal(1) <= minHash)\n+  setTest(1, Not(maxHash >= 1), maxHash < 1, Not(Literal(1) <= maxHash), Literal(1) > maxHash)\n+  setTest(1, Not(minHash >= 1), minHash < 1, Not(Literal(1) <= minHash), Literal(1) > minHash)\n+  setTest(1, Not(maxHash <= 1), maxHash > 1, Not(Literal(1) >= maxHash), Literal(1) < maxHash)\n+  setTest(1, Not(minHash <= 1), minHash > 1, Not(Literal(1) >= minHash), Literal(1) < minHash)",
+    "line": 54
+  }, {
+    "author": {
+      "login": "lw-lin"
+    },
+    "body": "yea sure they are covered correctly even prior to this patch's changes!\r\n\r\nthe previous `aUpper`'hashcode is either greater than or less than `1`'s hashcode but can not be both, while this change aims to test both cases -- but I'm quite open to revert the changes if they are considered unnecessary.",
+    "commit": "c5fc394a2ba1bfcaafa9d19bd92c449639a5d576",
+    "createdAt": "2017-01-28T03:18:17Z",
+    "diffHunk": "@@ -75,10 +107,14 @@ class ExpressionSetSuite extends SparkFunSuite {\n   setTest(1, aUpper >= bUpper, bUpper <= aUpper)\n \n   // `Not` canonicalization\n-  setTest(1, Not(aUpper > 1), aUpper <= 1, Not(Literal(1) < aUpper), Literal(1) >= aUpper)\n-  setTest(1, Not(aUpper < 1), aUpper >= 1, Not(Literal(1) > aUpper), Literal(1) <= aUpper)\n-  setTest(1, Not(aUpper >= 1), aUpper < 1, Not(Literal(1) <= aUpper), Literal(1) > aUpper)\n-  setTest(1, Not(aUpper <= 1), aUpper > 1, Not(Literal(1) >= aUpper), Literal(1) < aUpper)\n+  setTest(1, Not(maxHash > 1), maxHash <= 1, Not(Literal(1) < maxHash), Literal(1) >= maxHash)\n+  setTest(1, Not(minHash > 1), minHash <= 1, Not(Literal(1) < minHash), Literal(1) >= minHash)\n+  setTest(1, Not(maxHash < 1), maxHash >= 1, Not(Literal(1) > maxHash), Literal(1) <= maxHash)\n+  setTest(1, Not(minHash < 1), minHash >= 1, Not(Literal(1) > minHash), Literal(1) <= minHash)\n+  setTest(1, Not(maxHash >= 1), maxHash < 1, Not(Literal(1) <= maxHash), Literal(1) > maxHash)\n+  setTest(1, Not(minHash >= 1), minHash < 1, Not(Literal(1) <= minHash), Literal(1) > minHash)\n+  setTest(1, Not(maxHash <= 1), maxHash > 1, Not(Literal(1) >= maxHash), Literal(1) < maxHash)\n+  setTest(1, Not(minHash <= 1), minHash > 1, Not(Literal(1) >= minHash), Literal(1) < minHash)",
+    "line": 54
+  }],
+  "prId": 16719
+}, {
+  "comments": [{
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "Why not `override def hashCode: Int = Int.MaxValue`?",
+    "commit": "c5fc394a2ba1bfcaafa9d19bd92c449639a5d576",
+    "createdAt": "2017-01-29T06:35:08Z",
+    "diffHunk": "@@ -32,6 +32,38 @@ class ExpressionSetSuite extends SparkFunSuite {\n \n   val aAndBSet = AttributeSet(aUpper :: bUpper :: Nil)\n \n+  // An [AttributeReference] with almost the maximum hashcode, to make testing canonicalize rules\n+  // like `case GreaterThan(l, r) if l.hashcode > r.hashcode => GreaterThan(r, l)` easier\n+  val maxHash =\n+    Canonicalize.ignoreNamesTypes(\n+      AttributeReference(\"maxHash\", IntegerType)(exprId =\n+        new ExprId(4, NamedExpression.jvmId) {\n+          // maxHash's hashcode is calculated based on this exprId's hashcode, so we set this\n+          // exprId's hashCode to this specific value to make sure maxHash's hashcode is almost\n+          // `Int.MaxValue`\n+          override def hashCode: Int = 826929706"
+  }, {
+    "author": {
+      "login": "lw-lin"
+    },
+    "body": "thanks.\r\n\r\nthe reason is in [Canonicalize.scala#ignoreNamesTypes](https://github.com/apache/spark/blob/master/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/expressions/Canonicalize.scala#L41), we're making copies of `e` (`maxHash` in this case):\r\n```scala\r\n  private def ignoreNamesTypes(e: Expression): Expression = e match {\r\n    case a: AttributeReference =>\r\n      AttributeReference(\"none\", a.dataType.asNullable)(exprId = a.exprId)\r\n    case _ => e\r\n  }\r\n```\r\nso, even if we `override def hashCode: Int = Int.MaxValue` on `maxHash`, it has nothing to do with the copy's hashcode.\r\n\r\nthen i took a step back -- by defining `exprId`'s hashcode to a specific value (as provided in this patch), we further defined the copied attribute-reference's hashcode.",
+    "commit": "c5fc394a2ba1bfcaafa9d19bd92c449639a5d576",
+    "createdAt": "2017-01-29T07:02:23Z",
+    "diffHunk": "@@ -32,6 +32,38 @@ class ExpressionSetSuite extends SparkFunSuite {\n \n   val aAndBSet = AttributeSet(aUpper :: bUpper :: Nil)\n \n+  // An [AttributeReference] with almost the maximum hashcode, to make testing canonicalize rules\n+  // like `case GreaterThan(l, r) if l.hashcode > r.hashcode => GreaterThan(r, l)` easier\n+  val maxHash =\n+    Canonicalize.ignoreNamesTypes(\n+      AttributeReference(\"maxHash\", IntegerType)(exprId =\n+        new ExprId(4, NamedExpression.jvmId) {\n+          // maxHash's hashcode is calculated based on this exprId's hashcode, so we set this\n+          // exprId's hashCode to this specific value to make sure maxHash's hashcode is almost\n+          // `Int.MaxValue`\n+          override def hashCode: Int = 826929706"
+  }, {
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "uh, I did not read the comment carefully. Thanks for the explanation. \r\nYou can set it to `-1030353449`. Then, `maxHash.hashCode()` will be equal to `Int.MaxValue`",
+    "commit": "c5fc394a2ba1bfcaafa9d19bd92c449639a5d576",
+    "createdAt": "2017-01-29T07:19:39Z",
+    "diffHunk": "@@ -32,6 +32,38 @@ class ExpressionSetSuite extends SparkFunSuite {\n \n   val aAndBSet = AttributeSet(aUpper :: bUpper :: Nil)\n \n+  // An [AttributeReference] with almost the maximum hashcode, to make testing canonicalize rules\n+  // like `case GreaterThan(l, r) if l.hashcode > r.hashcode => GreaterThan(r, l)` easier\n+  val maxHash =\n+    Canonicalize.ignoreNamesTypes(\n+      AttributeReference(\"maxHash\", IntegerType)(exprId =\n+        new ExprId(4, NamedExpression.jvmId) {\n+          // maxHash's hashcode is calculated based on this exprId's hashcode, so we set this\n+          // exprId's hashCode to this specific value to make sure maxHash's hashcode is almost\n+          // `Int.MaxValue`\n+          override def hashCode: Int = 826929706"
+  }, {
+    "author": {
+      "login": "lw-lin"
+    },
+    "body": "ah, `-1030353449` works great! let me push a commit updating this",
+    "commit": "c5fc394a2ba1bfcaafa9d19bd92c449639a5d576",
+    "createdAt": "2017-01-29T07:42:22Z",
+    "diffHunk": "@@ -32,6 +32,38 @@ class ExpressionSetSuite extends SparkFunSuite {\n \n   val aAndBSet = AttributeSet(aUpper :: bUpper :: Nil)\n \n+  // An [AttributeReference] with almost the maximum hashcode, to make testing canonicalize rules\n+  // like `case GreaterThan(l, r) if l.hashcode > r.hashcode => GreaterThan(r, l)` easier\n+  val maxHash =\n+    Canonicalize.ignoreNamesTypes(\n+      AttributeReference(\"maxHash\", IntegerType)(exprId =\n+        new ExprId(4, NamedExpression.jvmId) {\n+          // maxHash's hashcode is calculated based on this exprId's hashcode, so we set this\n+          // exprId's hashCode to this specific value to make sure maxHash's hashcode is almost\n+          // `Int.MaxValue`\n+          override def hashCode: Int = 826929706"
+  }, {
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "Great!",
+    "commit": "c5fc394a2ba1bfcaafa9d19bd92c449639a5d576",
+    "createdAt": "2017-01-29T19:10:11Z",
+    "diffHunk": "@@ -32,6 +32,38 @@ class ExpressionSetSuite extends SparkFunSuite {\n \n   val aAndBSet = AttributeSet(aUpper :: bUpper :: Nil)\n \n+  // An [AttributeReference] with almost the maximum hashcode, to make testing canonicalize rules\n+  // like `case GreaterThan(l, r) if l.hashcode > r.hashcode => GreaterThan(r, l)` easier\n+  val maxHash =\n+    Canonicalize.ignoreNamesTypes(\n+      AttributeReference(\"maxHash\", IntegerType)(exprId =\n+        new ExprId(4, NamedExpression.jvmId) {\n+          // maxHash's hashcode is calculated based on this exprId's hashcode, so we set this\n+          // exprId's hashCode to this specific value to make sure maxHash's hashcode is almost\n+          // `Int.MaxValue`\n+          override def hashCode: Int = 826929706"
+  }],
+  "prId": 16719
+}, {
+  "comments": [{
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "Why not `override def hashCode: Int = Int.MinValue`?",
+    "commit": "c5fc394a2ba1bfcaafa9d19bd92c449639a5d576",
+    "createdAt": "2017-01-29T06:35:38Z",
+    "diffHunk": "@@ -32,6 +32,38 @@ class ExpressionSetSuite extends SparkFunSuite {\n \n   val aAndBSet = AttributeSet(aUpper :: bUpper :: Nil)\n \n+  // An [AttributeReference] with almost the maximum hashcode, to make testing canonicalize rules\n+  // like `case GreaterThan(l, r) if l.hashcode > r.hashcode => GreaterThan(r, l)` easier\n+  val maxHash =\n+    Canonicalize.ignoreNamesTypes(\n+      AttributeReference(\"maxHash\", IntegerType)(exprId =\n+        new ExprId(4, NamedExpression.jvmId) {\n+          // maxHash's hashcode is calculated based on this exprId's hashcode, so we set this\n+          // exprId's hashCode to this specific value to make sure maxHash's hashcode is almost\n+          // `Int.MaxValue`\n+          override def hashCode: Int = 826929706\n+          // We are implementing this equals() only because the style-checking rule \"you should\n+          // implement equals and hashCode together\" requires us to\n+          override def equals(obj: Any): Boolean = super.equals(obj)\n+        })).asInstanceOf[AttributeReference]\n+  assert(maxHash.hashCode() == Int.MaxValue - 1)\n+\n+  // An [AttributeReference] with almost the minimum hashcode, to make testing canonicalize rules\n+  // like `case GreaterThan(l, r) if l.hashcode > r.hashcode => GreaterThan(r, l)` easier\n+  val minHash =\n+    Canonicalize.ignoreNamesTypes(\n+      AttributeReference(\"minHash\", IntegerType)(exprId =\n+        new ExprId(5, NamedExpression.jvmId) {\n+          // minHash's hashcode is calculated based on this exprId's hashcode, so we set this\n+          // exprId's hashCode to this specific value to make sure minHash's hashcode is almost\n+          // `Int.MinValue`\n+          override def hashCode: Int = 826929707"
+  }, {
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "To make `minHash.hashCode()` equal to `Int.MinValue`, you can set it to `1407330692`",
+    "commit": "c5fc394a2ba1bfcaafa9d19bd92c449639a5d576",
+    "createdAt": "2017-01-29T07:24:12Z",
+    "diffHunk": "@@ -32,6 +32,38 @@ class ExpressionSetSuite extends SparkFunSuite {\n \n   val aAndBSet = AttributeSet(aUpper :: bUpper :: Nil)\n \n+  // An [AttributeReference] with almost the maximum hashcode, to make testing canonicalize rules\n+  // like `case GreaterThan(l, r) if l.hashcode > r.hashcode => GreaterThan(r, l)` easier\n+  val maxHash =\n+    Canonicalize.ignoreNamesTypes(\n+      AttributeReference(\"maxHash\", IntegerType)(exprId =\n+        new ExprId(4, NamedExpression.jvmId) {\n+          // maxHash's hashcode is calculated based on this exprId's hashcode, so we set this\n+          // exprId's hashCode to this specific value to make sure maxHash's hashcode is almost\n+          // `Int.MaxValue`\n+          override def hashCode: Int = 826929706\n+          // We are implementing this equals() only because the style-checking rule \"you should\n+          // implement equals and hashCode together\" requires us to\n+          override def equals(obj: Any): Boolean = super.equals(obj)\n+        })).asInstanceOf[AttributeReference]\n+  assert(maxHash.hashCode() == Int.MaxValue - 1)\n+\n+  // An [AttributeReference] with almost the minimum hashcode, to make testing canonicalize rules\n+  // like `case GreaterThan(l, r) if l.hashcode > r.hashcode => GreaterThan(r, l)` easier\n+  val minHash =\n+    Canonicalize.ignoreNamesTypes(\n+      AttributeReference(\"minHash\", IntegerType)(exprId =\n+        new ExprId(5, NamedExpression.jvmId) {\n+          // minHash's hashcode is calculated based on this exprId's hashcode, so we set this\n+          // exprId's hashCode to this specific value to make sure minHash's hashcode is almost\n+          // `Int.MinValue`\n+          override def hashCode: Int = 826929707"
+  }, {
+    "author": {
+      "login": "lw-lin"
+    },
+    "body": "updated, thanks!",
+    "commit": "c5fc394a2ba1bfcaafa9d19bd92c449639a5d576",
+    "createdAt": "2017-01-29T07:43:24Z",
+    "diffHunk": "@@ -32,6 +32,38 @@ class ExpressionSetSuite extends SparkFunSuite {\n \n   val aAndBSet = AttributeSet(aUpper :: bUpper :: Nil)\n \n+  // An [AttributeReference] with almost the maximum hashcode, to make testing canonicalize rules\n+  // like `case GreaterThan(l, r) if l.hashcode > r.hashcode => GreaterThan(r, l)` easier\n+  val maxHash =\n+    Canonicalize.ignoreNamesTypes(\n+      AttributeReference(\"maxHash\", IntegerType)(exprId =\n+        new ExprId(4, NamedExpression.jvmId) {\n+          // maxHash's hashcode is calculated based on this exprId's hashcode, so we set this\n+          // exprId's hashCode to this specific value to make sure maxHash's hashcode is almost\n+          // `Int.MaxValue`\n+          override def hashCode: Int = 826929706\n+          // We are implementing this equals() only because the style-checking rule \"you should\n+          // implement equals and hashCode together\" requires us to\n+          override def equals(obj: Any): Boolean = super.equals(obj)\n+        })).asInstanceOf[AttributeReference]\n+  assert(maxHash.hashCode() == Int.MaxValue - 1)\n+\n+  // An [AttributeReference] with almost the minimum hashcode, to make testing canonicalize rules\n+  // like `case GreaterThan(l, r) if l.hashcode > r.hashcode => GreaterThan(r, l)` easier\n+  val minHash =\n+    Canonicalize.ignoreNamesTypes(\n+      AttributeReference(\"minHash\", IntegerType)(exprId =\n+        new ExprId(5, NamedExpression.jvmId) {\n+          // minHash's hashcode is calculated based on this exprId's hashcode, so we set this\n+          // exprId's hashCode to this specific value to make sure minHash's hashcode is almost\n+          // `Int.MinValue`\n+          override def hashCode: Int = 826929707"
+  }],
+  "prId": 16719
+}]

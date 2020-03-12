@@ -1,0 +1,60 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "rxin"
+    },
+    "body": "\"Inserting into an RDD-based table is not allowed.\"\n",
+    "commit": "f82cbe710133d345d59661663c4b752725ac05cd",
+    "createdAt": "2015-07-13T02:58:00Z",
+    "diffHunk": "@@ -119,6 +120,10 @@ private[sql] case class PreWriteCheck(catalog: Catalog) extends (LogicalPlan =>\n         // The relation in l is not an InsertableRelation.\n         failAnalysis(s\"$l does not allow insertion.\")\n \n+      case logical.InsertIntoTable(t, _, _, _, _) =>\n+        failAnalysis(\n+          s\"Attempt to insert into a RDD-based table: ${t.simpleString} which is immutable.\")"
+  }],
+  "prId": 7342
+}, {
+  "comments": [{
+    "author": {
+      "login": "rxin"
+    },
+    "body": "is there a more explicit way to check whether it is an rdd table?\n",
+    "commit": "f82cbe710133d345d59661663c4b752725ac05cd",
+    "createdAt": "2015-07-13T02:58:15Z",
+    "diffHunk": "@@ -119,6 +120,10 @@ private[sql] case class PreWriteCheck(catalog: Catalog) extends (LogicalPlan =>\n         // The relation in l is not an InsertableRelation.\n         failAnalysis(s\"$l does not allow insertion.\")\n \n+      case logical.InsertIntoTable(t, _, _, _, _) =>",
+    "line": 13
+  }, {
+    "author": {
+      "login": "rxin"
+    },
+    "body": "cc @yhuai \n",
+    "commit": "f82cbe710133d345d59661663c4b752725ac05cd",
+    "createdAt": "2015-07-13T02:58:36Z",
+    "diffHunk": "@@ -119,6 +120,10 @@ private[sql] case class PreWriteCheck(catalog: Catalog) extends (LogicalPlan =>\n         // The relation in l is not an InsertableRelation.\n         failAnalysis(s\"$l does not allow insertion.\")\n \n+      case logical.InsertIntoTable(t, _, _, _, _) =>",
+    "line": 13
+  }, {
+    "author": {
+      "login": "yjshen"
+    },
+    "body": "I found this hard since t place could be any logical operator, it should fail except for LogicalRelation.\n",
+    "commit": "f82cbe710133d345d59661663c4b752725ac05cd",
+    "createdAt": "2015-07-13T03:05:06Z",
+    "diffHunk": "@@ -119,6 +120,10 @@ private[sql] case class PreWriteCheck(catalog: Catalog) extends (LogicalPlan =>\n         // The relation in l is not an InsertableRelation.\n         failAnalysis(s\"$l does not allow insertion.\")\n \n+      case logical.InsertIntoTable(t, _, _, _, _) =>",
+    "line": 13
+  }, {
+    "author": {
+      "login": "yhuai"
+    },
+    "body": "Actually, we also use `InsertIntoTable` for `MetastoreRelation`. But, we do not have access to it at here. I think we can match those `LogicalPlan`s that are not `LeafNodes` and also match those `LeafNode`s that do not support insert (e.g. `LocalRelation` and `OneRowRelation`).\n",
+    "commit": "f82cbe710133d345d59661663c4b752725ac05cd",
+    "createdAt": "2015-07-13T03:28:46Z",
+    "diffHunk": "@@ -119,6 +120,10 @@ private[sql] case class PreWriteCheck(catalog: Catalog) extends (LogicalPlan =>\n         // The relation in l is not an InsertableRelation.\n         failAnalysis(s\"$l does not allow insertion.\")\n \n+      case logical.InsertIntoTable(t, _, _, _, _) =>",
+    "line": 13
+  }, {
+    "author": {
+      "login": "yjshen"
+    },
+    "body": "@yhuai , thanks for the guidance, I've updated the matching logic.\n",
+    "commit": "f82cbe710133d345d59661663c4b752725ac05cd",
+    "createdAt": "2015-07-14T11:08:03Z",
+    "diffHunk": "@@ -119,6 +120,10 @@ private[sql] case class PreWriteCheck(catalog: Catalog) extends (LogicalPlan =>\n         // The relation in l is not an InsertableRelation.\n         failAnalysis(s\"$l does not allow insertion.\")\n \n+      case logical.InsertIntoTable(t, _, _, _, _) =>",
+    "line": 13
+  }],
+  "prId": 7342
+}]

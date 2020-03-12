@@ -1,0 +1,106 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "viirya"
+    },
+    "body": "We can create Dataset like the following because `Option` is at column, not top-level:\r\n\r\n```scala\r\nscala> Seq((1, Some(1, 2)), (2, Some(3, 4))).toDS.printSchema\r\nroot\r\n |-- _1: integer (nullable = false)\r\n |-- _2: struct (nullable = true)\r\n |    |-- _1: integer (nullable = false)\r\n |    |-- _2: integer (nullable = false)\r\n```\r\n\r\nBut now we can't use it as buffer/output encoding here. But the encoder here is not for top-level. I add a `topLevel` parameter to constructing `ExpressionEncoder`.",
+    "commit": "65a16ec6bcf93763e26605aea7cec8860df158d9",
+    "createdAt": "2018-06-22T06:10:46Z",
+    "diffHunk": "@@ -148,6 +148,79 @@ object VeryComplexResultAgg extends Aggregator[Row, String, ComplexAggData] {\n }\n \n \n+case class OptionBooleanData(name: String, isGood: Option[Boolean])\n+case class OptionBooleanIntData(name: String, isGood: Option[(Boolean, Int)])\n+\n+case class OptionBooleanAggregator(colName: String)\n+    extends Aggregator[Row, Option[Boolean], Option[Boolean]] {\n+\n+  override def zero: Option[Boolean] = None\n+\n+  override def reduce(buffer: Option[Boolean], row: Row): Option[Boolean] = {\n+    val index = row.fieldIndex(colName)\n+    val value = if (row.isNullAt(index)) {\n+      Option.empty[Boolean]\n+    } else {\n+      Some(row.getBoolean(index))\n+    }\n+    merge(buffer, value)\n+  }\n+\n+  override def merge(b1: Option[Boolean], b2: Option[Boolean]): Option[Boolean] = {\n+    if ((b1.isDefined && b1.get) || (b2.isDefined && b2.get)) {\n+      Some(true)\n+    } else if (b1.isDefined) {\n+      b1\n+    } else {\n+      b2\n+    }\n+  }\n+\n+  override def finish(reduction: Option[Boolean]): Option[Boolean] = reduction\n+\n+  override def bufferEncoder: Encoder[Option[Boolean]] = OptionalBoolEncoder\n+  override def outputEncoder: Encoder[Option[Boolean]] = OptionalBoolEncoder\n+\n+  def OptionalBoolEncoder: Encoder[Option[Boolean]] = ExpressionEncoder()\n+}\n+\n+case class OptionBooleanIntAggregator(colName: String)\n+    extends Aggregator[Row, Option[(Boolean, Int)], Option[(Boolean, Int)]] {\n+\n+  override def zero: Option[(Boolean, Int)] = None\n+\n+  override def reduce(buffer: Option[(Boolean, Int)], row: Row): Option[(Boolean, Int)] = {\n+    val index = row.fieldIndex(colName)\n+    val value = if (row.isNullAt(index)) {\n+      Option.empty[(Boolean, Int)]\n+    } else {\n+      val nestedRow = row.getStruct(index)\n+      Some((nestedRow.getBoolean(0), nestedRow.getInt(1)))\n+    }\n+    merge(buffer, value)\n+  }\n+\n+  override def merge(\n+      b1: Option[(Boolean, Int)],\n+      b2: Option[(Boolean, Int)]): Option[(Boolean, Int)] = {\n+    if ((b1.isDefined && b1.get._1) || (b2.isDefined && b2.get._1)) {\n+      val newInt = b1.map(_._2).getOrElse(0) + b2.map(_._2).getOrElse(0)\n+      Some((true, newInt))\n+    } else if (b1.isDefined) {\n+      b1\n+    } else {\n+      b2\n+    }\n+  }\n+\n+  override def finish(reduction: Option[(Boolean, Int)]): Option[(Boolean, Int)] = reduction\n+\n+  override def bufferEncoder: Encoder[Option[(Boolean, Int)]] = OptionalBoolIntEncoder\n+  override def outputEncoder: Encoder[Option[(Boolean, Int)]] = OptionalBoolIntEncoder\n+\n+  def OptionalBoolIntEncoder: Encoder[Option[(Boolean, Int)]] = ExpressionEncoder(topLevel = false)"
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "`ExpressionEncoder` is not a public API, maybe we should create something in `Encoders`. I do see the need of creating an encoder for option of product.",
+    "commit": "65a16ec6bcf93763e26605aea7cec8860df158d9",
+    "createdAt": "2018-06-26T15:11:44Z",
+    "diffHunk": "@@ -148,6 +148,79 @@ object VeryComplexResultAgg extends Aggregator[Row, String, ComplexAggData] {\n }\n \n \n+case class OptionBooleanData(name: String, isGood: Option[Boolean])\n+case class OptionBooleanIntData(name: String, isGood: Option[(Boolean, Int)])\n+\n+case class OptionBooleanAggregator(colName: String)\n+    extends Aggregator[Row, Option[Boolean], Option[Boolean]] {\n+\n+  override def zero: Option[Boolean] = None\n+\n+  override def reduce(buffer: Option[Boolean], row: Row): Option[Boolean] = {\n+    val index = row.fieldIndex(colName)\n+    val value = if (row.isNullAt(index)) {\n+      Option.empty[Boolean]\n+    } else {\n+      Some(row.getBoolean(index))\n+    }\n+    merge(buffer, value)\n+  }\n+\n+  override def merge(b1: Option[Boolean], b2: Option[Boolean]): Option[Boolean] = {\n+    if ((b1.isDefined && b1.get) || (b2.isDefined && b2.get)) {\n+      Some(true)\n+    } else if (b1.isDefined) {\n+      b1\n+    } else {\n+      b2\n+    }\n+  }\n+\n+  override def finish(reduction: Option[Boolean]): Option[Boolean] = reduction\n+\n+  override def bufferEncoder: Encoder[Option[Boolean]] = OptionalBoolEncoder\n+  override def outputEncoder: Encoder[Option[Boolean]] = OptionalBoolEncoder\n+\n+  def OptionalBoolEncoder: Encoder[Option[Boolean]] = ExpressionEncoder()\n+}\n+\n+case class OptionBooleanIntAggregator(colName: String)\n+    extends Aggregator[Row, Option[(Boolean, Int)], Option[(Boolean, Int)]] {\n+\n+  override def zero: Option[(Boolean, Int)] = None\n+\n+  override def reduce(buffer: Option[(Boolean, Int)], row: Row): Option[(Boolean, Int)] = {\n+    val index = row.fieldIndex(colName)\n+    val value = if (row.isNullAt(index)) {\n+      Option.empty[(Boolean, Int)]\n+    } else {\n+      val nestedRow = row.getStruct(index)\n+      Some((nestedRow.getBoolean(0), nestedRow.getInt(1)))\n+    }\n+    merge(buffer, value)\n+  }\n+\n+  override def merge(\n+      b1: Option[(Boolean, Int)],\n+      b2: Option[(Boolean, Int)]): Option[(Boolean, Int)] = {\n+    if ((b1.isDefined && b1.get._1) || (b2.isDefined && b2.get._1)) {\n+      val newInt = b1.map(_._2).getOrElse(0) + b2.map(_._2).getOrElse(0)\n+      Some((true, newInt))\n+    } else if (b1.isDefined) {\n+      b1\n+    } else {\n+      b2\n+    }\n+  }\n+\n+  override def finish(reduction: Option[(Boolean, Int)]): Option[(Boolean, Int)] = reduction\n+\n+  override def bufferEncoder: Encoder[Option[(Boolean, Int)]] = OptionalBoolIntEncoder\n+  override def outputEncoder: Encoder[Option[(Boolean, Int)]] = OptionalBoolIntEncoder\n+\n+  def OptionalBoolIntEncoder: Encoder[Option[(Boolean, Int)]] = ExpressionEncoder(topLevel = false)"
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "Top-level encoder for option of product is forbidden now. If you want to manually create an encoder like this case, you need an API like this to allow the creation.",
+    "commit": "65a16ec6bcf93763e26605aea7cec8860df158d9",
+    "createdAt": "2018-06-27T01:21:00Z",
+    "diffHunk": "@@ -148,6 +148,79 @@ object VeryComplexResultAgg extends Aggregator[Row, String, ComplexAggData] {\n }\n \n \n+case class OptionBooleanData(name: String, isGood: Option[Boolean])\n+case class OptionBooleanIntData(name: String, isGood: Option[(Boolean, Int)])\n+\n+case class OptionBooleanAggregator(colName: String)\n+    extends Aggregator[Row, Option[Boolean], Option[Boolean]] {\n+\n+  override def zero: Option[Boolean] = None\n+\n+  override def reduce(buffer: Option[Boolean], row: Row): Option[Boolean] = {\n+    val index = row.fieldIndex(colName)\n+    val value = if (row.isNullAt(index)) {\n+      Option.empty[Boolean]\n+    } else {\n+      Some(row.getBoolean(index))\n+    }\n+    merge(buffer, value)\n+  }\n+\n+  override def merge(b1: Option[Boolean], b2: Option[Boolean]): Option[Boolean] = {\n+    if ((b1.isDefined && b1.get) || (b2.isDefined && b2.get)) {\n+      Some(true)\n+    } else if (b1.isDefined) {\n+      b1\n+    } else {\n+      b2\n+    }\n+  }\n+\n+  override def finish(reduction: Option[Boolean]): Option[Boolean] = reduction\n+\n+  override def bufferEncoder: Encoder[Option[Boolean]] = OptionalBoolEncoder\n+  override def outputEncoder: Encoder[Option[Boolean]] = OptionalBoolEncoder\n+\n+  def OptionalBoolEncoder: Encoder[Option[Boolean]] = ExpressionEncoder()\n+}\n+\n+case class OptionBooleanIntAggregator(colName: String)\n+    extends Aggregator[Row, Option[(Boolean, Int)], Option[(Boolean, Int)]] {\n+\n+  override def zero: Option[(Boolean, Int)] = None\n+\n+  override def reduce(buffer: Option[(Boolean, Int)], row: Row): Option[(Boolean, Int)] = {\n+    val index = row.fieldIndex(colName)\n+    val value = if (row.isNullAt(index)) {\n+      Option.empty[(Boolean, Int)]\n+    } else {\n+      val nestedRow = row.getStruct(index)\n+      Some((nestedRow.getBoolean(0), nestedRow.getInt(1)))\n+    }\n+    merge(buffer, value)\n+  }\n+\n+  override def merge(\n+      b1: Option[(Boolean, Int)],\n+      b2: Option[(Boolean, Int)]): Option[(Boolean, Int)] = {\n+    if ((b1.isDefined && b1.get._1) || (b2.isDefined && b2.get._1)) {\n+      val newInt = b1.map(_._2).getOrElse(0) + b2.map(_._2).getOrElse(0)\n+      Some((true, newInt))\n+    } else if (b1.isDefined) {\n+      b1\n+    } else {\n+      b2\n+    }\n+  }\n+\n+  override def finish(reduction: Option[(Boolean, Int)]): Option[(Boolean, Int)] = reduction\n+\n+  override def bufferEncoder: Encoder[Option[(Boolean, Int)]] = OptionalBoolIntEncoder\n+  override def outputEncoder: Encoder[Option[(Boolean, Int)]] = OptionalBoolIntEncoder\n+\n+  def OptionalBoolIntEncoder: Encoder[Option[(Boolean, Int)]] = ExpressionEncoder(topLevel = false)"
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "If we want to create the encoders in `Encoders`, maybe we should do it in another Jira/PR?",
+    "commit": "65a16ec6bcf93763e26605aea7cec8860df158d9",
+    "createdAt": "2018-06-27T22:50:15Z",
+    "diffHunk": "@@ -148,6 +148,79 @@ object VeryComplexResultAgg extends Aggregator[Row, String, ComplexAggData] {\n }\n \n \n+case class OptionBooleanData(name: String, isGood: Option[Boolean])\n+case class OptionBooleanIntData(name: String, isGood: Option[(Boolean, Int)])\n+\n+case class OptionBooleanAggregator(colName: String)\n+    extends Aggregator[Row, Option[Boolean], Option[Boolean]] {\n+\n+  override def zero: Option[Boolean] = None\n+\n+  override def reduce(buffer: Option[Boolean], row: Row): Option[Boolean] = {\n+    val index = row.fieldIndex(colName)\n+    val value = if (row.isNullAt(index)) {\n+      Option.empty[Boolean]\n+    } else {\n+      Some(row.getBoolean(index))\n+    }\n+    merge(buffer, value)\n+  }\n+\n+  override def merge(b1: Option[Boolean], b2: Option[Boolean]): Option[Boolean] = {\n+    if ((b1.isDefined && b1.get) || (b2.isDefined && b2.get)) {\n+      Some(true)\n+    } else if (b1.isDefined) {\n+      b1\n+    } else {\n+      b2\n+    }\n+  }\n+\n+  override def finish(reduction: Option[Boolean]): Option[Boolean] = reduction\n+\n+  override def bufferEncoder: Encoder[Option[Boolean]] = OptionalBoolEncoder\n+  override def outputEncoder: Encoder[Option[Boolean]] = OptionalBoolEncoder\n+\n+  def OptionalBoolEncoder: Encoder[Option[Boolean]] = ExpressionEncoder()\n+}\n+\n+case class OptionBooleanIntAggregator(colName: String)\n+    extends Aggregator[Row, Option[(Boolean, Int)], Option[(Boolean, Int)]] {\n+\n+  override def zero: Option[(Boolean, Int)] = None\n+\n+  override def reduce(buffer: Option[(Boolean, Int)], row: Row): Option[(Boolean, Int)] = {\n+    val index = row.fieldIndex(colName)\n+    val value = if (row.isNullAt(index)) {\n+      Option.empty[(Boolean, Int)]\n+    } else {\n+      val nestedRow = row.getStruct(index)\n+      Some((nestedRow.getBoolean(0), nestedRow.getInt(1)))\n+    }\n+    merge(buffer, value)\n+  }\n+\n+  override def merge(\n+      b1: Option[(Boolean, Int)],\n+      b2: Option[(Boolean, Int)]): Option[(Boolean, Int)] = {\n+    if ((b1.isDefined && b1.get._1) || (b2.isDefined && b2.get._1)) {\n+      val newInt = b1.map(_._2).getOrElse(0) + b2.map(_._2).getOrElse(0)\n+      Some((true, newInt))\n+    } else if (b1.isDefined) {\n+      b1\n+    } else {\n+      b2\n+    }\n+  }\n+\n+  override def finish(reduction: Option[(Boolean, Int)]): Option[(Boolean, Int)] = reduction\n+\n+  override def bufferEncoder: Encoder[Option[(Boolean, Int)]] = OptionalBoolIntEncoder\n+  override def outputEncoder: Encoder[Option[(Boolean, Int)]] = OptionalBoolIntEncoder\n+\n+  def OptionalBoolIntEncoder: Encoder[Option[(Boolean, Int)]] = ExpressionEncoder(topLevel = false)"
+  }],
+  "prId": 21611
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "do we have the same problem in `groupByKey`?",
+    "commit": "65a16ec6bcf93763e26605aea7cec8860df158d9",
+    "createdAt": "2018-06-26T15:12:13Z",
+    "diffHunk": "@@ -333,4 +406,28 @@ class DatasetAggregatorSuite extends QueryTest with SharedSQLContext {\n       df.groupBy($\"i\").agg(VeryComplexResultAgg.toColumn),\n       Row(1, Row(Row(1, \"a\"), Row(1, \"a\"))) :: Row(2, Row(Row(2, \"bc\"), Row(2, \"bc\"))) :: Nil)\n   }\n+\n+  test(\"SPARK-24569: Aggregator with output type Option[Boolean] creates column of type Row\") {\n+    val df = Seq(\n+      OptionBooleanData(\"bob\", Some(true)),\n+      OptionBooleanData(\"bob\", Some(false)),\n+      OptionBooleanData(\"bob\", None)).toDF()\n+    val group = df\n+      .groupBy(\"name\")",
+    "line": 53
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "Yes, if you use similar `Aggregator` with `groupByKey`, you gets a struct too:\r\n\r\n```scala\r\nval df = Seq(\r\n  OptionBooleanData(\"bob\", Some(true)),\r\n  OptionBooleanData(\"bob\", Some(false)),\r\n  OptionBooleanData(\"bob\", None)).toDF()\r\nval df2 = df.groupByKey((r: Row) => r.getString(0))\r\n  .agg(OptionBooleanAggregator(\"isGood\").toColumn)\r\ndf2.printSchema\r\n```\r\n```\r\nroot\r\n |-- value: string (nullable = true)\r\n |-- OptionBooleanAggregator(org.apache.spark.sql.Row): struct (nullable = true)\r\n |    |-- value: boolean (nullable = true)\r\n```",
+    "commit": "65a16ec6bcf93763e26605aea7cec8860df158d9",
+    "createdAt": "2018-06-27T14:11:33Z",
+    "diffHunk": "@@ -333,4 +406,28 @@ class DatasetAggregatorSuite extends QueryTest with SharedSQLContext {\n       df.groupBy($\"i\").agg(VeryComplexResultAgg.toColumn),\n       Row(1, Row(Row(1, \"a\"), Row(1, \"a\"))) :: Row(2, Row(Row(2, \"bc\"), Row(2, \"bc\"))) :: Nil)\n   }\n+\n+  test(\"SPARK-24569: Aggregator with output type Option[Boolean] creates column of type Row\") {\n+    val df = Seq(\n+      OptionBooleanData(\"bob\", Some(true)),\n+      OptionBooleanData(\"bob\", Some(false)),\n+      OptionBooleanData(\"bob\", None)).toDF()\n+    val group = df\n+      .groupBy(\"name\")",
+    "line": 53
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "A test is added to demonstrate it.",
+    "commit": "65a16ec6bcf93763e26605aea7cec8860df158d9",
+    "createdAt": "2018-06-27T22:48:28Z",
+    "diffHunk": "@@ -333,4 +406,28 @@ class DatasetAggregatorSuite extends QueryTest with SharedSQLContext {\n       df.groupBy($\"i\").agg(VeryComplexResultAgg.toColumn),\n       Row(1, Row(Row(1, \"a\"), Row(1, \"a\"))) :: Row(2, Row(Row(2, \"bc\"), Row(2, \"bc\"))) :: Nil)\n   }\n+\n+  test(\"SPARK-24569: Aggregator with output type Option[Boolean] creates column of type Row\") {\n+    val df = Seq(\n+      OptionBooleanData(\"bob\", Some(true)),\n+      OptionBooleanData(\"bob\", Some(false)),\n+      OptionBooleanData(\"bob\", None)).toDF()\n+    val group = df\n+      .groupBy(\"name\")",
+    "line": 53
+  }],
+  "prId": 21611
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "this is not needed",
+    "commit": "65a16ec6bcf93763e26605aea7cec8860df158d9",
+    "createdAt": "2018-07-06T08:33:39Z",
+    "diffHunk": "@@ -148,6 +148,42 @@ object VeryComplexResultAgg extends Aggregator[Row, String, ComplexAggData] {\n }\n \n \n+case class OptionBooleanData(name: String, isGood: Option[Boolean])\n+case class OptionBooleanIntData(name: String, isGood: Option[(Boolean, Int)])"
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "Oops, forget to remove it.",
+    "commit": "65a16ec6bcf93763e26605aea7cec8860df158d9",
+    "createdAt": "2018-07-06T08:41:28Z",
+    "diffHunk": "@@ -148,6 +148,42 @@ object VeryComplexResultAgg extends Aggregator[Row, String, ComplexAggData] {\n }\n \n \n+case class OptionBooleanData(name: String, isGood: Option[Boolean])\n+case class OptionBooleanIntData(name: String, isGood: Option[(Boolean, Int)])"
+  }],
+  "prId": 21611
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "can we create a ds not df here?",
+    "commit": "65a16ec6bcf93763e26605aea7cec8860df158d9",
+    "createdAt": "2018-07-06T08:35:48Z",
+    "diffHunk": "@@ -333,4 +369,29 @@ class DatasetAggregatorSuite extends QueryTest with SharedSQLContext {\n       df.groupBy($\"i\").agg(VeryComplexResultAgg.toColumn),\n       Row(1, Row(Row(1, \"a\"), Row(1, \"a\"))) :: Row(2, Row(Row(2, \"bc\"), Row(2, \"bc\"))) :: Nil)\n   }\n+\n+  test(\"SPARK-24569: Aggregator with output type Option[Boolean] creates column of type Row\") {\n+    val df = Seq(\n+      OptionBooleanData(\"bob\", Some(true)),\n+      OptionBooleanData(\"bob\", Some(false)),\n+      OptionBooleanData(\"bob\", None)).toDF()\n+    val group = df\n+      .groupBy(\"name\")\n+      .agg(OptionBooleanAggregator(\"isGood\").toColumn.alias(\"isGood\"))\n+    assert(df.schema == group.schema)\n+    checkAnswer(group, Row(\"bob\", true) :: Nil)\n+    checkDataset(group.as[OptionBooleanData], OptionBooleanData(\"bob\", Some(true)))\n+  }\n+\n+  test(\"SPARK-24569: groupByKey with Aggregator of output type Option[Boolean]\") {\n+    val df = Seq(",
+    "line": 61
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "Ah, it is a DataFrame because I want to reuse `OptionBooleanAggregator` whose input type is `Row`.",
+    "commit": "65a16ec6bcf93763e26605aea7cec8860df158d9",
+    "createdAt": "2018-07-06T14:01:32Z",
+    "diffHunk": "@@ -333,4 +369,29 @@ class DatasetAggregatorSuite extends QueryTest with SharedSQLContext {\n       df.groupBy($\"i\").agg(VeryComplexResultAgg.toColumn),\n       Row(1, Row(Row(1, \"a\"), Row(1, \"a\"))) :: Row(2, Row(Row(2, \"bc\"), Row(2, \"bc\"))) :: Nil)\n   }\n+\n+  test(\"SPARK-24569: Aggregator with output type Option[Boolean] creates column of type Row\") {\n+    val df = Seq(\n+      OptionBooleanData(\"bob\", Some(true)),\n+      OptionBooleanData(\"bob\", Some(false)),\n+      OptionBooleanData(\"bob\", None)).toDF()\n+    val group = df\n+      .groupBy(\"name\")\n+      .agg(OptionBooleanAggregator(\"isGood\").toColumn.alias(\"isGood\"))\n+    assert(df.schema == group.schema)\n+    checkAnswer(group, Row(\"bob\", true) :: Nil)\n+    checkDataset(group.as[OptionBooleanData], OptionBooleanData(\"bob\", Some(true)))\n+  }\n+\n+  test(\"SPARK-24569: groupByKey with Aggregator of output type Option[Boolean]\") {\n+    val df = Seq(",
+    "line": 61
+  }],
+  "prId": 21611
+}]

@@ -1,0 +1,83 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Nit: should these be private?",
+    "commit": "cf7ef362352365c7aab4c927db3ea8240fcfaf21",
+    "createdAt": "2018-10-23T14:51:48Z",
+    "diffHunk": "@@ -30,14 +30,16 @@ private[spark] trait IntegrationTestBackend {\n private[spark] object IntegrationTestBackendFactory {\n   val deployModeConfigKey = \"spark.kubernetes.test.deployMode\"\n \n+  val backendMinikube = \"minikube\""
+  }],
+  "prId": 22805
+}, {
+  "comments": [{
+    "author": {
+      "login": "ifilonenko"
+    },
+    "body": "NIT: line too long, split",
+    "commit": "cf7ef362352365c7aab4c927db3ea8240fcfaf21",
+    "createdAt": "2018-10-23T19:08:40Z",
+    "diffHunk": "@@ -30,14 +30,16 @@ private[spark] trait IntegrationTestBackend {\n private[spark] object IntegrationTestBackendFactory {\n   val deployModeConfigKey = \"spark.kubernetes.test.deployMode\"\n \n+  val backendMinikube = \"minikube\"\n+  val backendDockerForDesktop = \"docker-for-desktop\"\n+\n   def getTestBackend: IntegrationTestBackend = {\n     val deployMode = Option(System.getProperty(deployModeConfigKey))\n-      .getOrElse(\"minikube\")\n-    if (deployMode == \"minikube\") {\n-      MinikubeTestBackend\n-    } else {\n-      throw new IllegalArgumentException(\n-        \"Invalid \" + deployModeConfigKey + \": \" + deployMode)\n+      .getOrElse(backendMinikube)\n+    deployMode match {\n+      case `backendMinikube` => MinikubeTestBackend\n+      case `backendDockerForDesktop` => DockerForDesktopBackend\n+      case _ => throw new IllegalArgumentException(\"Invalid \" + deployModeConfigKey + \": \" + deployMode)"
+  }],
+  "prId": 22805
+}, {
+  "comments": [{
+    "author": {
+      "login": "ifilonenko"
+    },
+    "body": "Can you add a README to explain how to run with docker-for-desktop, by specifying --deploy-mode",
+    "commit": "cf7ef362352365c7aab4c927db3ea8240fcfaf21",
+    "createdAt": "2018-10-23T19:10:43Z",
+    "diffHunk": "@@ -30,14 +30,16 @@ private[spark] trait IntegrationTestBackend {\n private[spark] object IntegrationTestBackendFactory {\n   val deployModeConfigKey = \"spark.kubernetes.test.deployMode\"\n \n+  val backendMinikube = \"minikube\"\n+  val backendDockerForDesktop = \"docker-for-desktop\"\n+\n   def getTestBackend: IntegrationTestBackend = {\n     val deployMode = Option(System.getProperty(deployModeConfigKey))\n-      .getOrElse(\"minikube\")\n-    if (deployMode == \"minikube\") {\n-      MinikubeTestBackend\n-    } else {\n-      throw new IllegalArgumentException(\n-        \"Invalid \" + deployModeConfigKey + \": \" + deployMode)\n+      .getOrElse(backendMinikube)\n+    deployMode match {\n+      case `backendMinikube` => MinikubeTestBackend\n+      case `backendDockerForDesktop` => DockerForDesktopBackend"
+  }],
+  "prId": 22805
+}, {
+  "comments": [{
+    "author": {
+      "login": "liyinan926"
+    },
+    "body": "Can we combine `KubeConfigBackend` and `CloudTestBackend` into one? The only difference is how the kubeconfig gets constructed. I guess you can decide which way to go based on the presence of the `CONFIG_KEY_KUBE_MASTER_URL` property.",
+    "commit": "cf7ef362352365c7aab4c927db3ea8240fcfaf21",
+    "createdAt": "2018-10-25T17:07:34Z",
+    "diffHunk": "@@ -28,16 +30,16 @@ private[spark] trait IntegrationTestBackend {\n }\n \n private[spark] object IntegrationTestBackendFactory {\n-  val deployModeConfigKey = \"spark.kubernetes.test.deployMode\"\n-\n   def getTestBackend: IntegrationTestBackend = {\n-    val deployMode = Option(System.getProperty(deployModeConfigKey))\n-      .getOrElse(\"minikube\")\n-    if (deployMode == \"minikube\") {\n-      MinikubeTestBackend\n-    } else {\n-      throw new IllegalArgumentException(\n-        \"Invalid \" + deployModeConfigKey + \": \" + deployMode)\n+    val deployMode = Option(System.getProperty(CONFIG_KEY_DEPLOY_MODE))\n+      .getOrElse(BACKEND_MINIKUBE)\n+    deployMode match {\n+      case BACKEND_MINIKUBE => MinikubeTestBackend\n+      case BACKEND_CLOUD => new KubeConfigBackend(null)"
+  }, {
+    "author": {
+      "login": "rvesse"
+    },
+    "body": "Yes, done this in the latest commit",
+    "commit": "cf7ef362352365c7aab4c927db3ea8240fcfaf21",
+    "createdAt": "2018-10-26T09:47:40Z",
+    "diffHunk": "@@ -28,16 +30,16 @@ private[spark] trait IntegrationTestBackend {\n }\n \n private[spark] object IntegrationTestBackendFactory {\n-  val deployModeConfigKey = \"spark.kubernetes.test.deployMode\"\n-\n   def getTestBackend: IntegrationTestBackend = {\n-    val deployMode = Option(System.getProperty(deployModeConfigKey))\n-      .getOrElse(\"minikube\")\n-    if (deployMode == \"minikube\") {\n-      MinikubeTestBackend\n-    } else {\n-      throw new IllegalArgumentException(\n-        \"Invalid \" + deployModeConfigKey + \": \" + deployMode)\n+    val deployMode = Option(System.getProperty(CONFIG_KEY_DEPLOY_MODE))\n+      .getOrElse(BACKEND_MINIKUBE)\n+    deployMode match {\n+      case BACKEND_MINIKUBE => MinikubeTestBackend\n+      case BACKEND_CLOUD => new KubeConfigBackend(null)"
+  }],
+  "prId": 22805
+}, {
+  "comments": [{
+    "author": {
+      "login": "liyinan926"
+    },
+    "body": "What if `CONFIG_KEY_KUBE_CONFIG_CONTEXT` is not defined?",
+    "commit": "cf7ef362352365c7aab4c927db3ea8240fcfaf21",
+    "createdAt": "2018-10-30T15:53:40Z",
+    "diffHunk": "@@ -28,16 +30,15 @@ private[spark] trait IntegrationTestBackend {\n }\n \n private[spark] object IntegrationTestBackendFactory {\n-  val deployModeConfigKey = \"spark.kubernetes.test.deployMode\"\n-\n   def getTestBackend: IntegrationTestBackend = {\n-    val deployMode = Option(System.getProperty(deployModeConfigKey))\n-      .getOrElse(\"minikube\")\n-    if (deployMode == \"minikube\") {\n-      MinikubeTestBackend\n-    } else {\n-      throw new IllegalArgumentException(\n-        \"Invalid \" + deployModeConfigKey + \": \" + deployMode)\n+    val deployMode = Option(System.getProperty(CONFIG_KEY_DEPLOY_MODE))\n+      .getOrElse(BACKEND_MINIKUBE)\n+    deployMode match {\n+      case BACKEND_MINIKUBE => MinikubeTestBackend\n+      case BACKEND_CLOUD => new KubeConfigBackend(System.getProperty(CONFIG_KEY_KUBE_CONFIG_CONTEXT))",
+    "line": 29
+  }, {
+    "author": {
+      "login": "rvesse"
+    },
+    "body": "The Fabric 8 client treats `null` as meaning use the users current context from their `KUBECONFIG` file - https://github.com/fabric8io/kubernetes-client/blob/v4.1.0/kubernetes-client/src/main/java/io/fabric8/kubernetes/client/Config.java#L467",
+    "commit": "cf7ef362352365c7aab4c927db3ea8240fcfaf21",
+    "createdAt": "2018-10-30T16:56:20Z",
+    "diffHunk": "@@ -28,16 +30,15 @@ private[spark] trait IntegrationTestBackend {\n }\n \n private[spark] object IntegrationTestBackendFactory {\n-  val deployModeConfigKey = \"spark.kubernetes.test.deployMode\"\n-\n   def getTestBackend: IntegrationTestBackend = {\n-    val deployMode = Option(System.getProperty(deployModeConfigKey))\n-      .getOrElse(\"minikube\")\n-    if (deployMode == \"minikube\") {\n-      MinikubeTestBackend\n-    } else {\n-      throw new IllegalArgumentException(\n-        \"Invalid \" + deployModeConfigKey + \": \" + deployMode)\n+    val deployMode = Option(System.getProperty(CONFIG_KEY_DEPLOY_MODE))\n+      .getOrElse(BACKEND_MINIKUBE)\n+    deployMode match {\n+      case BACKEND_MINIKUBE => MinikubeTestBackend\n+      case BACKEND_CLOUD => new KubeConfigBackend(System.getProperty(CONFIG_KEY_KUBE_CONFIG_CONTEXT))",
+    "line": 29
+  }, {
+    "author": {
+      "login": "liyinan926"
+    },
+    "body": "Got it.",
+    "commit": "cf7ef362352365c7aab4c927db3ea8240fcfaf21",
+    "createdAt": "2018-10-30T17:04:23Z",
+    "diffHunk": "@@ -28,16 +30,15 @@ private[spark] trait IntegrationTestBackend {\n }\n \n private[spark] object IntegrationTestBackendFactory {\n-  val deployModeConfigKey = \"spark.kubernetes.test.deployMode\"\n-\n   def getTestBackend: IntegrationTestBackend = {\n-    val deployMode = Option(System.getProperty(deployModeConfigKey))\n-      .getOrElse(\"minikube\")\n-    if (deployMode == \"minikube\") {\n-      MinikubeTestBackend\n-    } else {\n-      throw new IllegalArgumentException(\n-        \"Invalid \" + deployModeConfigKey + \": \" + deployMode)\n+    val deployMode = Option(System.getProperty(CONFIG_KEY_DEPLOY_MODE))\n+      .getOrElse(BACKEND_MINIKUBE)\n+    deployMode match {\n+      case BACKEND_MINIKUBE => MinikubeTestBackend\n+      case BACKEND_CLOUD => new KubeConfigBackend(System.getProperty(CONFIG_KEY_KUBE_CONFIG_CONTEXT))",
+    "line": 29
+  }],
+  "prId": 22805
+}]

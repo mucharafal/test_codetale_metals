@@ -1,0 +1,24 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "wangyum"
+    },
+    "body": "If the built-in Hive is 2.3.4, we use [org.apache.spark.sql.execution.datasources.orc.OrcFilters](sql/core/v2.3.4/src/main/scala/org/apache/spark/sql/execution/datasources/orc/OrcFilters.scala) to create the filter.",
+    "commit": "073c88347cf25e21dcf607fb85f636a37b99f7ba",
+    "createdAt": "2019-03-27T11:31:18Z",
+    "diffHunk": "@@ -57,22 +62,33 @@ import org.apache.spark.sql.types._\n  * known to be convertible.\n  */\n private[orc] object OrcFilters extends Logging {\n+\n+  private def findMethod(klass: Class[_], name: String, args: Class[_]*): Method = {\n+    val method = klass.getMethod(name, args: _*)\n+    method.setAccessible(true)\n+    method\n+  }\n+\n   def createFilter(schema: StructType, filters: Array[Filter]): Option[SearchArgument] = {\n-    val dataTypeMap = schema.map(f => f.name -> f.dataType).toMap\n-\n-    // First, tries to convert each filter individually to see whether it's convertible, and then\n-    // collect all convertible ones to build the final `SearchArgument`.\n-    val convertibleFilters = for {\n-      filter <- filters\n-      _ <- buildSearchArgument(dataTypeMap, filter, newBuilder)\n-    } yield filter\n-\n-    for {\n-      // Combines all convertible filters using `And` to produce a single conjunction\n-      conjunction <- buildTree(convertibleFilters)\n-      // Then tries to build a single ORC `SearchArgument` for the conjunction predicate\n-      builder <- buildSearchArgument(dataTypeMap, conjunction, newBuilder)\n-    } yield builder.build()\n+    if (HiveUtils.isHive2) {\n+      BuiltinOrcFilters.createFilter(schema, filters).asInstanceOf[Option[SearchArgument]]"
+  }],
+  "prId": 23788
+}, {
+  "comments": [{
+    "author": {
+      "login": "wangyum"
+    },
+    "body": "Cast `value` to `AnyRef` based on the following:\r\nhttps://github.com/apache/spark/pull/8799/files#diff-6cac9bc2656e3782b0312dceb8c55d47R132\r\nhttps://github.com/apache/hive/blob/release-1.2.1/serde/src/java/org/apache/hadoop/hive/ql/io/sarg/SearchArgument.java#L255\r\n \r\nOtherwise:\r\n```\r\n[error] /Users/yumwang/spark/sql/hive/src/main/scala/org/apache/spark/sql/hive/orc/OrcFilters.scala:180: type mismatch;\r\n[error]  found   : Any\r\n[error]  required: Object\r\n[error]         Some(method.invoke(bd, attribute, value).asInstanceOf[Builder].end())\r\n```",
+    "commit": "073c88347cf25e21dcf607fb85f636a37b99f7ba",
+    "createdAt": "2019-04-04T17:21:21Z",
+    "diffHunk": "@@ -160,31 +175,50 @@ private[orc] object OrcFilters extends Logging {\n       // wrapped by a \"parent\" predicate (`And`, `Or`, or `Not`).\n \n       case EqualTo(attribute, value) if isSearchableType(dataTypeMap(attribute)) =>\n-        Some(builder.startAnd().equals(attribute, value).end())\n+        val bd = builder.startAnd()\n+        val method = findMethod(bd.getClass, \"equals\", classOf[String], classOf[Object])\n+        Some(method.invoke(bd, attribute, value.asInstanceOf[AnyRef]).asInstanceOf[Builder].end())",
+    "line": 73
+  }],
+  "prId": 23788
+}]

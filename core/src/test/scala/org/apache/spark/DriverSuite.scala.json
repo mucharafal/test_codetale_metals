@@ -1,0 +1,52 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Since you're touching this, I kinda like the approach of adding the bug number to the `test()` call that I've seen in other places.\n",
+    "commit": "f5c80fd67a3637d9868a9afec1dae9ac37044b16",
+    "createdAt": "2015-01-28T00:55:58Z",
+    "diffHunk": "@@ -28,31 +28,30 @@ import org.apache.spark.util.Utils\n \n class DriverSuite extends FunSuite with Timeouts {\n \n+  // Regression test for SPARK-530: \"Spark driver process doesn't exit after finishing\"",
+    "line": 4
+  }, {
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "I just moved this line, but I can move it there too\n",
+    "commit": "f5c80fd67a3637d9868a9afec1dae9ac37044b16",
+    "createdAt": "2015-01-28T08:42:41Z",
+    "diffHunk": "@@ -28,31 +28,30 @@ import org.apache.spark.util.Utils\n \n class DriverSuite extends FunSuite with Timeouts {\n \n+  // Regression test for SPARK-530: \"Spark driver process doesn't exit after finishing\"",
+    "line": 4
+  }],
+  "prId": 4230
+}, {
+  "comments": [{
+    "author": {
+      "login": "squito"
+    },
+    "body": "@andrewor14 shouldn't the `destroy` be in a `finally` block?  Otherwise the process isn't destroyed if you hit the timeout.\n\n(I know this was committed a while back, and the test is even ignored now -- but I was looking at some flaky tests and this just happened to catch my eye, so I was curious)\n",
+    "commit": "f5c80fd67a3637d9868a9afec1dae9ac37044b16",
+    "createdAt": "2015-05-28T18:33:25Z",
+    "diffHunk": "@@ -28,31 +28,30 @@ import org.apache.spark.util.Utils\n \n class DriverSuite extends FunSuite with Timeouts {\n \n+  // Regression test for SPARK-530: \"Spark driver process doesn't exit after finishing\"\n   test(\"driver should exit after finishing\") {\n     val sparkHome = sys.props.getOrElse(\"spark.test.home\", fail(\"spark.test.home is not set!\"))\n-    // Regression test for SPARK-530: \"Spark driver process doesn't exit after finishing\"\n-    val masters = Table((\"master\"), (\"local\"), (\"local-cluster[2,1,512]\"))\n+    val masters = Table(\"master\", \"local\", \"local-cluster[2,1,512]\")\n     forAll(masters) { (master: String) =>\n-      failAfter(60 seconds) {\n-        Utils.executeAndGetOutput(\n-          Seq(s\"$sparkHome/bin/spark-class\", \"org.apache.spark.DriverWithoutCleanup\", master),\n-          new File(sparkHome),\n-          Map(\"SPARK_TESTING\" -> \"1\", \"SPARK_HOME\" -> sparkHome))\n-      }\n+      val process = Utils.executeCommand(\n+        Seq(s\"$sparkHome/bin/spark-class\", \"org.apache.spark.DriverWithoutCleanup\", master),\n+        new File(sparkHome),\n+        Map(\"SPARK_TESTING\" -> \"1\", \"SPARK_HOME\" -> sparkHome))\n+      failAfter(60 seconds) { process.waitFor() }\n+      // Ensure we still kill the process in case it timed out\n+      process.destroy()",
+    "line": 23
+  }, {
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "yes, it would be good to fix it, though I don't think it will solve the flakiness that we currently encounter\n",
+    "commit": "f5c80fd67a3637d9868a9afec1dae9ac37044b16",
+    "createdAt": "2015-05-28T19:34:44Z",
+    "diffHunk": "@@ -28,31 +28,30 @@ import org.apache.spark.util.Utils\n \n class DriverSuite extends FunSuite with Timeouts {\n \n+  // Regression test for SPARK-530: \"Spark driver process doesn't exit after finishing\"\n   test(\"driver should exit after finishing\") {\n     val sparkHome = sys.props.getOrElse(\"spark.test.home\", fail(\"spark.test.home is not set!\"))\n-    // Regression test for SPARK-530: \"Spark driver process doesn't exit after finishing\"\n-    val masters = Table((\"master\"), (\"local\"), (\"local-cluster[2,1,512]\"))\n+    val masters = Table(\"master\", \"local\", \"local-cluster[2,1,512]\")\n     forAll(masters) { (master: String) =>\n-      failAfter(60 seconds) {\n-        Utils.executeAndGetOutput(\n-          Seq(s\"$sparkHome/bin/spark-class\", \"org.apache.spark.DriverWithoutCleanup\", master),\n-          new File(sparkHome),\n-          Map(\"SPARK_TESTING\" -> \"1\", \"SPARK_HOME\" -> sparkHome))\n-      }\n+      val process = Utils.executeCommand(\n+        Seq(s\"$sparkHome/bin/spark-class\", \"org.apache.spark.DriverWithoutCleanup\", master),\n+        new File(sparkHome),\n+        Map(\"SPARK_TESTING\" -> \"1\", \"SPARK_HOME\" -> sparkHome))\n+      failAfter(60 seconds) { process.waitFor() }\n+      // Ensure we still kill the process in case it timed out\n+      process.destroy()",
+    "line": 23
+  }, {
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "by the way I'm addressing this at #6886\n",
+    "commit": "f5c80fd67a3637d9868a9afec1dae9ac37044b16",
+    "createdAt": "2015-06-18T20:19:13Z",
+    "diffHunk": "@@ -28,31 +28,30 @@ import org.apache.spark.util.Utils\n \n class DriverSuite extends FunSuite with Timeouts {\n \n+  // Regression test for SPARK-530: \"Spark driver process doesn't exit after finishing\"\n   test(\"driver should exit after finishing\") {\n     val sparkHome = sys.props.getOrElse(\"spark.test.home\", fail(\"spark.test.home is not set!\"))\n-    // Regression test for SPARK-530: \"Spark driver process doesn't exit after finishing\"\n-    val masters = Table((\"master\"), (\"local\"), (\"local-cluster[2,1,512]\"))\n+    val masters = Table(\"master\", \"local\", \"local-cluster[2,1,512]\")\n     forAll(masters) { (master: String) =>\n-      failAfter(60 seconds) {\n-        Utils.executeAndGetOutput(\n-          Seq(s\"$sparkHome/bin/spark-class\", \"org.apache.spark.DriverWithoutCleanup\", master),\n-          new File(sparkHome),\n-          Map(\"SPARK_TESTING\" -> \"1\", \"SPARK_HOME\" -> sparkHome))\n-      }\n+      val process = Utils.executeCommand(\n+        Seq(s\"$sparkHome/bin/spark-class\", \"org.apache.spark.DriverWithoutCleanup\", master),\n+        new File(sparkHome),\n+        Map(\"SPARK_TESTING\" -> \"1\", \"SPARK_HOME\" -> sparkHome))\n+      failAfter(60 seconds) { process.waitFor() }\n+      // Ensure we still kill the process in case it timed out\n+      process.destroy()",
+    "line": 23
+  }],
+  "prId": 4230
+}]

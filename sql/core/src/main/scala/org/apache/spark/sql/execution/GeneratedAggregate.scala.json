@@ -1,0 +1,112 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "rxin"
+    },
+    "body": "use named argument for this and the next line\n",
+    "commit": "eeee512bd94d463f741170e904ae186e238f997c",
+    "createdAt": "2015-04-28T07:59:16Z",
+    "diffHunk": "@@ -265,7 +284,49 @@ case class GeneratedAggregate(\n \n         val resultProjection = resultProjectionBuilder()\n         Iterator(resultProjection(buffer))\n+      } else if (unsafeEnabled && schemaSupportsUnsafe) {\n+        log.info(\"Using Unsafe-based aggregator\")\n+        val aggregationMap = new UnsafeFixedWidthAggregationMap(\n+          newAggregationBuffer(EmptyRow),\n+          aggregationBufferSchema,\n+          groupKeySchema,\n+          SparkEnv.get.unsafeMemoryManager,\n+          1024 * 16,"
+  }, {
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "AFAIK we can't use the Scala named argument syntax because `UnsafeFixedWidthAggregationMap` is implemented in Java, but I can add a line comment explaining this.  Also, I wonder if there's a better choice of default map size here.  If we had statistics / estimates from the optimizer, we could make a better choice here.\n",
+    "commit": "eeee512bd94d463f741170e904ae186e238f997c",
+    "createdAt": "2015-04-28T17:40:45Z",
+    "diffHunk": "@@ -265,7 +284,49 @@ case class GeneratedAggregate(\n \n         val resultProjection = resultProjectionBuilder()\n         Iterator(resultProjection(buffer))\n+      } else if (unsafeEnabled && schemaSupportsUnsafe) {\n+        log.info(\"Using Unsafe-based aggregator\")\n+        val aggregationMap = new UnsafeFixedWidthAggregationMap(\n+          newAggregationBuffer(EmptyRow),\n+          aggregationBufferSchema,\n+          groupKeySchema,\n+          SparkEnv.get.unsafeMemoryManager,\n+          1024 * 16,"
+  }, {
+    "author": {
+      "login": "rxin"
+    },
+    "body": "ah ok nvm. then let's add a comment like\n\n``` java\n1024 * 16,  // initial capacity\n...\n```\n",
+    "commit": "eeee512bd94d463f741170e904ae186e238f997c",
+    "createdAt": "2015-04-28T17:56:19Z",
+    "diffHunk": "@@ -265,7 +284,49 @@ case class GeneratedAggregate(\n \n         val resultProjection = resultProjectionBuilder()\n         Iterator(resultProjection(buffer))\n+      } else if (unsafeEnabled && schemaSupportsUnsafe) {\n+        log.info(\"Using Unsafe-based aggregator\")\n+        val aggregationMap = new UnsafeFixedWidthAggregationMap(\n+          newAggregationBuffer(EmptyRow),\n+          aggregationBufferSchema,\n+          groupKeySchema,\n+          SparkEnv.get.unsafeMemoryManager,\n+          1024 * 16,"
+  }],
+  "prId": 5725
+}, {
+  "comments": [{
+    "author": {
+      "login": "marmbrus"
+    },
+    "body": "nit: consider named arguments instead of comments.\n",
+    "commit": "eeee512bd94d463f741170e904ae186e238f997c",
+    "createdAt": "2015-04-29T00:09:56Z",
+    "diffHunk": "@@ -265,7 +283,49 @@ case class GeneratedAggregate(\n \n         val resultProjection = resultProjectionBuilder()\n         Iterator(resultProjection(buffer))\n+      } else if (unsafeEnabled && schemaSupportsUnsafe) {\n+        log.info(\"Using Unsafe-based aggregator\")\n+        val aggregationMap = new UnsafeFixedWidthAggregationMap(\n+          newAggregationBuffer(EmptyRow),\n+          aggregationBufferSchema,\n+          groupKeySchema,\n+          TaskContext.get.taskMemoryManager(),\n+          1024 * 16, // initial capacity\n+          false // disable tracking of performance metrics",
+    "line": 58
+  }, {
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "Reynold made the same comment upthread; we can't use Scala-style named arguments here because `UnsafFixedWidthAggregationMap` is a Java class.\n",
+    "commit": "eeee512bd94d463f741170e904ae186e238f997c",
+    "createdAt": "2015-04-29T00:12:46Z",
+    "diffHunk": "@@ -265,7 +283,49 @@ case class GeneratedAggregate(\n \n         val resultProjection = resultProjectionBuilder()\n         Iterator(resultProjection(buffer))\n+      } else if (unsafeEnabled && schemaSupportsUnsafe) {\n+        log.info(\"Using Unsafe-based aggregator\")\n+        val aggregationMap = new UnsafeFixedWidthAggregationMap(\n+          newAggregationBuffer(EmptyRow),\n+          aggregationBufferSchema,\n+          groupKeySchema,\n+          TaskContext.get.taskMemoryManager(),\n+          1024 * 16, // initial capacity\n+          false // disable tracking of performance metrics",
+    "line": 58
+  }],
+  "prId": 5725
+}, {
+  "comments": [{
+    "author": {
+      "login": "marmbrus"
+    },
+    "body": "nit: typically place children last (although we aren't great about following this convention)...\n",
+    "commit": "eeee512bd94d463f741170e904ae186e238f997c",
+    "createdAt": "2015-04-29T00:10:47Z",
+    "diffHunk": "@@ -41,13 +42,15 @@ case class AggregateEvaluation(\n  * @param groupingExpressions expressions that are evaluated to determine grouping.\n  * @param aggregateExpressions expressions that are computed for each group.\n  * @param child the input data source.\n+ * @param unsafeEnabled whether to allow Unsafe-based aggregation buffers to be used.\n  */\n @DeveloperApi\n case class GeneratedAggregate(\n     partial: Boolean,\n     groupingExpressions: Seq[Expression],\n     aggregateExpressions: Seq[NamedExpression],\n-    child: SparkPlan)\n+    child: SparkPlan,\n+    unsafeEnabled: Boolean)"
+  }],
+  "prId": 5725
+}, {
+  "comments": [{
+    "author": {
+      "login": "marmbrus"
+    },
+    "body": "We should consider breaking this into two operators at some point so the explain is more readable.\n",
+    "commit": "eeee512bd94d463f741170e904ae186e238f997c",
+    "createdAt": "2015-04-29T00:11:11Z",
+    "diffHunk": "@@ -41,13 +42,15 @@ case class AggregateEvaluation(\n  * @param groupingExpressions expressions that are evaluated to determine grouping.\n  * @param aggregateExpressions expressions that are computed for each group.\n  * @param child the input data source.\n+ * @param unsafeEnabled whether to allow Unsafe-based aggregation buffers to be used.\n  */\n @DeveloperApi\n case class GeneratedAggregate("
+  }, {
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "Agreed.  I'd like to avoid duplication of the code generation logic, though.\n",
+    "commit": "eeee512bd94d463f741170e904ae186e238f997c",
+    "createdAt": "2015-04-29T01:01:26Z",
+    "diffHunk": "@@ -41,13 +42,15 @@ case class AggregateEvaluation(\n  * @param groupingExpressions expressions that are evaluated to determine grouping.\n  * @param aggregateExpressions expressions that are computed for each group.\n  * @param child the input data source.\n+ * @param unsafeEnabled whether to allow Unsafe-based aggregation buffers to be used.\n  */\n @DeveloperApi\n case class GeneratedAggregate("
+  }],
+  "prId": 5725
+}, {
+  "comments": [{
+    "author": {
+      "login": "marmbrus"
+    },
+    "body": "Checking my understanding here... We are safe for takes that don't exhaust the iterator because of  some registration that is happening due to `TaskContext.get.taskMemoryManager()` above?\n",
+    "commit": "eeee512bd94d463f741170e904ae186e238f997c",
+    "createdAt": "2015-04-29T00:56:27Z",
+    "diffHunk": "@@ -265,7 +283,49 @@ case class GeneratedAggregate(\n \n         val resultProjection = resultProjectionBuilder()\n         Iterator(resultProjection(buffer))\n+      } else if (unsafeEnabled && schemaSupportsUnsafe) {\n+        log.info(\"Using Unsafe-based aggregator\")\n+        val aggregationMap = new UnsafeFixedWidthAggregationMap(\n+          newAggregationBuffer(EmptyRow),\n+          aggregationBufferSchema,\n+          groupKeySchema,\n+          TaskContext.get.taskMemoryManager(),\n+          1024 * 16, // initial capacity\n+          false // disable tracking of performance metrics\n+        )\n+\n+        while (iter.hasNext) {\n+          val currentRow: Row = iter.next()\n+          val groupKey: Row = groupProjection(currentRow)\n+          val aggregationBuffer = aggregationMap.getAggregationBuffer(groupKey)\n+          updateProjection.target(aggregationBuffer)(joinedRow(aggregationBuffer, currentRow))\n+        }\n+\n+        new Iterator[Row] {\n+          private[this] val mapIterator = aggregationMap.iterator()\n+          private[this] val resultProjection = resultProjectionBuilder()\n+\n+          def hasNext: Boolean = mapIterator.hasNext\n+\n+          def next(): Row = {\n+            val entry = mapIterator.next()\n+            val result = resultProjection(joinedRow(entry.key, entry.value))\n+            if (hasNext) {\n+              result\n+            } else {\n+              // This is the last element in the iterator, so let's free the buffer. Before we do,\n+              // though, we need to make a defensive copy of the result so that we don't return an\n+              // object that might contain dangling pointers to the freed memory\n+              val resultCopy = result.copy()\n+              aggregationMap.free()",
+    "line": 84
+  }, {
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "We're safe in the sense that the memory will eventually get cleaned up, but I think that we would get memory leak exceptions if those warnings / checks have been enabled (the cleanup is always performed but whether we fail tasks is controlled by a flag).  To avoid this issue, I think we need to return a closable iterator interface which lets downstream consumers signal that they will read no more output.\n",
+    "commit": "eeee512bd94d463f741170e904ae186e238f997c",
+    "createdAt": "2015-04-29T01:04:04Z",
+    "diffHunk": "@@ -265,7 +283,49 @@ case class GeneratedAggregate(\n \n         val resultProjection = resultProjectionBuilder()\n         Iterator(resultProjection(buffer))\n+      } else if (unsafeEnabled && schemaSupportsUnsafe) {\n+        log.info(\"Using Unsafe-based aggregator\")\n+        val aggregationMap = new UnsafeFixedWidthAggregationMap(\n+          newAggregationBuffer(EmptyRow),\n+          aggregationBufferSchema,\n+          groupKeySchema,\n+          TaskContext.get.taskMemoryManager(),\n+          1024 * 16, // initial capacity\n+          false // disable tracking of performance metrics\n+        )\n+\n+        while (iter.hasNext) {\n+          val currentRow: Row = iter.next()\n+          val groupKey: Row = groupProjection(currentRow)\n+          val aggregationBuffer = aggregationMap.getAggregationBuffer(groupKey)\n+          updateProjection.target(aggregationBuffer)(joinedRow(aggregationBuffer, currentRow))\n+        }\n+\n+        new Iterator[Row] {\n+          private[this] val mapIterator = aggregationMap.iterator()\n+          private[this] val resultProjection = resultProjectionBuilder()\n+\n+          def hasNext: Boolean = mapIterator.hasNext\n+\n+          def next(): Row = {\n+            val entry = mapIterator.next()\n+            val result = resultProjection(joinedRow(entry.key, entry.value))\n+            if (hasNext) {\n+              result\n+            } else {\n+              // This is the last element in the iterator, so let's free the buffer. Before we do,\n+              // though, we need to make a defensive copy of the result so that we don't return an\n+              // object that might contain dangling pointers to the freed memory\n+              val resultCopy = result.copy()\n+              aggregationMap.free()",
+    "line": 84
+  }],
+  "prId": 5725
+}, {
+  "comments": [{
+    "author": {
+      "login": "marmbrus"
+    },
+    "body": "Similar to my comment above, I think it would be better if this decision was made in the query planner.\n",
+    "commit": "eeee512bd94d463f741170e904ae186e238f997c",
+    "createdAt": "2015-04-29T00:57:01Z",
+    "diffHunk": "@@ -265,7 +283,49 @@ case class GeneratedAggregate(\n \n         val resultProjection = resultProjectionBuilder()\n         Iterator(resultProjection(buffer))\n+      } else if (unsafeEnabled && schemaSupportsUnsafe) {",
+    "line": 50
+  }],
+  "prId": 5725
+}]

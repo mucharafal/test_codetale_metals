@@ -1,0 +1,72 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "nit: ordering\n",
+    "commit": "99161a6a415d324ddfb1f4cfd0d066da58d4a2a8",
+    "createdAt": "2015-09-15T23:03:03Z",
+    "diffHunk": "@@ -0,0 +1,142 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.deploy.history.yarn\n+\n+import org.apache.spark.scheduler._\n+import org.apache.spark.util.{SystemClock, Clock}"
+  }],
+  "prId": 8744
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "nit: I believe the convention is to have an empty line before these.\n",
+    "commit": "99161a6a415d324ddfb1f4cfd0d066da58d4a2a8",
+    "createdAt": "2015-09-15T23:03:40Z",
+    "diffHunk": "@@ -0,0 +1,142 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.deploy.history.yarn\n+\n+import org.apache.spark.scheduler._\n+import org.apache.spark.util.{SystemClock, Clock}\n+import org.apache.spark.{Logging, SparkContext}\n+\n+/**\n+ * Spark listener which queues up all received events to the [[YarnHistoryService]] passed\n+ * as a constructor. There's no attempt to filter event types at this point.\n+ * @param sc context"
+  }],
+  "prId": 8744
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "nit: too many empty lines\n",
+    "commit": "99161a6a415d324ddfb1f4cfd0d066da58d4a2a8",
+    "createdAt": "2015-09-15T23:05:23Z",
+    "diffHunk": "@@ -0,0 +1,142 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.deploy.history.yarn\n+\n+import org.apache.spark.scheduler._\n+import org.apache.spark.util.{SystemClock, Clock}\n+import org.apache.spark.{Logging, SparkContext}\n+\n+/**\n+ * Spark listener which queues up all received events to the [[YarnHistoryService]] passed\n+ * as a constructor. There's no attempt to filter event types at this point.\n+ * @param sc context\n+ * @param service service to forward events to\n+ */\n+private[spark] class YarnEventListener(sc: SparkContext, service: YarnHistoryService)\n+  extends SparkListener with Logging {\n+\n+  private val clock: Clock = new SystemClock()\n+\n+  /**\n+   * Called when a stage completes successfully or fails, with information on the completed stage.\n+   */\n+  override def onStageCompleted(stageCompleted: SparkListenerStageCompleted) {\n+    enqueue(stageCompleted)\n+  }\n+\n+  /**\n+   * queue the event with the service, timestamped to the current time.\n+   * @param sparkEvent event to queue\n+   */\n+  private def enqueue(sparkEvent: SparkListenerEvent): Unit = {\n+    service.enqueue(new HandleSparkEvent(sparkEvent, clock.getTimeMillis()))\n+  }\n+\n+  /**\n+   * Called when a stage is submitted\n+   */\n+  override def onStageSubmitted(stageSubmitted: SparkListenerStageSubmitted) {\n+    enqueue(stageSubmitted)\n+  }\n+\n+  /**\n+   * Called when a task starts\n+   */\n+  override def onTaskStart(taskStart: SparkListenerTaskStart) {\n+    enqueue(taskStart)\n+  }\n+\n+  /**\n+   * Called when a task begins remotely fetching its result (will not be called for tasks that do\n+   * not need to fetch the result remotely).\n+   */\n+  override def onTaskGettingResult(taskGettingResult: SparkListenerTaskGettingResult) {\n+    enqueue(taskGettingResult)\n+  }\n+\n+  /**\n+   * Called when a task ends\n+   */\n+  override def onTaskEnd(taskEnd: SparkListenerTaskEnd) {\n+    enqueue(taskEnd)\n+  }\n+\n+  /**\n+   * Called when a job starts\n+   */\n+  override def onJobStart(jobStart: SparkListenerJobStart) {\n+    enqueue(jobStart)\n+  }\n+"
+  }],
+  "prId": 8744
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "I wonder if extending `SparkFirehoseListener` wouldn't make things easier.\n",
+    "commit": "99161a6a415d324ddfb1f4cfd0d066da58d4a2a8",
+    "createdAt": "2015-09-15T23:06:37Z",
+    "diffHunk": "@@ -0,0 +1,142 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.deploy.history.yarn\n+\n+import org.apache.spark.scheduler._\n+import org.apache.spark.util.{SystemClock, Clock}\n+import org.apache.spark.{Logging, SparkContext}\n+\n+/**\n+ * Spark listener which queues up all received events to the [[YarnHistoryService]] passed\n+ * as a constructor. There's no attempt to filter event types at this point.\n+ * @param sc context\n+ * @param service service to forward events to\n+ */\n+private[spark] class YarnEventListener(sc: SparkContext, service: YarnHistoryService)\n+  extends SparkListener with Logging {"
+  }, {
+    "author": {
+      "login": "steveloughran"
+    },
+    "body": "Why yes it would —thank you for pointing that class out.\n",
+    "commit": "99161a6a415d324ddfb1f4cfd0d066da58d4a2a8",
+    "createdAt": "2015-09-16T14:05:40Z",
+    "diffHunk": "@@ -0,0 +1,142 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.deploy.history.yarn\n+\n+import org.apache.spark.scheduler._\n+import org.apache.spark.util.{SystemClock, Clock}\n+import org.apache.spark.{Logging, SparkContext}\n+\n+/**\n+ * Spark listener which queues up all received events to the [[YarnHistoryService]] passed\n+ * as a constructor. There's no attempt to filter event types at this point.\n+ * @param sc context\n+ * @param service service to forward events to\n+ */\n+private[spark] class YarnEventListener(sc: SparkContext, service: YarnHistoryService)\n+  extends SparkListener with Logging {"
+  }],
+  "prId": 8744
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Not used?\n",
+    "commit": "99161a6a415d324ddfb1f4cfd0d066da58d4a2a8",
+    "createdAt": "2015-09-28T20:26:04Z",
+    "diffHunk": "@@ -0,0 +1,45 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.deploy.history.yarn\n+\n+import org.apache.spark.scheduler._\n+import org.apache.spark.util.{Clock, SystemClock}\n+import org.apache.spark.{Logging, SparkContext, SparkFirehoseListener}\n+\n+/**\n+ * Spark listener which queues up all received events to the [[YarnHistoryService]] passed\n+ * as a constructor. There's no attempt to filter event types at this point.\n+ *\n+ * @param sc context\n+ * @param service service to forward events to\n+ */\n+private[spark] class YarnEventListener(sc: SparkContext, service: YarnHistoryService)\n+  extends SparkFirehoseListener with Logging {\n+\n+  private val clock: Clock = new SystemClock()"
+  }, {
+    "author": {
+      "login": "steveloughran"
+    },
+    "body": "not any more; cut\n",
+    "commit": "99161a6a415d324ddfb1f4cfd0d066da58d4a2a8",
+    "createdAt": "2015-10-20T17:20:27Z",
+    "diffHunk": "@@ -0,0 +1,45 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.deploy.history.yarn\n+\n+import org.apache.spark.scheduler._\n+import org.apache.spark.util.{Clock, SystemClock}\n+import org.apache.spark.{Logging, SparkContext, SparkFirehoseListener}\n+\n+/**\n+ * Spark listener which queues up all received events to the [[YarnHistoryService]] passed\n+ * as a constructor. There's no attempt to filter event types at this point.\n+ *\n+ * @param sc context\n+ * @param service service to forward events to\n+ */\n+private[spark] class YarnEventListener(sc: SparkContext, service: YarnHistoryService)\n+  extends SparkFirehoseListener with Logging {\n+\n+  private val clock: Clock = new SystemClock()"
+  }],
+  "prId": 8744
+}]

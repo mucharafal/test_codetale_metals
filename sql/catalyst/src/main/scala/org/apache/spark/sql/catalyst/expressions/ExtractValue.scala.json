@@ -1,0 +1,79 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "It's weird that I have to add type cast here. Why `scala.collection.Seq<T>.apply` did't return `T` but `Object`? I test it locally, it do return `T`, but in code gen, it returns `Object`.\n",
+    "commit": "e203bc1ebbd70d8e4a5ed54cb5cdc31ef5c76251",
+    "createdAt": "2015-06-29T04:01:43Z",
+    "diffHunk": "@@ -195,6 +205,10 @@ case class GetArrayItem(child: Expression, ordinal: Expression)\n       baseValue(index)\n     }\n   }\n+\n+  override def genCode(ctx: CodeGenContext, ev: GeneratedExpressionCode): String = {\n+    defineCodeGen(ctx, ev, (eval1, eval2) => s\"(${ctx.javaType(dataType)})$eval1.apply((int)$eval2)\")"
+  }, {
+    "author": {
+      "login": "davies"
+    },
+    "body": "`T` is boxed type, so it still needs type cast here.\n",
+    "commit": "e203bc1ebbd70d8e4a5ed54cb5cdc31ef5c76251",
+    "createdAt": "2015-06-29T05:24:39Z",
+    "diffHunk": "@@ -195,6 +205,10 @@ case class GetArrayItem(child: Expression, ordinal: Expression)\n       baseValue(index)\n     }\n   }\n+\n+  override def genCode(ctx: CodeGenContext, ev: GeneratedExpressionCode): String = {\n+    defineCodeGen(ctx, ev, (eval1, eval2) => s\"(${ctx.javaType(dataType)})$eval1.apply((int)$eval2)\")"
+  }],
+  "prId": 6982
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "cc @davies , in java we can assign `Integer` to `int` without cast, so boxed `T` is not a problem. The failure is:\n\n``` java\nscala.collection.Seq<org.apache.spark.unsafe.types.UTF8String> primitive3 = null;\n...\norg.apache.spark.unsafe.types.UTF8String primitive1 = null;\n...\nprimitive1 = primitive3.apply((int)1);\n\nERROR: Assignment conversion not possible from type \"java.lang.Object\" to type \"org.apache.spark.unsafe.types.UTF8String\n```\n\nDoes Janino support java generics when compile?\n",
+    "commit": "e203bc1ebbd70d8e4a5ed54cb5cdc31ef5c76251",
+    "createdAt": "2015-06-29T05:51:54Z",
+    "diffHunk": "@@ -195,6 +205,11 @@ case class GetArrayItem(child: Expression, ordinal: Expression)\n       baseValue(index)\n     }\n   }\n+\n+  override def genCode(ctx: CodeGenContext, ev: GeneratedExpressionCode): String = {\n+    defineCodeGen(ctx, ev,\n+      (eval1, eval2) => s\"(${ctx.javaType(dataType)})$eval1.apply((int)$eval2)\")"
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "According to http://stackoverflow.com/questions/12381190/drools-changing-the-java-compiler-level, looks like Janino doesn't support generic...\n",
+    "commit": "e203bc1ebbd70d8e4a5ed54cb5cdc31ef5c76251",
+    "createdAt": "2015-06-29T05:57:22Z",
+    "diffHunk": "@@ -195,6 +205,11 @@ case class GetArrayItem(child: Expression, ordinal: Expression)\n       baseValue(index)\n     }\n   }\n+\n+  override def genCode(ctx: CodeGenContext, ev: GeneratedExpressionCode): String = {\n+    defineCodeGen(ctx, ev,\n+      (eval1, eval2) => s\"(${ctx.javaType(dataType)})$eval1.apply((int)$eval2)\")"
+  }, {
+    "author": {
+      "login": "davies"
+    },
+    "body": "I see.\n",
+    "commit": "e203bc1ebbd70d8e4a5ed54cb5cdc31ef5c76251",
+    "createdAt": "2015-06-29T06:08:25Z",
+    "diffHunk": "@@ -195,6 +205,11 @@ case class GetArrayItem(child: Expression, ordinal: Expression)\n       baseValue(index)\n     }\n   }\n+\n+  override def genCode(ctx: CodeGenContext, ev: GeneratedExpressionCode): String = {\n+    defineCodeGen(ctx, ev,\n+      (eval1, eval2) => s\"(${ctx.javaType(dataType)})$eval1.apply((int)$eval2)\")"
+  }],
+  "prId": 6982
+}, {
+  "comments": [{
+    "author": {
+      "login": "davies"
+    },
+    "body": "In order to support other numeric types, I'd like to cast it into `int` when `ordinal.dataType` is not `IntegerType`.\n\nBtw, maybe we could always cast it into `int`, the Java compiler and JIT may could avoid the unnecessary casting for us.\n",
+    "commit": "e203bc1ebbd70d8e4a5ed54cb5cdc31ef5c76251",
+    "createdAt": "2015-06-29T18:38:48Z",
+    "diffHunk": "@@ -195,6 +240,20 @@ case class GetArrayItem(child: Expression, ordinal: Expression)\n       baseValue(index)\n     }\n   }\n+\n+  override def genCode(ctx: CodeGenContext, ev: GeneratedExpressionCode): String = {\n+    val castToInt = if (ordinal.dataType == LongType) \"(int)\" else \"\""
+  }],
+  "prId": 6982
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "We search the map twice here(`contains` and `apply`), I was trying to fix it by using `map.getOrElse(key, null)` and `map.get.orNull`, but both failed as they need a function as parameter. One possible way is using `apply` and try catch the NPE but that's too nasty. Is there any better ways to search scala map in java?\n",
+    "commit": "e203bc1ebbd70d8e4a5ed54cb5cdc31ef5c76251",
+    "createdAt": "2015-06-30T02:47:36Z",
+    "diffHunk": "@@ -209,4 +257,16 @@ case class GetMapValue(child: Expression, ordinal: Expression)\n     val baseValue = value.asInstanceOf[Map[Any, _]]\n     baseValue.get(ordinal).orNull\n   }\n+\n+  override def genCode(ctx: CodeGenContext, ev: GeneratedExpressionCode): String = {\n+    nullSafeCodeGen(ctx, ev, (result, eval1, eval2) => {\n+      s\"\"\"\n+        if ($eval1.contains($eval2)) {\n+          $result = (${ctx.boxedType(dataType)})$eval1.apply($eval2);\n+        } else {\n+          ${ev.isNull} = true;",
+    "line": 142
+  }, {
+    "author": {
+      "login": "davies"
+    },
+    "body": "We can leave it as it is now, may change to use java.util.HashMap in future. \n",
+    "commit": "e203bc1ebbd70d8e4a5ed54cb5cdc31ef5c76251",
+    "createdAt": "2015-06-30T02:52:42Z",
+    "diffHunk": "@@ -209,4 +257,16 @@ case class GetMapValue(child: Expression, ordinal: Expression)\n     val baseValue = value.asInstanceOf[Map[Any, _]]\n     baseValue.get(ordinal).orNull\n   }\n+\n+  override def genCode(ctx: CodeGenContext, ev: GeneratedExpressionCode): String = {\n+    nullSafeCodeGen(ctx, ev, (result, eval1, eval2) => {\n+      s\"\"\"\n+        if ($eval1.contains($eval2)) {\n+          $result = (${ctx.boxedType(dataType)})$eval1.apply($eval2);\n+        } else {\n+          ${ev.isNull} = true;",
+    "line": 142
+  }],
+  "prId": 6982
+}]

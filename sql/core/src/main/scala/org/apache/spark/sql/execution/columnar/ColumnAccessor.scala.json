@@ -1,0 +1,39 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "typo? `ordinal`?",
+    "commit": "c16230d34472e0337b87ce858289fec9a1d88ab4",
+    "createdAt": "2017-09-12T14:29:27Z",
+    "diffHunk": "@@ -149,4 +153,23 @@ private[columnar] object ColumnAccessor {\n         throw new Exception(s\"not support type: $other\")\n     }\n   }\n+\n+  def decompress(columnAccessor: ColumnAccessor, columnVector: WritableColumnVector, numRows: Int):\n+      Unit = {\n+    if (columnAccessor.isInstanceOf[NativeColumnAccessor[_]]) {\n+      val nativeAccessor = columnAccessor.asInstanceOf[NativeColumnAccessor[_]]\n+      nativeAccessor.decompress(columnVector, numRows)\n+    } else {\n+      val dataBuffer = columnAccessor.asInstanceOf[BasicColumnAccessor[_]].getByteBuffer\n+      val nullsBuffer = dataBuffer.duplicate().order(ByteOrder.nativeOrder())\n+      nullsBuffer.rewind()\n+\n+      val numNulls = ByteBufferHelper.getInt(nullsBuffer)\n+      for (i <- 0 until numNulls) {\n+        val cordinal = ByteBufferHelper.getInt(nullsBuffer)"
+  }, {
+    "author": {
+      "login": "kiszk"
+    },
+    "body": "good catch, done",
+    "commit": "c16230d34472e0337b87ce858289fec9a1d88ab4",
+    "createdAt": "2017-09-14T09:15:23Z",
+    "diffHunk": "@@ -149,4 +153,23 @@ private[columnar] object ColumnAccessor {\n         throw new Exception(s\"not support type: $other\")\n     }\n   }\n+\n+  def decompress(columnAccessor: ColumnAccessor, columnVector: WritableColumnVector, numRows: Int):\n+      Unit = {\n+    if (columnAccessor.isInstanceOf[NativeColumnAccessor[_]]) {\n+      val nativeAccessor = columnAccessor.asInstanceOf[NativeColumnAccessor[_]]\n+      nativeAccessor.decompress(columnVector, numRows)\n+    } else {\n+      val dataBuffer = columnAccessor.asInstanceOf[BasicColumnAccessor[_]].getByteBuffer\n+      val nullsBuffer = dataBuffer.duplicate().order(ByteOrder.nativeOrder())\n+      nullsBuffer.rewind()\n+\n+      val numNulls = ByteBufferHelper.getInt(nullsBuffer)\n+      for (i <- 0 until numNulls) {\n+        val cordinal = ByteBufferHelper.getInt(nullsBuffer)"
+  }],
+  "prId": 18704
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "If we need to throw exception at last, why not do it at the beginning?",
+    "commit": "c16230d34472e0337b87ce858289fec9a1d88ab4",
+    "createdAt": "2017-09-12T14:30:39Z",
+    "diffHunk": "@@ -149,4 +153,23 @@ private[columnar] object ColumnAccessor {\n         throw new Exception(s\"not support type: $other\")\n     }\n   }\n+\n+  def decompress(columnAccessor: ColumnAccessor, columnVector: WritableColumnVector, numRows: Int):\n+      Unit = {\n+    if (columnAccessor.isInstanceOf[NativeColumnAccessor[_]]) {\n+      val nativeAccessor = columnAccessor.asInstanceOf[NativeColumnAccessor[_]]\n+      nativeAccessor.decompress(columnVector, numRows)\n+    } else {\n+      val dataBuffer = columnAccessor.asInstanceOf[BasicColumnAccessor[_]].getByteBuffer\n+      val nullsBuffer = dataBuffer.duplicate().order(ByteOrder.nativeOrder())\n+      nullsBuffer.rewind()\n+\n+      val numNulls = ByteBufferHelper.getInt(nullsBuffer)\n+      for (i <- 0 until numNulls) {\n+        val cordinal = ByteBufferHelper.getInt(nullsBuffer)\n+        columnVector.putNull(cordinal)\n+      }\n+      throw new RuntimeException(\"Not support non-primitive type now\")"
+  }, {
+    "author": {
+      "login": "kiszk"
+    },
+    "body": "thanks, fixed.",
+    "commit": "c16230d34472e0337b87ce858289fec9a1d88ab4",
+    "createdAt": "2017-09-14T09:15:13Z",
+    "diffHunk": "@@ -149,4 +153,23 @@ private[columnar] object ColumnAccessor {\n         throw new Exception(s\"not support type: $other\")\n     }\n   }\n+\n+  def decompress(columnAccessor: ColumnAccessor, columnVector: WritableColumnVector, numRows: Int):\n+      Unit = {\n+    if (columnAccessor.isInstanceOf[NativeColumnAccessor[_]]) {\n+      val nativeAccessor = columnAccessor.asInstanceOf[NativeColumnAccessor[_]]\n+      nativeAccessor.decompress(columnVector, numRows)\n+    } else {\n+      val dataBuffer = columnAccessor.asInstanceOf[BasicColumnAccessor[_]].getByteBuffer\n+      val nullsBuffer = dataBuffer.duplicate().order(ByteOrder.nativeOrder())\n+      nullsBuffer.rewind()\n+\n+      val numNulls = ByteBufferHelper.getInt(nullsBuffer)\n+      for (i <- 0 until numNulls) {\n+        val cordinal = ByteBufferHelper.getInt(nullsBuffer)\n+        columnVector.putNull(cordinal)\n+      }\n+      throw new RuntimeException(\"Not support non-primitive type now\")"
+  }],
+  "prId": 18704
+}]

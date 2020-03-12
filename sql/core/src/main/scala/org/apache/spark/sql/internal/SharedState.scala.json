@@ -1,0 +1,50 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "is it better than `conf.addResouorce(\"hive-site.xml\")`? Which corner case do we worry about it? cc @yhuai \n",
+    "commit": "8b53b226f0347c545bd13525d6d18bcf6f9a097e",
+    "createdAt": "2016-06-11T19:07:15Z",
+    "diffHunk": "@@ -40,10 +42,16 @@ private[sql] class SharedState(val sparkContext: SparkContext) {\n    */\n   val listener: SQLListener = createListenerAndUI(sparkContext)\n \n+  lazy val hadoopConf: Configuration = {\n+    val conf = sparkContext.hadoopConfiguration\n+    conf.addResource(Utils.getContextOrSparkClassLoader.getResource(\"hive-site.xml\"))"
+  }, {
+    "author": {
+      "login": "yhuai"
+    },
+    "body": "There is no fundamental difference between these two. After we call `conf.addResouorce(\"hive-site.xml\")`, `Configuration` internally will use classloader's `getResource` to find the url of the resource. At here, `Utils.getContextOrSparkClassLoader.getResource(\"hive-site.xml\")` just explicitly get the url. \n",
+    "commit": "8b53b226f0347c545bd13525d6d18bcf6f9a097e",
+    "createdAt": "2016-06-13T16:01:54Z",
+    "diffHunk": "@@ -40,10 +42,16 @@ private[sql] class SharedState(val sparkContext: SparkContext) {\n    */\n   val listener: SQLListener = createListenerAndUI(sparkContext)\n \n+  lazy val hadoopConf: Configuration = {\n+    val conf = sparkContext.hadoopConfiguration\n+    conf.addResource(Utils.getContextOrSparkClassLoader.getResource(\"hive-site.xml\"))"
+  }, {
+    "author": {
+      "login": "yhuai"
+    },
+    "body": "btw, we need to check if `Utils.getContextOrSparkClassLoader.getResource(\"hive-site.xml\")` returns null.\n",
+    "commit": "8b53b226f0347c545bd13525d6d18bcf6f9a097e",
+    "createdAt": "2016-06-13T16:08:57Z",
+    "diffHunk": "@@ -40,10 +42,16 @@ private[sql] class SharedState(val sparkContext: SparkContext) {\n    */\n   val listener: SQLListener = createListenerAndUI(sparkContext)\n \n+  lazy val hadoopConf: Configuration = {\n+    val conf = sparkContext.hadoopConfiguration\n+    conf.addResource(Utils.getContextOrSparkClassLoader.getResource(\"hive-site.xml\"))"
+  }],
+  "prId": 13611
+}, {
+  "comments": [{
+    "author": {
+      "login": "yhuai"
+    },
+    "body": "Let's add doc to explain what it is.\n",
+    "commit": "8b53b226f0347c545bd13525d6d18bcf6f9a097e",
+    "createdAt": "2016-06-13T16:12:22Z",
+    "diffHunk": "@@ -40,10 +42,16 @@ private[sql] class SharedState(val sparkContext: SparkContext) {\n    */\n   val listener: SQLListener = createListenerAndUI(sparkContext)\n \n+  lazy val hadoopConf: Configuration = {"
+  }],
+  "prId": 13611
+}, {
+  "comments": [{
+    "author": {
+      "login": "yhuai"
+    },
+    "body": "Sorry. I missed this part. Can we create a new `Configuration` instead of calling `addResource` directly? So, this PR will not change the behavior of other components which use `sparkContext.hadoopConfiguration`.\n",
+    "commit": "8b53b226f0347c545bd13525d6d18bcf6f9a097e",
+    "createdAt": "2016-06-13T19:59:00Z",
+    "diffHunk": "@@ -41,9 +43,22 @@ private[sql] class SharedState(val sparkContext: SparkContext) {\n   val listener: SQLListener = createListenerAndUI(sparkContext)\n \n   /**\n+   * The base hadoop configuration which is shared among all spark sessions. It is based on the\n+   * default hadoop configuration of Spark, with custom configurations inside `hive-site.xml`.\n+   */\n+  lazy val hadoopConf: Configuration = {\n+    val conf = sparkContext.hadoopConfiguration"
+  }],
+  "prId": 13611
+}]

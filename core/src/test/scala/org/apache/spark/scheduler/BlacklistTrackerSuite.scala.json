@@ -1,0 +1,77 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "If this tracker is ever used, won't you get NPEs because the listener bus is null?\r\n\r\nThis basically means you're forcing every test to call `configureBlacklistAndScheduler()` manually. So either remove this initialization, or do this properly, and just call `configureBlacklistAndScheduler()` for tests that need to override the default config.\r\n\r\nSince I don't see any test actually passing any custom config parameters, might as well do the initialization properly here and get rid of `configureBlacklistAndScheduler()` altogether.",
+    "commit": "701ebb7786ede13b5fe102d7c2c2b05f79edf21a",
+    "createdAt": "2016-12-22T19:31:56Z",
+    "diffHunk": "@@ -40,7 +41,7 @@ class BlacklistTrackerSuite extends SparkFunSuite with BeforeAndAfterEach with M\n     scheduler = mockTaskSchedWithConf(conf)\n \n     clock.setTime(0)\n-    blacklist = new BlacklistTracker(conf, clock)\n+    blacklist = new BlacklistTracker(null, conf, clock)"
+  }, {
+    "author": {
+      "login": "jsoltren"
+    },
+    "body": "Correct. For now, I've left configureBlacklistAndScheduler() in place, since the two tests at the end do not call it.",
+    "commit": "701ebb7786ede13b5fe102d7c2c2b05f79edf21a",
+    "createdAt": "2017-01-11T19:20:04Z",
+    "diffHunk": "@@ -40,7 +41,7 @@ class BlacklistTrackerSuite extends SparkFunSuite with BeforeAndAfterEach with M\n     scheduler = mockTaskSchedWithConf(conf)\n \n     clock.setTime(0)\n-    blacklist = new BlacklistTracker(conf, clock)\n+    blacklist = new BlacklistTracker(null, conf, clock)"
+  }],
+  "prId": 16346
+}, {
+  "comments": [{
+    "author": {
+      "login": "squito"
+    },
+    "body": "since you're never passing in `confs`, couldn't you get rid of this method, and just change the initialization in `beforeEach` to\r\n\r\n```\r\nlistenerBusMock = mock[LiveListenerBus]\r\nblacklist = new BlacklistTracker(listenerBusMock, conf, clock)\r\n```",
+    "commit": "701ebb7786ede13b5fe102d7c2c2b05f79edf21a",
+    "createdAt": "2017-01-12T04:41:07Z",
+    "diffHunk": "@@ -88,6 +88,86 @@ class BlacklistTrackerSuite extends SparkFunSuite with BeforeAndAfterEach with M\n     new TaskSetBlacklist(conf, stageId, clock)\n   }\n \n+  def configureBlacklistAndScheduler(confs: (String, String)*): Unit = {"
+  }, {
+    "author": {
+      "login": "jsoltren"
+    },
+    "body": "Done. The code is cleaner this way.",
+    "commit": "701ebb7786ede13b5fe102d7c2c2b05f79edf21a",
+    "createdAt": "2017-01-17T22:27:08Z",
+    "diffHunk": "@@ -88,6 +88,86 @@ class BlacklistTrackerSuite extends SparkFunSuite with BeforeAndAfterEach with M\n     new TaskSetBlacklist(conf, stageId, clock)\n   }\n \n+  def configureBlacklistAndScheduler(confs: (String, String)*): Unit = {"
+  }],
+  "prId": 16346
+}, {
+  "comments": [{
+    "author": {
+      "login": "squito"
+    },
+    "body": "I think the rest of the test code here has changed a lot since you first started working on this, but I'd avoid putting in a whole test case just for this.  Instead, I'd look at the existing test cases, find all occurrences of `blacklist.isNodeBlacklisted` and `blacklist.isExecutorBlacklisted`, and add appropriate `verify(listenerBusMock)` calls around all of those.",
+    "commit": "701ebb7786ede13b5fe102d7c2c2b05f79edf21a",
+    "createdAt": "2017-01-12T04:51:21Z",
+    "diffHunk": "@@ -88,6 +88,86 @@ class BlacklistTrackerSuite extends SparkFunSuite with BeforeAndAfterEach with M\n     new TaskSetBlacklist(conf, stageId, clock)\n   }\n \n+  def configureBlacklistAndScheduler(confs: (String, String)*): Unit = {\n+    conf = new SparkConf().setAppName(\"test\").setMaster(\"local\")\n+      .set(config.BLACKLIST_ENABLED.key, \"true\")\n+    confs.foreach { case (k, v) => conf.set(k, v) }\n+\n+    clock.setTime(0)\n+    listenerBusMock = mock[LiveListenerBus]\n+    blacklist = new BlacklistTracker(listenerBusMock, conf, clock)\n+  }\n+\n+  test(\"Blacklisting individual tasks and checking for SparkListenerEvents\") {\n+    configureBlacklistAndScheduler()"
+  }, {
+    "author": {
+      "login": "jsoltren"
+    },
+    "body": "Certainly this doesn't need a dedicated test. But there will be a large number - dozens - of listenerBusMock checks for blacklisting and unblacklisting. I'm working on this now, but, there will be a substantial diff here.\r\n\r\nA freebie is that by checking for the listener bus events we're also asserting that executors and nodes are being blacklisted with the correct number of failures, and we're making that number explicit.",
+    "commit": "701ebb7786ede13b5fe102d7c2c2b05f79edf21a",
+    "createdAt": "2017-01-17T22:52:57Z",
+    "diffHunk": "@@ -88,6 +88,86 @@ class BlacklistTrackerSuite extends SparkFunSuite with BeforeAndAfterEach with M\n     new TaskSetBlacklist(conf, stageId, clock)\n   }\n \n+  def configureBlacklistAndScheduler(confs: (String, String)*): Unit = {\n+    conf = new SparkConf().setAppName(\"test\").setMaster(\"local\")\n+      .set(config.BLACKLIST_ENABLED.key, \"true\")\n+    confs.foreach { case (k, v) => conf.set(k, v) }\n+\n+    clock.setTime(0)\n+    listenerBusMock = mock[LiveListenerBus]\n+    blacklist = new BlacklistTracker(listenerBusMock, conf, clock)\n+  }\n+\n+  test(\"Blacklisting individual tasks and checking for SparkListenerEvents\") {\n+    configureBlacklistAndScheduler()"
+  }],
+  "prId": 16346
+}, {
+  "comments": [{
+    "author": {
+      "login": "squito"
+    },
+    "body": "now that you're doing the equivalent thing in `beforeEach`, this entire method is unnecessary.  `beforeEach` gets called automatically for each test so you don't need to call this explicitly.\r\n\r\nsorry I was unclear about this earlier.",
+    "commit": "701ebb7786ede13b5fe102d7c2c2b05f79edf21a",
+    "createdAt": "2017-01-18T16:02:51Z",
+    "diffHunk": "@@ -88,6 +91,15 @@ class BlacklistTrackerSuite extends SparkFunSuite with BeforeAndAfterEach with M\n     new TaskSetBlacklist(conf, stageId, clock)\n   }\n \n+  def configureBlacklistAndScheduler: Unit = {"
+  }, {
+    "author": {
+      "login": "jsoltren"
+    },
+    "body": "Makes sense, fixed.",
+    "commit": "701ebb7786ede13b5fe102d7c2c2b05f79edf21a",
+    "createdAt": "2017-01-18T16:54:20Z",
+    "diffHunk": "@@ -88,6 +91,15 @@ class BlacklistTrackerSuite extends SparkFunSuite with BeforeAndAfterEach with M\n     new TaskSetBlacklist(conf, stageId, clock)\n   }\n \n+  def configureBlacklistAndScheduler: Unit = {"
+  }],
+  "prId": 16346
+}]

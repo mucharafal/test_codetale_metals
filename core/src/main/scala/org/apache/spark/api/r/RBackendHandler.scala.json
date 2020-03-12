@@ -1,0 +1,58 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "felixcheung"
+    },
+    "body": "Isn't this an unknown method call? Should this say \"error unknown method\" or similar?\n",
+    "commit": "4f643c9aea187c4876b895d6f0a92bfff93fd818",
+    "createdAt": "2015-07-29T16:55:37Z",
+    "diffHunk": "@@ -69,8 +69,11 @@ private[r] class RBackendHandler(server: RBackend)\n             case e: Exception =>\n               logError(s\"Removing $objId failed\", e)\n               writeInt(dos, -1)\n+              writeString(dos, s\"Removing $objId failed: ${e.getMessage}\")\n           }\n-        case _ => dos.writeInt(-1)\n+        case _ =>\n+          dos.writeInt(-1)\n+          writeString(dos, \"Unknown error\")"
+  }],
+  "prId": 7742
+}, {
+  "comments": [{
+    "author": {
+      "login": "felixcheung"
+    },
+    "body": "would it make sense to write the stack too? often time it is much more useful to have the call stack in additional to the exception message\n",
+    "commit": "4f643c9aea187c4876b895d6f0a92bfff93fd818",
+    "createdAt": "2015-07-29T16:56:30Z",
+    "diffHunk": "@@ -148,6 +151,9 @@ private[r] class RBackendHandler(server: RBackend)\n       case e: Exception =>\n         logError(s\"$methodName on $objId failed\", e)\n         writeInt(dos, -1)\n+        // Writing the error message of the cause for the exception. This will be returned\n+        // to user in the R process.\n+        writeString(dos, e.getCause.getMessage)"
+  }, {
+    "author": {
+      "login": "shivaram"
+    },
+    "body": "Yeah it would be good to have a stack trace too but only the one from the actual error and not one from RBackend\n",
+    "commit": "4f643c9aea187c4876b895d6f0a92bfff93fd818",
+    "createdAt": "2015-07-29T17:19:46Z",
+    "diffHunk": "@@ -148,6 +151,9 @@ private[r] class RBackendHandler(server: RBackend)\n       case e: Exception =>\n         logError(s\"$methodName on $objId failed\", e)\n         writeInt(dos, -1)\n+        // Writing the error message of the cause for the exception. This will be returned\n+        // to user in the R process.\n+        writeString(dos, e.getCause.getMessage)"
+  }],
+  "prId": 7742
+}, {
+  "comments": [{
+    "author": {
+      "login": "shivaram"
+    },
+    "body": "Can we remove the `e` from this `logError` call ? Because right now we get the exception printed twice [1]. Also is there a max length for the string printed by R ? If you see the gist we right not get only the first 10 or so lines from the exception -- this might be fine, but I just wanted to check.\n\n[1] https://gist.github.com/shivaram/e57e83f2b77e369796c8\n",
+    "commit": "4f643c9aea187c4876b895d6f0a92bfff93fd818",
+    "createdAt": "2015-07-30T17:42:58Z",
+    "diffHunk": "@@ -148,6 +151,9 @@ private[r] class RBackendHandler(server: RBackend)\n       case e: Exception =>\n         logError(s\"$methodName on $objId failed\", e)"
+  }, {
+    "author": {
+      "login": "felixcheung"
+    },
+    "body": "good point, this is logging the InvocationTargetException too\n",
+    "commit": "4f643c9aea187c4876b895d6f0a92bfff93fd818",
+    "createdAt": "2015-07-30T18:15:00Z",
+    "diffHunk": "@@ -148,6 +151,9 @@ private[r] class RBackendHandler(server: RBackend)\n       case e: Exception =>\n         logError(s\"$methodName on $objId failed\", e)"
+  }, {
+    "author": {
+      "login": "falaki"
+    },
+    "body": "Yes, there is a limit for `warning.length` and default is 1000.\nhttps://stat.ethz.ch/R-manual/R-devel/library/base/html/options.html\n",
+    "commit": "4f643c9aea187c4876b895d6f0a92bfff93fd818",
+    "createdAt": "2015-07-30T18:49:31Z",
+    "diffHunk": "@@ -148,6 +151,9 @@ private[r] class RBackendHandler(server: RBackend)\n       case e: Exception =>\n         logError(s\"$methodName on $objId failed\", e)"
+  }],
+  "prId": 7742
+}]

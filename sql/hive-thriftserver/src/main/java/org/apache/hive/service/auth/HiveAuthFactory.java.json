@@ -1,0 +1,151 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "mridulm"
+    },
+    "body": "This will always return `false` : though the additional check will not hurt.",
+    "commit": "315206d5af4bf844dc043dcfe076efc4f776e87e",
+    "createdAt": "2018-04-27T08:36:44Z",
+    "diffHunk": "@@ -107,9 +109,16 @@ public HiveAuthFactory(HiveConf conf) throws TTransportException {\n         authTypeStr = AuthTypes.NONE.getAuthName();\n       }\n       if (authTypeStr.equalsIgnoreCase(AuthTypes.KERBEROS.getAuthName())) {\n-        saslServer = ShimLoader.getHadoopThriftAuthBridge()\n-          .createServer(conf.getVar(ConfVars.HIVE_SERVER2_KERBEROS_KEYTAB),\n-                        conf.getVar(ConfVars.HIVE_SERVER2_KERBEROS_PRINCIPAL));\n+        String principal = conf.getVar(ConfVars.HIVE_SERVER2_KERBEROS_PRINCIPAL);\n+        String keytab = conf.getVar(ConfVars.HIVE_SERVER2_KERBEROS_KEYTAB);\n+        if (needUgiLogin(UserGroupInformation.getCurrentUser(),\n+          SecurityUtil.getServerPrincipal(principal, \"0.0.0.0\"), keytab)) {",
+    "line": 59
+  }],
+  "prId": 21178
+}, {
+  "comments": [{
+    "author": {
+      "login": "mridulm"
+    },
+    "body": "`Objects.equals` for keytab check ?\r\nI dont think we invoke this when `keytab` is null currently, but would be good to future proof this.",
+    "commit": "315206d5af4bf844dc043dcfe076efc4f776e87e",
+    "createdAt": "2018-04-27T08:39:01Z",
+    "diffHunk": "@@ -362,4 +371,34 @@ public static void verifyProxyAccess(String realUser, String proxyUser, String i\n     }\n   }\n \n+  public static boolean needUgiLogin(UserGroupInformation ugi, String principal, String keytab) {\n+    return null == ugi || !ugi.hasKerberosCredentials() || !ugi.getUserName().equals(principal) ||\n+      !keytab.equals(getKeytabFromUgi());"
+  }],
+  "prId": 21178
+}, {
+  "comments": [{
+    "author": {
+      "login": "mridulm"
+    },
+    "body": "The field lookup + setAccessible can be pulled out of the method and into a static variable.\r\nThe field.get() itself should be within the sync block.",
+    "commit": "315206d5af4bf844dc043dcfe076efc4f776e87e",
+    "createdAt": "2018-04-27T08:40:53Z",
+    "diffHunk": "@@ -362,4 +371,34 @@ public static void verifyProxyAccess(String realUser, String proxyUser, String i\n     }\n   }\n \n+  public static boolean needUgiLogin(UserGroupInformation ugi, String principal, String keytab) {\n+    return null == ugi || !ugi.hasKerberosCredentials() || !ugi.getUserName().equals(principal) ||\n+      !keytab.equals(getKeytabFromUgi());\n+  }\n+\n+  private static String getKeytabFromUgi() {\n+    Class<?> clz = UserGroupInformation.class;\n+    try {\n+      synchronized (clz) {\n+        Field field = clz.getDeclaredField(\"keytabFile\");"
+  }],
+  "prId": 21178
+}, {
+  "comments": [{
+    "author": {
+      "login": "mridulm"
+    },
+    "body": "I was not aware of this change, thanks for fixing this !\r\nLet us move both field and method out of getKeytabFromUgi.\r\n```\r\nsynchronized(UserGroupInformation.class) {\r\n  if (null != keyTabField) { \r\n    return keyTabField.get(null); \r\n  } else {\r\n    return (String) method.invoke(UserGroupInformation.getCurrentUser()) \r\n  }\r\n}\r\n```",
+    "commit": "315206d5af4bf844dc043dcfe076efc4f776e87e",
+    "createdAt": "2018-04-27T08:43:29Z",
+    "diffHunk": "@@ -362,4 +371,34 @@ public static void verifyProxyAccess(String realUser, String proxyUser, String i\n     }\n   }\n \n+  public static boolean needUgiLogin(UserGroupInformation ugi, String principal, String keytab) {\n+    return null == ugi || !ugi.hasKerberosCredentials() || !ugi.getUserName().equals(principal) ||\n+      !keytab.equals(getKeytabFromUgi());\n+  }\n+\n+  private static String getKeytabFromUgi() {\n+    Class<?> clz = UserGroupInformation.class;\n+    try {\n+      synchronized (clz) {\n+        Field field = clz.getDeclaredField(\"keytabFile\");\n+        field.setAccessible(true);\n+        return (String) field.get(null);\n+      }\n+    } catch (NoSuchFieldException e) {\n+      try {\n+        synchronized (clz) {\n+          // In Hadoop 3 we don't have \"keytabFile\" field, instead we should use private method\n+          // getKeytab().\n+          Method method = clz.getDeclaredMethod(\"getKeytab\");\n+          method.setAccessible(true);\n+          return (String) method.invoke(UserGroupInformation.getCurrentUser());"
+  }, {
+    "author": {
+      "login": "jerryshao"
+    },
+    "body": "What is the purpose of moving both field and method out of this method? I'm not sure is there any difference.",
+    "commit": "315206d5af4bf844dc043dcfe076efc4f776e87e",
+    "createdAt": "2018-04-27T12:27:22Z",
+    "diffHunk": "@@ -362,4 +371,34 @@ public static void verifyProxyAccess(String realUser, String proxyUser, String i\n     }\n   }\n \n+  public static boolean needUgiLogin(UserGroupInformation ugi, String principal, String keytab) {\n+    return null == ugi || !ugi.hasKerberosCredentials() || !ugi.getUserName().equals(principal) ||\n+      !keytab.equals(getKeytabFromUgi());\n+  }\n+\n+  private static String getKeytabFromUgi() {\n+    Class<?> clz = UserGroupInformation.class;\n+    try {\n+      synchronized (clz) {\n+        Field field = clz.getDeclaredField(\"keytabFile\");\n+        field.setAccessible(true);\n+        return (String) field.get(null);\n+      }\n+    } catch (NoSuchFieldException e) {\n+      try {\n+        synchronized (clz) {\n+          // In Hadoop 3 we don't have \"keytabFile\" field, instead we should use private method\n+          // getKeytab().\n+          Method method = clz.getDeclaredMethod(\"getKeytab\");\n+          method.setAccessible(true);\n+          return (String) method.invoke(UserGroupInformation.getCurrentUser());"
+  }, {
+    "author": {
+      "login": "mridulm"
+    },
+    "body": "You dont want to reflect on class to get to field/method each time method is invoked.",
+    "commit": "315206d5af4bf844dc043dcfe076efc4f776e87e",
+    "createdAt": "2018-04-27T19:21:31Z",
+    "diffHunk": "@@ -362,4 +371,34 @@ public static void verifyProxyAccess(String realUser, String proxyUser, String i\n     }\n   }\n \n+  public static boolean needUgiLogin(UserGroupInformation ugi, String principal, String keytab) {\n+    return null == ugi || !ugi.hasKerberosCredentials() || !ugi.getUserName().equals(principal) ||\n+      !keytab.equals(getKeytabFromUgi());\n+  }\n+\n+  private static String getKeytabFromUgi() {\n+    Class<?> clz = UserGroupInformation.class;\n+    try {\n+      synchronized (clz) {\n+        Field field = clz.getDeclaredField(\"keytabFile\");\n+        field.setAccessible(true);\n+        return (String) field.get(null);\n+      }\n+    } catch (NoSuchFieldException e) {\n+      try {\n+        synchronized (clz) {\n+          // In Hadoop 3 we don't have \"keytabFile\" field, instead we should use private method\n+          // getKeytab().\n+          Method method = clz.getDeclaredMethod(\"getKeytab\");\n+          method.setAccessible(true);\n+          return (String) method.invoke(UserGroupInformation.getCurrentUser());"
+  }, {
+    "author": {
+      "login": "jerryshao"
+    },
+    "body": "This will only be called twice in the initialization stage, so there should not be large overhead.",
+    "commit": "315206d5af4bf844dc043dcfe076efc4f776e87e",
+    "createdAt": "2018-04-28T00:58:04Z",
+    "diffHunk": "@@ -362,4 +371,34 @@ public static void verifyProxyAccess(String realUser, String proxyUser, String i\n     }\n   }\n \n+  public static boolean needUgiLogin(UserGroupInformation ugi, String principal, String keytab) {\n+    return null == ugi || !ugi.hasKerberosCredentials() || !ugi.getUserName().equals(principal) ||\n+      !keytab.equals(getKeytabFromUgi());\n+  }\n+\n+  private static String getKeytabFromUgi() {\n+    Class<?> clz = UserGroupInformation.class;\n+    try {\n+      synchronized (clz) {\n+        Field field = clz.getDeclaredField(\"keytabFile\");\n+        field.setAccessible(true);\n+        return (String) field.get(null);\n+      }\n+    } catch (NoSuchFieldException e) {\n+      try {\n+        synchronized (clz) {\n+          // In Hadoop 3 we don't have \"keytabFile\" field, instead we should use private method\n+          // getKeytab().\n+          Method method = clz.getDeclaredMethod(\"getKeytab\");\n+          method.setAccessible(true);\n+          return (String) method.invoke(UserGroupInformation.getCurrentUser());"
+  }, {
+    "author": {
+      "login": "mridulm"
+    },
+    "body": "It is called twice right now; but as a util method which can be used in other place, let us not intentionally introduce known inefficiencies.",
+    "commit": "315206d5af4bf844dc043dcfe076efc4f776e87e",
+    "createdAt": "2018-04-28T05:45:33Z",
+    "diffHunk": "@@ -362,4 +371,34 @@ public static void verifyProxyAccess(String realUser, String proxyUser, String i\n     }\n   }\n \n+  public static boolean needUgiLogin(UserGroupInformation ugi, String principal, String keytab) {\n+    return null == ugi || !ugi.hasKerberosCredentials() || !ugi.getUserName().equals(principal) ||\n+      !keytab.equals(getKeytabFromUgi());\n+  }\n+\n+  private static String getKeytabFromUgi() {\n+    Class<?> clz = UserGroupInformation.class;\n+    try {\n+      synchronized (clz) {\n+        Field field = clz.getDeclaredField(\"keytabFile\");\n+        field.setAccessible(true);\n+        return (String) field.get(null);\n+      }\n+    } catch (NoSuchFieldException e) {\n+      try {\n+        synchronized (clz) {\n+          // In Hadoop 3 we don't have \"keytabFile\" field, instead we should use private method\n+          // getKeytab().\n+          Method method = clz.getDeclaredMethod(\"getKeytab\");\n+          method.setAccessible(true);\n+          return (String) method.invoke(UserGroupInformation.getCurrentUser());"
+  }, {
+    "author": {
+      "login": "jerryshao"
+    },
+    "body": "Sure, I will change it.",
+    "commit": "315206d5af4bf844dc043dcfe076efc4f776e87e",
+    "createdAt": "2018-04-28T08:02:32Z",
+    "diffHunk": "@@ -362,4 +371,34 @@ public static void verifyProxyAccess(String realUser, String proxyUser, String i\n     }\n   }\n \n+  public static boolean needUgiLogin(UserGroupInformation ugi, String principal, String keytab) {\n+    return null == ugi || !ugi.hasKerberosCredentials() || !ugi.getUserName().equals(principal) ||\n+      !keytab.equals(getKeytabFromUgi());\n+  }\n+\n+  private static String getKeytabFromUgi() {\n+    Class<?> clz = UserGroupInformation.class;\n+    try {\n+      synchronized (clz) {\n+        Field field = clz.getDeclaredField(\"keytabFile\");\n+        field.setAccessible(true);\n+        return (String) field.get(null);\n+      }\n+    } catch (NoSuchFieldException e) {\n+      try {\n+        synchronized (clz) {\n+          // In Hadoop 3 we don't have \"keytabFile\" field, instead we should use private method\n+          // getKeytab().\n+          Method method = clz.getDeclaredMethod(\"getKeytab\");\n+          method.setAccessible(true);\n+          return (String) method.invoke(UserGroupInformation.getCurrentUser());"
+  }],
+  "prId": 21178
+}, {
+  "comments": [{
+    "author": {
+      "login": "mridulm"
+    },
+    "body": "Let us catch specific exceptions for method/field invocation; not throwable.\r\nThe code I had initially written was poor in this regard btw, and was catching throwable - was bad form.",
+    "commit": "315206d5af4bf844dc043dcfe076efc4f776e87e",
+    "createdAt": "2018-04-27T08:44:22Z",
+    "diffHunk": "@@ -362,4 +371,34 @@ public static void verifyProxyAccess(String realUser, String proxyUser, String i\n     }\n   }\n \n+  public static boolean needUgiLogin(UserGroupInformation ugi, String principal, String keytab) {\n+    return null == ugi || !ugi.hasKerberosCredentials() || !ugi.getUserName().equals(principal) ||\n+      !keytab.equals(getKeytabFromUgi());\n+  }\n+\n+  private static String getKeytabFromUgi() {\n+    Class<?> clz = UserGroupInformation.class;\n+    try {\n+      synchronized (clz) {\n+        Field field = clz.getDeclaredField(\"keytabFile\");\n+        field.setAccessible(true);\n+        return (String) field.get(null);\n+      }\n+    } catch (NoSuchFieldException e) {\n+      try {\n+        synchronized (clz) {\n+          // In Hadoop 3 we don't have \"keytabFile\" field, instead we should use private method\n+          // getKeytab().\n+          Method method = clz.getDeclaredMethod(\"getKeytab\");\n+          method.setAccessible(true);\n+          return (String) method.invoke(UserGroupInformation.getCurrentUser());\n+        }\n+      } catch (Throwable t) {\n+        return null;\n+      }\n+    } catch (Throwable t) {\n+      return null;\n+    }"
+  }],
+  "prId": 21178
+}, {
+  "comments": [{
+    "author": {
+      "login": "mgaido91"
+    },
+    "body": "nit: I have always seen that we are trying to avoid to have imports of `.*`",
+    "commit": "315206d5af4bf844dc043dcfe076efc4f776e87e",
+    "createdAt": "2018-04-27T18:41:09Z",
+    "diffHunk": "@@ -18,14 +18,11 @@\n package org.apache.hive.service.auth;\n \n import java.io.IOException;\n+import java.lang.reflect.Field;\n+import java.lang.reflect.Method;\n import java.net.InetSocketAddress;\n import java.net.UnknownHostException;\n-import java.util.ArrayList;\n-import java.util.Arrays;\n-import java.util.HashMap;\n-import java.util.List;\n-import java.util.Locale;\n-import java.util.Map;\n+import java.util.*;"
+  }, {
+    "author": {
+      "login": "jerryshao"
+    },
+    "body": "This is automatically done by my intellij idea, will revert back.",
+    "commit": "315206d5af4bf844dc043dcfe076efc4f776e87e",
+    "createdAt": "2018-04-28T00:51:36Z",
+    "diffHunk": "@@ -18,14 +18,11 @@\n package org.apache.hive.service.auth;\n \n import java.io.IOException;\n+import java.lang.reflect.Field;\n+import java.lang.reflect.Method;\n import java.net.InetSocketAddress;\n import java.net.UnknownHostException;\n-import java.util.ArrayList;\n-import java.util.Arrays;\n-import java.util.HashMap;\n-import java.util.List;\n-import java.util.Locale;\n-import java.util.Map;\n+import java.util.*;"
+  }],
+  "prId": 21178
+}, {
+  "comments": [{
+    "author": {
+      "login": "mridulm"
+    },
+    "body": "nit: We should include a debug message (not INFO) indicating the exception.\r\nSame for getKeytab below.\r\n\r\nThis will help debug in case the signatures of these private methods changes later, and we are not sure what is happening.",
+    "commit": "315206d5af4bf844dc043dcfe076efc4f776e87e",
+    "createdAt": "2018-05-02T06:39:36Z",
+    "diffHunk": "@@ -92,7 +95,26 @@ public String getAuthName() {\n   public static final String HS2_PROXY_USER = \"hive.server2.proxy.user\";\n   public static final String HS2_CLIENT_TOKEN = \"hiveserver2ClientToken\";\n \n-  public HiveAuthFactory(HiveConf conf) throws TTransportException {\n+  private static Field keytabFile = null;\n+  private static Method getKeytab = null;\n+  static {\n+    Class<?> clz = UserGroupInformation.class;\n+    try {\n+      keytabFile = clz.getDeclaredField(\"keytabFile\");\n+      keytabFile.setAccessible(true);\n+    } catch (NoSuchFieldException nfe) {\n+      keytabFile = null;"
+  }, {
+    "author": {
+      "login": "jerryshao"
+    },
+    "body": "In the current STS code, we avoid using any log method. You can check the code, all the log method which used before (in Spark1) is removed now. ",
+    "commit": "315206d5af4bf844dc043dcfe076efc4f776e87e",
+    "createdAt": "2018-05-02T07:00:49Z",
+    "diffHunk": "@@ -92,7 +95,26 @@ public String getAuthName() {\n   public static final String HS2_PROXY_USER = \"hive.server2.proxy.user\";\n   public static final String HS2_CLIENT_TOKEN = \"hiveserver2ClientToken\";\n \n-  public HiveAuthFactory(HiveConf conf) throws TTransportException {\n+  private static Field keytabFile = null;\n+  private static Method getKeytab = null;\n+  static {\n+    Class<?> clz = UserGroupInformation.class;\n+    try {\n+      keytabFile = clz.getDeclaredField(\"keytabFile\");\n+      keytabFile.setAccessible(true);\n+    } catch (NoSuchFieldException nfe) {\n+      keytabFile = null;"
+  }, {
+    "author": {
+      "login": "mridulm"
+    },
+    "body": "I am not sure what you mean by that statement.\r\n```\r\n$ $ find sql/hive-thriftserver/ -type f | grep scala$ | xargs grep -i 'log.*\"' | wc -l\r\n      42\r\n```\r\n\r\nLog messages help us debug issues without needing to modify code; and this is an excellent case of where logging at appropriate level will help us unearth issues in production.\r\nI am not sure what the concern here is.",
+    "commit": "315206d5af4bf844dc043dcfe076efc4f776e87e",
+    "createdAt": "2018-05-02T08:22:26Z",
+    "diffHunk": "@@ -92,7 +95,26 @@ public String getAuthName() {\n   public static final String HS2_PROXY_USER = \"hive.server2.proxy.user\";\n   public static final String HS2_CLIENT_TOKEN = \"hiveserver2ClientToken\";\n \n-  public HiveAuthFactory(HiveConf conf) throws TTransportException {\n+  private static Field keytabFile = null;\n+  private static Method getKeytab = null;\n+  static {\n+    Class<?> clz = UserGroupInformation.class;\n+    try {\n+      keytabFile = clz.getDeclaredField(\"keytabFile\");\n+      keytabFile.setAccessible(true);\n+    } catch (NoSuchFieldException nfe) {\n+      keytabFile = null;"
+  }, {
+    "author": {
+      "login": "jerryshao"
+    },
+    "body": "Ok, I just remember Steve commented on some JIRAs about this thing, but I cannot remember where it is. Anyway I will log some logs here.",
+    "commit": "315206d5af4bf844dc043dcfe076efc4f776e87e",
+    "createdAt": "2018-05-02T08:41:10Z",
+    "diffHunk": "@@ -92,7 +95,26 @@ public String getAuthName() {\n   public static final String HS2_PROXY_USER = \"hive.server2.proxy.user\";\n   public static final String HS2_CLIENT_TOKEN = \"hiveserver2ClientToken\";\n \n-  public HiveAuthFactory(HiveConf conf) throws TTransportException {\n+  private static Field keytabFile = null;\n+  private static Method getKeytab = null;\n+  static {\n+    Class<?> clz = UserGroupInformation.class;\n+    try {\n+      keytabFile = clz.getDeclaredField(\"keytabFile\");\n+      keytabFile.setAccessible(true);\n+    } catch (NoSuchFieldException nfe) {\n+      keytabFile = null;"
+  }],
+  "prId": 21178
+}]

@@ -1,0 +1,263 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "`use implicit preference`\n",
+    "commit": "8b371dc115077151003bf3fa06a2e6bcd08434fd",
+    "createdAt": "2014-05-06T16:43:22Z",
+    "diffHunk": "@@ -62,6 +63,9 @@ object MovieLensALS {\n       opt[Unit](\"kryo\")\n         .text(s\"use Kryo serialization\")\n         .action((_, c) => c.copy(kryo = true))\n+      opt[Unit](\"implicitPrefs\")\n+        .text(s\"use Implicit Preference\")"
+  }],
+  "prId": 597
+}, {
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "Could you summarize our discussion and put a comment here explaining why we use `- 2.5`?\n",
+    "commit": "8b371dc115077151003bf3fa06a2e6bcd08434fd",
+    "createdAt": "2014-05-06T16:45:04Z",
+    "diffHunk": "@@ -88,7 +92,11 @@ object MovieLensALS {\n \n     val ratings = sc.textFile(params.input).map { line =>\n       val fields = line.split(\"::\")\n-      Rating(fields(0).toInt, fields(1).toInt, fields(2).toDouble)\n+      if (params.implicitPrefs) {\n+        Rating(fields(0).toInt, fields(1).toInt, fields(2).toDouble - 2.5)"
+  }, {
+    "author": {
+      "login": "techaddict"
+    },
+    "body": "```\n        /**\n         * MovieLens ratings are on a scale of 1-5:\n         * 5: Must see\n         * 4: Will enjoy\n         * 3: It's okay\n         * 2: Fairly bad\n         * 1: Awful\n         * So we should not recommend a movie if the predicted rating is less than 3.\n         * To map ratings to confidence scores, we use\n         * 5 -> 2.5, 4 -> 1.5, 3 -> 0.5, 2 -> -0.5, 1 -> -1.5. This mappings means unobserved\n         * entries are generally between It's okay and Fairly bad.\n         * The semantics of 0 in this expanded world of non-positive weights\n         * are \"the same as never having interacted at all\" -- which doesn't quite fit.\n         * It's possible that 0 values are ignored when constructing the sparse representation,\n         * because the 0s are implicit. This would be a problem, at least, a theoretical one.\n         */\n```\n",
+    "commit": "8b371dc115077151003bf3fa06a2e6bcd08434fd",
+    "createdAt": "2014-05-07T06:26:51Z",
+    "diffHunk": "@@ -88,7 +92,11 @@ object MovieLensALS {\n \n     val ratings = sc.textFile(params.input).map { line =>\n       val fields = line.split(\"::\")\n-      Rating(fields(0).toInt, fields(1).toInt, fields(2).toDouble)\n+      if (params.implicitPrefs) {\n+        Rating(fields(0).toInt, fields(1).toInt, fields(2).toDouble - 2.5)"
+  }, {
+    "author": {
+      "login": "techaddict"
+    },
+    "body": "Any modifs in the comment ?\n",
+    "commit": "8b371dc115077151003bf3fa06a2e6bcd08434fd",
+    "createdAt": "2014-05-07T06:27:18Z",
+    "diffHunk": "@@ -88,7 +92,11 @@ object MovieLensALS {\n \n     val ratings = sc.textFile(params.input).map { line =>\n       val fields = line.split(\"::\")\n-      Rating(fields(0).toInt, fields(1).toInt, fields(2).toDouble)\n+      if (params.implicitPrefs) {\n+        Rating(fields(0).toInt, fields(1).toInt, fields(2).toDouble - 2.5)"
+  }, {
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "The part starting from `-- which doesn't quite fit` is a little confusing. I think it is okay to end the comment at `at all\".` Also we need some comments for the evaluation part.\n",
+    "commit": "8b371dc115077151003bf3fa06a2e6bcd08434fd",
+    "createdAt": "2014-05-07T06:41:46Z",
+    "diffHunk": "@@ -88,7 +92,11 @@ object MovieLensALS {\n \n     val ratings = sc.textFile(params.input).map { line =>\n       val fields = line.split(\"::\")\n-      Rating(fields(0).toInt, fields(1).toInt, fields(2).toDouble)\n+      if (params.implicitPrefs) {\n+        Rating(fields(0).toInt, fields(1).toInt, fields(2).toDouble - 2.5)"
+  }],
+  "prId": 597
+}, {
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "`if(x.rating >= 0)` => `if (x.rating > 2.5)`. So ratings 3/4/5 are positive and 1/2 are negative.\n\nDoes this line fit the one above?\n",
+    "commit": "8b371dc115077151003bf3fa06a2e6bcd08434fd",
+    "createdAt": "2014-05-06T16:48:11Z",
+    "diffHunk": "@@ -99,7 +107,12 @@ object MovieLensALS {\n \n     val splits = ratings.randomSplit(Array(0.8, 0.2))\n     val training = splits(0).cache()\n-    val test = splits(1).cache()\n+    val test = if (params.implicitPrefs) {\n+      splits(1)\n+      .map(x => Rating(x.user, x.product, if(x.rating >= 0) 1.0 else 0.0))"
+  }, {
+    "author": {
+      "login": "techaddict"
+    },
+    "body": "`if (x.rating > 2.5)` will always be false, better `> 0` since we have already done `x.ratings - 2.5`\n",
+    "commit": "8b371dc115077151003bf3fa06a2e6bcd08434fd",
+    "createdAt": "2014-05-07T06:30:56Z",
+    "diffHunk": "@@ -99,7 +107,12 @@ object MovieLensALS {\n \n     val splits = ratings.randomSplit(Array(0.8, 0.2))\n     val training = splits(0).cache()\n-    val test = splits(1).cache()\n+    val test = if (params.implicitPrefs) {\n+      splits(1)\n+      .map(x => Rating(x.user, x.product, if(x.rating >= 0) 1.0 else 0.0))"
+  }, {
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "Sorry, I thought we only applied `- 2.5` to ratings in `training`.\n",
+    "commit": "8b371dc115077151003bf3fa06a2e6bcd08434fd",
+    "createdAt": "2014-05-07T06:38:22Z",
+    "diffHunk": "@@ -99,7 +107,12 @@ object MovieLensALS {\n \n     val splits = ratings.randomSplit(Array(0.8, 0.2))\n     val training = splits(0).cache()\n-    val test = splits(1).cache()\n+    val test = if (params.implicitPrefs) {\n+      splits(1)\n+      .map(x => Rating(x.user, x.product, if(x.rating >= 0) 1.0 else 0.0))"
+  }],
+  "prId": 597
+}, {
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "`map(x =>` -> `map { x =>`\n",
+    "commit": "8b371dc115077151003bf3fa06a2e6bcd08434fd",
+    "createdAt": "2014-05-06T16:49:43Z",
+    "diffHunk": "@@ -121,11 +135,17 @@ object MovieLensALS {\n   }\n \n   /** Compute RMSE (Root Mean Squared Error). */\n-  def computeRmse(model: MatrixFactorizationModel, data: RDD[Rating], n: Long) = {\n+  def computeRmse(model: MatrixFactorizationModel, data: RDD[Rating], params: Params) = {\n     val predictions: RDD[Rating] = model.predict(data.map(x => (x.user, x.product)))\n-    val predictionsAndRatings = predictions.map(x => ((x.user, x.product), x.rating))\n-      .join(data.map(x => ((x.user, x.product), x.rating)))\n-      .values\n-    math.sqrt(predictionsAndRatings.map(x => (x._1 - x._2) * (x._1 - x._2)).reduce(_ + _) / n)\n+    val predictionsAndRatings = if (params.implicitPrefs) {\n+      predictions.map(x => ("
+  }],
+  "prId": 597
+}, {
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "This block is more readable if \n\n```\nval r = if (x.rating > 1.0) 1.0 else if (x.rating < 0.0) 0.0 else x.rating\n((x.user, x.product), r)\n```\n",
+    "commit": "8b371dc115077151003bf3fa06a2e6bcd08434fd",
+    "createdAt": "2014-05-06T16:50:37Z",
+    "diffHunk": "@@ -121,11 +135,17 @@ object MovieLensALS {\n   }\n \n   /** Compute RMSE (Root Mean Squared Error). */\n-  def computeRmse(model: MatrixFactorizationModel, data: RDD[Rating], n: Long) = {\n+  def computeRmse(model: MatrixFactorizationModel, data: RDD[Rating], params: Params) = {\n     val predictions: RDD[Rating] = model.predict(data.map(x => (x.user, x.product)))\n-    val predictionsAndRatings = predictions.map(x => ((x.user, x.product), x.rating))\n-      .join(data.map(x => ((x.user, x.product), x.rating)))\n-      .values\n-    math.sqrt(predictionsAndRatings.map(x => (x._1 - x._2) * (x._1 - x._2)).reduce(_ + _) / n)\n+    val predictionsAndRatings = if (params.implicitPrefs) {\n+      predictions.map(x => (\n+        (x.user, x.product),\n+        if (x.rating > 1.0) 1.0 else if (x.rating < 0.0) 0.0 else x.rating"
+  }],
+  "prId": 597
+}, {
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "Put `join` after `if ... else ...` because both branches use the same join.\n",
+    "commit": "8b371dc115077151003bf3fa06a2e6bcd08434fd",
+    "createdAt": "2014-05-06T16:51:58Z",
+    "diffHunk": "@@ -121,11 +135,17 @@ object MovieLensALS {\n   }\n \n   /** Compute RMSE (Root Mean Squared Error). */\n-  def computeRmse(model: MatrixFactorizationModel, data: RDD[Rating], n: Long) = {\n+  def computeRmse(model: MatrixFactorizationModel, data: RDD[Rating], params: Params) = {\n     val predictions: RDD[Rating] = model.predict(data.map(x => (x.user, x.product)))\n-    val predictionsAndRatings = predictions.map(x => ((x.user, x.product), x.rating))\n-      .join(data.map(x => ((x.user, x.product), x.rating)))\n-      .values\n-    math.sqrt(predictionsAndRatings.map(x => (x._1 - x._2) * (x._1 - x._2)).reduce(_ + _) / n)\n+    val predictionsAndRatings = if (params.implicitPrefs) {\n+      predictions.map(x => (\n+        (x.user, x.product),\n+        if (x.rating > 1.0) 1.0 else if (x.rating < 0.0) 0.0 else x.rating\n+      )).join(data.map(x => ((x.user, x.product), x.rating)))"
+  }],
+  "prId": 597
+}, {
+  "comments": [{
+    "author": {
+      "login": "techaddict"
+    },
+    "body": "@mengxr ok ?\n\n```\n/**\n       * 0 means \"don't know\" and positive values mean \"confident that the prediction should be 1\".\n       * Negative values means \"confident that the prediction should be 0\".\n       * We have in this case used some kind of weighted RMSE. The weight is the absolute value of the\n       * confidence. The error is the difference between prediction and either 1 or 0, depending on\n       * whether r is positive or negative.\n       */\n```\n",
+    "commit": "8b371dc115077151003bf3fa06a2e6bcd08434fd",
+    "createdAt": "2014-05-07T07:01:39Z",
+    "diffHunk": "@@ -99,7 +107,12 @@ object MovieLensALS {\n \n     val splits = ratings.randomSplit(Array(0.8, 0.2))\n     val training = splits(0).cache()\n-    val test = splits(1).cache()\n+    val test = if (params.implicitPrefs) {\n+      splits(1)"
+  }, {
+    "author": {
+      "login": "techaddict"
+    },
+    "body": "Will put it on top of this line.\n",
+    "commit": "8b371dc115077151003bf3fa06a2e6bcd08434fd",
+    "createdAt": "2014-05-07T07:02:12Z",
+    "diffHunk": "@@ -99,7 +107,12 @@ object MovieLensALS {\n \n     val splits = ratings.randomSplit(Array(0.8, 0.2))\n     val training = splits(0).cache()\n-    val test = splits(1).cache()\n+    val test = if (params.implicitPrefs) {\n+      splits(1)"
+  }],
+  "prId": 597
+}, {
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "remove `s`\n",
+    "commit": "8b371dc115077151003bf3fa06a2e6bcd08434fd",
+    "createdAt": "2014-05-07T17:01:16Z",
+    "diffHunk": "@@ -62,6 +63,9 @@ object MovieLensALS {\n       opt[Unit](\"kryo\")\n         .text(s\"use Kryo serialization\")\n         .action((_, c) => c.copy(kryo = true))\n+      opt[Unit](\"implicitPrefs\")\n+        .text(s\"use implicit preference\")"
+  }],
+  "prId": 597
+}, {
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "This is not JavaDoc, so please remove the last `*`.\n",
+    "commit": "8b371dc115077151003bf3fa06a2e6bcd08434fd",
+    "createdAt": "2014-05-07T17:01:42Z",
+    "diffHunk": "@@ -88,7 +92,27 @@ object MovieLensALS {\n \n     val ratings = sc.textFile(params.input).map { line =>\n       val fields = line.split(\"::\")\n-      Rating(fields(0).toInt, fields(1).toInt, fields(2).toDouble)\n+      if (params.implicitPrefs) {\n+        /**"
+  }],
+  "prId": 597
+}, {
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "Missing a period  at the end.\n",
+    "commit": "8b371dc115077151003bf3fa06a2e6bcd08434fd",
+    "createdAt": "2014-05-07T17:02:40Z",
+    "diffHunk": "@@ -88,7 +92,27 @@ object MovieLensALS {\n \n     val ratings = sc.textFile(params.input).map { line =>\n       val fields = line.split(\"::\")\n-      Rating(fields(0).toInt, fields(1).toInt, fields(2).toDouble)\n+      if (params.implicitPrefs) {\n+        /**\n+         * MovieLens ratings are on a scale of 1-5:\n+         * 5: Must see\n+         * 4: Will enjoy\n+         * 3: It's okay\n+         * 2: Fairly bad\n+         * 1: Awful\n+         * So we should not recommend a movie if the predicted rating is less than 3.\n+         * To map ratings to confidence scores, we use\n+         * 5 -> 2.5, 4 -> 1.5, 3 -> 0.5, 2 -> -0.5, 1 -> -1.5. This mappings means unobserved\n+         * entries are generally between It's okay and Fairly bad.\n+         * The semantics of 0 in this expanded world of non-positive weights\n+         * are \"the same as never having interacted at all\""
+  }],
+  "prId": 597
+}, {
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "This sentence may be confusing to users. Shall we hide theory from users?\n",
+    "commit": "8b371dc115077151003bf3fa06a2e6bcd08434fd",
+    "createdAt": "2014-05-07T17:03:40Z",
+    "diffHunk": "@@ -88,7 +92,27 @@ object MovieLensALS {\n \n     val ratings = sc.textFile(params.input).map { line =>\n       val fields = line.split(\"::\")\n-      Rating(fields(0).toInt, fields(1).toInt, fields(2).toDouble)\n+      if (params.implicitPrefs) {\n+        /**\n+         * MovieLens ratings are on a scale of 1-5:\n+         * 5: Must see\n+         * 4: Will enjoy\n+         * 3: It's okay\n+         * 2: Fairly bad\n+         * 1: Awful\n+         * So we should not recommend a movie if the predicted rating is less than 3.\n+         * To map ratings to confidence scores, we use\n+         * 5 -> 2.5, 4 -> 1.5, 3 -> 0.5, 2 -> -0.5, 1 -> -1.5. This mappings means unobserved\n+         * entries are generally between It's okay and Fairly bad.\n+         * The semantics of 0 in this expanded world of non-positive weights\n+         * are \"the same as never having interacted at all\"\n+         * It's possible that 0 values are ignored when constructing the sparse representation,"
+  }, {
+    "author": {
+      "login": "techaddict"
+    },
+    "body": "@mengxr  I think it's just ok won't cause a problem. should i leave it as it is ?\n",
+    "commit": "8b371dc115077151003bf3fa06a2e6bcd08434fd",
+    "createdAt": "2014-05-07T17:07:24Z",
+    "diffHunk": "@@ -88,7 +92,27 @@ object MovieLensALS {\n \n     val ratings = sc.textFile(params.input).map { line =>\n       val fields = line.split(\"::\")\n-      Rating(fields(0).toInt, fields(1).toInt, fields(2).toDouble)\n+      if (params.implicitPrefs) {\n+        /**\n+         * MovieLens ratings are on a scale of 1-5:\n+         * 5: Must see\n+         * 4: Will enjoy\n+         * 3: It's okay\n+         * 2: Fairly bad\n+         * 1: Awful\n+         * So we should not recommend a movie if the predicted rating is less than 3.\n+         * To map ratings to confidence scores, we use\n+         * 5 -> 2.5, 4 -> 1.5, 3 -> 0.5, 2 -> -0.5, 1 -> -1.5. This mappings means unobserved\n+         * entries are generally between It's okay and Fairly bad.\n+         * The semantics of 0 in this expanded world of non-positive weights\n+         * are \"the same as never having interacted at all\"\n+         * It's possible that 0 values are ignored when constructing the sparse representation,"
+  }],
+  "prId": 597
+}, {
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "Ditto. Remove the last `*`.\n",
+    "commit": "8b371dc115077151003bf3fa06a2e6bcd08434fd",
+    "createdAt": "2014-05-07T17:04:02Z",
+    "diffHunk": "@@ -99,7 +123,18 @@ object MovieLensALS {\n \n     val splits = ratings.randomSplit(Array(0.8, 0.2))\n     val training = splits(0).cache()\n-    val test = splits(1).cache()\n+    val test = if (params.implicitPrefs) {\n+      /**"
+  }],
+  "prId": 597
+}, {
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "`eval` might mean something different. Shall we use 'mapPredictedRating`?\n",
+    "commit": "8b371dc115077151003bf3fa06a2e6bcd08434fd",
+    "createdAt": "2014-05-07T17:06:27Z",
+    "diffHunk": "@@ -121,11 +157,14 @@ object MovieLensALS {\n   }\n \n   /** Compute RMSE (Root Mean Squared Error). */\n-  def computeRmse(model: MatrixFactorizationModel, data: RDD[Rating], n: Long) = {\n+  def computeRmse(model: MatrixFactorizationModel, data: RDD[Rating], implicitPrefs: Boolean) = {\n+\n+    def evalRating(r: Double) ="
+  }, {
+    "author": {
+      "login": "techaddict"
+    },
+    "body": "ya better.\n",
+    "commit": "8b371dc115077151003bf3fa06a2e6bcd08434fd",
+    "createdAt": "2014-05-07T17:11:52Z",
+    "diffHunk": "@@ -121,11 +157,14 @@ object MovieLensALS {\n   }\n \n   /** Compute RMSE (Root Mean Squared Error). */\n-  def computeRmse(model: MatrixFactorizationModel, data: RDD[Rating], n: Long) = {\n+  def computeRmse(model: MatrixFactorizationModel, data: RDD[Rating], implicitPrefs: Boolean) = {\n+\n+    def evalRating(r: Double) ="
+  }],
+  "prId": 597
+}, {
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "There are two `if` blocks in this line. Better use multiple lines for readability.\n",
+    "commit": "8b371dc115077151003bf3fa06a2e6bcd08434fd",
+    "createdAt": "2014-05-07T17:07:22Z",
+    "diffHunk": "@@ -121,11 +157,14 @@ object MovieLensALS {\n   }\n \n   /** Compute RMSE (Root Mean Squared Error). */\n-  def computeRmse(model: MatrixFactorizationModel, data: RDD[Rating], n: Long) = {\n+  def computeRmse(model: MatrixFactorizationModel, data: RDD[Rating], implicitPrefs: Boolean) = {\n+\n+    def evalRating(r: Double) =\n+      if (!implicitPrefs) r else if (r > 1.0) 1.0 else if (r < 0.0) 0.0 else r"
+  }],
+  "prId": 597
+}, {
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "2-space indentation?\n",
+    "commit": "8b371dc115077151003bf3fa06a2e6bcd08434fd",
+    "createdAt": "2014-05-07T17:08:07Z",
+    "diffHunk": "@@ -121,11 +157,14 @@ object MovieLensALS {\n   }\n \n   /** Compute RMSE (Root Mean Squared Error). */\n-  def computeRmse(model: MatrixFactorizationModel, data: RDD[Rating], n: Long) = {\n+  def computeRmse(model: MatrixFactorizationModel, data: RDD[Rating], implicitPrefs: Boolean) = {\n+\n+    def evalRating(r: Double) =\n+      if (!implicitPrefs) r else if (r > 1.0) 1.0 else if (r < 0.0) 0.0 else r\n+\n     val predictions: RDD[Rating] = model.predict(data.map(x => (x.user, x.product)))\n-    val predictionsAndRatings = predictions.map(x => ((x.user, x.product), x.rating))\n-      .join(data.map(x => ((x.user, x.product), x.rating)))\n-      .values\n-    math.sqrt(predictionsAndRatings.map(x => (x._1 - x._2) * (x._1 - x._2)).reduce(_ + _) / n)\n+    val predictionsAndRatings = predictions.map(x => ((x.user, x.product), evalRating(x.rating)))\n+        .join(data.map(x => ((x.user, x.product), x.rating))).values"
+  }],
+  "prId": 597
+}, {
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "Can we change it to the following:\n\n```\nif (implicitPrefs) math.max(math.min(r, 1.0), 0.0) else r\n```\n",
+    "commit": "8b371dc115077151003bf3fa06a2e6bcd08434fd",
+    "createdAt": "2014-05-07T22:50:25Z",
+    "diffHunk": "@@ -121,11 +157,23 @@ object MovieLensALS {\n   }\n \n   /** Compute RMSE (Root Mean Squared Error). */\n-  def computeRmse(model: MatrixFactorizationModel, data: RDD[Rating], n: Long) = {\n+  def computeRmse(model: MatrixFactorizationModel, data: RDD[Rating], implicitPrefs: Boolean) = {\n+\n+    def mapPredictedRating(r: Double) =\n+      if (!implicitPrefs) {"
+  }],
+  "prId": 597
+}, {
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "Shall we remove lines 109 and 110? MovieLens data does not have `0` ratings.\n",
+    "commit": "8b371dc115077151003bf3fa06a2e6bcd08434fd",
+    "createdAt": "2014-05-07T22:52:50Z",
+    "diffHunk": "@@ -88,7 +92,27 @@ object MovieLensALS {\n \n     val ratings = sc.textFile(params.input).map { line =>\n       val fields = line.split(\"::\")\n-      Rating(fields(0).toInt, fields(1).toInt, fields(2).toDouble)\n+      if (params.implicitPrefs) {\n+        /*\n+         * MovieLens ratings are on a scale of 1-5:\n+         * 5: Must see\n+         * 4: Will enjoy\n+         * 3: It's okay\n+         * 2: Fairly bad\n+         * 1: Awful\n+         * So we should not recommend a movie if the predicted rating is less than 3.\n+         * To map ratings to confidence scores, we use\n+         * 5 -> 2.5, 4 -> 1.5, 3 -> 0.5, 2 -> -0.5, 1 -> -1.5. This mappings means unobserved\n+         * entries are generally between It's okay and Fairly bad.\n+         * The semantics of 0 in this expanded world of non-positive weights\n+         * are \"the same as never having interacted at all\".\n+         * It's possible that 0 values are ignored when constructing the sparse representation,\n+         * because the 0s are implicit. This would be a problem, at least, a theoretical one."
+  }],
+  "prId": 597
+}, {
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "Add a space after `if`.\n",
+    "commit": "8b371dc115077151003bf3fa06a2e6bcd08434fd",
+    "createdAt": "2014-05-07T22:53:12Z",
+    "diffHunk": "@@ -99,7 +123,18 @@ object MovieLensALS {\n \n     val splits = ratings.randomSplit(Array(0.8, 0.2))\n     val training = splits(0).cache()\n-    val test = splits(1).cache()\n+    val test = if (params.implicitPrefs) {\n+      /*\n+       * 0 means \"don't know\" and positive values mean \"confident that the prediction should be 1\".\n+       * Negative values means \"confident that the prediction should be 0\".\n+       * We have in this case used some kind of weighted RMSE. The weight is the absolute value of\n+       * the confidence. The error is the difference between prediction and either 1 or 0,\n+       * depending on whether r is positive or negative.\n+       */\n+      splits(1).map(x => Rating(x.user, x.product, if(x.rating > 0) 1.0 else 0.0))"
+  }],
+  "prId": 597
+}]

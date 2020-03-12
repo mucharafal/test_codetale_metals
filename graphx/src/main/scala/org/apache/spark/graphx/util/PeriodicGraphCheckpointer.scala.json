@@ -1,0 +1,61 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "viirya"
+    },
+    "body": "hmm, `GraphImpl.persist` actually persists its `vertices` and `replicatedVertexView.edges` (i.e., `edges`). But the problem is we only check the storage level of vertices. Maybe we should keep the original.",
+    "commit": "ec6265986cb91585c0a6fdbc0c9675ec9fbba613",
+    "createdAt": "2017-02-10T07:58:44Z",
+    "diffHunk": "@@ -87,10 +88,7 @@ private[mllib] class PeriodicGraphCheckpointer[VD, ED](\n \n   override protected def persist(data: Graph[VD, ED]): Unit = {\n     if (data.vertices.getStorageLevel == StorageLevel.NONE) {\n-      data.vertices.persist()\n-    }\n-    if (data.edges.getStorageLevel == StorageLevel.NONE) {\n-      data.edges.persist()\n+      data.persist()"
+  }, {
+    "author": {
+      "login": "mallman"
+    },
+    "body": "I enhanced the persistence tests in `PeriodicGraphCheckpointSuite` to check that the storage level requested in the graph construction is the storage level seen after persistence. Both this version and the original version of this method failed that unit test.\r\n\r\nThe graph's vertex and edge rdds are somewhat peculiar in that `.cache()` and `.persist()` do not do the same thing, unlike other RDDs. And while `.cache()` honors the default storage level specified at graph construction time, `.persist()` always caches with the `MEMORY_ONLY` storage level.\r\n\r\nAt any rate, getting the `PeriodicGraphCheckpointer` to honor the default storage level specified at graph construction time requires changing these method calls from `persist()` to `cache()`.",
+    "commit": "ec6265986cb91585c0a6fdbc0c9675ec9fbba613",
+    "createdAt": "2017-02-10T22:54:50Z",
+    "diffHunk": "@@ -87,10 +88,7 @@ private[mllib] class PeriodicGraphCheckpointer[VD, ED](\n \n   override protected def persist(data: Graph[VD, ED]): Unit = {\n     if (data.vertices.getStorageLevel == StorageLevel.NONE) {\n-      data.vertices.persist()\n-    }\n-    if (data.edges.getStorageLevel == StorageLevel.NONE) {\n-      data.edges.persist()\n+      data.persist()"
+  }],
+  "prId": 15125
+}, {
+  "comments": [{
+    "author": {
+      "login": "mallman"
+    },
+    "body": "This comment should be removed.",
+    "commit": "ec6265986cb91585c0a6fdbc0c9675ec9fbba613",
+    "createdAt": "2017-02-10T22:32:47Z",
+    "diffHunk": "@@ -76,7 +77,7 @@ import org.apache.spark.storage.StorageLevel\n  *\n  * TODO: Move this out of MLlib?"
+  }],
+  "prId": 15125
+}, {
+  "comments": [{
+    "author": {
+      "login": "felixcheung"
+    },
+    "body": "isn't persist better? this could potentially support different storage level later",
+    "commit": "ec6265986cb91585c0a6fdbc0c9675ec9fbba613",
+    "createdAt": "2017-02-17T05:05:49Z",
+    "diffHunk": "@@ -87,10 +87,10 @@ private[mllib] class PeriodicGraphCheckpointer[VD, ED](\n \n   override protected def persist(data: Graph[VD, ED]): Unit = {\n     if (data.vertices.getStorageLevel == StorageLevel.NONE) {\n-      data.vertices.persist()",
+    "line": 29
+  }, {
+    "author": {
+      "login": "mallman"
+    },
+    "body": "We need to use `cache` because `persist` does not honor the default storage level requested when constructing the graph. Only `cache` does that. It's confusing, but true. To verify this for yourself, change these values to `persist` and run the `PeriodicGraphCheckpointerSuite` tests.",
+    "commit": "ec6265986cb91585c0a6fdbc0c9675ec9fbba613",
+    "createdAt": "2017-02-17T18:38:30Z",
+    "diffHunk": "@@ -87,10 +87,10 @@ private[mllib] class PeriodicGraphCheckpointer[VD, ED](\n \n   override protected def persist(data: Graph[VD, ED]): Unit = {\n     if (data.vertices.getStorageLevel == StorageLevel.NONE) {\n-      data.vertices.persist()",
+    "line": 29
+  }, {
+    "author": {
+      "login": "felixcheung"
+    },
+    "body": "@mallman @dding3  it will be good to add a comment on that here",
+    "commit": "ec6265986cb91585c0a6fdbc0c9675ec9fbba613",
+    "createdAt": "2017-04-19T03:25:20Z",
+    "diffHunk": "@@ -87,10 +87,10 @@ private[mllib] class PeriodicGraphCheckpointer[VD, ED](\n \n   override protected def persist(data: Graph[VD, ED]): Unit = {\n     if (data.vertices.getStorageLevel == StorageLevel.NONE) {\n-      data.vertices.persist()",
+    "line": 29
+  }],
+  "prId": 15125
+}]

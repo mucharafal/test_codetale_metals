@@ -1,0 +1,44 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "squito"
+    },
+    "body": "should we actually do this in `LocalSparkContext.resetSparkContext()` (which is called in `afterEach`)?\r\n\r\nI worry there are a lot more places we should be doing this, eg. `MLlibTestSparkContext.afterAll()` only calls `SparkSession.clearActiveSession()`.\r\n\r\nthis class does seem to be one of the major sources of flakiness so I'm also OK with just getting this in for now.",
+    "commit": "04d7f785483910dff88fa2c3906c1de6146ced1d",
+    "createdAt": "2018-06-11T17:29:56Z",
+    "diffHunk": "@@ -45,6 +44,14 @@ class ClosableByteArrayInputStream(buf: Array[Byte]) extends ByteArrayInputStrea\n \n class UnsafeRowSerializerSuite extends SparkFunSuite with LocalSparkContext {\n \n+  override def beforeAll() {\n+    super.beforeAll()\n+    // This test suite calls `UnsafeProjection.create` which accesses `SQLConf.get`, we should make\n+    // sure active session is cleaned so that `SQLConf.get` won't refer to a stopped session.\n+    SparkSession.clearActiveSession()\n+    SparkSession.clearDefaultSession()"
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "the problem is that, `LocalSparkContext` is in core module not SQL, so we can't access `SparkSession` there.\r\n\r\nMaybe we should use `LocalSparkSession` for this test suite.\r\n\r\n",
+    "commit": "04d7f785483910dff88fa2c3906c1de6146ced1d",
+    "createdAt": "2018-06-11T18:12:50Z",
+    "diffHunk": "@@ -45,6 +44,14 @@ class ClosableByteArrayInputStream(buf: Array[Byte]) extends ByteArrayInputStrea\n \n class UnsafeRowSerializerSuite extends SparkFunSuite with LocalSparkContext {\n \n+  override def beforeAll() {\n+    super.beforeAll()\n+    // This test suite calls `UnsafeProjection.create` which accesses `SQLConf.get`, we should make\n+    // sure active session is cleaned so that `SQLConf.get` won't refer to a stopped session.\n+    SparkSession.clearActiveSession()\n+    SparkSession.clearDefaultSession()"
+  }, {
+    "author": {
+      "login": "praetp"
+    },
+    "body": "@squito @cloud-fan : we are facing similar issues in our own Spark tests. Are you saying just closing the sparkSession is not enough ?",
+    "commit": "04d7f785483910dff88fa2c3906c1de6146ced1d",
+    "createdAt": "2018-08-08T12:08:08Z",
+    "diffHunk": "@@ -45,6 +44,14 @@ class ClosableByteArrayInputStream(buf: Array[Byte]) extends ByteArrayInputStrea\n \n class UnsafeRowSerializerSuite extends SparkFunSuite with LocalSparkContext {\n \n+  override def beforeAll() {\n+    super.beforeAll()\n+    // This test suite calls `UnsafeProjection.create` which accesses `SQLConf.get`, we should make\n+    // sure active session is cleaned so that `SQLConf.get` won't refer to a stopped session.\n+    SparkSession.clearActiveSession()\n+    SparkSession.clearDefaultSession()"
+  }, {
+    "author": {
+      "login": "squito"
+    },
+    "body": "@praetp yeah I think so, you probably also need to call `clearActiveSession()` and `clearDefaultSession()` in your `afterEach()` in your tests (or similar).\r\n\r\nIf that doesn't work, might be best to open a thread on dev@spark.apache.org with more details.",
+    "commit": "04d7f785483910dff88fa2c3906c1de6146ced1d",
+    "createdAt": "2018-08-08T14:55:07Z",
+    "diffHunk": "@@ -45,6 +44,14 @@ class ClosableByteArrayInputStream(buf: Array[Byte]) extends ByteArrayInputStrea\n \n class UnsafeRowSerializerSuite extends SparkFunSuite with LocalSparkContext {\n \n+  override def beforeAll() {\n+    super.beforeAll()\n+    // This test suite calls `UnsafeProjection.create` which accesses `SQLConf.get`, we should make\n+    // sure active session is cleaned so that `SQLConf.get` won't refer to a stopped session.\n+    SparkSession.clearActiveSession()\n+    SparkSession.clearDefaultSession()"
+  }, {
+    "author": {
+      "login": "praetp"
+    },
+    "body": "Seems like a major resource leakage to me then..",
+    "commit": "04d7f785483910dff88fa2c3906c1de6146ced1d",
+    "createdAt": "2018-08-09T07:28:29Z",
+    "diffHunk": "@@ -45,6 +44,14 @@ class ClosableByteArrayInputStream(buf: Array[Byte]) extends ByteArrayInputStrea\n \n class UnsafeRowSerializerSuite extends SparkFunSuite with LocalSparkContext {\n \n+  override def beforeAll() {\n+    super.beforeAll()\n+    // This test suite calls `UnsafeProjection.create` which accesses `SQLConf.get`, we should make\n+    // sure active session is cleaned so that `SQLConf.get` won't refer to a stopped session.\n+    SparkSession.clearActiveSession()\n+    SparkSession.clearDefaultSession()"
+  }],
+  "prId": 21518
+}]

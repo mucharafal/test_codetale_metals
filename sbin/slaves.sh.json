@@ -1,0 +1,99 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "mattf"
+    },
+    "body": "why cat here and echo later?\n",
+    "commit": "eff73948d44a1067498033605ce9158becacedf6",
+    "createdAt": "2014-09-18T14:42:48Z",
+    "diffHunk": "@@ -67,20 +69,26 @@ fi\n \n if [ \"$HOSTLIST\" = \"\" ]; then\n   if [ \"$SPARK_SLAVES\" = \"\" ]; then\n-    export HOSTLIST=\"${SPARK_CONF_DIR}/slaves\"\n+    if [ -f \"${SPARK_CONF_DIR}/slaves\" ]; then\n+      HOSTLIST=`cat \"${SPARK_CONF_DIR}/slaves\"`\n+    else\n+      HOSTLIST=localhost\n+    fi\n   else\n-    export HOSTLIST=\"${SPARK_SLAVES}\"\n+    HOSTLIST=`cat \"${SPARK_SLAVES}\"`",
+    "line": 23
+  }, {
+    "author": {
+      "login": "sarutak"
+    },
+    "body": "This is to use HOSTLIST as List of Host, not file.\nIt's to use localhost as a default host list entry.\n",
+    "commit": "eff73948d44a1067498033605ce9158becacedf6",
+    "createdAt": "2014-09-19T05:43:09Z",
+    "diffHunk": "@@ -67,20 +69,26 @@ fi\n \n if [ \"$HOSTLIST\" = \"\" ]; then\n   if [ \"$SPARK_SLAVES\" = \"\" ]; then\n-    export HOSTLIST=\"${SPARK_CONF_DIR}/slaves\"\n+    if [ -f \"${SPARK_CONF_DIR}/slaves\" ]; then\n+      HOSTLIST=`cat \"${SPARK_CONF_DIR}/slaves\"`\n+    else\n+      HOSTLIST=localhost\n+    fi\n   else\n-    export HOSTLIST=\"${SPARK_SLAVES}\"\n+    HOSTLIST=`cat \"${SPARK_SLAVES}\"`",
+    "line": 23
+  }, {
+    "author": {
+      "login": "mattf"
+    },
+    "body": "thanks for pointing that out. i didn't read closely enough.\n",
+    "commit": "eff73948d44a1067498033605ce9158becacedf6",
+    "createdAt": "2014-09-19T12:45:09Z",
+    "diffHunk": "@@ -67,20 +69,26 @@ fi\n \n if [ \"$HOSTLIST\" = \"\" ]; then\n   if [ \"$SPARK_SLAVES\" = \"\" ]; then\n-    export HOSTLIST=\"${SPARK_CONF_DIR}/slaves\"\n+    if [ -f \"${SPARK_CONF_DIR}/slaves\" ]; then\n+      HOSTLIST=`cat \"${SPARK_CONF_DIR}/slaves\"`\n+    else\n+      HOSTLIST=localhost\n+    fi\n   else\n-    export HOSTLIST=\"${SPARK_SLAVES}\"\n+    HOSTLIST=`cat \"${SPARK_SLAVES}\"`",
+    "line": 23
+  }],
+  "prId": 2444
+}, {
+  "comments": [{
+    "author": {
+      "login": "mattf"
+    },
+    "body": "doing this in parallel is a feature, and passwordless access is common. i'd suggest adding a flag to indicate ssh should be run in the foreground.\n",
+    "commit": "eff73948d44a1067498033605ce9158becacedf6",
+    "createdAt": "2014-09-18T14:43:55Z",
+    "diffHunk": "@@ -67,20 +69,26 @@ fi\n \n if [ \"$HOSTLIST\" = \"\" ]; then\n   if [ \"$SPARK_SLAVES\" = \"\" ]; then\n-    export HOSTLIST=\"${SPARK_CONF_DIR}/slaves\"\n+    if [ -f \"${SPARK_CONF_DIR}/slaves\" ]; then\n+      HOSTLIST=`cat \"${SPARK_CONF_DIR}/slaves\"`\n+    else\n+      HOSTLIST=localhost\n+    fi\n   else\n-    export HOSTLIST=\"${SPARK_SLAVES}\"\n+    HOSTLIST=`cat \"${SPARK_SLAVES}\"`\n   fi\n fi\n \n+\n+\n # By default disable strict host key checking\n if [ \"$SPARK_SSH_OPTS\" = \"\" ]; then\n   SPARK_SSH_OPTS=\"-o StrictHostKeyChecking=no\"\n fi\n \n-for slave in `cat \"$HOSTLIST\"|sed  \"s/#.*$//;/^$/d\"`; do\n+for slave in `echo \"$HOSTLIST\"|sed  \"s/#.*$//;/^$/d\"`; do\n  ssh $SPARK_SSH_OPTS \"$slave\" $\"${@// /\\\\ }\" \\\n-   2>&1 | sed \"s/^/$slave: /\" &\n+   2>&1 | sed \"s/^/$slave: /\""
+  }, {
+    "author": {
+      "login": "pwendell"
+    },
+    "body": "I agree with matt - this will regress behavior for other users. Can we have a flag called `SSH_FOREGROUND` that turns this on?\n",
+    "commit": "eff73948d44a1067498033605ce9158becacedf6",
+    "createdAt": "2014-09-19T17:54:47Z",
+    "diffHunk": "@@ -67,20 +69,26 @@ fi\n \n if [ \"$HOSTLIST\" = \"\" ]; then\n   if [ \"$SPARK_SLAVES\" = \"\" ]; then\n-    export HOSTLIST=\"${SPARK_CONF_DIR}/slaves\"\n+    if [ -f \"${SPARK_CONF_DIR}/slaves\" ]; then\n+      HOSTLIST=`cat \"${SPARK_CONF_DIR}/slaves\"`\n+    else\n+      HOSTLIST=localhost\n+    fi\n   else\n-    export HOSTLIST=\"${SPARK_SLAVES}\"\n+    HOSTLIST=`cat \"${SPARK_SLAVES}\"`\n   fi\n fi\n \n+\n+\n # By default disable strict host key checking\n if [ \"$SPARK_SSH_OPTS\" = \"\" ]; then\n   SPARK_SSH_OPTS=\"-o StrictHostKeyChecking=no\"\n fi\n \n-for slave in `cat \"$HOSTLIST\"|sed  \"s/#.*$//;/^$/d\"`; do\n+for slave in `echo \"$HOSTLIST\"|sed  \"s/#.*$//;/^$/d\"`; do\n  ssh $SPARK_SSH_OPTS \"$slave\" $\"${@// /\\\\ }\" \\\n-   2>&1 | sed \"s/^/$slave: /\" &\n+   2>&1 | sed \"s/^/$slave: /\""
+  }, {
+    "author": {
+      "login": "sarutak"
+    },
+    "body": "O.K, I'll try it.\n",
+    "commit": "eff73948d44a1067498033605ce9158becacedf6",
+    "createdAt": "2014-09-21T06:17:21Z",
+    "diffHunk": "@@ -67,20 +69,26 @@ fi\n \n if [ \"$HOSTLIST\" = \"\" ]; then\n   if [ \"$SPARK_SLAVES\" = \"\" ]; then\n-    export HOSTLIST=\"${SPARK_CONF_DIR}/slaves\"\n+    if [ -f \"${SPARK_CONF_DIR}/slaves\" ]; then\n+      HOSTLIST=`cat \"${SPARK_CONF_DIR}/slaves\"`\n+    else\n+      HOSTLIST=localhost\n+    fi\n   else\n-    export HOSTLIST=\"${SPARK_SLAVES}\"\n+    HOSTLIST=`cat \"${SPARK_SLAVES}\"`\n   fi\n fi\n \n+\n+\n # By default disable strict host key checking\n if [ \"$SPARK_SSH_OPTS\" = \"\" ]; then\n   SPARK_SSH_OPTS=\"-o StrictHostKeyChecking=no\"\n fi\n \n-for slave in `cat \"$HOSTLIST\"|sed  \"s/#.*$//;/^$/d\"`; do\n+for slave in `echo \"$HOSTLIST\"|sed  \"s/#.*$//;/^$/d\"`; do\n  ssh $SPARK_SSH_OPTS \"$slave\" $\"${@// /\\\\ }\" \\\n-   2>&1 | sed \"s/^/$slave: /\" &\n+   2>&1 | sed \"s/^/$slave: /\""
+  }],
+  "prId": 2444
+}, {
+  "comments": [{
+    "author": {
+      "login": "pwendell"
+    },
+    "body": "We should change the docs in `spark-standalone.md` to explain two new features:\n1. You can set SSH_FOREGROUND if you cannot use paswordless SSH (currently, it says this is required).\n2. If there is no `slaves` file in existence, it will launch a single slave at `localhost` by default.\n",
+    "commit": "eff73948d44a1067498033605ce9158becacedf6",
+    "createdAt": "2014-09-19T18:02:13Z",
+    "diffHunk": "@@ -67,20 +69,26 @@ fi\n \n if [ \"$HOSTLIST\" = \"\" ]; then\n   if [ \"$SPARK_SLAVES\" = \"\" ]; then\n-    export HOSTLIST=\"${SPARK_CONF_DIR}/slaves\"\n+    if [ -f \"${SPARK_CONF_DIR}/slaves\" ]; then\n+      HOSTLIST=`cat \"${SPARK_CONF_DIR}/slaves\"`\n+    else\n+      HOSTLIST=localhost",
+    "line": 19
+  }, {
+    "author": {
+      "login": "mattf"
+    },
+    "body": "yes, i was moving too quickly this morning. definitely need something to allow for background ssh.\n",
+    "commit": "eff73948d44a1067498033605ce9158becacedf6",
+    "createdAt": "2014-09-19T23:39:54Z",
+    "diffHunk": "@@ -67,20 +69,26 @@ fi\n \n if [ \"$HOSTLIST\" = \"\" ]; then\n   if [ \"$SPARK_SLAVES\" = \"\" ]; then\n-    export HOSTLIST=\"${SPARK_CONF_DIR}/slaves\"\n+    if [ -f \"${SPARK_CONF_DIR}/slaves\" ]; then\n+      HOSTLIST=`cat \"${SPARK_CONF_DIR}/slaves\"`\n+    else\n+      HOSTLIST=localhost",
+    "line": 19
+  }, {
+    "author": {
+      "login": "sarutak"
+    },
+    "body": "O.K, I'll add SSH_FOREGROUND variable and add description.\n",
+    "commit": "eff73948d44a1067498033605ce9158becacedf6",
+    "createdAt": "2014-09-21T06:19:22Z",
+    "diffHunk": "@@ -67,20 +69,26 @@ fi\n \n if [ \"$HOSTLIST\" = \"\" ]; then\n   if [ \"$SPARK_SLAVES\" = \"\" ]; then\n-    export HOSTLIST=\"${SPARK_CONF_DIR}/slaves\"\n+    if [ -f \"${SPARK_CONF_DIR}/slaves\" ]; then\n+      HOSTLIST=`cat \"${SPARK_CONF_DIR}/slaves\"`\n+    else\n+      HOSTLIST=localhost",
+    "line": 19
+  }],
+  "prId": 2444
+}, {
+  "comments": [{
+    "author": {
+      "login": "pwendell"
+    },
+    "body": "Typically for these types of options we just check whether it's defined or not. For example elsewhere we do:\n\n```\nif [ -n \"$SPARK_PRINT_LAUNCH_COMMAND\" ]; then\n```\n\nCan you make it consistent with that?\n",
+    "commit": "eff73948d44a1067498033605ce9158becacedf6",
+    "createdAt": "2014-09-25T06:25:14Z",
+    "diffHunk": "@@ -67,23 +69,34 @@ fi\n \n if [ \"$HOSTLIST\" = \"\" ]; then\n   if [ \"$SPARK_SLAVES\" = \"\" ]; then\n-    export HOSTLIST=\"${SPARK_CONF_DIR}/slaves\"\n+    if [ -f \"${SPARK_CONF_DIR}/slaves\" ]; then\n+      HOSTLIST=`cat \"${SPARK_CONF_DIR}/slaves\"`\n+    else\n+      HOSTLIST=localhost\n+    fi\n   else\n-    export HOSTLIST=\"${SPARK_SLAVES}\"\n+    HOSTLIST=`cat \"${SPARK_SLAVES}\"`\n   fi\n fi\n \n+\n+\n # By default disable strict host key checking\n if [ \"$SPARK_SSH_OPTS\" = \"\" ]; then\n   SPARK_SSH_OPTS=\"-o StrictHostKeyChecking=no\"\n fi\n \n-for slave in `cat \"$HOSTLIST\"|sed  \"s/#.*$//;/^$/d\"`; do\n- ssh $SPARK_SSH_OPTS \"$slave\" $\"${@// /\\\\ }\" \\\n-   2>&1 | sed \"s/^/$slave: /\" &\n- if [ \"$SPARK_SLAVE_SLEEP\" != \"\" ]; then\n-   sleep $SPARK_SLAVE_SLEEP\n- fi\n+for slave in `echo \"$HOSTLIST\"|sed  \"s/#.*$//;/^$/d\"`; do\n+  if [ \"${SPARK_SSH_FOREGROUND}\" = \"y\" ] || [ \"${SPARK_SSH_FOREGROUND}\" = \"yes\" ]; then"
+  }],
+  "prId": 2444
+}]

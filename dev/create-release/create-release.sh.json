@@ -1,0 +1,31 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Yeah, this is starting to make the standard build get out of hand. Now there are two required profiles to build R? these need to be part of R's module.\n",
+    "commit": "8dc8ecf980a039ade098776b5211b5b686b1272e",
+    "createdAt": "2015-06-02T09:04:44Z",
+    "diffHunk": "@@ -228,14 +228,14 @@ if [[ ! \"$@\" =~ --skip-package ]]; then\n \n   # We increment the Zinc port each time to avoid OOM's and other craziness if multiple builds\n   # share the same Zinc server.\n-  make_binary_release \"hadoop1\" \"-Psparkr -Phadoop-1 -Phive -Phive-thriftserver\" \"3030\" &\n-  make_binary_release \"hadoop1-scala2.11\" \"-Psparkr -Phadoop-1 -Phive -Dscala-2.11\" \"3031\" &\n-  make_binary_release \"cdh4\" \"-Psparkr -Phadoop-1 -Phive -Phive-thriftserver -Dhadoop.version=2.0.0-mr1-cdh4.2.0\" \"3032\" &\n-  make_binary_release \"hadoop2.3\" \"-Psparkr -Phadoop-2.3 -Phive -Phive-thriftserver -Pyarn\" \"3033\" &\n-  make_binary_release \"hadoop2.4\" \"-Psparkr -Phadoop-2.4 -Phive -Phive-thriftserver -Pyarn\" \"3034\" &\n-  make_binary_release \"mapr3\" \"-Pmapr3 -Psparkr -Phive -Phive-thriftserver\" \"3035\" &\n-  make_binary_release \"mapr4\" \"-Pmapr4 -Psparkr -Pyarn -Phive -Phive-thriftserver\" \"3036\" &\n-  make_binary_release \"hadoop2.4-without-hive\" \"-Psparkr -Phadoop-2.4 -Pyarn\" \"3037\" &\n+  make_binary_release \"hadoop1\" \"-Psparkr -Psparkr-docs -Phadoop-1 -Phive -Phive-thriftserver\" \"3030\" &",
+    "line": 12
+  }, {
+    "author": {
+      "login": "shivaram"
+    },
+    "body": "Hmm - I agree that the number of flags is getting out of hand, but there are a couple of things I tried to separate out in the SparkR build that can probably be simplified\n\nThe reason we need this change was that R has an inbuilt help system where you can access a [package's man pages](http://cran.r-project.org/doc/manuals/r-release/R-intro.html#Getting-help). Now these man pages use another R package (roxygen2) to be generated. I tried to keep the binary build separate from the man pages build so that users could build them separately if required.\n\nNow another way to do this might be to check if roxygen2 is installed in the binary build script and just build the man pages if it exists. This might help us get rid of the profile `sparkr-docs` -- Does that sound like a better solution ? I will make a follow up PR today\n",
+    "commit": "8dc8ecf980a039ade098776b5211b5b686b1272e",
+    "createdAt": "2015-06-02T18:10:26Z",
+    "diffHunk": "@@ -228,14 +228,14 @@ if [[ ! \"$@\" =~ --skip-package ]]; then\n \n   # We increment the Zinc port each time to avoid OOM's and other craziness if multiple builds\n   # share the same Zinc server.\n-  make_binary_release \"hadoop1\" \"-Psparkr -Phadoop-1 -Phive -Phive-thriftserver\" \"3030\" &\n-  make_binary_release \"hadoop1-scala2.11\" \"-Psparkr -Phadoop-1 -Phive -Dscala-2.11\" \"3031\" &\n-  make_binary_release \"cdh4\" \"-Psparkr -Phadoop-1 -Phive -Phive-thriftserver -Dhadoop.version=2.0.0-mr1-cdh4.2.0\" \"3032\" &\n-  make_binary_release \"hadoop2.3\" \"-Psparkr -Phadoop-2.3 -Phive -Phive-thriftserver -Pyarn\" \"3033\" &\n-  make_binary_release \"hadoop2.4\" \"-Psparkr -Phadoop-2.4 -Phive -Phive-thriftserver -Pyarn\" \"3034\" &\n-  make_binary_release \"mapr3\" \"-Pmapr3 -Psparkr -Phive -Phive-thriftserver\" \"3035\" &\n-  make_binary_release \"mapr4\" \"-Pmapr4 -Psparkr -Pyarn -Phive -Phive-thriftserver\" \"3036\" &\n-  make_binary_release \"hadoop2.4-without-hive\" \"-Psparkr -Phadoop-2.4 -Pyarn\" \"3037\" &\n+  make_binary_release \"hadoop1\" \"-Psparkr -Psparkr-docs -Phadoop-1 -Phive -Phive-thriftserver\" \"3030\" &",
+    "line": 12
+  }, {
+    "author": {
+      "login": "pwendell"
+    },
+    "body": "Personally I don't mind if this is kept behind a flag, because most developers won't necessarily want to install a bunch of extra packages to just try and get SparkR building. We could just merge it under the sparkr profile if we want though, don't have strong feelings about it.\n\nOne other note, I've been prototyping a refactoring of these build scripts locally that I plan to contribute back after the 1.4 release. So any changes should be made there too:\n\nhttps://github.com/pwendell/spark-utils/tree/master/new-release-scripts\n",
+    "commit": "8dc8ecf980a039ade098776b5211b5b686b1272e",
+    "createdAt": "2015-06-02T19:32:23Z",
+    "diffHunk": "@@ -228,14 +228,14 @@ if [[ ! \"$@\" =~ --skip-package ]]; then\n \n   # We increment the Zinc port each time to avoid OOM's and other craziness if multiple builds\n   # share the same Zinc server.\n-  make_binary_release \"hadoop1\" \"-Psparkr -Phadoop-1 -Phive -Phive-thriftserver\" \"3030\" &\n-  make_binary_release \"hadoop1-scala2.11\" \"-Psparkr -Phadoop-1 -Phive -Dscala-2.11\" \"3031\" &\n-  make_binary_release \"cdh4\" \"-Psparkr -Phadoop-1 -Phive -Phive-thriftserver -Dhadoop.version=2.0.0-mr1-cdh4.2.0\" \"3032\" &\n-  make_binary_release \"hadoop2.3\" \"-Psparkr -Phadoop-2.3 -Phive -Phive-thriftserver -Pyarn\" \"3033\" &\n-  make_binary_release \"hadoop2.4\" \"-Psparkr -Phadoop-2.4 -Phive -Phive-thriftserver -Pyarn\" \"3034\" &\n-  make_binary_release \"mapr3\" \"-Pmapr3 -Psparkr -Phive -Phive-thriftserver\" \"3035\" &\n-  make_binary_release \"mapr4\" \"-Pmapr4 -Psparkr -Pyarn -Phive -Phive-thriftserver\" \"3036\" &\n-  make_binary_release \"hadoop2.4-without-hive\" \"-Psparkr -Phadoop-2.4 -Pyarn\" \"3037\" &\n+  make_binary_release \"hadoop1\" \"-Psparkr -Psparkr-docs -Phadoop-1 -Phive -Phive-thriftserver\" \"3030\" &",
+    "line": 12
+  }],
+  "prId": 6567
+}]

@@ -1,0 +1,22 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "tdas"
+    },
+    "body": "i had written this in this way so that if there are any errors in the lazy eval of `condition` that gets caught and message printed correctly. Happened to me a few times.\n",
+    "commit": "6aeb27afc057eb9ce917654f4dabf8bd47aed01a",
+    "createdAt": "2016-04-01T03:53:26Z",
+    "diffHunk": "@@ -224,11 +239,8 @@ trait StreamTest extends QueryTest with Timeouts {\n          \"\"\".stripMargin\n \n     def verify(condition: => Boolean, message: String): Unit = {\n-      try {\n-        Assertions.assert(condition)\n-      } catch {\n-        case NonFatal(e) =>\n-          failTest(message, e)\n+      if (!condition) {",
+    "line": 44
+  }, {
+    "author": {
+      "login": "marmbrus"
+    },
+    "body": "All uses of `verify` are just doing equality checks with variables (and thus can't throw), except for those that were modified specifically such that that were going to throw exceptions upon failure.  So I think really the problem is overloading what was a simple assert to be an error handler.\n\nThe issue this this construction is it now pollutes the output with the obvious:\n\n```\ncondition was false\n[info]   org.scalatest.Assertions$class.newAssertionFailedException(Assertions.scala:500)\n[info]          org.scalatest.FunSuite.newAssertionFailedException(FunSuite.scala:1555)\n[info]          org.scalatest.Assertions$AssertionsHelper.macroAssert(Assertions.scala:466)\n[info]          org.apache.spark.sql.StreamTest$class.verify$1(StreamTest.scala:228)\n[info]          org.apache.spark.sql.StreamTest$$anonfun$testStream$1.apply(StreamTest.scala:355)\n[info]          org.apache.spark.sql.StreamTest$$anonfun$testStream$1.apply(StreamTest.scala:271)\n[info]          scala.collection.mutable.ResizableArray$class.foreach(ResizableArray.scala:59)\n[info]          scala.collection.mutable.ArrayBuffer.foreach(ArrayBuffer.scala:48)\n[info]          org.apache.spark.sql.StreamTest$class.testStream(StreamTest.scala:271)\n[info]          org.apache.spark.sql.streaming.StreamSuite.testStream(StreamSuite.scala:24)\n```\n",
+    "commit": "6aeb27afc057eb9ce917654f4dabf8bd47aed01a",
+    "createdAt": "2016-04-01T21:09:59Z",
+    "diffHunk": "@@ -224,11 +239,8 @@ trait StreamTest extends QueryTest with Timeouts {\n          \"\"\".stripMargin\n \n     def verify(condition: => Boolean, message: String): Unit = {\n-      try {\n-        Assertions.assert(condition)\n-      } catch {\n-        case NonFatal(e) =>\n-          failTest(message, e)\n+      if (!condition) {",
+    "line": 44
+  }],
+  "prId": 12048
+}]

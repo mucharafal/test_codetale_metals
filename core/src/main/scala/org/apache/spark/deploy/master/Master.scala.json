@@ -1,0 +1,176 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "\"accidently\" is misspelled. I think this line may be too long. Also, it's probably unusual that the app terminated right? this file will always show up while the app is running?\n",
+    "commit": "03589ac7427cd906316c1121089b433e8d2bbf6e",
+    "createdAt": "2015-03-02T08:21:47Z",
+    "diffHunk": "@@ -736,30 +736,31 @@ private[spark] class Master(\n     val appName = app.desc.name\n     val notFoundBasePath = HistoryServer.UI_PATH_PREFIX + \"/not-found\"\n     try {\n-      val eventLogFile = app.desc.eventLogDir\n-        .map { dir => EventLoggingListener.getLogPath(dir, app.id) }\n+      val eventLogDir = app.desc.eventLogDir\n         .getOrElse {\n           // Event logging is not enabled for this application\n           app.desc.appUiUrl = notFoundBasePath\n           return false\n         }\n-        \n-      val fs = Utils.getHadoopFileSystem(eventLogFile, hadoopConf)\n-\n-      if (fs.exists(new Path(eventLogFile + EventLoggingListener.IN_PROGRESS))) {\n+      \n+      val eventLogFilePrefix = EventLoggingListener.getLogPath(eventLogDir, app.id)        \n+      val fs = Utils.getHadoopFileSystem(eventLogDir, hadoopConf)\n+      val eventLogFileSuffix = if (fs.exists(new Path(eventLogFilePrefix + \n+          EventLoggingListener.IN_PROGRESS))) {\n         // Event logging is enabled for this application, but the application is still in progress\n-        val title = s\"Application history not found (${app.id})\"\n-        var msg = s\"Application $appName is still in progress.\"\n+        var msg = s\"Application $appName is still in progress, it may be terminated accidently.\""
+  }, {
+    "author": {
+      "login": "liyezhang556520"
+    },
+    "body": "Hi @srowen , when app is running, it will recording the history at the same time. And the history log file name is with the format \"app-xxxxx.inprogress\" and after the app finished running, the suffix (.inprogress) is removed. And if app is stopped abnormally, the suffix remains.\n",
+    "commit": "03589ac7427cd906316c1121089b433e8d2bbf6e",
+    "createdAt": "2015-03-02T08:29:59Z",
+    "diffHunk": "@@ -736,30 +736,31 @@ private[spark] class Master(\n     val appName = app.desc.name\n     val notFoundBasePath = HistoryServer.UI_PATH_PREFIX + \"/not-found\"\n     try {\n-      val eventLogFile = app.desc.eventLogDir\n-        .map { dir => EventLoggingListener.getLogPath(dir, app.id) }\n+      val eventLogDir = app.desc.eventLogDir\n         .getOrElse {\n           // Event logging is not enabled for this application\n           app.desc.appUiUrl = notFoundBasePath\n           return false\n         }\n-        \n-      val fs = Utils.getHadoopFileSystem(eventLogFile, hadoopConf)\n-\n-      if (fs.exists(new Path(eventLogFile + EventLoggingListener.IN_PROGRESS))) {\n+      \n+      val eventLogFilePrefix = EventLoggingListener.getLogPath(eventLogDir, app.id)        \n+      val fs = Utils.getHadoopFileSystem(eventLogDir, hadoopConf)\n+      val eventLogFileSuffix = if (fs.exists(new Path(eventLogFilePrefix + \n+          EventLoggingListener.IN_PROGRESS))) {\n         // Event logging is enabled for this application, but the application is still in progress\n-        val title = s\"Application history not found (${app.id})\"\n-        var msg = s\"Application $appName is still in progress.\"\n+        var msg = s\"Application $appName is still in progress, it may be terminated accidently.\""
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Yeah I understand that, but the message tends to suggest to people that there is a problem, when 99% of the time the app is still merely running, not failed. I might soften the text to \"... still in progress. If the application is not running, then this indicates it may have terminated abnormally.\"\n",
+    "commit": "03589ac7427cd906316c1121089b433e8d2bbf6e",
+    "createdAt": "2015-03-02T08:33:34Z",
+    "diffHunk": "@@ -736,30 +736,31 @@ private[spark] class Master(\n     val appName = app.desc.name\n     val notFoundBasePath = HistoryServer.UI_PATH_PREFIX + \"/not-found\"\n     try {\n-      val eventLogFile = app.desc.eventLogDir\n-        .map { dir => EventLoggingListener.getLogPath(dir, app.id) }\n+      val eventLogDir = app.desc.eventLogDir\n         .getOrElse {\n           // Event logging is not enabled for this application\n           app.desc.appUiUrl = notFoundBasePath\n           return false\n         }\n-        \n-      val fs = Utils.getHadoopFileSystem(eventLogFile, hadoopConf)\n-\n-      if (fs.exists(new Path(eventLogFile + EventLoggingListener.IN_PROGRESS))) {\n+      \n+      val eventLogFilePrefix = EventLoggingListener.getLogPath(eventLogDir, app.id)        \n+      val fs = Utils.getHadoopFileSystem(eventLogDir, hadoopConf)\n+      val eventLogFileSuffix = if (fs.exists(new Path(eventLogFilePrefix + \n+          EventLoggingListener.IN_PROGRESS))) {\n         // Event logging is enabled for this application, but the application is still in progress\n-        val title = s\"Application history not found (${app.id})\"\n-        var msg = s\"Application $appName is still in progress.\"\n+        var msg = s\"Application $appName is still in progress, it may be terminated accidently.\""
+  }, {
+    "author": {
+      "login": "liyezhang556520"
+    },
+    "body": "Ok, I'll update the message, thank you for your idea\n",
+    "commit": "03589ac7427cd906316c1121089b433e8d2bbf6e",
+    "createdAt": "2015-03-02T08:36:36Z",
+    "diffHunk": "@@ -736,30 +736,31 @@ private[spark] class Master(\n     val appName = app.desc.name\n     val notFoundBasePath = HistoryServer.UI_PATH_PREFIX + \"/not-found\"\n     try {\n-      val eventLogFile = app.desc.eventLogDir\n-        .map { dir => EventLoggingListener.getLogPath(dir, app.id) }\n+      val eventLogDir = app.desc.eventLogDir\n         .getOrElse {\n           // Event logging is not enabled for this application\n           app.desc.appUiUrl = notFoundBasePath\n           return false\n         }\n-        \n-      val fs = Utils.getHadoopFileSystem(eventLogFile, hadoopConf)\n-\n-      if (fs.exists(new Path(eventLogFile + EventLoggingListener.IN_PROGRESS))) {\n+      \n+      val eventLogFilePrefix = EventLoggingListener.getLogPath(eventLogDir, app.id)        \n+      val fs = Utils.getHadoopFileSystem(eventLogDir, hadoopConf)\n+      val eventLogFileSuffix = if (fs.exists(new Path(eventLogFilePrefix + \n+          EventLoggingListener.IN_PROGRESS))) {\n         // Event logging is enabled for this application, but the application is still in progress\n-        val title = s\"Application history not found (${app.id})\"\n-        var msg = s\"Application $appName is still in progress.\"\n+        var msg = s\"Application $appName is still in progress, it may be terminated accidently.\""
+  }, {
+    "author": {
+      "login": "liyezhang556520"
+    },
+    "body": "@srowen , I have a question, is it normal that the app is still running after it is removed by master ? Should not it  be always be stopped when master receive `removeApplication` message?\n",
+    "commit": "03589ac7427cd906316c1121089b433e8d2bbf6e",
+    "createdAt": "2015-03-02T08:52:42Z",
+    "diffHunk": "@@ -736,30 +736,31 @@ private[spark] class Master(\n     val appName = app.desc.name\n     val notFoundBasePath = HistoryServer.UI_PATH_PREFIX + \"/not-found\"\n     try {\n-      val eventLogFile = app.desc.eventLogDir\n-        .map { dir => EventLoggingListener.getLogPath(dir, app.id) }\n+      val eventLogDir = app.desc.eventLogDir\n         .getOrElse {\n           // Event logging is not enabled for this application\n           app.desc.appUiUrl = notFoundBasePath\n           return false\n         }\n-        \n-      val fs = Utils.getHadoopFileSystem(eventLogFile, hadoopConf)\n-\n-      if (fs.exists(new Path(eventLogFile + EventLoggingListener.IN_PROGRESS))) {\n+      \n+      val eventLogFilePrefix = EventLoggingListener.getLogPath(eventLogDir, app.id)        \n+      val fs = Utils.getHadoopFileSystem(eventLogDir, hadoopConf)\n+      val eventLogFileSuffix = if (fs.exists(new Path(eventLogFilePrefix + \n+          EventLoggingListener.IN_PROGRESS))) {\n         // Event logging is enabled for this application, but the application is still in progress\n-        val title = s\"Application history not found (${app.id})\"\n-        var msg = s\"Application $appName is still in progress.\"\n+        var msg = s\"Application $appName is still in progress, it may be terminated accidently.\""
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "I don't think that's normal. Hm, is that the context here? I thought this was just about always seeing the latest log messages even from the in-progress log file.\n",
+    "commit": "03589ac7427cd906316c1121089b433e8d2bbf6e",
+    "createdAt": "2015-03-02T08:57:01Z",
+    "diffHunk": "@@ -736,30 +736,31 @@ private[spark] class Master(\n     val appName = app.desc.name\n     val notFoundBasePath = HistoryServer.UI_PATH_PREFIX + \"/not-found\"\n     try {\n-      val eventLogFile = app.desc.eventLogDir\n-        .map { dir => EventLoggingListener.getLogPath(dir, app.id) }\n+      val eventLogDir = app.desc.eventLogDir\n         .getOrElse {\n           // Event logging is not enabled for this application\n           app.desc.appUiUrl = notFoundBasePath\n           return false\n         }\n-        \n-      val fs = Utils.getHadoopFileSystem(eventLogFile, hadoopConf)\n-\n-      if (fs.exists(new Path(eventLogFile + EventLoggingListener.IN_PROGRESS))) {\n+      \n+      val eventLogFilePrefix = EventLoggingListener.getLogPath(eventLogDir, app.id)        \n+      val fs = Utils.getHadoopFileSystem(eventLogDir, hadoopConf)\n+      val eventLogFileSuffix = if (fs.exists(new Path(eventLogFilePrefix + \n+          EventLoggingListener.IN_PROGRESS))) {\n         // Event logging is enabled for this application, but the application is still in progress\n-        val title = s\"Application history not found (${app.id})\"\n-        var msg = s\"Application $appName is still in progress.\"\n+        var msg = s\"Application $appName is still in progress, it may be terminated accidently.\""
+  }, {
+    "author": {
+      "login": "liyezhang556520"
+    },
+    "body": "Well I don't think the in-progress log file will be appended any more log messages when the program comes here.\n",
+    "commit": "03589ac7427cd906316c1121089b433e8d2bbf6e",
+    "createdAt": "2015-03-02T09:04:01Z",
+    "diffHunk": "@@ -736,30 +736,31 @@ private[spark] class Master(\n     val appName = app.desc.name\n     val notFoundBasePath = HistoryServer.UI_PATH_PREFIX + \"/not-found\"\n     try {\n-      val eventLogFile = app.desc.eventLogDir\n-        .map { dir => EventLoggingListener.getLogPath(dir, app.id) }\n+      val eventLogDir = app.desc.eventLogDir\n         .getOrElse {\n           // Event logging is not enabled for this application\n           app.desc.appUiUrl = notFoundBasePath\n           return false\n         }\n-        \n-      val fs = Utils.getHadoopFileSystem(eventLogFile, hadoopConf)\n-\n-      if (fs.exists(new Path(eventLogFile + EventLoggingListener.IN_PROGRESS))) {\n+      \n+      val eventLogFilePrefix = EventLoggingListener.getLogPath(eventLogDir, app.id)        \n+      val fs = Utils.getHadoopFileSystem(eventLogDir, hadoopConf)\n+      val eventLogFileSuffix = if (fs.exists(new Path(eventLogFilePrefix + \n+          EventLoggingListener.IN_PROGRESS))) {\n         // Event logging is enabled for this application, but the application is still in progress\n-        val title = s\"Application history not found (${app.id})\"\n-        var msg = s\"Application $appName is still in progress.\"\n+        var msg = s\"Application $appName is still in progress, it may be terminated accidently.\""
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "I agreed with @srowen that the wording `...,it may be terminated accidently` seems suggesting there is a problem. Using softer wording would be better.\n",
+    "commit": "03589ac7427cd906316c1121089b433e8d2bbf6e",
+    "createdAt": "2015-03-02T12:45:02Z",
+    "diffHunk": "@@ -736,30 +736,31 @@ private[spark] class Master(\n     val appName = app.desc.name\n     val notFoundBasePath = HistoryServer.UI_PATH_PREFIX + \"/not-found\"\n     try {\n-      val eventLogFile = app.desc.eventLogDir\n-        .map { dir => EventLoggingListener.getLogPath(dir, app.id) }\n+      val eventLogDir = app.desc.eventLogDir\n         .getOrElse {\n           // Event logging is not enabled for this application\n           app.desc.appUiUrl = notFoundBasePath\n           return false\n         }\n-        \n-      val fs = Utils.getHadoopFileSystem(eventLogFile, hadoopConf)\n-\n-      if (fs.exists(new Path(eventLogFile + EventLoggingListener.IN_PROGRESS))) {\n+      \n+      val eventLogFilePrefix = EventLoggingListener.getLogPath(eventLogDir, app.id)        \n+      val fs = Utils.getHadoopFileSystem(eventLogDir, hadoopConf)\n+      val eventLogFileSuffix = if (fs.exists(new Path(eventLogFilePrefix + \n+          EventLoggingListener.IN_PROGRESS))) {\n         // Event logging is enabled for this application, but the application is still in progress\n-        val title = s\"Application history not found (${app.id})\"\n-        var msg = s\"Application $appName is still in progress.\"\n+        var msg = s\"Application $appName is still in progress, it may be terminated accidently.\""
+  }],
+  "prId": 4848
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "This seems harder to understand than just perhaps recording the value of `if (fs.exists(new Path(eventLogFilePrefix + EventLoggingListener.IN_PROGRESS)))` in a `val`, using it above in the `if`, and using it here to construct the file name.\n",
+    "commit": "03589ac7427cd906316c1121089b433e8d2bbf6e",
+    "createdAt": "2015-03-02T08:23:48Z",
+    "diffHunk": "@@ -736,30 +736,31 @@ private[spark] class Master(\n     val appName = app.desc.name\n     val notFoundBasePath = HistoryServer.UI_PATH_PREFIX + \"/not-found\"\n     try {\n-      val eventLogFile = app.desc.eventLogDir\n-        .map { dir => EventLoggingListener.getLogPath(dir, app.id) }\n+      val eventLogDir = app.desc.eventLogDir\n         .getOrElse {\n           // Event logging is not enabled for this application\n           app.desc.appUiUrl = notFoundBasePath\n           return false\n         }\n-        \n-      val fs = Utils.getHadoopFileSystem(eventLogFile, hadoopConf)\n-\n-      if (fs.exists(new Path(eventLogFile + EventLoggingListener.IN_PROGRESS))) {\n+      \n+      val eventLogFilePrefix = EventLoggingListener.getLogPath(eventLogDir, app.id)        \n+      val fs = Utils.getHadoopFileSystem(eventLogDir, hadoopConf)\n+      val eventLogFileSuffix = if (fs.exists(new Path(eventLogFilePrefix + \n+          EventLoggingListener.IN_PROGRESS))) {\n         // Event logging is enabled for this application, but the application is still in progress\n-        val title = s\"Application history not found (${app.id})\"\n-        var msg = s\"Application $appName is still in progress.\"\n+        var msg = s\"Application $appName is still in progress, it may be terminated accidently.\"\n         logWarning(msg)\n-        msg = URLEncoder.encode(msg, \"UTF-8\")\n-        app.desc.appUiUrl = notFoundBasePath + s\"?msg=$msg&title=$title\"\n-        return false\n-      }\n+        EventLoggingListener.IN_PROGRESS\n+      } else \"\""
+  }, {
+    "author": {
+      "login": "liyezhang556520"
+    },
+    "body": "Hi @srowen , I don't quite understand your idea, Can you explain it in detail? I just intend not to introduce `var`\n\n> using it above in the if, and using it here to construct the file name\n",
+    "commit": "03589ac7427cd906316c1121089b433e8d2bbf6e",
+    "createdAt": "2015-03-02T08:41:25Z",
+    "diffHunk": "@@ -736,30 +736,31 @@ private[spark] class Master(\n     val appName = app.desc.name\n     val notFoundBasePath = HistoryServer.UI_PATH_PREFIX + \"/not-found\"\n     try {\n-      val eventLogFile = app.desc.eventLogDir\n-        .map { dir => EventLoggingListener.getLogPath(dir, app.id) }\n+      val eventLogDir = app.desc.eventLogDir\n         .getOrElse {\n           // Event logging is not enabled for this application\n           app.desc.appUiUrl = notFoundBasePath\n           return false\n         }\n-        \n-      val fs = Utils.getHadoopFileSystem(eventLogFile, hadoopConf)\n-\n-      if (fs.exists(new Path(eventLogFile + EventLoggingListener.IN_PROGRESS))) {\n+      \n+      val eventLogFilePrefix = EventLoggingListener.getLogPath(eventLogDir, app.id)        \n+      val fs = Utils.getHadoopFileSystem(eventLogDir, hadoopConf)\n+      val eventLogFileSuffix = if (fs.exists(new Path(eventLogFilePrefix + \n+          EventLoggingListener.IN_PROGRESS))) {\n         // Event logging is enabled for this application, but the application is still in progress\n-        val title = s\"Application history not found (${app.id})\"\n-        var msg = s\"Application $appName is still in progress.\"\n+        var msg = s\"Application $appName is still in progress, it may be terminated accidently.\"\n         logWarning(msg)\n-        msg = URLEncoder.encode(msg, \"UTF-8\")\n-        app.desc.appUiUrl = notFoundBasePath + s\"?msg=$msg&title=$title\"\n-        return false\n-      }\n+        EventLoggingListener.IN_PROGRESS\n+      } else \"\""
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Like:\n\n`val inProgressExists = fs.exists(new Path(eventLogFilePrefix + EventLoggingListener.IN_PROGRESS))`\n\nThen use that in the `if` statement, which need not also evaluate to a value.\nThen use the same flag to construct the file name.\nIMHO this is more straightforward than piggy-backing a sometimes-blank return value from the conditional.\n",
+    "commit": "03589ac7427cd906316c1121089b433e8d2bbf6e",
+    "createdAt": "2015-03-02T08:45:30Z",
+    "diffHunk": "@@ -736,30 +736,31 @@ private[spark] class Master(\n     val appName = app.desc.name\n     val notFoundBasePath = HistoryServer.UI_PATH_PREFIX + \"/not-found\"\n     try {\n-      val eventLogFile = app.desc.eventLogDir\n-        .map { dir => EventLoggingListener.getLogPath(dir, app.id) }\n+      val eventLogDir = app.desc.eventLogDir\n         .getOrElse {\n           // Event logging is not enabled for this application\n           app.desc.appUiUrl = notFoundBasePath\n           return false\n         }\n-        \n-      val fs = Utils.getHadoopFileSystem(eventLogFile, hadoopConf)\n-\n-      if (fs.exists(new Path(eventLogFile + EventLoggingListener.IN_PROGRESS))) {\n+      \n+      val eventLogFilePrefix = EventLoggingListener.getLogPath(eventLogDir, app.id)        \n+      val fs = Utils.getHadoopFileSystem(eventLogDir, hadoopConf)\n+      val eventLogFileSuffix = if (fs.exists(new Path(eventLogFilePrefix + \n+          EventLoggingListener.IN_PROGRESS))) {\n         // Event logging is enabled for this application, but the application is still in progress\n-        val title = s\"Application history not found (${app.id})\"\n-        var msg = s\"Application $appName is still in progress.\"\n+        var msg = s\"Application $appName is still in progress, it may be terminated accidently.\"\n         logWarning(msg)\n-        msg = URLEncoder.encode(msg, \"UTF-8\")\n-        app.desc.appUiUrl = notFoundBasePath + s\"?msg=$msg&title=$title\"\n-        return false\n-      }\n+        EventLoggingListener.IN_PROGRESS\n+      } else \"\""
+  }],
+  "prId": 4848
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "This could be a `val` but could also just be an arg to `logWarning`.\n",
+    "commit": "03589ac7427cd906316c1121089b433e8d2bbf6e",
+    "createdAt": "2015-03-02T10:47:28Z",
+    "diffHunk": "@@ -736,30 +736,34 @@ private[spark] class Master(\n     val appName = app.desc.name\n     val notFoundBasePath = HistoryServer.UI_PATH_PREFIX + \"/not-found\"\n     try {\n-      val eventLogFile = app.desc.eventLogDir\n-        .map { dir => EventLoggingListener.getLogPath(dir, app.id) }\n+      val eventLogDir = app.desc.eventLogDir\n         .getOrElse {\n           // Event logging is not enabled for this application\n           app.desc.appUiUrl = notFoundBasePath\n           return false\n         }\n-        \n-      val fs = Utils.getHadoopFileSystem(eventLogFile, hadoopConf)\n-\n-      if (fs.exists(new Path(eventLogFile + EventLoggingListener.IN_PROGRESS))) {\n+      \n+      val eventLogFilePrefix = EventLoggingListener.getLogPath(eventLogDir, app.id)        \n+      val fs = Utils.getHadoopFileSystem(eventLogDir, hadoopConf)\n+      val inProgressExists = fs.exists(new Path(eventLogFilePrefix + \n+          EventLoggingListener.IN_PROGRESS))\n+      \n+      if (inProgressExists) {\n         // Event logging is enabled for this application, but the application is still in progress\n-        val title = s\"Application history not found (${app.id})\"\n-        var msg = s\"Application $appName is still in progress.\"\n+        var msg = s\"Application $appName is still in progress, it may be terminated accidently.\""
+  }],
+  "prId": 4848
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Oops, meant to comment here. I don't believe this works since you don't have an else clause. If the condition it false it appends something random like `()`. I'd keep it straightforward.\n\n```\nval eventLogFile  = if (inProgressExists) {\n  ...\n} else {\n  ...\n}\n```\n",
+    "commit": "03589ac7427cd906316c1121089b433e8d2bbf6e",
+    "createdAt": "2015-03-02T10:50:45Z",
+    "diffHunk": "@@ -736,30 +736,34 @@ private[spark] class Master(\n     val appName = app.desc.name\n     val notFoundBasePath = HistoryServer.UI_PATH_PREFIX + \"/not-found\"\n     try {\n-      val eventLogFile = app.desc.eventLogDir\n-        .map { dir => EventLoggingListener.getLogPath(dir, app.id) }\n+      val eventLogDir = app.desc.eventLogDir\n         .getOrElse {\n           // Event logging is not enabled for this application\n           app.desc.appUiUrl = notFoundBasePath\n           return false\n         }\n-        \n-      val fs = Utils.getHadoopFileSystem(eventLogFile, hadoopConf)\n-\n-      if (fs.exists(new Path(eventLogFile + EventLoggingListener.IN_PROGRESS))) {\n+      \n+      val eventLogFilePrefix = EventLoggingListener.getLogPath(eventLogDir, app.id)        \n+      val fs = Utils.getHadoopFileSystem(eventLogDir, hadoopConf)\n+      val inProgressExists = fs.exists(new Path(eventLogFilePrefix + \n+          EventLoggingListener.IN_PROGRESS))\n+      \n+      if (inProgressExists) {\n         // Event logging is enabled for this application, but the application is still in progress\n-        val title = s\"Application history not found (${app.id})\"\n-        var msg = s\"Application $appName is still in progress.\"\n+        var msg = s\"Application $appName is still in progress, it may be terminated accidently.\"\n         logWarning(msg)\n-        msg = URLEncoder.encode(msg, \"UTF-8\")\n-        app.desc.appUiUrl = notFoundBasePath + s\"?msg=$msg&title=$title\"\n-        return false\n       }\n+      \n+      val eventLogFile = eventLogFilePrefix + {\n+        if(inProgressExists) EventLoggingListener.IN_PROGRESS"
+  }, {
+    "author": {
+      "login": "liyezhang556520"
+    },
+    "body": "Yes, you are right, I discovered that, i'll update it soon, thanks.\n",
+    "commit": "03589ac7427cd906316c1121089b433e8d2bbf6e",
+    "createdAt": "2015-03-02T11:30:32Z",
+    "diffHunk": "@@ -736,30 +736,34 @@ private[spark] class Master(\n     val appName = app.desc.name\n     val notFoundBasePath = HistoryServer.UI_PATH_PREFIX + \"/not-found\"\n     try {\n-      val eventLogFile = app.desc.eventLogDir\n-        .map { dir => EventLoggingListener.getLogPath(dir, app.id) }\n+      val eventLogDir = app.desc.eventLogDir\n         .getOrElse {\n           // Event logging is not enabled for this application\n           app.desc.appUiUrl = notFoundBasePath\n           return false\n         }\n-        \n-      val fs = Utils.getHadoopFileSystem(eventLogFile, hadoopConf)\n-\n-      if (fs.exists(new Path(eventLogFile + EventLoggingListener.IN_PROGRESS))) {\n+      \n+      val eventLogFilePrefix = EventLoggingListener.getLogPath(eventLogDir, app.id)        \n+      val fs = Utils.getHadoopFileSystem(eventLogDir, hadoopConf)\n+      val inProgressExists = fs.exists(new Path(eventLogFilePrefix + \n+          EventLoggingListener.IN_PROGRESS))\n+      \n+      if (inProgressExists) {\n         // Event logging is enabled for this application, but the application is still in progress\n-        val title = s\"Application history not found (${app.id})\"\n-        var msg = s\"Application $appName is still in progress.\"\n+        var msg = s\"Application $appName is still in progress, it may be terminated accidently.\"\n         logWarning(msg)\n-        msg = URLEncoder.encode(msg, \"UTF-8\")\n-        app.desc.appUiUrl = notFoundBasePath + s\"?msg=$msg&title=$title\"\n-        return false\n       }\n+      \n+      val eventLogFile = eventLogFilePrefix + {\n+        if(inProgressExists) EventLoggingListener.IN_PROGRESS"
+  }],
+  "prId": 4848
+}, {
+  "comments": [{
+    "author": {
+      "login": "viirya"
+    },
+    "body": "`status` is determined based on same condition as `eventLogFile`. Could be combined together in a if elese block.\n",
+    "commit": "03589ac7427cd906316c1121089b433e8d2bbf6e",
+    "createdAt": "2015-03-02T11:55:01Z",
+    "diffHunk": "@@ -736,30 +736,34 @@ private[spark] class Master(\n     val appName = app.desc.name\n     val notFoundBasePath = HistoryServer.UI_PATH_PREFIX + \"/not-found\"\n     try {\n-      val eventLogFile = app.desc.eventLogDir\n-        .map { dir => EventLoggingListener.getLogPath(dir, app.id) }\n+      val eventLogDir = app.desc.eventLogDir\n         .getOrElse {\n           // Event logging is not enabled for this application\n           app.desc.appUiUrl = notFoundBasePath\n           return false\n         }\n-        \n-      val fs = Utils.getHadoopFileSystem(eventLogFile, hadoopConf)\n-\n-      if (fs.exists(new Path(eventLogFile + EventLoggingListener.IN_PROGRESS))) {\n+      \n+      val eventLogFilePrefix = EventLoggingListener.getLogPath(eventLogDir, app.id)        \n+      val fs = Utils.getHadoopFileSystem(eventLogDir, hadoopConf)\n+      val inProgressExists = fs.exists(new Path(eventLogFilePrefix + \n+          EventLoggingListener.IN_PROGRESS))\n+      \n+      if (inProgressExists) {\n         // Event logging is enabled for this application, but the application is still in progress\n-        val title = s\"Application history not found (${app.id})\"\n-        var msg = s\"Application $appName is still in progress.\"\n-        logWarning(msg)\n-        msg = URLEncoder.encode(msg, \"UTF-8\")\n-        app.desc.appUiUrl = notFoundBasePath + s\"?msg=$msg&title=$title\"\n-        return false\n+        logWarning(s\"Application $appName is still in progress, it may be terminated accidently.\")\n       }\n-\n+      \n+      val eventLogFile = if (inProgressExists) {\n+        eventLogFilePrefix + EventLoggingListener.IN_PROGRESS\n+      } else {\n+        eventLogFilePrefix\n+      }\n+      val status = if (inProgressExists) \" (inprogress)\" else \" (completed)\""
+  }, {
+    "author": {
+      "login": "liyezhang556520"
+    },
+    "body": "Good idea, thanks @viirya \n",
+    "commit": "03589ac7427cd906316c1121089b433e8d2bbf6e",
+    "createdAt": "2015-03-02T12:07:28Z",
+    "diffHunk": "@@ -736,30 +736,34 @@ private[spark] class Master(\n     val appName = app.desc.name\n     val notFoundBasePath = HistoryServer.UI_PATH_PREFIX + \"/not-found\"\n     try {\n-      val eventLogFile = app.desc.eventLogDir\n-        .map { dir => EventLoggingListener.getLogPath(dir, app.id) }\n+      val eventLogDir = app.desc.eventLogDir\n         .getOrElse {\n           // Event logging is not enabled for this application\n           app.desc.appUiUrl = notFoundBasePath\n           return false\n         }\n-        \n-      val fs = Utils.getHadoopFileSystem(eventLogFile, hadoopConf)\n-\n-      if (fs.exists(new Path(eventLogFile + EventLoggingListener.IN_PROGRESS))) {\n+      \n+      val eventLogFilePrefix = EventLoggingListener.getLogPath(eventLogDir, app.id)        \n+      val fs = Utils.getHadoopFileSystem(eventLogDir, hadoopConf)\n+      val inProgressExists = fs.exists(new Path(eventLogFilePrefix + \n+          EventLoggingListener.IN_PROGRESS))\n+      \n+      if (inProgressExists) {\n         // Event logging is enabled for this application, but the application is still in progress\n-        val title = s\"Application history not found (${app.id})\"\n-        var msg = s\"Application $appName is still in progress.\"\n-        logWarning(msg)\n-        msg = URLEncoder.encode(msg, \"UTF-8\")\n-        app.desc.appUiUrl = notFoundBasePath + s\"?msg=$msg&title=$title\"\n-        return false\n+        logWarning(s\"Application $appName is still in progress, it may be terminated accidently.\")\n       }\n-\n+      \n+      val eventLogFile = if (inProgressExists) {\n+        eventLogFilePrefix + EventLoggingListener.IN_PROGRESS\n+      } else {\n+        eventLogFilePrefix\n+      }\n+      val status = if (inProgressExists) \" (inprogress)\" else \" (completed)\""
+  }],
+  "prId": 4848
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "One last comment -- I see that \"inprogress\" is used in the UI. It should be \"in progress\".\n",
+    "commit": "03589ac7427cd906316c1121089b433e8d2bbf6e",
+    "createdAt": "2015-03-03T08:57:16Z",
+    "diffHunk": "@@ -736,30 +736,34 @@ private[spark] class Master(\n     val appName = app.desc.name\n     val notFoundBasePath = HistoryServer.UI_PATH_PREFIX + \"/not-found\"\n     try {\n-      val eventLogFile = app.desc.eventLogDir\n-        .map { dir => EventLoggingListener.getLogPath(dir, app.id, app.desc.eventLogCodec) }\n+      val eventLogDir = app.desc.eventLogDir\n         .getOrElse {\n           // Event logging is not enabled for this application\n           app.desc.appUiUrl = notFoundBasePath\n           return false\n         }\n-\n-      val fs = Utils.getHadoopFileSystem(eventLogFile, hadoopConf)\n-\n-      if (fs.exists(new Path(eventLogFile + EventLoggingListener.IN_PROGRESS))) {\n+      \n+      val eventLogFilePrefix = EventLoggingListener.getLogPath(\n+          eventLogDir, app.id, app.desc.eventLogCodec)\n+      val fs = Utils.getHadoopFileSystem(eventLogDir, hadoopConf)\n+      val inProgressExists = fs.exists(new Path(eventLogFilePrefix + \n+          EventLoggingListener.IN_PROGRESS))\n+      \n+      if (inProgressExists) {\n         // Event logging is enabled for this application, but the application is still in progress\n-        val title = s\"Application history not found (${app.id})\"\n-        var msg = s\"Application $appName is still in progress.\"\n-        logWarning(msg)\n-        msg = URLEncoder.encode(msg, \"UTF-8\")\n-        app.desc.appUiUrl = notFoundBasePath + s\"?msg=$msg&title=$title\"\n-        return false\n+        logWarning(s\"Application $appName is still in progress, it may be terminated abnormally.\")\n       }\n-\n+      \n+      val (eventLogFile, status) = if (inProgressExists) {\n+        (eventLogFilePrefix + EventLoggingListener.IN_PROGRESS, \" (inprogress)\")"
+  }],
+  "prId": 4848
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "the `.get` is a minor unrelated change, right?\n\nI think this looks good in that it changes a situation where Spark does nothing and just shows an error, into one where it shows something, which may be needed for debugging.\n",
+    "commit": "03589ac7427cd906316c1121089b433e8d2bbf6e",
+    "createdAt": "2015-03-03T08:58:01Z",
+    "diffHunk": "@@ -774,7 +778,7 @@ private[spark] class Master(\n       case fnf: FileNotFoundException =>\n         // Event logging is enabled for this application, but no event logs are found\n         val title = s\"Application history not found (${app.id})\"\n-        var msg = s\"No event logs found for application $appName in ${app.desc.eventLogDir}.\"\n+        var msg = s\"No event logs found for application $appName in ${app.desc.eventLogDir.get}.\"",
+    "line": 54
+  }, {
+    "author": {
+      "login": "liyezhang556520"
+    },
+    "body": "Yes, it's an unrelated change.\n",
+    "commit": "03589ac7427cd906316c1121089b433e8d2bbf6e",
+    "createdAt": "2015-03-03T09:01:32Z",
+    "diffHunk": "@@ -774,7 +778,7 @@ private[spark] class Master(\n       case fnf: FileNotFoundException =>\n         // Event logging is enabled for this application, but no event logs are found\n         val title = s\"Application history not found (${app.id})\"\n-        var msg = s\"No event logs found for application $appName in ${app.desc.eventLogDir}.\"\n+        var msg = s\"No event logs found for application $appName in ${app.desc.eventLogDir.get}.\"",
+    "line": 54
+  }],
+  "prId": 4848
+}]

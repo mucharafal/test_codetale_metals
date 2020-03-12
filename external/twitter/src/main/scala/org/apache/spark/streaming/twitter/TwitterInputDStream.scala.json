@@ -1,0 +1,58 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "These are supposed to be a bunch of (lat,lon) pairs, right? why not `Seq[(Double,Double)]`?\n",
+    "commit": "eecd364fc816a783cf26a99d47308a3792474176",
+    "createdAt": "2014-12-30T10:00:10Z",
+    "diffHunk": "@@ -60,6 +61,7 @@ private[streaming]\n class TwitterReceiver(\n     twitterAuth: Authorization,\n     filters: Seq[String],\n+    locations: Seq[Seq[Double]],"
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "I remember that seems to be for using under both scala and java. So we can simply give a lat, lon pair in array. In fact, the FilterQuery in twitter4j also uses `double[][]` as its location parameter. Let scala api uses `Seq[(Double,Double)]` may be inconsistent with its java version. Is it good?\n",
+    "commit": "eecd364fc816a783cf26a99d47308a3792474176",
+    "createdAt": "2014-12-30T10:08:16Z",
+    "diffHunk": "@@ -60,6 +61,7 @@ private[streaming]\n class TwitterReceiver(\n     twitterAuth: Authorization,\n     filters: Seq[String],\n+    locations: Seq[Seq[Double]],"
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "There is already a separate set of methods for Java, no? that use `Array` and not things like `Seq`. This is private to the Scala-based Spark code.\n",
+    "commit": "eecd364fc816a783cf26a99d47308a3792474176",
+    "createdAt": "2014-12-30T10:40:38Z",
+    "diffHunk": "@@ -60,6 +61,7 @@ private[streaming]\n class TwitterReceiver(\n     twitterAuth: Authorization,\n     filters: Seq[String],\n+    locations: Seq[Seq[Double]],"
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "There is. I meant that the main problem is the inconsistency between Scala and Java apis. One use `Seq[(Double,Double)]` and other uses `Array[Array[Double]]`. If it is ok, I would revise it.\n",
+    "commit": "eecd364fc816a783cf26a99d47308a3792474176",
+    "createdAt": "2014-12-30T10:45:10Z",
+    "diffHunk": "@@ -60,6 +61,7 @@ private[streaming]\n class TwitterReceiver(\n     twitterAuth: Authorization,\n     filters: Seq[String],\n+    locations: Seq[Seq[Double]],"
+  }],
+  "prId": 3246
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "It seems like this could be rewritten to avoid the redundant checks and create of `FilterQuery` when there is no filtering.\n",
+    "commit": "eecd364fc816a783cf26a99d47308a3792474176",
+    "createdAt": "2014-12-30T10:00:51Z",
+    "diffHunk": "@@ -88,6 +90,11 @@ class TwitterReceiver(\n       val query = new FilterQuery\n       if (filters.size > 0) {\n         query.track(filters.toArray)\n+      }\n+      if (locations.size > 0) {\n+        query.locations(locations.map(_.toArray).toArray)\n+      }\n+      if (filters.size > 0 || locations.size > 0) {"
+  }],
+  "prId": 3246
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Trivial but can this be `.nonEmpty` instead of `.size > 0` around here? slightly more readable\n",
+    "commit": "eecd364fc816a783cf26a99d47308a3792474176",
+    "createdAt": "2015-01-22T16:34:29Z",
+    "diffHunk": "@@ -85,9 +93,14 @@ class TwitterReceiver(\n         }\n       })\n \n-      val query = new FilterQuery\n-      if (filters.size > 0) {\n-        query.track(filters.toArray)\n+      if (filters.size > 0 || locations.size > 0) {"
+  }],
+  "prId": 3246
+}]

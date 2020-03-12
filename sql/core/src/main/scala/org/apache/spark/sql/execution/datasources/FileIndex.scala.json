@@ -1,0 +1,59 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "rxin"
+    },
+    "body": "I'd keep this to avoid changing too many. Just make it a function to return a value based on fileListingPhase",
+    "commit": "16d80c504c807d3626da1ff808f3c4c447187ea3",
+    "createdAt": "2018-12-18T18:56:15Z",
+    "diffHunk": "@@ -74,12 +74,11 @@ trait FileIndex {\n   def partitionSchema: StructType\n \n   /**\n-   * Returns an optional metadata operation time, in nanoseconds, for listing files.\n+   * Returns an optional file listing phase summary.\n    *\n-   * We do file listing in query optimization (in order to get the proper statistics) and we want\n-   * to account for file listing time in physical execution (as metrics). To do that, we save the\n-   * file listing time in some implementations and physical execution calls it in this method\n-   * to update the metrics.\n+   * We call this in physical execution while we want to account for the file listing time as\n+   * metrics. If partition pruning happened in query planning, the phase also contains this\n+   * part of the cost, otherwise, it only contains file listing time of FileIndex initialize.\n    */\n-  def metadataOpsTimeNs: Option[Long] = None"
+  }, {
+    "author": {
+      "login": "xuanyuanking"
+    },
+    "body": "I try to do like this but the `metadataOpsTimeNs` is part of whole metadata time, valued it by CatalogFileIndex's fileListingPhase.durationMs would get a wrong answer. Worrying about not knowing your meaning precisely, I just keep this in next commit.\r\nI plan to address this as part of the metastore time in next JIRA SPARK-26223, also summary all metastore time and file listing time as final metadata time, do you agree about this?",
+    "commit": "16d80c504c807d3626da1ff808f3c4c447187ea3",
+    "createdAt": "2018-12-19T15:12:35Z",
+    "diffHunk": "@@ -74,12 +74,11 @@ trait FileIndex {\n   def partitionSchema: StructType\n \n   /**\n-   * Returns an optional metadata operation time, in nanoseconds, for listing files.\n+   * Returns an optional file listing phase summary.\n    *\n-   * We do file listing in query optimization (in order to get the proper statistics) and we want\n-   * to account for file listing time in physical execution (as metrics). To do that, we save the\n-   * file listing time in some implementations and physical execution calls it in this method\n-   * to update the metrics.\n+   * We call this in physical execution while we want to account for the file listing time as\n+   * metrics. If partition pruning happened in query planning, the phase also contains this\n+   * part of the cost, otherwise, it only contains file listing time of FileIndex initialize.\n    */\n-  def metadataOpsTimeNs: Option[Long] = None"
+  }, {
+    "author": {
+      "login": "xuanyuanking"
+    },
+    "body": "```\r\nI plan to address this as part of the metastore time in next JIRA SPARK-26223\r\n```\r\nHere's the part in preview PR: https://github.com/apache/spark/pull/23371/files#diff-4f50a25b08ee9a2bb1d12658ead0a455R74",
+    "commit": "16d80c504c807d3626da1ff808f3c4c447187ea3",
+    "createdAt": "2018-12-22T04:12:10Z",
+    "diffHunk": "@@ -74,12 +74,11 @@ trait FileIndex {\n   def partitionSchema: StructType\n \n   /**\n-   * Returns an optional metadata operation time, in nanoseconds, for listing files.\n+   * Returns an optional file listing phase summary.\n    *\n-   * We do file listing in query optimization (in order to get the proper statistics) and we want\n-   * to account for file listing time in physical execution (as metrics). To do that, we save the\n-   * file listing time in some implementations and physical execution calls it in this method\n-   * to update the metrics.\n+   * We call this in physical execution while we want to account for the file listing time as\n+   * metrics. If partition pruning happened in query planning, the phase also contains this\n+   * part of the cost, otherwise, it only contains file listing time of FileIndex initialize.\n    */\n-  def metadataOpsTimeNs: Option[Long] = None"
+  }],
+  "prId": 23327
+}, {
+  "comments": [{
+    "author": {
+      "login": "rxin"
+    },
+    "body": "fileListingPhaseSummary",
+    "commit": "16d80c504c807d3626da1ff808f3c4c447187ea3",
+    "createdAt": "2018-12-18T18:56:24Z",
+    "diffHunk": "@@ -74,12 +74,11 @@ trait FileIndex {\n   def partitionSchema: StructType\n \n   /**\n-   * Returns an optional metadata operation time, in nanoseconds, for listing files.\n+   * Returns an optional file listing phase summary.\n    *\n-   * We do file listing in query optimization (in order to get the proper statistics) and we want\n-   * to account for file listing time in physical execution (as metrics). To do that, we save the\n-   * file listing time in some implementations and physical execution calls it in this method\n-   * to update the metrics.\n+   * We call this in physical execution while we want to account for the file listing time as\n+   * metrics. If partition pruning happened in query planning, the phase also contains this\n+   * part of the cost, otherwise, it only contains file listing time of FileIndex initialize.\n    */\n-  def metadataOpsTimeNs: Option[Long] = None\n+  def fileListingPhase: Option[QueryPlanningTracker.PhaseSummary] = None"
+  }, {
+    "author": {
+      "login": "xuanyuanking"
+    },
+    "body": "Copy that, done in 1ed45b1.",
+    "commit": "16d80c504c807d3626da1ff808f3c4c447187ea3",
+    "createdAt": "2018-12-19T15:13:01Z",
+    "diffHunk": "@@ -74,12 +74,11 @@ trait FileIndex {\n   def partitionSchema: StructType\n \n   /**\n-   * Returns an optional metadata operation time, in nanoseconds, for listing files.\n+   * Returns an optional file listing phase summary.\n    *\n-   * We do file listing in query optimization (in order to get the proper statistics) and we want\n-   * to account for file listing time in physical execution (as metrics). To do that, we save the\n-   * file listing time in some implementations and physical execution calls it in this method\n-   * to update the metrics.\n+   * We call this in physical execution while we want to account for the file listing time as\n+   * metrics. If partition pruning happened in query planning, the phase also contains this\n+   * part of the cost, otherwise, it only contains file listing time of FileIndex initialize.\n    */\n-  def metadataOpsTimeNs: Option[Long] = None\n+  def fileListingPhase: Option[QueryPlanningTracker.PhaseSummary] = None"
+  }],
+  "prId": 23327
+}, {
+  "comments": [{
+    "author": {
+      "login": "LantaoJin"
+    },
+    "body": "Just FYI. After patched this method, current Delta-Lake df.show will throw `AbstractMethodError`\r\n```\r\njava.lang.AbstractMethodError\r\n  at org.apache.spark.sql.execution.FileSourceScanExec.fileListingPhaseSummary$lzycompute(DataSourceScanExec.scala:248)\r\n```",
+    "commit": "16d80c504c807d3626da1ff808f3c4c447187ea3",
+    "createdAt": "2019-10-16T13:33:43Z",
+    "diffHunk": "@@ -82,4 +83,16 @@ trait FileIndex {\n    * to update the metrics.\n    */\n   def metadataOpsTimeNs: Option[Long] = None\n+\n+  /**\n+   * Returns the latest phase summary of file listing in the current FileIndex, we should also\n+   * clean the phase summary cause in the scenario of the cached plan, we shouldn't report the\n+   * old phase summary.\n+   * This interface is only overridden in [[InMemoryFileIndex]] and [[CatalogFileIndex]], we do\n+   * not override this in [[PartitioningAwareFileIndex]] cause all its subclass using in scan\n+   * node already track file listing time.\n+   *\n+   * @return An optional phase summary to record the start and end timestamp for listing file.\n+   */\n+  def getAndCleanFileListingPhaseSummary: Option[PhaseSummary] = None",
+    "line": 23
+  }],
+  "prId": 23327
+}]

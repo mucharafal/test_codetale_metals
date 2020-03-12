@@ -1,0 +1,122 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "OK to keep, but I don't think there's a lot to gain from asserting this, since it just tests whether our mocking is set up correctly.\n",
+    "commit": "7e9e191c76992813d9a0bdbb1de590776c4875a1",
+    "createdAt": "2015-12-08T22:05:54Z",
+    "diffHunk": "@@ -78,33 +75,37 @@ class UnifiedMemoryManagerSuite extends MemoryManagerSuite with PrivateMethodTes\n     val (mm, ms) = makeThings(maxMemory)\n     assert(mm.storageMemoryUsed === 0L)\n     assert(mm.acquireStorageMemory(dummyBlock, 10L, evictedBlocks))\n-    // `ensureFreeSpace` should be called with the number of bytes requested\n-    assertEnsureFreeSpaceCalled(ms, 10L)\n+    assertEvictBlocksToFreeSpaceNotCalled(ms)\n     assert(mm.storageMemoryUsed === 10L)\n+\n     assert(mm.acquireStorageMemory(dummyBlock, 100L, evictedBlocks))\n-    assertEnsureFreeSpaceCalled(ms, 100L)\n+    assertEvictBlocksToFreeSpaceNotCalled(ms)\n     assert(mm.storageMemoryUsed === 110L)\n+    assert(evictedBlocks.isEmpty)\n     // Acquire more than the max, not granted\n     assert(!mm.acquireStorageMemory(dummyBlock, maxMemory + 1L, evictedBlocks))\n-    assertEnsureFreeSpaceCalled(ms, maxMemory + 1L)\n+    assertEvictBlocksToFreeSpaceNotCalled(ms)\n     assert(mm.storageMemoryUsed === 110L)\n+    assert(evictedBlocks.isEmpty)\n     // Acquire up to the max, requests after this are still granted due to LRU eviction\n     assert(mm.acquireStorageMemory(dummyBlock, maxMemory, evictedBlocks))\n-    assertEnsureFreeSpaceCalled(ms, 1000L)\n+    assertEvictBlocksToFreeSpaceCalled(ms, 110L)\n     assert(mm.storageMemoryUsed === 1000L)\n+    assert(evictedBlocks.nonEmpty)",
+    "line": 41
+  }],
+  "prId": 10170
+}, {
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "same here as in the `StaticMemoryManagerSuite` case, we should add a comment to explain why this is still 1000\n",
+    "commit": "7e9e191c76992813d9a0bdbb1de590776c4875a1",
+    "createdAt": "2015-12-08T22:07:15Z",
+    "diffHunk": "@@ -78,33 +75,37 @@ class UnifiedMemoryManagerSuite extends MemoryManagerSuite with PrivateMethodTes\n     val (mm, ms) = makeThings(maxMemory)\n     assert(mm.storageMemoryUsed === 0L)\n     assert(mm.acquireStorageMemory(dummyBlock, 10L, evictedBlocks))\n-    // `ensureFreeSpace` should be called with the number of bytes requested\n-    assertEnsureFreeSpaceCalled(ms, 10L)\n+    assertEvictBlocksToFreeSpaceNotCalled(ms)\n     assert(mm.storageMemoryUsed === 10L)\n+\n     assert(mm.acquireStorageMemory(dummyBlock, 100L, evictedBlocks))\n-    assertEnsureFreeSpaceCalled(ms, 100L)\n+    assertEvictBlocksToFreeSpaceNotCalled(ms)\n     assert(mm.storageMemoryUsed === 110L)\n+    assert(evictedBlocks.isEmpty)\n     // Acquire more than the max, not granted\n     assert(!mm.acquireStorageMemory(dummyBlock, maxMemory + 1L, evictedBlocks))\n-    assertEnsureFreeSpaceCalled(ms, maxMemory + 1L)\n+    assertEvictBlocksToFreeSpaceNotCalled(ms)\n     assert(mm.storageMemoryUsed === 110L)\n+    assert(evictedBlocks.isEmpty)\n     // Acquire up to the max, requests after this are still granted due to LRU eviction\n     assert(mm.acquireStorageMemory(dummyBlock, maxMemory, evictedBlocks))\n-    assertEnsureFreeSpaceCalled(ms, 1000L)\n+    assertEvictBlocksToFreeSpaceCalled(ms, 110L)\n     assert(mm.storageMemoryUsed === 1000L)\n+    assert(evictedBlocks.nonEmpty)\n+    evictedBlocks.clear()\n     assert(mm.acquireStorageMemory(dummyBlock, 1L, evictedBlocks))\n-    assertEnsureFreeSpaceCalled(ms, 1L)\n+    assertEvictBlocksToFreeSpaceCalled(ms, 1L)\n     assert(mm.storageMemoryUsed === 1000L)"
+  }],
+  "prId": 10170
+}, {
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "should this assert just go into the body of the previous one? i.e. `assertEvictBlocksToFreeSpaceNotCalled` internally also checks that `evictedBlocks` is empty. I notice we have these 2 lines in quite a few places.\n",
+    "commit": "7e9e191c76992813d9a0bdbb1de590776c4875a1",
+    "createdAt": "2015-12-08T22:08:29Z",
+    "diffHunk": "@@ -117,25 +118,29 @@ class UnifiedMemoryManagerSuite extends MemoryManagerSuite with PrivateMethodTes\n     val (mm, ms) = makeThings(maxMemory)\n     // Acquire enough storage memory to exceed the storage region\n     assert(mm.acquireStorageMemory(dummyBlock, 750L, evictedBlocks))\n-    assertEnsureFreeSpaceCalled(ms, 750L)\n+    assertEvictBlocksToFreeSpaceNotCalled(ms)\n     assert(mm.executionMemoryUsed === 0L)\n     assert(mm.storageMemoryUsed === 750L)\n+    assert(evictedBlocks.isEmpty)\n     // Execution needs to request 250 bytes to evict storage memory\n     assert(mm.acquireExecutionMemory(100L, taskAttemptId, MemoryMode.ON_HEAP) === 100L)\n     assert(mm.executionMemoryUsed === 100L)\n     assert(mm.storageMemoryUsed === 750L)\n-    assertEnsureFreeSpaceNotCalled(ms)\n+    assertEvictBlocksToFreeSpaceNotCalled(ms)\n+    assert(evictedBlocks.isEmpty)"
+  }],
+  "prId": 10170
+}, {
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "duplicated assert? This should check `mm.storageMemoryUsed === 700L` instead\n",
+    "commit": "7e9e191c76992813d9a0bdbb1de590776c4875a1",
+    "createdAt": "2015-12-08T22:10:06Z",
+    "diffHunk": "@@ -117,25 +118,29 @@ class UnifiedMemoryManagerSuite extends MemoryManagerSuite with PrivateMethodTes\n     val (mm, ms) = makeThings(maxMemory)\n     // Acquire enough storage memory to exceed the storage region\n     assert(mm.acquireStorageMemory(dummyBlock, 750L, evictedBlocks))\n-    assertEnsureFreeSpaceCalled(ms, 750L)\n+    assertEvictBlocksToFreeSpaceNotCalled(ms)\n     assert(mm.executionMemoryUsed === 0L)\n     assert(mm.storageMemoryUsed === 750L)\n+    assert(evictedBlocks.isEmpty)\n     // Execution needs to request 250 bytes to evict storage memory\n     assert(mm.acquireExecutionMemory(100L, taskAttemptId, MemoryMode.ON_HEAP) === 100L)\n     assert(mm.executionMemoryUsed === 100L)\n     assert(mm.storageMemoryUsed === 750L)\n-    assertEnsureFreeSpaceNotCalled(ms)\n+    assertEvictBlocksToFreeSpaceNotCalled(ms)\n+    assert(evictedBlocks.isEmpty)\n     // Execution wants 200 bytes but only 150 are free, so storage is evicted\n     assert(mm.acquireExecutionMemory(200L, taskAttemptId, MemoryMode.ON_HEAP) === 200L)\n     assert(mm.executionMemoryUsed === 300L)\n-    assertEnsureFreeSpaceCalled(ms, 50L)\n+    assertEvictBlocksToFreeSpaceCalled(ms, 50L)\n     assert(mm.executionMemoryUsed === 300L)"
+  }],
+  "prId": 10170
+}, {
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "Should we briefly explain SPARK-12165 since it's not at all obvious? Also I would change the numbers a little so it's easier to explain. Maybe something like:\n\n```\n...\nassert(mm.storageMemoryUsed === 700L)\n// SPARK-12165: previously, MemoryStore would not evict anything because it would\n// mistakenly think that the 300 bytes of free space was still available even after\n// using it to expand the execution pool. Consequently, no storage memory was released\n// and the following call granted only 300 bytes to execution.\nassert(mm.acquireExecutionMemory(500L, taskAttemptId, MemoryMode.ON_HEAP) === 500L)\nassertEvictBlocksToFreeSpaceCalled(ms, 200L)\n...\n```\n",
+    "commit": "7e9e191c76992813d9a0bdbb1de590776c4875a1",
+    "createdAt": "2015-12-08T22:30:44Z",
+    "diffHunk": "@@ -143,7 +148,25 @@ class UnifiedMemoryManagerSuite extends MemoryManagerSuite with PrivateMethodTes\n     assert(mm.acquireExecutionMemory(400L, taskAttemptId, MemoryMode.ON_HEAP) === 300L)\n     assert(mm.executionMemoryUsed === 600L)\n     assert(mm.storageMemoryUsed === 400L)\n-    assertEnsureFreeSpaceNotCalled(ms)\n+    assertEvictBlocksToFreeSpaceNotCalled(ms)\n+    assert(evictedBlocks.isEmpty)\n+  }\n+\n+  test(\"execution can evict storage blocks when storage memory is below max mem (SPARK-12165)\") {\n+    val maxMemory = 1000L\n+    val taskAttemptId = 0L\n+    val (mm, ms) = makeThings(maxMemory)\n+    // Acquire enough storage memory to exceed the storage region size\n+    assert(mm.acquireStorageMemory(dummyBlock, 750L, evictedBlocks))\n+    assertEvictBlocksToFreeSpaceNotCalled(ms)\n+    assert(mm.executionMemoryUsed === 0L)\n+    assert(mm.storageMemoryUsed === 750L)\n+    // Should now be able to require up to 500 bytes of memory\n+    assert(mm.acquireExecutionMemory(500L, taskAttemptId, MemoryMode.ON_HEAP) === 500L)"
+  }, {
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "also, I think the test name should be something like\n\n```\nexecution memory requests smaller than free memory should evict storage (SPARK-12165)\n```\n\nThe problem isn't that \"storage memory is below than max memory\". Even in the existing test \"eviction evicts storage\", storage memory (750) is below the max memory (1000).\n",
+    "commit": "7e9e191c76992813d9a0bdbb1de590776c4875a1",
+    "createdAt": "2015-12-08T23:47:01Z",
+    "diffHunk": "@@ -143,7 +148,25 @@ class UnifiedMemoryManagerSuite extends MemoryManagerSuite with PrivateMethodTes\n     assert(mm.acquireExecutionMemory(400L, taskAttemptId, MemoryMode.ON_HEAP) === 300L)\n     assert(mm.executionMemoryUsed === 600L)\n     assert(mm.storageMemoryUsed === 400L)\n-    assertEnsureFreeSpaceNotCalled(ms)\n+    assertEvictBlocksToFreeSpaceNotCalled(ms)\n+    assert(evictedBlocks.isEmpty)\n+  }\n+\n+  test(\"execution can evict storage blocks when storage memory is below max mem (SPARK-12165)\") {\n+    val maxMemory = 1000L\n+    val taskAttemptId = 0L\n+    val (mm, ms) = makeThings(maxMemory)\n+    // Acquire enough storage memory to exceed the storage region size\n+    assert(mm.acquireStorageMemory(dummyBlock, 750L, evictedBlocks))\n+    assertEvictBlocksToFreeSpaceNotCalled(ms)\n+    assert(mm.executionMemoryUsed === 0L)\n+    assert(mm.storageMemoryUsed === 750L)\n+    // Should now be able to require up to 500 bytes of memory\n+    assert(mm.acquireExecutionMemory(500L, taskAttemptId, MemoryMode.ON_HEAP) === 500L)"
+  }, {
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "By the way I included these changes as part of my PR: https://github.com/JoshRosen/spark/pull/8\n",
+    "commit": "7e9e191c76992813d9a0bdbb1de590776c4875a1",
+    "createdAt": "2015-12-08T23:56:00Z",
+    "diffHunk": "@@ -143,7 +148,25 @@ class UnifiedMemoryManagerSuite extends MemoryManagerSuite with PrivateMethodTes\n     assert(mm.acquireExecutionMemory(400L, taskAttemptId, MemoryMode.ON_HEAP) === 300L)\n     assert(mm.executionMemoryUsed === 600L)\n     assert(mm.storageMemoryUsed === 400L)\n-    assertEnsureFreeSpaceNotCalled(ms)\n+    assertEvictBlocksToFreeSpaceNotCalled(ms)\n+    assert(evictedBlocks.isEmpty)\n+  }\n+\n+  test(\"execution can evict storage blocks when storage memory is below max mem (SPARK-12165)\") {\n+    val maxMemory = 1000L\n+    val taskAttemptId = 0L\n+    val (mm, ms) = makeThings(maxMemory)\n+    // Acquire enough storage memory to exceed the storage region size\n+    assert(mm.acquireStorageMemory(dummyBlock, 750L, evictedBlocks))\n+    assertEvictBlocksToFreeSpaceNotCalled(ms)\n+    assert(mm.executionMemoryUsed === 0L)\n+    assert(mm.storageMemoryUsed === 750L)\n+    // Should now be able to require up to 500 bytes of memory\n+    assert(mm.acquireExecutionMemory(500L, taskAttemptId, MemoryMode.ON_HEAP) === 500L)"
+  }, {
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "> The problem isn't that \"storage memory is below than max memory\". Even in the existing test \"eviction evicts storage\", storage memory (750) is below the max memory (1000).\n\nIt's true that this was a little inprecise, but I think that \"execution memory requests smaller than free memory should evict storage\" is also slightly inprecise because this essentially sounds like a synonym for \"execution evicts storage when there is not enough free memory.\" I guess a slightly more accurate description of SPARK-12165 would be something like \"execution evicts storage if free memory is insufficient and free memory > 0\", since not _all_ situations where there is insufficient free memory will trigger the first part of SPARK-12165. This precision doesn't really matter, though, so I'm happy to adopt your test name if you find it to be clearer.\n",
+    "commit": "7e9e191c76992813d9a0bdbb1de590776c4875a1",
+    "createdAt": "2015-12-09T00:19:02Z",
+    "diffHunk": "@@ -143,7 +148,25 @@ class UnifiedMemoryManagerSuite extends MemoryManagerSuite with PrivateMethodTes\n     assert(mm.acquireExecutionMemory(400L, taskAttemptId, MemoryMode.ON_HEAP) === 300L)\n     assert(mm.executionMemoryUsed === 600L)\n     assert(mm.storageMemoryUsed === 400L)\n-    assertEnsureFreeSpaceNotCalled(ms)\n+    assertEvictBlocksToFreeSpaceNotCalled(ms)\n+    assert(evictedBlocks.isEmpty)\n+  }\n+\n+  test(\"execution can evict storage blocks when storage memory is below max mem (SPARK-12165)\") {\n+    val maxMemory = 1000L\n+    val taskAttemptId = 0L\n+    val (mm, ms) = makeThings(maxMemory)\n+    // Acquire enough storage memory to exceed the storage region size\n+    assert(mm.acquireStorageMemory(dummyBlock, 750L, evictedBlocks))\n+    assertEvictBlocksToFreeSpaceNotCalled(ms)\n+    assert(mm.executionMemoryUsed === 0L)\n+    assert(mm.storageMemoryUsed === 750L)\n+    // Should now be able to require up to 500 bytes of memory\n+    assert(mm.acquireExecutionMemory(500L, taskAttemptId, MemoryMode.ON_HEAP) === 500L)"
+  }],
+  "prId": 10170
+}, {
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "If you take my suggestion from above about adding the preemptive check, then this will not be called. (i.e. we know there's only 100B of blocks so don't bother trying to free 150B out of it)\n",
+    "commit": "7e9e191c76992813d9a0bdbb1de590776c4875a1",
+    "createdAt": "2015-12-08T23:07:43Z",
+    "diffHunk": "@@ -154,32 +177,34 @@ class UnifiedMemoryManagerSuite extends MemoryManagerSuite with PrivateMethodTes\n     assert(mm.acquireExecutionMemory(800L, taskAttemptId, MemoryMode.ON_HEAP) === 800L)\n     assert(mm.executionMemoryUsed === 800L)\n     assert(mm.storageMemoryUsed === 0L)\n-    assertEnsureFreeSpaceNotCalled(ms)\n+    assertEvictBlocksToFreeSpaceNotCalled(ms)\n     // Storage should not be able to evict execution\n     assert(mm.acquireStorageMemory(dummyBlock, 100L, evictedBlocks))\n     assert(mm.executionMemoryUsed === 800L)\n     assert(mm.storageMemoryUsed === 100L)\n-    assertEnsureFreeSpaceCalled(ms, 100L)\n+    assertEvictBlocksToFreeSpaceNotCalled(ms)\n     assert(!mm.acquireStorageMemory(dummyBlock, 250L, evictedBlocks))\n     assert(mm.executionMemoryUsed === 800L)\n     assert(mm.storageMemoryUsed === 100L)\n-    assertEnsureFreeSpaceCalled(ms, 250L)\n+    assertEvictBlocksToFreeSpaceCalled(ms, 150L) // try to evict blocks ..."
+  }],
+  "prId": 10170
+}, {
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "was -> were\n",
+    "commit": "7e9e191c76992813d9a0bdbb1de590776c4875a1",
+    "createdAt": "2015-12-08T23:10:01Z",
+    "diffHunk": "@@ -154,32 +177,34 @@ class UnifiedMemoryManagerSuite extends MemoryManagerSuite with PrivateMethodTes\n     assert(mm.acquireExecutionMemory(800L, taskAttemptId, MemoryMode.ON_HEAP) === 800L)\n     assert(mm.executionMemoryUsed === 800L)\n     assert(mm.storageMemoryUsed === 0L)\n-    assertEnsureFreeSpaceNotCalled(ms)\n+    assertEvictBlocksToFreeSpaceNotCalled(ms)\n     // Storage should not be able to evict execution\n     assert(mm.acquireStorageMemory(dummyBlock, 100L, evictedBlocks))\n     assert(mm.executionMemoryUsed === 800L)\n     assert(mm.storageMemoryUsed === 100L)\n-    assertEnsureFreeSpaceCalled(ms, 100L)\n+    assertEvictBlocksToFreeSpaceNotCalled(ms)\n     assert(!mm.acquireStorageMemory(dummyBlock, 250L, evictedBlocks))\n     assert(mm.executionMemoryUsed === 800L)\n     assert(mm.storageMemoryUsed === 100L)\n-    assertEnsureFreeSpaceCalled(ms, 250L)\n+    assertEvictBlocksToFreeSpaceCalled(ms, 150L) // try to evict blocks ...\n+    assert(evictedBlocks.isEmpty) // ... but don't evict since evicting will not be sufficient\n     mm.releaseExecutionMemory(maxMemory, taskAttemptId, MemoryMode.ON_HEAP)\n     mm.releaseStorageMemory(maxMemory)\n     // Acquire some execution memory again, but this time keep it within the execution region\n     assert(mm.acquireExecutionMemory(200L, taskAttemptId, MemoryMode.ON_HEAP) === 200L)\n     assert(mm.executionMemoryUsed === 200L)\n     assert(mm.storageMemoryUsed === 0L)\n-    assertEnsureFreeSpaceNotCalled(ms)\n+    assertEvictBlocksToFreeSpaceNotCalled(ms)\n     // Storage should still not be able to evict execution\n     assert(mm.acquireStorageMemory(dummyBlock, 750L, evictedBlocks))\n     assert(mm.executionMemoryUsed === 200L)\n     assert(mm.storageMemoryUsed === 750L)\n-    assertEnsureFreeSpaceCalled(ms, 750L)\n+    assertEvictBlocksToFreeSpaceNotCalled(ms) // since there was 800 bytes free"
+  }],
+  "prId": 10170
+}, {
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "same here, if you take the suggestion then this will not happen\n",
+    "commit": "7e9e191c76992813d9a0bdbb1de590776c4875a1",
+    "createdAt": "2015-12-08T23:13:18Z",
+    "diffHunk": "@@ -154,32 +177,34 @@ class UnifiedMemoryManagerSuite extends MemoryManagerSuite with PrivateMethodTes\n     assert(mm.acquireExecutionMemory(800L, taskAttemptId, MemoryMode.ON_HEAP) === 800L)\n     assert(mm.executionMemoryUsed === 800L)\n     assert(mm.storageMemoryUsed === 0L)\n-    assertEnsureFreeSpaceNotCalled(ms)\n+    assertEvictBlocksToFreeSpaceNotCalled(ms)\n     // Storage should not be able to evict execution\n     assert(mm.acquireStorageMemory(dummyBlock, 100L, evictedBlocks))\n     assert(mm.executionMemoryUsed === 800L)\n     assert(mm.storageMemoryUsed === 100L)\n-    assertEnsureFreeSpaceCalled(ms, 100L)\n+    assertEvictBlocksToFreeSpaceNotCalled(ms)\n     assert(!mm.acquireStorageMemory(dummyBlock, 250L, evictedBlocks))\n     assert(mm.executionMemoryUsed === 800L)\n     assert(mm.storageMemoryUsed === 100L)\n-    assertEnsureFreeSpaceCalled(ms, 250L)\n+    assertEvictBlocksToFreeSpaceCalled(ms, 150L) // try to evict blocks ...\n+    assert(evictedBlocks.isEmpty) // ... but don't evict since evicting will not be sufficient\n     mm.releaseExecutionMemory(maxMemory, taskAttemptId, MemoryMode.ON_HEAP)\n     mm.releaseStorageMemory(maxMemory)\n     // Acquire some execution memory again, but this time keep it within the execution region\n     assert(mm.acquireExecutionMemory(200L, taskAttemptId, MemoryMode.ON_HEAP) === 200L)\n     assert(mm.executionMemoryUsed === 200L)\n     assert(mm.storageMemoryUsed === 0L)\n-    assertEnsureFreeSpaceNotCalled(ms)\n+    assertEvictBlocksToFreeSpaceNotCalled(ms)\n     // Storage should still not be able to evict execution\n     assert(mm.acquireStorageMemory(dummyBlock, 750L, evictedBlocks))\n     assert(mm.executionMemoryUsed === 200L)\n     assert(mm.storageMemoryUsed === 750L)\n-    assertEnsureFreeSpaceCalled(ms, 750L)\n+    assertEvictBlocksToFreeSpaceNotCalled(ms) // since there was 800 bytes free\n     assert(!mm.acquireStorageMemory(dummyBlock, 850L, evictedBlocks))\n     assert(mm.executionMemoryUsed === 200L)\n     assert(mm.storageMemoryUsed === 750L)\n-    assertEnsureFreeSpaceCalled(ms, 850L)\n+    assertEvictBlocksToFreeSpaceCalled(ms, 800L) // try to evict blocks..."
+  }, {
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "Yep, this was addressed by changing `maxMemory` to `maxStorageMemory` in the check at the start of `acquireStorageMemory`.\n",
+    "commit": "7e9e191c76992813d9a0bdbb1de590776c4875a1",
+    "createdAt": "2015-12-09T00:57:49Z",
+    "diffHunk": "@@ -154,32 +177,34 @@ class UnifiedMemoryManagerSuite extends MemoryManagerSuite with PrivateMethodTes\n     assert(mm.acquireExecutionMemory(800L, taskAttemptId, MemoryMode.ON_HEAP) === 800L)\n     assert(mm.executionMemoryUsed === 800L)\n     assert(mm.storageMemoryUsed === 0L)\n-    assertEnsureFreeSpaceNotCalled(ms)\n+    assertEvictBlocksToFreeSpaceNotCalled(ms)\n     // Storage should not be able to evict execution\n     assert(mm.acquireStorageMemory(dummyBlock, 100L, evictedBlocks))\n     assert(mm.executionMemoryUsed === 800L)\n     assert(mm.storageMemoryUsed === 100L)\n-    assertEnsureFreeSpaceCalled(ms, 100L)\n+    assertEvictBlocksToFreeSpaceNotCalled(ms)\n     assert(!mm.acquireStorageMemory(dummyBlock, 250L, evictedBlocks))\n     assert(mm.executionMemoryUsed === 800L)\n     assert(mm.storageMemoryUsed === 100L)\n-    assertEnsureFreeSpaceCalled(ms, 250L)\n+    assertEvictBlocksToFreeSpaceCalled(ms, 150L) // try to evict blocks ...\n+    assert(evictedBlocks.isEmpty) // ... but don't evict since evicting will not be sufficient\n     mm.releaseExecutionMemory(maxMemory, taskAttemptId, MemoryMode.ON_HEAP)\n     mm.releaseStorageMemory(maxMemory)\n     // Acquire some execution memory again, but this time keep it within the execution region\n     assert(mm.acquireExecutionMemory(200L, taskAttemptId, MemoryMode.ON_HEAP) === 200L)\n     assert(mm.executionMemoryUsed === 200L)\n     assert(mm.storageMemoryUsed === 0L)\n-    assertEnsureFreeSpaceNotCalled(ms)\n+    assertEvictBlocksToFreeSpaceNotCalled(ms)\n     // Storage should still not be able to evict execution\n     assert(mm.acquireStorageMemory(dummyBlock, 750L, evictedBlocks))\n     assert(mm.executionMemoryUsed === 200L)\n     assert(mm.storageMemoryUsed === 750L)\n-    assertEnsureFreeSpaceCalled(ms, 750L)\n+    assertEvictBlocksToFreeSpaceNotCalled(ms) // since there was 800 bytes free\n     assert(!mm.acquireStorageMemory(dummyBlock, 850L, evictedBlocks))\n     assert(mm.executionMemoryUsed === 200L)\n     assert(mm.storageMemoryUsed === 750L)\n-    assertEnsureFreeSpaceCalled(ms, 850L)\n+    assertEvictBlocksToFreeSpaceCalled(ms, 800L) // try to evict blocks..."
+  }],
+  "prId": 10170
+}]

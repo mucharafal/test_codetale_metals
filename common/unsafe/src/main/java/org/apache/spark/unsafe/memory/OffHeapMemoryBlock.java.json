@@ -1,0 +1,96 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "where do we use this `directBuffer`?",
+    "commit": "50326ca2fff63ef0a88f3c7924fa8f1d53d17ec1",
+    "createdAt": "2017-10-28T22:34:08Z",
+    "diffHunk": "@@ -0,0 +1,103 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.unsafe.memory;\n+\n+import org.apache.spark.unsafe.Platform;\n+\n+public class OffHeapMemoryBlock extends MemoryBlock {\n+  private Object directBuffer;"
+  }, {
+    "author": {
+      "login": "kiszk"
+    },
+    "body": "`directBuffer` is used to control lifetime of `DirectByteBuffer`. Since I decided not to use `DirectByteBuffer` in this PR, I will remove this field `directBuffer`.",
+    "commit": "50326ca2fff63ef0a88f3c7924fa8f1d53d17ec1",
+    "createdAt": "2017-10-29T07:51:47Z",
+    "diffHunk": "@@ -0,0 +1,103 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.unsafe.memory;\n+\n+import org.apache.spark.unsafe.Platform;\n+\n+public class OffHeapMemoryBlock extends MemoryBlock {\n+  private Object directBuffer;"
+  }],
+  "prId": 19222
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "shall we just `assert directBuffer == null` and remove the `directBuffer` member?",
+    "commit": "50326ca2fff63ef0a88f3c7924fa8f1d53d17ec1",
+    "createdAt": "2017-10-28T22:34:40Z",
+    "diffHunk": "@@ -0,0 +1,103 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.unsafe.memory;\n+\n+import org.apache.spark.unsafe.Platform;\n+\n+public class OffHeapMemoryBlock extends MemoryBlock {\n+  private Object directBuffer;\n+  private final long address;\n+\n+  static public final OffHeapMemoryBlock NULL = new OffHeapMemoryBlock(null, 0, 0);\n+\n+  public OffHeapMemoryBlock(Object directBuffer, long address, long size) {\n+    super(null, address, size);\n+    this.address = address;\n+    this.directBuffer = directBuffer;"
+  }],
+  "prId": 19222
+}, {
+  "comments": [{
+    "author": {
+      "login": "viirya"
+    },
+    "body": "`@Override`?",
+    "commit": "50326ca2fff63ef0a88f3c7924fa8f1d53d17ec1",
+    "createdAt": "2018-03-02T08:29:15Z",
+    "diffHunk": "@@ -0,0 +1,89 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.unsafe.memory;\n+\n+import org.apache.spark.unsafe.Platform;\n+\n+public class OffHeapMemoryBlock extends MemoryBlock {\n+  static public final OffHeapMemoryBlock NULL = new OffHeapMemoryBlock(0, 0);\n+\n+  public OffHeapMemoryBlock(long address, long size) {\n+    super(null, address, size);\n+  }\n+\n+  @Override\n+  public MemoryBlock subBlock(long offset, long size) {\n+    return new OffHeapMemoryBlock(this.offset + offset, size);\n+  }\n+\n+  public final int getInt(long offset) {"
+  }, {
+    "author": {
+      "login": "kiszk"
+    },
+    "body": "good catch",
+    "commit": "50326ca2fff63ef0a88f3c7924fa8f1d53d17ec1",
+    "createdAt": "2018-03-02T12:25:35Z",
+    "diffHunk": "@@ -0,0 +1,89 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.unsafe.memory;\n+\n+import org.apache.spark.unsafe.Platform;\n+\n+public class OffHeapMemoryBlock extends MemoryBlock {\n+  static public final OffHeapMemoryBlock NULL = new OffHeapMemoryBlock(0, 0);\n+\n+  public OffHeapMemoryBlock(long address, long size) {\n+    super(null, address, size);\n+  }\n+\n+  @Override\n+  public MemoryBlock subBlock(long offset, long size) {\n+    return new OffHeapMemoryBlock(this.offset + offset, size);\n+  }\n+\n+  public final int getInt(long offset) {"
+  }],
+  "prId": 19222
+}, {
+  "comments": [{
+    "author": {
+      "login": "viirya"
+    },
+    "body": "Is this correct? Or `address + offset`?",
+    "commit": "50326ca2fff63ef0a88f3c7924fa8f1d53d17ec1",
+    "createdAt": "2018-03-02T08:29:40Z",
+    "diffHunk": "@@ -0,0 +1,89 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.unsafe.memory;\n+\n+import org.apache.spark.unsafe.Platform;\n+\n+public class OffHeapMemoryBlock extends MemoryBlock {\n+  static public final OffHeapMemoryBlock NULL = new OffHeapMemoryBlock(0, 0);\n+\n+  public OffHeapMemoryBlock(long address, long size) {\n+    super(null, address, size);\n+  }\n+\n+  @Override\n+  public MemoryBlock subBlock(long offset, long size) {\n+    return new OffHeapMemoryBlock(this.offset + offset, size);\n+  }\n+\n+  public final int getInt(long offset) {\n+    return Platform.getInt(null, offset);"
+  }, {
+    "author": {
+      "login": "kiszk"
+    },
+    "body": "This is correct for `OffHeapMemoryBlock`.",
+    "commit": "50326ca2fff63ef0a88f3c7924fa8f1d53d17ec1",
+    "createdAt": "2018-03-02T10:45:07Z",
+    "diffHunk": "@@ -0,0 +1,89 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.unsafe.memory;\n+\n+import org.apache.spark.unsafe.Platform;\n+\n+public class OffHeapMemoryBlock extends MemoryBlock {\n+  static public final OffHeapMemoryBlock NULL = new OffHeapMemoryBlock(0, 0);\n+\n+  public OffHeapMemoryBlock(long address, long size) {\n+    super(null, address, size);\n+  }\n+\n+  @Override\n+  public MemoryBlock subBlock(long offset, long size) {\n+    return new OffHeapMemoryBlock(this.offset + offset, size);\n+  }\n+\n+  public final int getInt(long offset) {\n+    return Platform.getInt(null, offset);"
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "You mean here `offset` is absolute address?",
+    "commit": "50326ca2fff63ef0a88f3c7924fa8f1d53d17ec1",
+    "createdAt": "2018-03-02T12:51:47Z",
+    "diffHunk": "@@ -0,0 +1,89 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.unsafe.memory;\n+\n+import org.apache.spark.unsafe.Platform;\n+\n+public class OffHeapMemoryBlock extends MemoryBlock {\n+  static public final OffHeapMemoryBlock NULL = new OffHeapMemoryBlock(0, 0);\n+\n+  public OffHeapMemoryBlock(long address, long size) {\n+    super(null, address, size);\n+  }\n+\n+  @Override\n+  public MemoryBlock subBlock(long offset, long size) {\n+    return new OffHeapMemoryBlock(this.offset + offset, size);\n+  }\n+\n+  public final int getInt(long offset) {\n+    return Platform.getInt(null, offset);"
+  }],
+  "prId": 19222
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "shall we put this into a protected method in the parent class?",
+    "commit": "50326ca2fff63ef0a88f3c7924fa8f1d53d17ec1",
+    "createdAt": "2018-03-13T22:10:47Z",
+    "diffHunk": "@@ -0,0 +1,108 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.unsafe.memory;\n+\n+import org.apache.spark.unsafe.Platform;\n+\n+public class OffHeapMemoryBlock extends MemoryBlock {\n+  static public final OffHeapMemoryBlock NULL = new OffHeapMemoryBlock(0, 0);\n+\n+  public OffHeapMemoryBlock(long address, long size) {\n+    super(null, address, size);\n+  }\n+\n+  @Override\n+  public MemoryBlock subBlock(long offset, long size) {\n+    if (offset + size > this.offset + length) {"
+  }, {
+    "author": {
+      "login": "kiszk"
+    },
+    "body": "Sure, I will move this check into the parent class.",
+    "commit": "50326ca2fff63ef0a88f3c7924fa8f1d53d17ec1",
+    "createdAt": "2018-03-16T02:37:26Z",
+    "diffHunk": "@@ -0,0 +1,108 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.unsafe.memory;\n+\n+import org.apache.spark.unsafe.Platform;\n+\n+public class OffHeapMemoryBlock extends MemoryBlock {\n+  static public final OffHeapMemoryBlock NULL = new OffHeapMemoryBlock(0, 0);\n+\n+  public OffHeapMemoryBlock(long address, long size) {\n+    super(null, address, size);\n+  }\n+\n+  @Override\n+  public MemoryBlock subBlock(long offset, long size) {\n+    if (offset + size > this.offset + length) {"
+  }],
+  "prId": 19222
+}]

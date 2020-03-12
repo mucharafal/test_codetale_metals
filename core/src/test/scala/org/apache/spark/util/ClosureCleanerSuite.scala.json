@@ -1,0 +1,45 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "note that the tests will fail because these closures are expected to have `return` statements in them. Can you model these closures after the other ones in this test?\n",
+    "commit": "f83d44557551bda264655f8b7073bbf49722c26e",
+    "createdAt": "2015-05-07T21:22:47Z",
+    "diffHunk": "@@ -260,6 +262,21 @@ private object TestUserClosuresActuallyCleaned {\n   def testMapPartitionsWithIndex(rdd: RDD[Int]): Unit = {\n     rdd.mapPartitionsWithIndex { (_, it) => return; it }.count()\n   }\n+  def testFlatMapWith(rdd: RDD[Int]): Unit = {\n+    import java.util.Random\n+    val randoms = rdd.flatMapWith(\n+      (index: Int) => new Random(index + 42))\n+      {(t: Int, prng: Random) =>\n+        val random = prng.nextDouble()\n+        Seq(random * t, random * t * 10)}.\n+      count()\n+  }\n+  def testMapWith(rdd: RDD[Int]): Unit = {\n+    import java.util.Random\n+    val randoms = rdd.mapWith(\n+      (index: Int) => new Random(index + 42))\n+      {(t: Int, prng: Random) => prng.nextDouble * t}.count()"
+  }],
+  "prId": 5959
+}, {
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "I believe this is missing `testForeachWith`\n",
+    "commit": "f83d44557551bda264655f8b7073bbf49722c26e",
+    "createdAt": "2015-05-07T21:28:35Z",
+    "diffHunk": "@@ -92,6 +92,8 @@ class ClosureCleanerSuite extends FunSuite {\n       expectCorrectException { TestUserClosuresActuallyCleaned.testKeyBy(rdd) }\n       expectCorrectException { TestUserClosuresActuallyCleaned.testMapPartitions(rdd) }\n       expectCorrectException { TestUserClosuresActuallyCleaned.testMapPartitionsWithIndex(rdd) }\n+      expectCorrectException { TestUserClosuresActuallyCleaned.testFlatMapWith(rdd) }\n+      expectCorrectException { TestUserClosuresActuallyCleaned.testMapWith(rdd) }"
+  }],
+  "prId": 5959
+}, {
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "why is this commented out?\n",
+    "commit": "f83d44557551bda264655f8b7073bbf49722c26e",
+    "createdAt": "2015-05-08T21:01:33Z",
+    "diffHunk": "@@ -92,6 +92,11 @@ class ClosureCleanerSuite extends FunSuite {\n       expectCorrectException { TestUserClosuresActuallyCleaned.testKeyBy(rdd) }\n       expectCorrectException { TestUserClosuresActuallyCleaned.testMapPartitions(rdd) }\n       expectCorrectException { TestUserClosuresActuallyCleaned.testMapPartitionsWithIndex(rdd) }\n+      expectCorrectException { TestUserClosuresActuallyCleaned.testMapPartitionsWithContext(rdd) }\n+      expectCorrectException { TestUserClosuresActuallyCleaned.testFlatMapWith(rdd) }\n+      // expectCorrectException { TestUserClosuresActuallyCleaned.testFilterWith(rdd) }"
+  }],
+  "prId": 5959
+}, {
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "you can just import this once at the very top instead of doing it many times\n",
+    "commit": "f83d44557551bda264655f8b7073bbf49722c26e",
+    "createdAt": "2015-05-08T21:01:59Z",
+    "diffHunk": "@@ -260,6 +265,25 @@ private object TestUserClosuresActuallyCleaned {\n   def testMapPartitionsWithIndex(rdd: RDD[Int]): Unit = {\n     rdd.mapPartitionsWithIndex { (_, it) => return; it }.count()\n   }\n+  def testFlatMapWith(rdd: RDD[Int]): Unit = {\n+    import java.util.Random\n+    rdd.flatMapWith ((index: Int) => new Random(index + 42)){ (_, it) => return; Seq() }.count()\n+  }\n+  def testMapWith(rdd: RDD[Int]): Unit = {\n+    import java.util.Random\n+    rdd.mapWith ((index: Int) => new Random(index + 42)){ (_, it) => return; 0 }.count()\n+  }\n+  def testFilterWith(rdd: RDD[Int]): Unit = {\n+    import java.util.Random\n+    rdd.filterWith ((index: Int) => new Random(index + 42)){ (_, it) => return; true }.count()\n+  }\n+  def testForEachWith(rdd: RDD[Int]): Unit = {\n+    import java.util.Random"
+  }],
+  "prId": 5959
+}]

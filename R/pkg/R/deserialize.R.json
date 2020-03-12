@@ -1,0 +1,63 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "Arrow seems to only provide an API that converts Arrow batch to Tibble (not `data.frame`). They are similar but different. I converted it to `as.data.frame` to be consistent with existing `gapply`. The cost looks very cheap since some doc say `as.data.frame` works like a thin wrapper in this case.",
+    "commit": "2559d7aacb688ae426b1917e65863feecb549968",
+    "createdAt": "2019-02-09T13:17:18Z",
+    "diffHunk": "@@ -231,6 +231,26 @@ readMultipleObjectsWithKeys <- function(inputCon) {\n   list(keys = keys, data = data) # this is a list of keys and corresponding data\n }\n \n+readDeserializeInArrow <- function(inputCon) {\n+  # This is a hack to avoid CRAN check. Arrow is not uploaded into CRAN now. See ARROW-3204.\n+  requireNamespace1 <- requireNamespace\n+  requireNamespace1(\"arrow\", quietly = TRUE)\n+\n+  # Currently, there looks no way to read batch by batch by socket connection in R side,\n+  # See ARROW-4512. Therefore, it reads the whole Arrow streaming-formatted binary at once for now.\n+  dataLen <- readInt(inputCon)\n+  arrowData <- readBin(inputCon, raw(), as.integer(dataLen), endian = \"big\")\n+  batches <- arrow::RecordBatchStreamReader(arrowData)$batches()\n+\n+  # Read all groupped batches. Tibble -> data.frame is cheap.\n+  data <- lapply(batches, function(batch) as.data.frame(arrow::as_tibble(batch)))"
+  }],
+  "prId": 23746
+}, {
+  "comments": [{
+    "author": {
+      "login": "felixcheung"
+    },
+    "body": "these are pretty nasty... maybe put all these into a R file/method\r\n\r\n```\r\n  requireNamespace1 <- requireNamespace\r\n  requireNamespace1(\"arrow\", quietly = TRUE)\r\n  RecordBatchStreamReader <- get(\r\n    \"RecordBatchStreamReader\", envir = asNamespace(\"arrow\"), inherits = FALSE)\r\n  as_tibble <- get(\"as_tibble\", envir = asNamespace(\"arrow\"))\r\n```",
+    "commit": "2559d7aacb688ae426b1917e65863feecb549968",
+    "createdAt": "2019-02-10T05:23:20Z",
+    "diffHunk": "@@ -235,15 +235,18 @@ readDeserializeInArrow <- function(inputCon) {\n   # This is a hack to avoid CRAN check. Arrow is not uploaded into CRAN now. See ARROW-3204.\n   requireNamespace1 <- requireNamespace\n   requireNamespace1(\"arrow\", quietly = TRUE)\n+  RecordBatchStreamReader <- get(\n+    \"RecordBatchStreamReader\", envir = asNamespace(\"arrow\"), inherits = FALSE)\n+  as_tibble <- get(\"as_tibble\", envir = asNamespace(\"arrow\"))"
+  }, {
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "Yes .. I actually tried to pull those out.. but I ended up with leave them as are .. I target to remove those weird hacks as soon as Arrow is on CRAN which I estimate before Spark 3.0. I promise I clean up those before Spark 3.0.",
+    "commit": "2559d7aacb688ae426b1917e65863feecb549968",
+    "createdAt": "2019-02-11T02:36:14Z",
+    "diffHunk": "@@ -235,15 +235,18 @@ readDeserializeInArrow <- function(inputCon) {\n   # This is a hack to avoid CRAN check. Arrow is not uploaded into CRAN now. See ARROW-3204.\n   requireNamespace1 <- requireNamespace\n   requireNamespace1(\"arrow\", quietly = TRUE)\n+  RecordBatchStreamReader <- get(\n+    \"RecordBatchStreamReader\", envir = asNamespace(\"arrow\"), inherits = FALSE)\n+  as_tibble <- get(\"as_tibble\", envir = asNamespace(\"arrow\"))"
+  }],
+  "prId": 23746
+}, {
+  "comments": [{
+    "author": {
+      "login": "felixcheung"
+    },
+    "body": "check arrow can be loaded like in https://github.com/apache/spark/commit/e8982ca7ad94e98d907babf2d6f1068b7cd064c6#diff-b11442485f6b77bf47b58b4747321638R157?",
+    "commit": "2559d7aacb688ae426b1917e65863feecb549968",
+    "createdAt": "2019-02-12T07:49:02Z",
+    "diffHunk": "@@ -231,6 +231,29 @@ readMultipleObjectsWithKeys <- function(inputCon) {\n   list(keys = keys, data = data) # this is a list of keys and corresponding data\n }\n \n+readDeserializeInArrow <- function(inputCon) {\n+  # This is a hack to avoid CRAN check. Arrow is not uploaded into CRAN now. See ARROW-3204.\n+  requireNamespace1 <- requireNamespace\n+  requireNamespace1(\"arrow\", quietly = TRUE)"
+  }],
+  "prId": 23746
+}, {
+  "comments": [{
+    "author": {
+      "login": "felixcheung"
+    },
+    "body": "another approach\r\n```\r\n  if (!requireNamespace1(\"arrow\", quietly = TRUE)) {\r\n    stop(\"'arrow' package should be installed.\")\r\n  }\r\n```",
+    "commit": "2559d7aacb688ae426b1917e65863feecb549968",
+    "createdAt": "2019-02-13T02:16:58Z",
+    "diffHunk": "@@ -234,24 +234,27 @@ readMultipleObjectsWithKeys <- function(inputCon) {\n readDeserializeInArrow <- function(inputCon) {\n   # This is a hack to avoid CRAN check. Arrow is not uploaded into CRAN now. See ARROW-3204.\n   requireNamespace1 <- requireNamespace\n-  requireNamespace1(\"arrow\", quietly = TRUE)\n-  RecordBatchStreamReader <- get(\n-    \"RecordBatchStreamReader\", envir = asNamespace(\"arrow\"), inherits = FALSE)\n-  as_tibble <- get(\"as_tibble\", envir = asNamespace(\"arrow\"))\n+  if (requireNamespace1(\"arrow\", quietly = TRUE)) {",
+    "line": 7
+  }, {
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "Let me fix it when I clean up this logic to be same and minimised.",
+    "commit": "2559d7aacb688ae426b1917e65863feecb549968",
+    "createdAt": "2019-02-13T03:09:11Z",
+    "diffHunk": "@@ -234,24 +234,27 @@ readMultipleObjectsWithKeys <- function(inputCon) {\n readDeserializeInArrow <- function(inputCon) {\n   # This is a hack to avoid CRAN check. Arrow is not uploaded into CRAN now. See ARROW-3204.\n   requireNamespace1 <- requireNamespace\n-  requireNamespace1(\"arrow\", quietly = TRUE)\n-  RecordBatchStreamReader <- get(\n-    \"RecordBatchStreamReader\", envir = asNamespace(\"arrow\"), inherits = FALSE)\n-  as_tibble <- get(\"as_tibble\", envir = asNamespace(\"arrow\"))\n+  if (requireNamespace1(\"arrow\", quietly = TRUE)) {",
+    "line": 7
+  }],
+  "prId": 23746
+}]

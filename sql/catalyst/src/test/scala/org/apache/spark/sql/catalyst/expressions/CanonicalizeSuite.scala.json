@@ -1,0 +1,114 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "This is not a real end-to-end test...\r\n\r\nHow about add the following test to SQLQuerySuite?\r\n```\r\nsql(\"create table t (s struct<i: Int>) using json\")\r\nsql(\"select s.I from t group by s.i\")\r\n```\r\ncurrently it fials with\r\n```\r\norg.apache.spark.sql.AnalysisException: expression 'default.t.`s`' is neither present in the group by, nor is it an aggregate function\r\n```",
+    "commit": "e1da1992cddc07d563df36ab599d69bb45978bdc",
+    "createdAt": "2018-12-20T07:48:42Z",
+    "diffHunk": "@@ -50,4 +59,44 @@ class CanonicalizeSuite extends SparkFunSuite {\n     assert(range.where(arrays1).sameResult(range.where(arrays2)))\n     assert(!range.where(arrays1).sameResult(range.where(arrays3)))\n   }\n+\n+  test(\"SPARK-26402: GetStructField with different optional names are semantically equal\") {\n+    val expId = NamedExpression.newExprId\n+    val qualifier = Seq.empty[String]\n+    val structType = StructType(\n+      StructField(\"a\", StructType(StructField(\"b\", IntegerType, false) :: Nil), false) :: Nil)\n+\n+    val fieldB1 = GetStructField(\n+      AttributeReference(\"data1\", structType, false)(expId, qualifier),\n+      0, Some(\"b1\"))\n+    val fieldB2 = GetStructField(\n+      AttributeReference(\"data2\", structType, false)(expId, qualifier),\n+      0, Some(\"b2\"))\n+    assert(fieldB1.semanticEquals(fieldB2))\n+\n+    val fieldA1 = GetStructField(\n+      GetStructField(\n+        AttributeReference(\"data1\", structType, false)(expId, qualifier),\n+        0, Some(\"a1\")),\n+      0, Some(\"b1\"))\n+    val fieldA2 = GetStructField(\n+      GetStructField(\n+        AttributeReference(\"data2\", structType, false)(expId, qualifier),\n+        0, Some(\"a2\")),\n+      0, Some(\"b2\"))\n+    assert(fieldA1.semanticEquals(fieldA2))\n+\n+    // End-to-end test case\n+    val testRelation = LocalRelation('a.int)"
+  }, {
+    "author": {
+      "login": "dbtsai"
+    },
+    "body": "This one makes sense, and is addressed by this PR. ",
+    "commit": "e1da1992cddc07d563df36ab599d69bb45978bdc",
+    "createdAt": "2018-12-20T22:22:24Z",
+    "diffHunk": "@@ -50,4 +59,44 @@ class CanonicalizeSuite extends SparkFunSuite {\n     assert(range.where(arrays1).sameResult(range.where(arrays2)))\n     assert(!range.where(arrays1).sameResult(range.where(arrays3)))\n   }\n+\n+  test(\"SPARK-26402: GetStructField with different optional names are semantically equal\") {\n+    val expId = NamedExpression.newExprId\n+    val qualifier = Seq.empty[String]\n+    val structType = StructType(\n+      StructField(\"a\", StructType(StructField(\"b\", IntegerType, false) :: Nil), false) :: Nil)\n+\n+    val fieldB1 = GetStructField(\n+      AttributeReference(\"data1\", structType, false)(expId, qualifier),\n+      0, Some(\"b1\"))\n+    val fieldB2 = GetStructField(\n+      AttributeReference(\"data2\", structType, false)(expId, qualifier),\n+      0, Some(\"b2\"))\n+    assert(fieldB1.semanticEquals(fieldB2))\n+\n+    val fieldA1 = GetStructField(\n+      GetStructField(\n+        AttributeReference(\"data1\", structType, false)(expId, qualifier),\n+        0, Some(\"a1\")),\n+      0, Some(\"b1\"))\n+    val fieldA2 = GetStructField(\n+      GetStructField(\n+        AttributeReference(\"data2\", structType, false)(expId, qualifier),\n+        0, Some(\"a2\")),\n+      0, Some(\"b2\"))\n+    assert(fieldA1.semanticEquals(fieldA2))\n+\n+    // End-to-end test case\n+    val testRelation = LocalRelation('a.int)"
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "then can we remove this part? i.e. code between L89 to L99",
+    "commit": "e1da1992cddc07d563df36ab599d69bb45978bdc",
+    "createdAt": "2018-12-21T02:12:49Z",
+    "diffHunk": "@@ -50,4 +59,44 @@ class CanonicalizeSuite extends SparkFunSuite {\n     assert(range.where(arrays1).sameResult(range.where(arrays2)))\n     assert(!range.where(arrays1).sameResult(range.where(arrays3)))\n   }\n+\n+  test(\"SPARK-26402: GetStructField with different optional names are semantically equal\") {\n+    val expId = NamedExpression.newExprId\n+    val qualifier = Seq.empty[String]\n+    val structType = StructType(\n+      StructField(\"a\", StructType(StructField(\"b\", IntegerType, false) :: Nil), false) :: Nil)\n+\n+    val fieldB1 = GetStructField(\n+      AttributeReference(\"data1\", structType, false)(expId, qualifier),\n+      0, Some(\"b1\"))\n+    val fieldB2 = GetStructField(\n+      AttributeReference(\"data2\", structType, false)(expId, qualifier),\n+      0, Some(\"b2\"))\n+    assert(fieldB1.semanticEquals(fieldB2))\n+\n+    val fieldA1 = GetStructField(\n+      GetStructField(\n+        AttributeReference(\"data1\", structType, false)(expId, qualifier),\n+        0, Some(\"a1\")),\n+      0, Some(\"b1\"))\n+    val fieldA2 = GetStructField(\n+      GetStructField(\n+        AttributeReference(\"data2\", structType, false)(expId, qualifier),\n+        0, Some(\"a2\")),\n+      0, Some(\"b2\"))\n+    assert(fieldA1.semanticEquals(fieldA2))\n+\n+    // End-to-end test case\n+    val testRelation = LocalRelation('a.int)"
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "+1",
+    "commit": "e1da1992cddc07d563df36ab599d69bb45978bdc",
+    "createdAt": "2018-12-21T02:17:08Z",
+    "diffHunk": "@@ -50,4 +59,44 @@ class CanonicalizeSuite extends SparkFunSuite {\n     assert(range.where(arrays1).sameResult(range.where(arrays2)))\n     assert(!range.where(arrays1).sameResult(range.where(arrays3)))\n   }\n+\n+  test(\"SPARK-26402: GetStructField with different optional names are semantically equal\") {\n+    val expId = NamedExpression.newExprId\n+    val qualifier = Seq.empty[String]\n+    val structType = StructType(\n+      StructField(\"a\", StructType(StructField(\"b\", IntegerType, false) :: Nil), false) :: Nil)\n+\n+    val fieldB1 = GetStructField(\n+      AttributeReference(\"data1\", structType, false)(expId, qualifier),\n+      0, Some(\"b1\"))\n+    val fieldB2 = GetStructField(\n+      AttributeReference(\"data2\", structType, false)(expId, qualifier),\n+      0, Some(\"b2\"))\n+    assert(fieldB1.semanticEquals(fieldB2))\n+\n+    val fieldA1 = GetStructField(\n+      GetStructField(\n+        AttributeReference(\"data1\", structType, false)(expId, qualifier),\n+        0, Some(\"a1\")),\n+      0, Some(\"b1\"))\n+    val fieldA2 = GetStructField(\n+      GetStructField(\n+        AttributeReference(\"data2\", structType, false)(expId, qualifier),\n+        0, Some(\"a2\")),\n+      0, Some(\"b2\"))\n+    assert(fieldA1.semanticEquals(fieldA2))\n+\n+    // End-to-end test case\n+    val testRelation = LocalRelation('a.int)"
+  }, {
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "This test can be a part of `BinaryComparisonSimplificationSuite` for `SimplifyBinaryComparison`. So far, there is no test case for `struct` type in `BinaryComparisonSimplificationSuite`. Since this PR, `SimplifyBinaryComparison` can remove `s.I <=> s.i`.",
+    "commit": "e1da1992cddc07d563df36ab599d69bb45978bdc",
+    "createdAt": "2018-12-21T03:50:24Z",
+    "diffHunk": "@@ -50,4 +59,44 @@ class CanonicalizeSuite extends SparkFunSuite {\n     assert(range.where(arrays1).sameResult(range.where(arrays2)))\n     assert(!range.where(arrays1).sameResult(range.where(arrays3)))\n   }\n+\n+  test(\"SPARK-26402: GetStructField with different optional names are semantically equal\") {\n+    val expId = NamedExpression.newExprId\n+    val qualifier = Seq.empty[String]\n+    val structType = StructType(\n+      StructField(\"a\", StructType(StructField(\"b\", IntegerType, false) :: Nil), false) :: Nil)\n+\n+    val fieldB1 = GetStructField(\n+      AttributeReference(\"data1\", structType, false)(expId, qualifier),\n+      0, Some(\"b1\"))\n+    val fieldB2 = GetStructField(\n+      AttributeReference(\"data2\", structType, false)(expId, qualifier),\n+      0, Some(\"b2\"))\n+    assert(fieldB1.semanticEquals(fieldB2))\n+\n+    val fieldA1 = GetStructField(\n+      GetStructField(\n+        AttributeReference(\"data1\", structType, false)(expId, qualifier),\n+        0, Some(\"a1\")),\n+      0, Some(\"b1\"))\n+    val fieldA2 = GetStructField(\n+      GetStructField(\n+        AttributeReference(\"data2\", structType, false)(expId, qualifier),\n+        0, Some(\"a2\")),\n+      0, Some(\"b2\"))\n+    assert(fieldA1.semanticEquals(fieldA2))\n+\n+    // End-to-end test case\n+    val testRelation = LocalRelation('a.int)"
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "I'm curious that is that removed too when case sensitive mode is turned on?",
+    "commit": "e1da1992cddc07d563df36ab599d69bb45978bdc",
+    "createdAt": "2018-12-21T03:57:36Z",
+    "diffHunk": "@@ -50,4 +59,44 @@ class CanonicalizeSuite extends SparkFunSuite {\n     assert(range.where(arrays1).sameResult(range.where(arrays2)))\n     assert(!range.where(arrays1).sameResult(range.where(arrays3)))\n   }\n+\n+  test(\"SPARK-26402: GetStructField with different optional names are semantically equal\") {\n+    val expId = NamedExpression.newExprId\n+    val qualifier = Seq.empty[String]\n+    val structType = StructType(\n+      StructField(\"a\", StructType(StructField(\"b\", IntegerType, false) :: Nil), false) :: Nil)\n+\n+    val fieldB1 = GetStructField(\n+      AttributeReference(\"data1\", structType, false)(expId, qualifier),\n+      0, Some(\"b1\"))\n+    val fieldB2 = GetStructField(\n+      AttributeReference(\"data2\", structType, false)(expId, qualifier),\n+      0, Some(\"b2\"))\n+    assert(fieldB1.semanticEquals(fieldB2))\n+\n+    val fieldA1 = GetStructField(\n+      GetStructField(\n+        AttributeReference(\"data1\", structType, false)(expId, qualifier),\n+        0, Some(\"a1\")),\n+      0, Some(\"b1\"))\n+    val fieldA2 = GetStructField(\n+      GetStructField(\n+        AttributeReference(\"data2\", structType, false)(expId, qualifier),\n+        0, Some(\"a2\")),\n+      0, Some(\"b2\"))\n+    assert(fieldA1.semanticEquals(fieldA2))\n+\n+    // End-to-end test case\n+    val testRelation = LocalRelation('a.int)"
+  }, {
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "It will fail at name resolution.",
+    "commit": "e1da1992cddc07d563df36ab599d69bb45978bdc",
+    "createdAt": "2018-12-21T04:15:12Z",
+    "diffHunk": "@@ -50,4 +59,44 @@ class CanonicalizeSuite extends SparkFunSuite {\n     assert(range.where(arrays1).sameResult(range.where(arrays2)))\n     assert(!range.where(arrays1).sameResult(range.where(arrays3)))\n   }\n+\n+  test(\"SPARK-26402: GetStructField with different optional names are semantically equal\") {\n+    val expId = NamedExpression.newExprId\n+    val qualifier = Seq.empty[String]\n+    val structType = StructType(\n+      StructField(\"a\", StructType(StructField(\"b\", IntegerType, false) :: Nil), false) :: Nil)\n+\n+    val fieldB1 = GetStructField(\n+      AttributeReference(\"data1\", structType, false)(expId, qualifier),\n+      0, Some(\"b1\"))\n+    val fieldB2 = GetStructField(\n+      AttributeReference(\"data2\", structType, false)(expId, qualifier),\n+      0, Some(\"b2\"))\n+    assert(fieldB1.semanticEquals(fieldB2))\n+\n+    val fieldA1 = GetStructField(\n+      GetStructField(\n+        AttributeReference(\"data1\", structType, false)(expId, qualifier),\n+        0, Some(\"a1\")),\n+      0, Some(\"b1\"))\n+    val fieldA2 = GetStructField(\n+      GetStructField(\n+        AttributeReference(\"data2\", structType, false)(expId, qualifier),\n+        0, Some(\"a2\")),\n+      0, Some(\"b2\"))\n+    assert(fieldA1.semanticEquals(fieldA2))\n+\n+    // End-to-end test case\n+    val testRelation = LocalRelation('a.int)"
+  }, {
+    "author": {
+      "login": "dbtsai"
+    },
+    "body": "@viirya I added a test to show in case insensitive mode, it will fail.",
+    "commit": "e1da1992cddc07d563df36ab599d69bb45978bdc",
+    "createdAt": "2018-12-21T20:18:48Z",
+    "diffHunk": "@@ -50,4 +59,44 @@ class CanonicalizeSuite extends SparkFunSuite {\n     assert(range.where(arrays1).sameResult(range.where(arrays2)))\n     assert(!range.where(arrays1).sameResult(range.where(arrays3)))\n   }\n+\n+  test(\"SPARK-26402: GetStructField with different optional names are semantically equal\") {\n+    val expId = NamedExpression.newExprId\n+    val qualifier = Seq.empty[String]\n+    val structType = StructType(\n+      StructField(\"a\", StructType(StructField(\"b\", IntegerType, false) :: Nil), false) :: Nil)\n+\n+    val fieldB1 = GetStructField(\n+      AttributeReference(\"data1\", structType, false)(expId, qualifier),\n+      0, Some(\"b1\"))\n+    val fieldB2 = GetStructField(\n+      AttributeReference(\"data2\", structType, false)(expId, qualifier),\n+      0, Some(\"b2\"))\n+    assert(fieldB1.semanticEquals(fieldB2))\n+\n+    val fieldA1 = GetStructField(\n+      GetStructField(\n+        AttributeReference(\"data1\", structType, false)(expId, qualifier),\n+        0, Some(\"a1\")),\n+      0, Some(\"b1\"))\n+    val fieldA2 = GetStructField(\n+      GetStructField(\n+        AttributeReference(\"data2\", structType, false)(expId, qualifier),\n+        0, Some(\"a2\")),\n+      0, Some(\"b2\"))\n+    assert(fieldA1.semanticEquals(fieldA2))\n+\n+    // End-to-end test case\n+    val testRelation = LocalRelation('a.int)"
+  }],
+  "prId": 23353
+}, {
+  "comments": [{
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "Sorry for nit-picking. This should be `a1` (and `a2` at line 67) because this is the first level.\r\nConsequently, `fieldB1` -> `fieldA1`?",
+    "commit": "e1da1992cddc07d563df36ab599d69bb45978bdc",
+    "createdAt": "2018-12-21T23:11:17Z",
+    "diffHunk": "@@ -50,4 +51,32 @@ class CanonicalizeSuite extends SparkFunSuite {\n     assert(range.where(arrays1).sameResult(range.where(arrays2)))\n     assert(!range.where(arrays1).sameResult(range.where(arrays3)))\n   }\n+\n+  test(\"SPARK-26402: accessing nested fields with different cases in case insensitive mode\") {\n+    val expId = NamedExpression.newExprId\n+    val qualifier = Seq.empty[String]\n+    val structType = StructType(\n+      StructField(\"a\", StructType(StructField(\"b\", IntegerType, false) :: Nil), false) :: Nil)\n+\n+    // GetStructField with different names are semantically equal\n+    val fieldB1 = GetStructField(\n+      AttributeReference(\"data1\", structType, false)(expId, qualifier),\n+      0, Some(\"b1\"))"
+  }, {
+    "author": {
+      "login": "dbtsai"
+    },
+    "body": "Thanks! Done.",
+    "commit": "e1da1992cddc07d563df36ab599d69bb45978bdc",
+    "createdAt": "2018-12-22T02:21:37Z",
+    "diffHunk": "@@ -50,4 +51,32 @@ class CanonicalizeSuite extends SparkFunSuite {\n     assert(range.where(arrays1).sameResult(range.where(arrays2)))\n     assert(!range.where(arrays1).sameResult(range.where(arrays3)))\n   }\n+\n+  test(\"SPARK-26402: accessing nested fields with different cases in case insensitive mode\") {\n+    val expId = NamedExpression.newExprId\n+    val qualifier = Seq.empty[String]\n+    val structType = StructType(\n+      StructField(\"a\", StructType(StructField(\"b\", IntegerType, false) :: Nil), false) :: Nil)\n+\n+    // GetStructField with different names are semantically equal\n+    val fieldB1 = GetStructField(\n+      AttributeReference(\"data1\", structType, false)(expId, qualifier),\n+      0, Some(\"b1\"))"
+  }, {
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "```scala\r\n    val fieldA1 = GetStructField(\r\n      AttributeReference(\"data1\", structType, false)(expId, qualifier),\r\n      0, Some(\"a1\"))\r\n    val fieldA2 = GetStructField(\r\n      AttributeReference(\"data2\", structType, false)(expId, qualifier),\r\n      0, Some(\"a2\"))\r\n    assert(fieldA1.semanticEquals(fieldA2))\r\n\r\n    val fieldB1 = GetStructField(\r\n      GetStructField(\r\n        AttributeReference(\"data1\", structType, false)(expId, qualifier),\r\n        0, Some(\"a1\")),\r\n      0, Some(\"b1\"))\r\n    val fieldB2 = GetStructField(\r\n      GetStructField(\r\n        AttributeReference(\"data2\", structType, false)(expId, qualifier),\r\n        0, Some(\"a2\")),\r\n      0, Some(\"b2\"))\r\n    assert(fieldB1.semanticEquals(fieldB2))\r\n```",
+    "commit": "e1da1992cddc07d563df36ab599d69bb45978bdc",
+    "createdAt": "2018-12-22T03:11:08Z",
+    "diffHunk": "@@ -50,4 +51,32 @@ class CanonicalizeSuite extends SparkFunSuite {\n     assert(range.where(arrays1).sameResult(range.where(arrays2)))\n     assert(!range.where(arrays1).sameResult(range.where(arrays3)))\n   }\n+\n+  test(\"SPARK-26402: accessing nested fields with different cases in case insensitive mode\") {\n+    val expId = NamedExpression.newExprId\n+    val qualifier = Seq.empty[String]\n+    val structType = StructType(\n+      StructField(\"a\", StructType(StructField(\"b\", IntegerType, false) :: Nil), false) :: Nil)\n+\n+    // GetStructField with different names are semantically equal\n+    val fieldB1 = GetStructField(\n+      AttributeReference(\"data1\", structType, false)(expId, qualifier),\n+      0, Some(\"b1\"))"
+  }, {
+    "author": {
+      "login": "dbtsai"
+    },
+    "body": "@dongjoon-hyun I put the ordering wrong. Addressed as you suggested. Thanks! ",
+    "commit": "e1da1992cddc07d563df36ab599d69bb45978bdc",
+    "createdAt": "2018-12-22T04:02:43Z",
+    "diffHunk": "@@ -50,4 +51,32 @@ class CanonicalizeSuite extends SparkFunSuite {\n     assert(range.where(arrays1).sameResult(range.where(arrays2)))\n     assert(!range.where(arrays1).sameResult(range.where(arrays3)))\n   }\n+\n+  test(\"SPARK-26402: accessing nested fields with different cases in case insensitive mode\") {\n+    val expId = NamedExpression.newExprId\n+    val qualifier = Seq.empty[String]\n+    val structType = StructType(\n+      StructField(\"a\", StructType(StructField(\"b\", IntegerType, false) :: Nil), false) :: Nil)\n+\n+    // GetStructField with different names are semantically equal\n+    val fieldB1 = GetStructField(\n+      AttributeReference(\"data1\", structType, false)(expId, qualifier),\n+      0, Some(\"b1\"))"
+  }],
+  "prId": 23353
+}, {
+  "comments": [{
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "This line will fail to build.",
+    "commit": "e1da1992cddc07d563df36ab599d69bb45978bdc",
+    "createdAt": "2018-12-22T04:06:12Z",
+    "diffHunk": "@@ -50,4 +51,32 @@ class CanonicalizeSuite extends SparkFunSuite {\n     assert(range.where(arrays1).sameResult(range.where(arrays2)))\n     assert(!range.where(arrays1).sameResult(range.where(arrays3)))\n   }\n+\n+  test(\"SPARK-26402: accessing nested fields with different cases in case insensitive mode\") {\n+    val expId = NamedExpression.newExprId\n+    val qualifier = Seq.empty[String]\n+    val structType = StructType(\n+      StructField(\"a\", StructType(StructField(\"b\", IntegerType, false) :: Nil), false) :: Nil)\n+\n+    // GetStructField with different names are semantically equal\n+    val fieldA1 = GetStructField(\n+      AttributeReference(\"data1\", structType, false)(expId, qualifier),\n+      0, Some(\"a1\"))\n+    val fieldA2 = GetStructField(\n+      AttributeReference(\"data2\", structType, false)(expId, qualifier),\n+      0, Some(\"a2\"))\n+    assert(fieldB1.semanticEquals(fieldB2))"
+  }],
+  "prId": 23353
+}]

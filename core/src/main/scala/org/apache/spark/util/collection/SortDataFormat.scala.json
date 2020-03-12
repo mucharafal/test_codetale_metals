@@ -1,0 +1,74 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "aarondav"
+    },
+    "body": "It's somewhat surprising that a universal trait can have a default implementation, but maybe we can convert this to an abstract class to ensure it's still compiled into simple Java bytecode.\n",
+    "commit": "d73c3d05a9c5cf529a90b2571086830a7a91f0e9",
+    "createdAt": "2014-10-24T23:07:44Z",
+    "diffHunk": "@@ -34,9 +34,20 @@ import scala.reflect.ClassTag\n  */\n // TODO: Making Buffer a real trait would be a better abstraction, but adds some complexity.\n private[spark] trait SortDataFormat[K, Buffer] extends Any {\n+\n+  /** Creates a new mutable key for reuse. */\n+  protected def newKey(): K = null.asInstanceOf[K]\n+\n   /** Return the sort key for the element at the given index. */\n   protected def getKey(data: Buffer, pos: Int): K\n \n+  /**\n+   * Returns the sort key for the element at the given index and reuse the input key if possible.\n+   */\n+  protected def getKey(data: Buffer, pos: Int, reuse: K): K = {"
+  }, {
+    "author": {
+      "login": "aarondav"
+    },
+    "body": "It's also funny that Java ignores the protectedness, maybe we can upgrade all actually-public methods to public (that's everything but `getKey(data: Buffer, pos: Int)`, which is only used internally)\n",
+    "commit": "d73c3d05a9c5cf529a90b2571086830a7a91f0e9",
+    "createdAt": "2014-10-24T23:14:00Z",
+    "diffHunk": "@@ -34,9 +34,20 @@ import scala.reflect.ClassTag\n  */\n // TODO: Making Buffer a real trait would be a better abstraction, but adds some complexity.\n private[spark] trait SortDataFormat[K, Buffer] extends Any {\n+\n+  /** Creates a new mutable key for reuse. */\n+  protected def newKey(): K = null.asInstanceOf[K]\n+\n   /** Return the sort key for the element at the given index. */\n   protected def getKey(data: Buffer, pos: Int): K\n \n+  /**\n+   * Returns the sort key for the element at the given index and reuse the input key if possible.\n+   */\n+  protected def getKey(data: Buffer, pos: Int, reuse: K): K = {"
+  }],
+  "prId": 2937
+}, {
+  "comments": [{
+    "author": {
+      "login": "aarondav"
+    },
+    "body": "Add a note that this must be implemented only if you also override getKey(data, pos, reuse).\n",
+    "commit": "d73c3d05a9c5cf529a90b2571086830a7a91f0e9",
+    "createdAt": "2014-10-24T23:11:41Z",
+    "diffHunk": "@@ -34,9 +34,20 @@ import scala.reflect.ClassTag\n  */\n // TODO: Making Buffer a real trait would be a better abstraction, but adds some complexity.\n private[spark] trait SortDataFormat[K, Buffer] extends Any {\n+\n+  /** Creates a new mutable key for reuse. */"
+  }],
+  "prId": 2937
+}, {
+  "comments": [{
+    "author": {
+      "login": "aarondav"
+    },
+    "body": "Add a note that the default implementation simply ignores the reuse parameter and invokes the other method. Also give the precondition that the \"reused\" key will have initially been constructed via newKey().\n",
+    "commit": "d73c3d05a9c5cf529a90b2571086830a7a91f0e9",
+    "createdAt": "2014-10-24T23:11:56Z",
+    "diffHunk": "@@ -34,9 +34,20 @@ import scala.reflect.ClassTag\n  */\n // TODO: Making Buffer a real trait would be a better abstraction, but adds some complexity.\n private[spark] trait SortDataFormat[K, Buffer] extends Any {\n+\n+  /** Creates a new mutable key for reuse. */\n+  protected def newKey(): K = null.asInstanceOf[K]\n+\n   /** Return the sort key for the element at the given index. */\n   protected def getKey(data: Buffer, pos: Int): K\n \n+  /**\n+   * Returns the sort key for the element at the given index and reuse the input key if possible.",
+    "line": 26
+  }, {
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "done.\n",
+    "commit": "d73c3d05a9c5cf529a90b2571086830a7a91f0e9",
+    "createdAt": "2014-10-26T03:31:00Z",
+    "diffHunk": "@@ -34,9 +34,20 @@ import scala.reflect.ClassTag\n  */\n // TODO: Making Buffer a real trait would be a better abstraction, but adds some complexity.\n private[spark] trait SortDataFormat[K, Buffer] extends Any {\n+\n+  /** Creates a new mutable key for reuse. */\n+  protected def newKey(): K = null.asInstanceOf[K]\n+\n   /** Return the sort key for the element at the given index. */\n   protected def getKey(data: Buffer, pos: Int): K\n \n+  /**\n+   * Returns the sort key for the element at the given index and reuse the input key if possible.",
+    "line": 26
+  }],
+  "prId": 2937
+}, {
+  "comments": [{
+    "author": {
+      "login": "aarondav"
+    },
+    "body": "Maybe add a comment that this is ONLY invoked by the default `getKey(data: Buffer, pos: Int, reuse: K)` method. That is, you should not call this from outside.\n",
+    "commit": "d73c3d05a9c5cf529a90b2571086830a7a91f0e9",
+    "createdAt": "2014-10-24T23:13:14Z",
+    "diffHunk": "@@ -34,9 +34,20 @@ import scala.reflect.ClassTag\n  */\n // TODO: Making Buffer a real trait would be a better abstraction, but adds some complexity.\n private[spark] trait SortDataFormat[K, Buffer] extends Any {\n+\n+  /** Creates a new mutable key for reuse. */\n+  protected def newKey(): K = null.asInstanceOf[K]\n+\n   /** Return the sort key for the element at the given index. */"
+  }],
+  "prId": 2937
+}, {
+  "comments": [{
+    "author": {
+      "login": "aarondav"
+    },
+    "body": "Maybe slight rephrasing of this to something like\n\n```\nNote: Declaring and instantiating multiple subclasses of this class would prevent JIT inlining overridden methods and hence may decrease the shuffle performance.\n```\n\nI just added \"Note\" since it's sort of a tangent and \"may\" since it may not be noticeable for non computationally-intensive workloads.\n",
+    "commit": "d73c3d05a9c5cf529a90b2571086830a7a91f0e9",
+    "createdAt": "2014-10-28T04:47:19Z",
+    "diffHunk": "@@ -27,33 +27,51 @@ import scala.reflect.ClassTag\n  * Example format: an array of numbers, where each element is also the key.\n  * See [[KVArraySortDataFormat]] for a more exciting format.\n  *\n- * This trait extends Any to ensure it is universal (and thus compiled to a Java interface).\n+ * Declaring and instantiating multiple subclasses of this class would prevent JIT inlining"
+  }],
+  "prId": 2937
+}]

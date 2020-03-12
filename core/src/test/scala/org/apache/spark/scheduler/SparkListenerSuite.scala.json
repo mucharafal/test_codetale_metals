@@ -1,0 +1,31 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "is this deterministic that this line will be run before `listenerStarted.release()` in `onJobEnd`?",
+    "commit": "76b669ca6eb35a0cce4291702baa5d1f60adb467",
+    "createdAt": "2017-06-08T23:25:01Z",
+    "diffHunk": "@@ -138,6 +162,44 @@ class SparkListenerSuite extends SparkFunSuite with LocalSparkContext with Match\n     assert(drained)\n   }\n \n+  test(\"metrics for dropped listener events\") {\n+    val bus = new LiveListenerBus(new SparkConf().set(LISTENER_BUS_EVENT_QUEUE_CAPACITY, 1))\n+\n+    val listenerStarted = new Semaphore(0)\n+    val listenerWait = new Semaphore(0)\n+\n+    bus.addListener(new SparkListener {\n+      override def onJobEnd(jobEnd: SparkListenerJobEnd): Unit = {\n+        listenerStarted.release()\n+        listenerWait.acquire()\n+      }\n+    })\n+\n+    bus.start(mockSparkContext, mockMetricsSystem)\n+\n+    // Post a message to the listener bus and wait for processing to begin:\n+    bus.post(SparkListenerJobEnd(0, jobCompletionTime, JobSucceeded))\n+    listenerStarted.acquire()",
+    "line": 133
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "actually the order doesn't matter, if `release` is called first, `acquire` won't block",
+    "commit": "76b669ca6eb35a0cce4291702baa5d1f60adb467",
+    "createdAt": "2017-06-09T01:07:59Z",
+    "diffHunk": "@@ -138,6 +162,44 @@ class SparkListenerSuite extends SparkFunSuite with LocalSparkContext with Match\n     assert(drained)\n   }\n \n+  test(\"metrics for dropped listener events\") {\n+    val bus = new LiveListenerBus(new SparkConf().set(LISTENER_BUS_EVENT_QUEUE_CAPACITY, 1))\n+\n+    val listenerStarted = new Semaphore(0)\n+    val listenerWait = new Semaphore(0)\n+\n+    bus.addListener(new SparkListener {\n+      override def onJobEnd(jobEnd: SparkListenerJobEnd): Unit = {\n+        listenerStarted.release()\n+        listenerWait.acquire()\n+      }\n+    })\n+\n+    bus.start(mockSparkContext, mockMetricsSystem)\n+\n+    // Post a message to the listener bus and wait for processing to begin:\n+    bus.post(SparkListenerJobEnd(0, jobCompletionTime, JobSucceeded))\n+    listenerStarted.acquire()",
+    "line": 133
+  }, {
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "This should be fine:\r\n\r\n- If this code runs before `listenerStarted.release()` then it will block until `listenerStarted.release()` is hit.\r\n- The listener will block in `listenerWait.acquire()` until we call `listenerWait.release()` further down in this method.\r\n\r\nThis synchronization pattern is already used elsewhere in this suite in https://github.com/JoshRosen/spark/blob/76b669ca6eb35a0cce4291702baa5d1f60adb467/core/src/test/scala/org/apache/spark/scheduler/SparkListenerSuite.scala#L113\r\n",
+    "commit": "76b669ca6eb35a0cce4291702baa5d1f60adb467",
+    "createdAt": "2017-06-09T01:08:41Z",
+    "diffHunk": "@@ -138,6 +162,44 @@ class SparkListenerSuite extends SparkFunSuite with LocalSparkContext with Match\n     assert(drained)\n   }\n \n+  test(\"metrics for dropped listener events\") {\n+    val bus = new LiveListenerBus(new SparkConf().set(LISTENER_BUS_EVENT_QUEUE_CAPACITY, 1))\n+\n+    val listenerStarted = new Semaphore(0)\n+    val listenerWait = new Semaphore(0)\n+\n+    bus.addListener(new SparkListener {\n+      override def onJobEnd(jobEnd: SparkListenerJobEnd): Unit = {\n+        listenerStarted.release()\n+        listenerWait.acquire()\n+      }\n+    })\n+\n+    bus.start(mockSparkContext, mockMetricsSystem)\n+\n+    // Post a message to the listener bus and wait for processing to begin:\n+    bus.post(SparkListenerJobEnd(0, jobCompletionTime, JobSucceeded))\n+    listenerStarted.acquire()",
+    "line": 133
+  }],
+  "prId": 18083
+}]

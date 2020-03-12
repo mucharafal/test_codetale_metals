@@ -1,0 +1,54 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "rdblue"
+    },
+    "body": "I think this interface (and the continuous and micro-batch equivalents) should note that returning a `ReadSupport` from options is for sources with no catalog support or to use an implementation directly. Maybe we should add this after #21306 is in though. What do you think?",
+    "commit": "51cda76897353344427aaa666e29be408263eeb1",
+    "createdAt": "2018-08-07T18:17:50Z",
+    "diffHunk": "@@ -19,18 +19,18 @@\n \n import org.apache.spark.annotation.InterfaceStability;\n import org.apache.spark.sql.sources.DataSourceRegister;\n-import org.apache.spark.sql.sources.v2.reader.DataSourceReader;\n+import org.apache.spark.sql.sources.v2.reader.BatchReadSupport;\n import org.apache.spark.sql.types.StructType;\n \n /**\n  * A mix-in interface for {@link DataSourceV2}. Data sources can implement this interface to\n- * provide data reading ability and scan the data from the data source.\n+ * provide data reading ability for batch processing.",
+    "line": 13
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "good point. I'll add some documents about when this interface will be used (spark.read.format...), which means to use an implementation directly. ",
+    "commit": "51cda76897353344427aaa666e29be408263eeb1",
+    "createdAt": "2018-08-08T02:08:28Z",
+    "diffHunk": "@@ -19,18 +19,18 @@\n \n import org.apache.spark.annotation.InterfaceStability;\n import org.apache.spark.sql.sources.DataSourceRegister;\n-import org.apache.spark.sql.sources.v2.reader.DataSourceReader;\n+import org.apache.spark.sql.sources.v2.reader.BatchReadSupport;\n import org.apache.spark.sql.types.StructType;\n \n /**\n  * A mix-in interface for {@link DataSourceV2}. Data sources can implement this interface to\n- * provide data reading ability and scan the data from the data source.\n+ * provide data reading ability for batch processing.",
+    "line": 13
+  }],
+  "prId": 22009
+}, {
+  "comments": [{
+    "author": {
+      "login": "jose-torres"
+    },
+    "body": "nit: ... from this data source with a user specified schema.",
+    "commit": "51cda76897353344427aaa666e29be408263eeb1",
+    "createdAt": "2018-08-09T15:49:30Z",
+    "diffHunk": "@@ -18,19 +18,22 @@\n package org.apache.spark.sql.sources.v2;\n \n import org.apache.spark.annotation.InterfaceStability;\n-import org.apache.spark.sql.sources.DataSourceRegister;\n-import org.apache.spark.sql.sources.v2.reader.DataSourceReader;\n+import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Utils;\n+import org.apache.spark.sql.sources.v2.reader.BatchReadSupport;\n import org.apache.spark.sql.types.StructType;\n \n /**\n  * A mix-in interface for {@link DataSourceV2}. Data sources can implement this interface to\n- * provide data reading ability and scan the data from the data source.\n+ * provide data reading ability for batch processing.\n+ *\n+ * This interface is used when end users want to use a data source implementation directly, e.g.\n+ * {@code SparkSession.read.format(...).option(...).load()}.\n  */\n @InterfaceStability.Evolving\n-public interface ReadSupport extends DataSourceV2 {\n+public interface BatchReadSupportProvider extends DataSourceV2 {\n \n   /**\n-   * Creates a {@link DataSourceReader} to scan the data from this data source.\n+   * Creates a {@link BatchReadSupport} to scan the data from this data source."
+  }],
+  "prId": 22009
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "although Spark is OK to use a same `ReadSupport` instance across queries, this interface (`BatchReadSupportProvider`) is not going to support it. It's instantiated by reflection everytime `DataFrameReader.load` is called, so the implementation can not reuse a same `ReadSupport` instance.",
+    "commit": "51cda76897353344427aaa666e29be408263eeb1",
+    "createdAt": "2018-08-21T15:54:08Z",
+    "diffHunk": "@@ -18,48 +18,44 @@\n package org.apache.spark.sql.sources.v2;\n \n import org.apache.spark.annotation.InterfaceStability;\n-import org.apache.spark.sql.sources.DataSourceRegister;\n-import org.apache.spark.sql.sources.v2.reader.DataSourceReader;\n+import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Utils;\n+import org.apache.spark.sql.sources.v2.reader.BatchReadSupport;\n import org.apache.spark.sql.types.StructType;\n \n /**\n  * A mix-in interface for {@link DataSourceV2}. Data sources can implement this interface to\n- * provide data reading ability and scan the data from the data source.\n+ * provide data reading ability for batch processing.\n+ *\n+ * This interface is used to create {@link BatchReadSupport} instances when end users run\n+ * {@code SparkSession.read.format(...).option(...).load()}.\n  */\n @InterfaceStability.Evolving\n-public interface ReadSupport extends DataSourceV2 {\n+public interface BatchReadSupportProvider extends DataSourceV2 {\n \n   /**\n-   * Creates a {@link DataSourceReader} to scan the data from this data source.\n+   * Creates a {@link BatchReadSupport} instance to load the data from this data source with a user",
+    "line": 24
+  }, {
+    "author": {
+      "login": "rdblue"
+    },
+    "body": "It is fine if the life-cycle of the provider inhibits this (though they could use a static cache). Spark should just not make assumptions about the ReadSupport instance being specific to a query.",
+    "commit": "51cda76897353344427aaa666e29be408263eeb1",
+    "createdAt": "2018-08-21T17:30:02Z",
+    "diffHunk": "@@ -18,48 +18,44 @@\n package org.apache.spark.sql.sources.v2;\n \n import org.apache.spark.annotation.InterfaceStability;\n-import org.apache.spark.sql.sources.DataSourceRegister;\n-import org.apache.spark.sql.sources.v2.reader.DataSourceReader;\n+import org.apache.spark.sql.execution.datasources.v2.DataSourceV2Utils;\n+import org.apache.spark.sql.sources.v2.reader.BatchReadSupport;\n import org.apache.spark.sql.types.StructType;\n \n /**\n  * A mix-in interface for {@link DataSourceV2}. Data sources can implement this interface to\n- * provide data reading ability and scan the data from the data source.\n+ * provide data reading ability for batch processing.\n+ *\n+ * This interface is used to create {@link BatchReadSupport} instances when end users run\n+ * {@code SparkSession.read.format(...).option(...).load()}.\n  */\n @InterfaceStability.Evolving\n-public interface ReadSupport extends DataSourceV2 {\n+public interface BatchReadSupportProvider extends DataSourceV2 {\n \n   /**\n-   * Creates a {@link DataSourceReader} to scan the data from this data source.\n+   * Creates a {@link BatchReadSupport} instance to load the data from this data source with a user",
+    "line": 24
+  }],
+  "prId": 22009
+}]

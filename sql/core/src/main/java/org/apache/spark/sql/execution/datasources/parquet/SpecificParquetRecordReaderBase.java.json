@@ -1,0 +1,79 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "Could you be more specific by mentioning the corresponding Parquet JIRA issue or versions (1.10.0)?",
+    "commit": "497bdd8fc581f3c40ae97eb56d0a5f65e7d42405",
+    "createdAt": "2018-05-12T17:43:37Z",
+    "diffHunk": "@@ -147,7 +147,8 @@ public void initialize(InputSplit inputSplit, TaskAttemptContext taskAttemptCont\n     this.sparkSchema = StructType$.MODULE$.fromString(sparkRequestedSchemaString);\n     this.reader = new ParquetFileReader(\n         configuration, footer.getFileMetaData(), file, blocks, requestedSchema.getColumns());\n-    for (BlockMetaData block : blocks) {\n+    // use the blocks from the reader in case some do not match filters and will not be read",
+    "line": 5
+  }, {
+    "author": {
+      "login": "rdblue"
+    },
+    "body": "I'm not sure what you mean here. This is a problem entirely in Spark because Spark is reaching into Parquet internals for its vectorized support. There's no Parquet issue to reference.",
+    "commit": "497bdd8fc581f3c40ae97eb56d0a5f65e7d42405",
+    "createdAt": "2018-05-13T18:14:27Z",
+    "diffHunk": "@@ -147,7 +147,8 @@ public void initialize(InputSplit inputSplit, TaskAttemptContext taskAttemptCont\n     this.sparkSchema = StructType$.MODULE$.fromString(sparkRequestedSchemaString);\n     this.reader = new ParquetFileReader(\n         configuration, footer.getFileMetaData(), file, blocks, requestedSchema.getColumns());\n-    for (BlockMetaData block : blocks) {\n+    // use the blocks from the reader in case some do not match filters and will not be read",
+    "line": 5
+  }, {
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "What I mean is `this patch is logically okay, but only valid for master branch, Spark 2.4 with Parquet 1.10.0`. For example, the test case will pass in `branch-2.3` without this patch because it uses Parquet 1.8.X. As you mentioned, it would be great if we had included this patch in #21070.",
+    "commit": "497bdd8fc581f3c40ae97eb56d0a5f65e7d42405",
+    "createdAt": "2018-05-13T21:16:30Z",
+    "diffHunk": "@@ -147,7 +147,8 @@ public void initialize(InputSplit inputSplit, TaskAttemptContext taskAttemptCont\n     this.sparkSchema = StructType$.MODULE$.fromString(sparkRequestedSchemaString);\n     this.reader = new ParquetFileReader(\n         configuration, footer.getFileMetaData(), file, blocks, requestedSchema.getColumns());\n-    for (BlockMetaData block : blocks) {\n+    // use the blocks from the reader in case some do not match filters and will not be read",
+    "line": 5
+  }, {
+    "author": {
+      "login": "rdblue"
+    },
+    "body": "Actually, it is fine and more correct for this to be ported to older versions. I doubt it will because it is unnecessary though.",
+    "commit": "497bdd8fc581f3c40ae97eb56d0a5f65e7d42405",
+    "createdAt": "2018-05-22T00:23:52Z",
+    "diffHunk": "@@ -147,7 +147,8 @@ public void initialize(InputSplit inputSplit, TaskAttemptContext taskAttemptCont\n     this.sparkSchema = StructType$.MODULE$.fromString(sparkRequestedSchemaString);\n     this.reader = new ParquetFileReader(\n         configuration, footer.getFileMetaData(), file, blocks, requestedSchema.getColumns());\n-    for (BlockMetaData block : blocks) {\n+    // use the blocks from the reader in case some do not match filters and will not be read",
+    "line": 5
+  }, {
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "It looks correct to me, too. However, this comment isn't clear.\r\n- If the comment is correct only in Parquet 1.10.0, please fix the comment.\r\n- If the comment is correct in general, the failure should occur in Apache Spark 2.3.X (with old Parquet). Why don't we fix that in 2.3.1? This was [my original suggestion](https://github.com/apache/spark/pull/21295#issuecomment-388656852).\r\n",
+    "commit": "497bdd8fc581f3c40ae97eb56d0a5f65e7d42405",
+    "createdAt": "2018-05-22T16:03:35Z",
+    "diffHunk": "@@ -147,7 +147,8 @@ public void initialize(InputSplit inputSplit, TaskAttemptContext taskAttemptCont\n     this.sparkSchema = StructType$.MODULE$.fromString(sparkRequestedSchemaString);\n     this.reader = new ParquetFileReader(\n         configuration, footer.getFileMetaData(), file, blocks, requestedSchema.getColumns());\n-    for (BlockMetaData block : blocks) {\n+    // use the blocks from the reader in case some do not match filters and will not be read",
+    "line": 5
+  }, {
+    "author": {
+      "login": "rdblue"
+    },
+    "body": "Yes, we will need to backport this to the 2.3.x line. No rush to make it for 2.3.1 though, since dictionary filtering is off by default and this isn't a correctness problem.",
+    "commit": "497bdd8fc581f3c40ae97eb56d0a5f65e7d42405",
+    "createdAt": "2018-05-23T19:55:56Z",
+    "diffHunk": "@@ -147,7 +147,8 @@ public void initialize(InputSplit inputSplit, TaskAttemptContext taskAttemptCont\n     this.sparkSchema = StructType$.MODULE$.fromString(sparkRequestedSchemaString);\n     this.reader = new ParquetFileReader(\n         configuration, footer.getFileMetaData(), file, blocks, requestedSchema.getColumns());\n-    for (BlockMetaData block : blocks) {\n+    // use the blocks from the reader in case some do not match filters and will not be read",
+    "line": 5
+  }],
+  "prId": 21295
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "I think this is an existing issue, does your test case fail on Spark 2.3 too?",
+    "commit": "497bdd8fc581f3c40ae97eb56d0a5f65e7d42405",
+    "createdAt": "2018-05-23T13:48:47Z",
+    "diffHunk": "@@ -225,7 +226,8 @@ protected void initialize(String path, List<String> columns) throws IOException\n     this.sparkSchema = new ParquetToSparkSchemaConverter(config).convert(requestedSchema);\n     this.reader = new ParquetFileReader(\n         config, footer.getFileMetaData(), file, blocks, requestedSchema.getColumns());\n-    for (BlockMetaData block : blocks) {\n+    // use the blocks from the reader in case some do not match filters and will not be read\n+    for (BlockMetaData block : reader.getRowGroups()) {",
+    "line": 16
+  }, {
+    "author": {
+      "login": "rdblue"
+    },
+    "body": "Dictionary filtering is off by default in 1.8.x. It was enabled after we built confidence in its correctness in 1.9.x.\r\n\r\nWe should backport this fix to 2.3.x also, but the only downside to not having it is that dictionary filtering will throw an exception when it is enabled. So the feature just isn't available.",
+    "commit": "497bdd8fc581f3c40ae97eb56d0a5f65e7d42405",
+    "createdAt": "2018-05-23T19:55:16Z",
+    "diffHunk": "@@ -225,7 +226,8 @@ protected void initialize(String path, List<String> columns) throws IOException\n     this.sparkSchema = new ParquetToSparkSchemaConverter(config).convert(requestedSchema);\n     this.reader = new ParquetFileReader(\n         config, footer.getFileMetaData(), file, blocks, requestedSchema.getColumns());\n-    for (BlockMetaData block : blocks) {\n+    // use the blocks from the reader in case some do not match filters and will not be read\n+    for (BlockMetaData block : reader.getRowGroups()) {",
+    "line": 16
+  }],
+  "prId": 21295
+}]

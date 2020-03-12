@@ -1,0 +1,31 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "marmbrus"
+    },
+    "body": "@dragos any idea why it fails to infer the type only in the REPL?\n",
+    "commit": "d7367da4ca031548d843aed3ef9f14be9f46aecf",
+    "createdAt": "2015-11-20T21:17:10Z",
+    "diffHunk": "@@ -315,6 +315,30 @@ class ReplSuite extends SparkFunSuite {\n     }\n   }\n \n+  test(\"Datasets agg type-inference\") {\n+    val output = runInterpreter(\"local\",\n+      \"\"\"\n+        |import org.apache.spark.sql.functions._\n+        |import org.apache.spark.sql.Encoder\n+        |import org.apache.spark.sql.expressions.Aggregator\n+        |import org.apache.spark.sql.TypedColumn\n+        |/** An `Aggregator` that adds up any numeric type returned by the given function. */\n+        |class SumOf[I, N : Numeric](f: I => N) extends Aggregator[I, N, N] with Serializable {\n+        |  val numeric = implicitly[Numeric[N]]\n+        |  override def zero: N = numeric.zero\n+        |  override def reduce(b: N, a: I): N = numeric.plus(b, f(a))\n+        |  override def merge(b1: N,b2: N): N = numeric.plus(b1, b2)\n+        |  override def finish(reduction: N): N = reduction\n+        |}\n+        |\n+        |def sum[I, N : Numeric : Encoder](f: I => N): TypedColumn[I, N] = new SumOf(f).toColumn\n+        |val ds = Seq((1, 1, 2L), (1, 2, 3L), (1, 3, 4L), (2, 1, 5L)).toDS()\n+        |ds.groupBy(_._1).agg(sum(_._2), sum(_._3)).collect()",
+    "line": 22
+  }, {
+    "author": {
+      "login": "dragos"
+    },
+    "body": "I can't reproduce the difference. It won't infer it in a standalone program [either](https://gist.github.com/dragos/7c2d3ec962ee2e6862f3).\n\nAs I mentioned in our conversation, it's a chicken and egg problem: type inference is guided by the expected type, but if the method is overloaded, the expected type is not known. And the argument type is what guides overload resolution. It works in simple cases, when the overloads have different aritites, but with varargs that's no longer the case.\n",
+    "commit": "d7367da4ca031548d843aed3ef9f14be9f46aecf",
+    "createdAt": "2015-11-21T11:38:18Z",
+    "diffHunk": "@@ -315,6 +315,30 @@ class ReplSuite extends SparkFunSuite {\n     }\n   }\n \n+  test(\"Datasets agg type-inference\") {\n+    val output = runInterpreter(\"local\",\n+      \"\"\"\n+        |import org.apache.spark.sql.functions._\n+        |import org.apache.spark.sql.Encoder\n+        |import org.apache.spark.sql.expressions.Aggregator\n+        |import org.apache.spark.sql.TypedColumn\n+        |/** An `Aggregator` that adds up any numeric type returned by the given function. */\n+        |class SumOf[I, N : Numeric](f: I => N) extends Aggregator[I, N, N] with Serializable {\n+        |  val numeric = implicitly[Numeric[N]]\n+        |  override def zero: N = numeric.zero\n+        |  override def reduce(b: N, a: I): N = numeric.plus(b, f(a))\n+        |  override def merge(b1: N,b2: N): N = numeric.plus(b1, b2)\n+        |  override def finish(reduction: N): N = reduction\n+        |}\n+        |\n+        |def sum[I, N : Numeric : Encoder](f: I => N): TypedColumn[I, N] = new SumOf(f).toColumn\n+        |val ds = Seq((1, 1, 2L), (1, 2, 3L), (1, 3, 4L), (2, 1, 5L)).toDS()\n+        |ds.groupBy(_._1).agg(sum(_._2), sum(_._3)).collect()",
+    "line": 22
+  }, {
+    "author": {
+      "login": "marmbrus"
+    },
+    "body": "It always works fine [here](https://github.com/apache/spark/blob/master/sql/core/src/test/scala/org/apache/spark/sql/DatasetAggregatorSuite.scala#L102) though.  Why is this different?\n",
+    "commit": "d7367da4ca031548d843aed3ef9f14be9f46aecf",
+    "createdAt": "2015-11-22T19:35:37Z",
+    "diffHunk": "@@ -315,6 +315,30 @@ class ReplSuite extends SparkFunSuite {\n     }\n   }\n \n+  test(\"Datasets agg type-inference\") {\n+    val output = runInterpreter(\"local\",\n+      \"\"\"\n+        |import org.apache.spark.sql.functions._\n+        |import org.apache.spark.sql.Encoder\n+        |import org.apache.spark.sql.expressions.Aggregator\n+        |import org.apache.spark.sql.TypedColumn\n+        |/** An `Aggregator` that adds up any numeric type returned by the given function. */\n+        |class SumOf[I, N : Numeric](f: I => N) extends Aggregator[I, N, N] with Serializable {\n+        |  val numeric = implicitly[Numeric[N]]\n+        |  override def zero: N = numeric.zero\n+        |  override def reduce(b: N, a: I): N = numeric.plus(b, f(a))\n+        |  override def merge(b1: N,b2: N): N = numeric.plus(b1, b2)\n+        |  override def finish(reduction: N): N = reduction\n+        |}\n+        |\n+        |def sum[I, N : Numeric : Encoder](f: I => N): TypedColumn[I, N] = new SumOf(f).toColumn\n+        |val ds = Seq((1, 1, 2L), (1, 2, 3L), (1, 3, 4L), (2, 1, 5L)).toDS()\n+        |ds.groupBy(_._1).agg(sum(_._2), sum(_._3)).collect()",
+    "line": 22
+  }],
+  "prId": 9870
+}]

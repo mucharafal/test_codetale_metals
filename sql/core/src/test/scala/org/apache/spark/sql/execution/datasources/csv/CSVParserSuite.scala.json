@@ -1,0 +1,40 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "Should we add a new parser suite for csv?\n",
+    "commit": "7abdfc111166f2bf275fc4318c0ffe8836dcbb70",
+    "createdAt": "2016-04-11T02:17:12Z",
+    "diffHunk": "@@ -1,125 +0,0 @@\n-/*\n- * Licensed to the Apache Software Foundation (ASF) under one or more\n- * contributor license agreements.  See the NOTICE file distributed with\n- * this work for additional information regarding copyright ownership.\n- * The ASF licenses this file to You under the Apache License, Version 2.0\n- * (the \"License\"); you may not use this file except in compliance with\n- * the License.  You may obtain a copy of the License at\n- *\n- *    http://www.apache.org/licenses/LICENSE-2.0\n- *\n- * Unless required by applicable law or agreed to in writing, software\n- * distributed under the License is distributed on an \"AS IS\" BASIS,\n- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n- * See the License for the specific language governing permissions and\n- * limitations under the License.\n- */\n-\n-package org.apache.spark.sql.execution.datasources.csv\n-\n-import org.apache.spark.SparkFunSuite\n-\n-/**\n- * test cases for StringIteratorReader\n- */\n-class CSVParserSuite extends SparkFunSuite {",
+    "line": 25
+  }, {
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "Actually, I was a bit worried (and confused) of the range for tests. `CSVParserSuite` was testing the conversion from `Iterator` to `Reader` which does not exist now. So, I was thinking test codes in `UnivocityParser` and `UnivocityGenerator` because they are new classes anyway.\n\nBut while trying to add some mode test codes, I realised that it ends up with a test just like a end-to-end just as below:\n\n``` scala\ntest(\"Parse csv data correctly with univocity parser\") {\n  val cars = sparkContext.textFile(testFile(\"cars.csv\"))\n  val schema = StructType(\n    StructField(\"year\", IntegerType) ::\n    StructField(\"make\", StringType) ::\n    StructField(\"model\", StringType) ::\n    StructField(\"comment\", StringType) ::\n    StructField(\"blank\", StringType) :: Nil)\n\n  val requiredSchema = StructType(\n    StructField(\"year\", IntegerType) ::\n    StructField(\"make\", StringType) ::\n    StructField(\"model\", StringType) :: Nil)\n\n  val headers = schema.fields.map(_.name)\n  val options = new CSVOptions(Map.empty)\n  val filteredCars = cars.filter(_.nonEmpty)\n  val firstLine = filteredCars.first()\n  val dropHeaderCars = filteredCars.filter(_ != firstLine)\n\n  val parsedCars = UnivocityParser.parse(\n    dropHeaderCars,\n    schema,\n    requiredSchema,\n    headers,\n    options).collect()\n\n  val expectedCars = Seq(\n    new GenericMutableRow(\n      Array(2012, UTF8String.fromString(\"Tesla\"), UTF8String.fromString(\"S\"))),\n    new GenericMutableRow(\n      Array(1997, UTF8String.fromString(\"Ford\"), UTF8String.fromString(\"E350\"))),\n    new GenericMutableRow(\n      Array(2015, UTF8String.fromString(\"Chevy\"), UTF8String.fromString(\"Vold\"))))\n\n  assert(parsedCars === expectedCars)\n}\n```\n",
+    "commit": "7abdfc111166f2bf275fc4318c0ffe8836dcbb70",
+    "createdAt": "2016-04-11T09:57:29Z",
+    "diffHunk": "@@ -1,125 +0,0 @@\n-/*\n- * Licensed to the Apache Software Foundation (ASF) under one or more\n- * contributor license agreements.  See the NOTICE file distributed with\n- * this work for additional information regarding copyright ownership.\n- * The ASF licenses this file to You under the Apache License, Version 2.0\n- * (the \"License\"); you may not use this file except in compliance with\n- * the License.  You may obtain a copy of the License at\n- *\n- *    http://www.apache.org/licenses/LICENSE-2.0\n- *\n- * Unless required by applicable law or agreed to in writing, software\n- * distributed under the License is distributed on an \"AS IS\" BASIS,\n- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n- * See the License for the specific language governing permissions and\n- * limitations under the License.\n- */\n-\n-package org.apache.spark.sql.execution.datasources.csv\n-\n-import org.apache.spark.SparkFunSuite\n-\n-/**\n- * test cases for StringIteratorReader\n- */\n-class CSVParserSuite extends SparkFunSuite {",
+    "line": 25
+  }, {
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "I just also noticed that JSON data source also does not have some tests for `JacksonParser` and `JacksonGenerator`. \n\nCould I maybe add some tests for `JacksonParser`, `JacksonGenerator`, `UnivocityParser` and `UnivocityGenerator` in another PR or a follow-up if you think it needs (and this is sensible)?\n",
+    "commit": "7abdfc111166f2bf275fc4318c0ffe8836dcbb70",
+    "createdAt": "2016-04-11T09:57:33Z",
+    "diffHunk": "@@ -1,125 +0,0 @@\n-/*\n- * Licensed to the Apache Software Foundation (ASF) under one or more\n- * contributor license agreements.  See the NOTICE file distributed with\n- * this work for additional information regarding copyright ownership.\n- * The ASF licenses this file to You under the Apache License, Version 2.0\n- * (the \"License\"); you may not use this file except in compliance with\n- * the License.  You may obtain a copy of the License at\n- *\n- *    http://www.apache.org/licenses/LICENSE-2.0\n- *\n- * Unless required by applicable law or agreed to in writing, software\n- * distributed under the License is distributed on an \"AS IS\" BASIS,\n- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n- * See the License for the specific language governing permissions and\n- * limitations under the License.\n- */\n-\n-package org.apache.spark.sql.execution.datasources.csv\n-\n-import org.apache.spark.SparkFunSuite\n-\n-/**\n- * test cases for StringIteratorReader\n- */\n-class CSVParserSuite extends SparkFunSuite {",
+    "line": 25
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "yea makes sense, we can do it in follow-ups\n",
+    "commit": "7abdfc111166f2bf275fc4318c0ffe8836dcbb70",
+    "createdAt": "2016-04-11T11:58:36Z",
+    "diffHunk": "@@ -1,125 +0,0 @@\n-/*\n- * Licensed to the Apache Software Foundation (ASF) under one or more\n- * contributor license agreements.  See the NOTICE file distributed with\n- * this work for additional information regarding copyright ownership.\n- * The ASF licenses this file to You under the Apache License, Version 2.0\n- * (the \"License\"); you may not use this file except in compliance with\n- * the License.  You may obtain a copy of the License at\n- *\n- *    http://www.apache.org/licenses/LICENSE-2.0\n- *\n- * Unless required by applicable law or agreed to in writing, software\n- * distributed under the License is distributed on an \"AS IS\" BASIS,\n- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n- * See the License for the specific language governing permissions and\n- * limitations under the License.\n- */\n-\n-package org.apache.spark.sql.execution.datasources.csv\n-\n-import org.apache.spark.SparkFunSuite\n-\n-/**\n- * test cases for StringIteratorReader\n- */\n-class CSVParserSuite extends SparkFunSuite {",
+    "line": 25
+  }],
+  "prId": 12268
+}]

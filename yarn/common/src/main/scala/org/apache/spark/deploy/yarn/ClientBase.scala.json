@@ -1,0 +1,36 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "I don't think env variables and conf entries should be handled here like this.\n\nYarnClientSchedulerBackend already deals with the env variable and command line option for client mode. It seems that SparkSubmit might be missing code to handle the env variable for cluster mode, though. Probably better to fix it there, and leave this code to deal only with the command line args (which are already correctly parsed).\n",
+    "commit": "8117765daa02b03b81c12c1869ef75eda6653392",
+    "createdAt": "2014-06-04T23:21:56Z",
+    "diffHunk": "@@ -220,10 +220,21 @@ trait ClientBase extends Logging {\n       }\n     }\n \n+    def getArg(arg: String, envVar: String, sysProp: String): String = {\n+      if (arg != null && !arg.isEmpty) {\n+        arg\n+      } else if (System.getenv(envVar) != null && !System.getenv(envVar).isEmpty) {\n+        System.getenv(envVar)\n+      } else {\n+        sparkConf.getOption(sysProp).orNull\n+      }\n+    }\n     var cachedSecondaryJarLinks = ListBuffer.empty[String]\n-    val fileLists = List( (args.addJars, LocalResourceType.FILE, true),\n-      (args.files, LocalResourceType.FILE, false),\n-      (args.archives, LocalResourceType.ARCHIVE, false) )\n+    val fileLists = List((args.addJars, LocalResourceType.FILE, true),\n+      (getArg(args.files, \"SPARK_YARN_DIST_FILES\", \"spark.yarn.dist.files\"),\n+        LocalResourceType.FILE, false),\n+      (getArg(args.archives, \"SPARK_YARN_DIST_ARCHIVES\", \"spark.yarn.dist.archives\"),"
+  }, {
+    "author": {
+      "login": "witgo"
+    },
+    "body": "@vanzin  This is a yarn cluster problems. Don't use `YarnClientSchedulerBackend`.\n",
+    "commit": "8117765daa02b03b81c12c1869ef75eda6653392",
+    "createdAt": "2014-06-12T13:57:57Z",
+    "diffHunk": "@@ -220,10 +220,21 @@ trait ClientBase extends Logging {\n       }\n     }\n \n+    def getArg(arg: String, envVar: String, sysProp: String): String = {\n+      if (arg != null && !arg.isEmpty) {\n+        arg\n+      } else if (System.getenv(envVar) != null && !System.getenv(envVar).isEmpty) {\n+        System.getenv(envVar)\n+      } else {\n+        sparkConf.getOption(sysProp).orNull\n+      }\n+    }\n     var cachedSecondaryJarLinks = ListBuffer.empty[String]\n-    val fileLists = List( (args.addJars, LocalResourceType.FILE, true),\n-      (args.files, LocalResourceType.FILE, false),\n-      (args.archives, LocalResourceType.ARCHIVE, false) )\n+    val fileLists = List((args.addJars, LocalResourceType.FILE, true),\n+      (getArg(args.files, \"SPARK_YARN_DIST_FILES\", \"spark.yarn.dist.files\"),\n+        LocalResourceType.FILE, false),\n+      (getArg(args.archives, \"SPARK_YARN_DIST_ARCHIVES\", \"spark.yarn.dist.archives\"),"
+  }, {
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Did you see the other PR I mentioned (see https://github.com/apache/spark/pull/969#issuecomment-45805466)?\n\nThere's a bug in the Yarn code where configuration is not propagated correctly in cluster mode, which I fixed there. So you don't need this here because with my fix, these options should be correctly propagated without any extra code.\n",
+    "commit": "8117765daa02b03b81c12c1869ef75eda6653392",
+    "createdAt": "2014-06-12T16:59:03Z",
+    "diffHunk": "@@ -220,10 +220,21 @@ trait ClientBase extends Logging {\n       }\n     }\n \n+    def getArg(arg: String, envVar: String, sysProp: String): String = {\n+      if (arg != null && !arg.isEmpty) {\n+        arg\n+      } else if (System.getenv(envVar) != null && !System.getenv(envVar).isEmpty) {\n+        System.getenv(envVar)\n+      } else {\n+        sparkConf.getOption(sysProp).orNull\n+      }\n+    }\n     var cachedSecondaryJarLinks = ListBuffer.empty[String]\n-    val fileLists = List( (args.addJars, LocalResourceType.FILE, true),\n-      (args.files, LocalResourceType.FILE, false),\n-      (args.archives, LocalResourceType.ARCHIVE, false) )\n+    val fileLists = List((args.addJars, LocalResourceType.FILE, true),\n+      (getArg(args.files, \"SPARK_YARN_DIST_FILES\", \"spark.yarn.dist.files\"),\n+        LocalResourceType.FILE, false),\n+      (getArg(args.archives, \"SPARK_YARN_DIST_ARCHIVES\", \"spark.yarn.dist.archives\"),"
+  }, {
+    "author": {
+      "login": "witgo"
+    },
+    "body": "I see, Weekend, I will test your branch, Please merge the master changes.\n",
+    "commit": "8117765daa02b03b81c12c1869ef75eda6653392",
+    "createdAt": "2014-06-13T05:32:04Z",
+    "diffHunk": "@@ -220,10 +220,21 @@ trait ClientBase extends Logging {\n       }\n     }\n \n+    def getArg(arg: String, envVar: String, sysProp: String): String = {\n+      if (arg != null && !arg.isEmpty) {\n+        arg\n+      } else if (System.getenv(envVar) != null && !System.getenv(envVar).isEmpty) {\n+        System.getenv(envVar)\n+      } else {\n+        sparkConf.getOption(sysProp).orNull\n+      }\n+    }\n     var cachedSecondaryJarLinks = ListBuffer.empty[String]\n-    val fileLists = List( (args.addJars, LocalResourceType.FILE, true),\n-      (args.files, LocalResourceType.FILE, false),\n-      (args.archives, LocalResourceType.ARCHIVE, false) )\n+    val fileLists = List((args.addJars, LocalResourceType.FILE, true),\n+      (getArg(args.files, \"SPARK_YARN_DIST_FILES\", \"spark.yarn.dist.files\"),\n+        LocalResourceType.FILE, false),\n+      (getArg(args.archives, \"SPARK_YARN_DIST_ARCHIVES\", \"spark.yarn.dist.archives\"),"
+  }],
+  "prId": 969
+}]

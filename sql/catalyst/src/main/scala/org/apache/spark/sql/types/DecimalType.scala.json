@@ -1,0 +1,120 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "rxin"
+    },
+    "body": "Can we remove this? Declaring a zero-arg apply method is pretty error prone.\n",
+    "commit": "aa3f115d12d42182d8fa2a7daae10f2eb0cef9c2",
+    "createdAt": "2015-07-23T01:11:39Z",
+    "diffHunk": "@@ -92,31 +94,47 @@ object DecimalType extends AbstractDataType {\n \n   override private[sql] def simpleString: String = \"decimal\"\n \n-  val Unlimited: DecimalType = DecimalType(None)\n+  val Maximum: DecimalType = DecimalType(Some(PrecisionInfo(MAX_PRECISION, 18)))\n+\n+  val Default: DecimalType = DecimalType(Some(PrecisionInfo(10, 0)))\n+\n+  val Unlimited: DecimalType = Maximum  // backward compatibility\n \n   private[sql] object Fixed {\n     def unapply(t: DecimalType): Option[(Int, Int)] =\n-      t.precisionInfo.map(p => (p.precision, p.scale))\n+      t.precisionInfo.map(p => (p.precision, p.scale)).orElse(Some((10, 0)))\n   }\n \n   private[sql] object Expression {\n     def unapply(e: Expression): Option[(Int, Int)] = e.dataType match {\n-      case t: DecimalType => t.precisionInfo.map(p => (p.precision, p.scale))\n+      case t: DecimalType => t.precisionInfo.map(p => (p.precision, p.scale)).orElse(Some((10, 0)))\n       case _ => None\n     }\n   }\n \n-  def apply(): DecimalType = Unlimited\n+  def apply(): DecimalType = Default"
+  }, {
+    "author": {
+      "login": "davies"
+    },
+    "body": "Is it a public API?\n",
+    "commit": "aa3f115d12d42182d8fa2a7daae10f2eb0cef9c2",
+    "createdAt": "2015-07-23T04:07:19Z",
+    "diffHunk": "@@ -92,31 +94,47 @@ object DecimalType extends AbstractDataType {\n \n   override private[sql] def simpleString: String = \"decimal\"\n \n-  val Unlimited: DecimalType = DecimalType(None)\n+  val Maximum: DecimalType = DecimalType(Some(PrecisionInfo(MAX_PRECISION, 18)))\n+\n+  val Default: DecimalType = DecimalType(Some(PrecisionInfo(10, 0)))\n+\n+  val Unlimited: DecimalType = Maximum  // backward compatibility\n \n   private[sql] object Fixed {\n     def unapply(t: DecimalType): Option[(Int, Int)] =\n-      t.precisionInfo.map(p => (p.precision, p.scale))\n+      t.precisionInfo.map(p => (p.precision, p.scale)).orElse(Some((10, 0)))\n   }\n \n   private[sql] object Expression {\n     def unapply(e: Expression): Option[(Int, Int)] = e.dataType match {\n-      case t: DecimalType => t.precisionInfo.map(p => (p.precision, p.scale))\n+      case t: DecimalType => t.precisionInfo.map(p => (p.precision, p.scale)).orElse(Some((10, 0)))\n       case _ => None\n     }\n   }\n \n-  def apply(): DecimalType = Unlimited\n+  def apply(): DecimalType = Default"
+  }, {
+    "author": {
+      "login": "rxin"
+    },
+    "body": "Ah damn. Maybe deprecate it for now? Take a look to see how many places use it. If possible, let's remove its usage.\n",
+    "commit": "aa3f115d12d42182d8fa2a7daae10f2eb0cef9c2",
+    "createdAt": "2015-07-23T04:09:34Z",
+    "diffHunk": "@@ -92,31 +94,47 @@ object DecimalType extends AbstractDataType {\n \n   override private[sql] def simpleString: String = \"decimal\"\n \n-  val Unlimited: DecimalType = DecimalType(None)\n+  val Maximum: DecimalType = DecimalType(Some(PrecisionInfo(MAX_PRECISION, 18)))\n+\n+  val Default: DecimalType = DecimalType(Some(PrecisionInfo(10, 0)))\n+\n+  val Unlimited: DecimalType = Maximum  // backward compatibility\n \n   private[sql] object Fixed {\n     def unapply(t: DecimalType): Option[(Int, Int)] =\n-      t.precisionInfo.map(p => (p.precision, p.scale))\n+      t.precisionInfo.map(p => (p.precision, p.scale)).orElse(Some((10, 0)))\n   }\n \n   private[sql] object Expression {\n     def unapply(e: Expression): Option[(Int, Int)] = e.dataType match {\n-      case t: DecimalType => t.precisionInfo.map(p => (p.precision, p.scale))\n+      case t: DecimalType => t.precisionInfo.map(p => (p.precision, p.scale)).orElse(Some((10, 0)))\n       case _ => None\n     }\n   }\n \n-  def apply(): DecimalType = Unlimited\n+  def apply(): DecimalType = Default"
+  }],
+  "prId": 7605
+}, {
+  "comments": [{
+    "author": {
+      "login": "rxin"
+    },
+    "body": "can you add scaladoc explaining the semantics of this function?\n",
+    "commit": "aa3f115d12d42182d8fa2a7daae10f2eb0cef9c2",
+    "createdAt": "2015-07-23T17:38:03Z",
+    "diffHunk": "@@ -53,18 +53,20 @@ case class DecimalType(precisionInfo: Option[PrecisionInfo]) extends FractionalT\n   private[sql] val ordering = Decimal.DecimalIsFractional\n   private[sql] val asIntegral = Decimal.DecimalAsIfIntegral\n \n-  def precision: Int = precisionInfo.map(_.precision).getOrElse(-1)\n+  def precision: Int = precisionInfo.map(_.precision).getOrElse(10)\n \n-  def scale: Int = precisionInfo.map(_.scale).getOrElse(-1)\n+  def scale: Int = precisionInfo.map(_.scale).getOrElse(0)\n \n-  override def typeName: String = precisionInfo match {\n-    case Some(PrecisionInfo(precision, scale)) => s\"decimal($precision,$scale)\"\n-    case None => \"decimal\"\n-  }\n+  override def typeName: String = s\"decimal($precision,$scale)\"\n+\n+  override def toString: String = s\"DecimalType($precision,$scale)\"\n \n-  override def toString: String = precisionInfo match {\n-    case Some(PrecisionInfo(precision, scale)) => s\"DecimalType($precision,$scale)\"\n-    case None => \"DecimalType()\"\n+  private[sql] def isWiderThan(other: DataType): Boolean = other match {",
+    "line": 69
+  }, {
+    "author": {
+      "login": "rxin"
+    },
+    "body": "also for something like this you should add a unit test\n",
+    "commit": "aa3f115d12d42182d8fa2a7daae10f2eb0cef9c2",
+    "createdAt": "2015-07-23T17:38:26Z",
+    "diffHunk": "@@ -53,18 +53,20 @@ case class DecimalType(precisionInfo: Option[PrecisionInfo]) extends FractionalT\n   private[sql] val ordering = Decimal.DecimalIsFractional\n   private[sql] val asIntegral = Decimal.DecimalAsIfIntegral\n \n-  def precision: Int = precisionInfo.map(_.precision).getOrElse(-1)\n+  def precision: Int = precisionInfo.map(_.precision).getOrElse(10)\n \n-  def scale: Int = precisionInfo.map(_.scale).getOrElse(-1)\n+  def scale: Int = precisionInfo.map(_.scale).getOrElse(0)\n \n-  override def typeName: String = precisionInfo match {\n-    case Some(PrecisionInfo(precision, scale)) => s\"decimal($precision,$scale)\"\n-    case None => \"decimal\"\n-  }\n+  override def typeName: String = s\"decimal($precision,$scale)\"\n+\n+  override def toString: String = s\"DecimalType($precision,$scale)\"\n \n-  override def toString: String = precisionInfo match {\n-    case Some(PrecisionInfo(precision, scale)) => s\"DecimalType($precision,$scale)\"\n-    case None => \"DecimalType()\"\n+  private[sql] def isWiderThan(other: DataType): Boolean = other match {",
+    "line": 69
+  }],
+  "prId": 7605
+}, {
+  "comments": [{
+    "author": {
+      "login": "rxin"
+    },
+    "body": "would it make more sense to make precision and scale the two parameters of DecimalType, rather than an optional PrecisionInfo? \n\nTo keep binary compatibility, we can still create a function called precisionInfo\n",
+    "commit": "aa3f115d12d42182d8fa2a7daae10f2eb0cef9c2",
+    "createdAt": "2015-07-23T17:39:26Z",
+    "diffHunk": "@@ -36,7 +36,7 @@ case class PrecisionInfo(precision: Int, scale: Int) {\n /**\n  * :: DeveloperApi ::\n  * The data type representing `java.math.BigDecimal` values.\n- * A Decimal that might have fixed precision and scale, or unlimited values for these.\n+ * A Decimal that must have fixed precision and scale.\n  *\n  * Please use [[DataTypes.createDecimalType()]] to create a specific instance.\n  */"
+  }, {
+    "author": {
+      "login": "rxin"
+    },
+    "body": "after looking through the code - it definitely makes sense to just remove the Option, and make precision/scale the two arguments on DecimalType.\n",
+    "commit": "aa3f115d12d42182d8fa2a7daae10f2eb0cef9c2",
+    "createdAt": "2015-07-23T18:16:04Z",
+    "diffHunk": "@@ -36,7 +36,7 @@ case class PrecisionInfo(precision: Int, scale: Int) {\n /**\n  * :: DeveloperApi ::\n  * The data type representing `java.math.BigDecimal` values.\n- * A Decimal that might have fixed precision and scale, or unlimited values for these.\n+ * A Decimal that must have fixed precision and scale.\n  *\n  * Please use [[DataTypes.createDecimalType()]] to create a specific instance.\n  */"
+  }, {
+    "author": {
+      "login": "davies"
+    },
+    "body": "updated.\n",
+    "commit": "aa3f115d12d42182d8fa2a7daae10f2eb0cef9c2",
+    "createdAt": "2015-07-23T21:40:12Z",
+    "diffHunk": "@@ -36,7 +36,7 @@ case class PrecisionInfo(precision: Int, scale: Int) {\n /**\n  * :: DeveloperApi ::\n  * The data type representing `java.math.BigDecimal` values.\n- * A Decimal that might have fixed precision and scale, or unlimited values for these.\n+ * A Decimal that must have fixed precision and scale.\n  *\n  * Please use [[DataTypes.createDecimalType()]] to create a specific instance.\n  */"
+  }],
+  "prId": 7605
+}, {
+  "comments": [{
+    "author": {
+      "login": "rxin"
+    },
+    "body": "these are used only once -- seem excessive to have top level variables for them\n",
+    "commit": "aa3f115d12d42182d8fa2a7daae10f2eb0cef9c2",
+    "createdAt": "2015-07-23T17:40:28Z",
+    "diffHunk": "@@ -92,31 +94,47 @@ object DecimalType extends AbstractDataType {\n \n   override private[sql] def simpleString: String = \"decimal\"\n \n-  val Unlimited: DecimalType = DecimalType(None)\n+  val Maximum: DecimalType = DecimalType(Some(PrecisionInfo(MAX_PRECISION, 18)))\n+\n+  val Default: DecimalType = DecimalType(Some(PrecisionInfo(10, 0)))\n+\n+  val Unlimited: DecimalType = Maximum  // backward compatibility\n \n   private[sql] object Fixed {\n     def unapply(t: DecimalType): Option[(Int, Int)] =\n-      t.precisionInfo.map(p => (p.precision, p.scale))\n+      t.precisionInfo.map(p => (p.precision, p.scale)).orElse(Some((10, 0)))\n   }\n \n   private[sql] object Expression {\n     def unapply(e: Expression): Option[(Int, Int)] = e.dataType match {\n-      case t: DecimalType => t.precisionInfo.map(p => (p.precision, p.scale))\n+      case t: DecimalType => t.precisionInfo.map(p => (p.precision, p.scale)).orElse(Some((10, 0)))\n       case _ => None\n     }\n   }\n \n-  def apply(): DecimalType = Unlimited\n+  def apply(): DecimalType = Default\n \n   def apply(precision: Int, scale: Int): DecimalType =\n     DecimalType(Some(PrecisionInfo(precision, scale)))\n \n+  // The decimal types compatible with IntegralTypes\n+  private[sql] val ByteDecimal = DecimalType(3, 0)"
+  }],
+  "prId": 7605
+}, {
+  "comments": [{
+    "author": {
+      "login": "rxin"
+    },
+    "body": "i think you can now just remove Fixed and Expression, and use the unapply directly on DecimalType.\n\nThese two are private APIs.\n",
+    "commit": "aa3f115d12d42182d8fa2a7daae10f2eb0cef9c2",
+    "createdAt": "2015-07-23T18:14:46Z",
+    "diffHunk": "@@ -92,31 +94,47 @@ object DecimalType extends AbstractDataType {\n \n   override private[sql] def simpleString: String = \"decimal\"\n \n-  val Unlimited: DecimalType = DecimalType(None)\n+  val Maximum: DecimalType = DecimalType(Some(PrecisionInfo(MAX_PRECISION, 18)))\n+\n+  val Default: DecimalType = DecimalType(Some(PrecisionInfo(10, 0)))\n+\n+  val Unlimited: DecimalType = Maximum  // backward compatibility\n \n   private[sql] object Fixed {"
+  }],
+  "prId": 7605
+}, {
+  "comments": [{
+    "author": {
+      "login": "rxin"
+    },
+    "body": "make this a def, and deprecate it.\n",
+    "commit": "aa3f115d12d42182d8fa2a7daae10f2eb0cef9c2",
+    "createdAt": "2015-07-23T18:15:04Z",
+    "diffHunk": "@@ -92,31 +94,47 @@ object DecimalType extends AbstractDataType {\n \n   override private[sql] def simpleString: String = \"decimal\"\n \n-  val Unlimited: DecimalType = DecimalType(None)\n+  val Maximum: DecimalType = DecimalType(Some(PrecisionInfo(MAX_PRECISION, 18)))\n+\n+  val Default: DecimalType = DecimalType(Some(PrecisionInfo(10, 0)))\n+\n+  val Unlimited: DecimalType = Maximum  // backward compatibility"
+  }],
+  "prId": 7605
+}, {
+  "comments": [{
+    "author": {
+      "login": "rxin"
+    },
+    "body": "define the maximum and default here\n",
+    "commit": "aa3f115d12d42182d8fa2a7daae10f2eb0cef9c2",
+    "createdAt": "2015-07-23T18:16:13Z",
+    "diffHunk": "@@ -36,7 +36,7 @@ case class PrecisionInfo(precision: Int, scale: Int) {\n /**\n  * :: DeveloperApi ::\n  * The data type representing `java.math.BigDecimal` values.\n- * A Decimal that might have fixed precision and scale, or unlimited values for these.\n+ * A Decimal that must have fixed precision and scale."
+  }],
+  "prId": 7605
+}]

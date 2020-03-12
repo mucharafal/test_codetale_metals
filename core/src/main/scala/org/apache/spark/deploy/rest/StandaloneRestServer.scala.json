@@ -1,0 +1,71 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "jiangxb1987"
+    },
+    "body": "I think this should also affect `SPARK_LOCAL_DIRS`, is that expected?",
+    "commit": "b188cc9a9e290683210d3c4a6841d37ca00b112f",
+    "createdAt": "2017-08-06T14:23:21Z",
+    "diffHunk": "@@ -139,7 +139,9 @@ private[rest] class StandaloneSubmitRequestServlet(\n     val driverExtraLibraryPath = sparkProperties.get(\"spark.driver.extraLibraryPath\")\n     val superviseDriver = sparkProperties.get(\"spark.driver.supervise\")\n     val appArgs = request.appArgs\n-    val environmentVariables = request.environmentVariables\n+    // Filter SPARK_LOCAL environment variables from being set on the remote system.\n+    val environmentVariables =\n+      request.environmentVariables.filterNot(_._1.startsWith(\"SPARK_LOCAL\"))"
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "I guess that Driver might not use `SPARK_LOCAL_DIRS`. But yes we may only need to filter out `SPARK_LOCAL_IP` and `SPARK_LOCAL_HOSTNAME`.",
+    "commit": "b188cc9a9e290683210d3c4a6841d37ca00b112f",
+    "createdAt": "2017-08-07T06:54:29Z",
+    "diffHunk": "@@ -139,7 +139,9 @@ private[rest] class StandaloneSubmitRequestServlet(\n     val driverExtraLibraryPath = sparkProperties.get(\"spark.driver.extraLibraryPath\")\n     val superviseDriver = sparkProperties.get(\"spark.driver.supervise\")\n     val appArgs = request.appArgs\n-    val environmentVariables = request.environmentVariables\n+    // Filter SPARK_LOCAL environment variables from being set on the remote system.\n+    val environmentVariables =\n+      request.environmentVariables.filterNot(_._1.startsWith(\"SPARK_LOCAL\"))"
+  }, {
+    "author": {
+      "login": "ScrapCodes"
+    },
+    "body": "You are right, but shouldn't all SPARK_LOCAL* properties be picked up from the local environment of the node where driver is going to be started? \r\n\r\nNot filtering them, would mean, that these local properties are common to all nodes. \r\n\r\nBut for this particular bug, `SPARK_LOCAL_DIRS` is not required to be filtered. ",
+    "commit": "b188cc9a9e290683210d3c4a6841d37ca00b112f",
+    "createdAt": "2017-08-24T10:54:54Z",
+    "diffHunk": "@@ -139,7 +139,9 @@ private[rest] class StandaloneSubmitRequestServlet(\n     val driverExtraLibraryPath = sparkProperties.get(\"spark.driver.extraLibraryPath\")\n     val superviseDriver = sparkProperties.get(\"spark.driver.supervise\")\n     val appArgs = request.appArgs\n-    val environmentVariables = request.environmentVariables\n+    // Filter SPARK_LOCAL environment variables from being set on the remote system.\n+    val environmentVariables =\n+      request.environmentVariables.filterNot(_._1.startsWith(\"SPARK_LOCAL\"))"
+  }, {
+    "author": {
+      "login": "jiangxb1987"
+    },
+    "body": "Could you please check the code to ensure that `SPARK_LOCAL_DIRS` has not been used as a global config?",
+    "commit": "b188cc9a9e290683210d3c4a6841d37ca00b112f",
+    "createdAt": "2017-08-24T14:36:10Z",
+    "diffHunk": "@@ -139,7 +139,9 @@ private[rest] class StandaloneSubmitRequestServlet(\n     val driverExtraLibraryPath = sparkProperties.get(\"spark.driver.extraLibraryPath\")\n     val superviseDriver = sparkProperties.get(\"spark.driver.supervise\")\n     val appArgs = request.appArgs\n-    val environmentVariables = request.environmentVariables\n+    // Filter SPARK_LOCAL environment variables from being set on the remote system.\n+    val environmentVariables =\n+      request.environmentVariables.filterNot(_._1.startsWith(\"SPARK_LOCAL\"))"
+  }, {
+    "author": {
+      "login": "ScrapCodes"
+    },
+    "body": "Alright, I will check how it is used across the project. \r\nJust noted, In `LocalDirsSuite`, comments in `test(\"SPARK_LOCAL_DIRS override also affects driver\") ` seems to corroborate with my intentions here.\r\n",
+    "commit": "b188cc9a9e290683210d3c4a6841d37ca00b112f",
+    "createdAt": "2017-08-25T05:50:53Z",
+    "diffHunk": "@@ -139,7 +139,9 @@ private[rest] class StandaloneSubmitRequestServlet(\n     val driverExtraLibraryPath = sparkProperties.get(\"spark.driver.extraLibraryPath\")\n     val superviseDriver = sparkProperties.get(\"spark.driver.supervise\")\n     val appArgs = request.appArgs\n-    val environmentVariables = request.environmentVariables\n+    // Filter SPARK_LOCAL environment variables from being set on the remote system.\n+    val environmentVariables =\n+      request.environmentVariables.filterNot(_._1.startsWith(\"SPARK_LOCAL\"))"
+  }],
+  "prId": 17357
+}, {
+  "comments": [{
+    "author": {
+      "login": "ScrapCodes"
+    },
+    "body": "@jiangxb1987 Hi I have changed it to only filter HOSTNAME and IP.",
+    "commit": "b188cc9a9e290683210d3c4a6841d37ca00b112f",
+    "createdAt": "2017-08-28T09:55:07Z",
+    "diffHunk": "@@ -139,7 +139,9 @@ private[rest] class StandaloneSubmitRequestServlet(\n     val driverExtraLibraryPath = sparkProperties.get(\"spark.driver.extraLibraryPath\")\n     val superviseDriver = sparkProperties.get(\"spark.driver.supervise\")\n     val appArgs = request.appArgs\n-    val environmentVariables = request.environmentVariables\n+    // Filter SPARK_LOCAL_(IP|HOSTNAME) environment variables from being set on the remote system.\n+    val environmentVariables =\n+      request.environmentVariables.filterNot(x => x._1.matches(\"SPARK_LOCAL_(IP|HOSTNAME\"))"
+  }, {
+    "author": {
+      "login": "jiangxb1987"
+    },
+    "body": "Should it be `\"SPARK_LOCAL_(IP|HOSTNAME)\"`?",
+    "commit": "b188cc9a9e290683210d3c4a6841d37ca00b112f",
+    "createdAt": "2017-08-28T20:35:00Z",
+    "diffHunk": "@@ -139,7 +139,9 @@ private[rest] class StandaloneSubmitRequestServlet(\n     val driverExtraLibraryPath = sparkProperties.get(\"spark.driver.extraLibraryPath\")\n     val superviseDriver = sparkProperties.get(\"spark.driver.supervise\")\n     val appArgs = request.appArgs\n-    val environmentVariables = request.environmentVariables\n+    // Filter SPARK_LOCAL_(IP|HOSTNAME) environment variables from being set on the remote system.\n+    val environmentVariables =\n+      request.environmentVariables.filterNot(x => x._1.matches(\"SPARK_LOCAL_(IP|HOSTNAME\"))"
+  }, {
+    "author": {
+      "login": "ScrapCodes"
+    },
+    "body": "Thanks!",
+    "commit": "b188cc9a9e290683210d3c4a6841d37ca00b112f",
+    "createdAt": "2017-08-29T05:53:08Z",
+    "diffHunk": "@@ -139,7 +139,9 @@ private[rest] class StandaloneSubmitRequestServlet(\n     val driverExtraLibraryPath = sparkProperties.get(\"spark.driver.extraLibraryPath\")\n     val superviseDriver = sparkProperties.get(\"spark.driver.supervise\")\n     val appArgs = request.appArgs\n-    val environmentVariables = request.environmentVariables\n+    // Filter SPARK_LOCAL_(IP|HOSTNAME) environment variables from being set on the remote system.\n+    val environmentVariables =\n+      request.environmentVariables.filterNot(x => x._1.matches(\"SPARK_LOCAL_(IP|HOSTNAME\"))"
+  }],
+  "prId": 17357
+}]

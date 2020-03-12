@@ -1,0 +1,121 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Why remove this requirement?\n",
+    "commit": "6f47f21a81f8201f50de58677358df60a836831e",
+    "createdAt": "2015-03-31T09:18:05Z",
+    "diffHunk": "@@ -106,7 +118,6 @@ class LogisticRegressionModel (\n \n     // If dataMatrix and weightMatrix have the same dimension, it's binary logistic regression.\n     if (numClasses == 2) {\n-      require(numFeatures == weightMatrix.size)",
+    "line": 44
+  }, {
+    "author": {
+      "login": "yanboliang"
+    },
+    "body": "Because that we have check it when LogisticRegressionModel created.\nhttps://github.com/apache/spark/blob/master/mllib/src/main/scala/org/apache/spark/mllib/classification/LogisticRegression.scala#L52\n",
+    "commit": "6f47f21a81f8201f50de58677358df60a836831e",
+    "createdAt": "2015-03-31T16:40:38Z",
+    "diffHunk": "@@ -106,7 +118,6 @@ class LogisticRegressionModel (\n \n     // If dataMatrix and weightMatrix have the same dimension, it's binary logistic regression.\n     if (numClasses == 2) {\n-      require(numFeatures == weightMatrix.size)",
+    "line": 44
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "I agree the check is made later but wouldn't you want to fail fast-er, still, if this condition doesn't hold? sorry if I am overlooking something obvious due to your change.\n",
+    "commit": "6f47f21a81f8201f50de58677358df60a836831e",
+    "createdAt": "2015-03-31T16:50:24Z",
+    "diffHunk": "@@ -106,7 +118,6 @@ class LogisticRegressionModel (\n \n     // If dataMatrix and weightMatrix have the same dimension, it's binary logistic regression.\n     if (numClasses == 2) {\n-      require(numFeatures == weightMatrix.size)",
+    "line": 44
+  }, {
+    "author": {
+      "login": "yanboliang"
+    },
+    "body": "I think the check at \nhttps://github.com/apache/spark/blob/master/mllib/src/main/scala/org/apache/spark/mllib/classification/LogisticRegression.scala#L52 is before the check at here.\nSo if `numFeatures == weightMatrix.size` is not satisfied, the model will created failed and predictPoint will not be called.\n",
+    "commit": "6f47f21a81f8201f50de58677358df60a836831e",
+    "createdAt": "2015-03-31T17:09:59Z",
+    "diffHunk": "@@ -106,7 +118,6 @@ class LogisticRegressionModel (\n \n     // If dataMatrix and weightMatrix have the same dimension, it's binary logistic regression.\n     if (numClasses == 2) {\n-      require(numFeatures == weightMatrix.size)",
+    "line": 44
+  }],
+  "prId": 5249
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Doesn't this just collapse to `(dataMatrix.size + 1 == dataWithBiasSize)`?\n",
+    "commit": "6f47f21a81f8201f50de58677358df60a836831e",
+    "createdAt": "2015-03-31T09:18:20Z",
+    "diffHunk": "@@ -145,13 +135,20 @@ class LogisticRegressionModel (\n        */\n       var bestClass = 0\n       var maxMargin = 0.0\n-      var i = 0\n-      while(i < margins.size) {\n-        if (margins(i) > maxMargin) {\n-          maxMargin = margins(i)\n+      val withBias = if (dataMatrix.size + 1 == dataWithBiasSize) true else false"
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Ah, no, my point is much simpler, just saying that `if (x) true else false` is equivalent to the simpler expression `x`. I'm not questioning the boolean expression itself.\n",
+    "commit": "6f47f21a81f8201f50de58677358df60a836831e",
+    "createdAt": "2015-03-31T16:57:45Z",
+    "diffHunk": "@@ -145,13 +135,20 @@ class LogisticRegressionModel (\n        */\n       var bestClass = 0\n       var maxMargin = 0.0\n-      var i = 0\n-      while(i < margins.size) {\n-        if (margins(i) > maxMargin) {\n-          maxMargin = margins(i)\n+      val withBias = if (dataMatrix.size + 1 == dataWithBiasSize) true else false"
+  }, {
+    "author": {
+      "login": "yanboliang"
+    },
+    "body": "Oh, yes, you are right. Sorry for my misunderstand, I will update it.\n",
+    "commit": "6f47f21a81f8201f50de58677358df60a836831e",
+    "createdAt": "2015-03-31T17:01:45Z",
+    "diffHunk": "@@ -145,13 +135,20 @@ class LogisticRegressionModel (\n        */\n       var bestClass = 0\n       var maxMargin = 0.0\n-      var i = 0\n-      while(i < margins.size) {\n-        if (margins(i) > maxMargin) {\n-          maxMargin = margins(i)\n+      val withBias = if (dataMatrix.size + 1 == dataWithBiasSize) true else false"
+  }],
+  "prId": 5249
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "It's minor, but I wonder if this is faster without the branch. It wouldn't affect the result. Also if you're concerned with speed I think you can precompute `i * dataWithBiasSize` which is used many times.\n",
+    "commit": "6f47f21a81f8201f50de58677358df60a836831e",
+    "createdAt": "2015-03-31T09:19:51Z",
+    "diffHunk": "@@ -145,13 +135,20 @@ class LogisticRegressionModel (\n        */\n       var bestClass = 0\n       var maxMargin = 0.0\n-      var i = 0\n-      while(i < margins.size) {\n-        if (margins(i) > maxMargin) {\n-          maxMargin = margins(i)\n+      val withBias = if (dataMatrix.size + 1 == dataWithBiasSize) true else false\n+      (0 until numClasses - 1).map { i =>\n+        var margin = 0.0\n+        dataMatrix.foreachActive { (index, value) =>\n+          if (value != 0.0) margin += value * weightsArray((i * dataWithBiasSize) + index)"
+  }, {
+    "author": {
+      "login": "yanboliang"
+    },
+    "body": "`i * dataWithBiasSize` is not the most concerned problem.\nWe just want to track `best_class` within this loop to avoid 2 loops.\n",
+    "commit": "6f47f21a81f8201f50de58677358df60a836831e",
+    "createdAt": "2015-03-31T17:04:41Z",
+    "diffHunk": "@@ -145,13 +135,20 @@ class LogisticRegressionModel (\n        */\n       var bestClass = 0\n       var maxMargin = 0.0\n-      var i = 0\n-      while(i < margins.size) {\n-        if (margins(i) > maxMargin) {\n-          maxMargin = margins(i)\n+      val withBias = if (dataMatrix.size + 1 == dataWithBiasSize) true else false\n+      (0 until numClasses - 1).map { i =>\n+        var margin = 0.0\n+        dataMatrix.foreachActive { (index, value) =>\n+          if (value != 0.0) margin += value * weightsArray((i * dataWithBiasSize) + index)"
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "OK, yes you're avoiding computing and saving margins, then looping over them again. I thought the real optimization was not computing the weights array every time a prediction is made. I suppose it means potentially storing the weights twice, but there generally won't be millions of them or anything.\n\nThese seem like smallish improvements though, does it make a measurable difference? I would think that if things like this matter, then it might be valuable to go further and even avoid `(0 until numClasses - 1)` in favor of a `while` loop. I'm not suggesting this must be done, but just making sure the win is happening for the reasons we think it is, and that it's worth some optimization but not more.\n",
+    "commit": "6f47f21a81f8201f50de58677358df60a836831e",
+    "createdAt": "2015-03-31T19:00:02Z",
+    "diffHunk": "@@ -145,13 +135,20 @@ class LogisticRegressionModel (\n        */\n       var bestClass = 0\n       var maxMargin = 0.0\n-      var i = 0\n-      while(i < margins.size) {\n-        if (margins(i) > maxMargin) {\n-          maxMargin = margins(i)\n+      val withBias = if (dataMatrix.size + 1 == dataWithBiasSize) true else false\n+      (0 until numClasses - 1).map { i =>\n+        var margin = 0.0\n+        dataMatrix.foreachActive { (index, value) =>\n+          if (value != 0.0) margin += value * weightsArray((i * dataWithBiasSize) + index)"
+  }, {
+    "author": {
+      "login": "yanboliang"
+    },
+    "body": "@srowen  Thank you for your comments. I'm not sure that it will make a measurable difference, what I made for this PR is just want to simplify code and reduce redundant. This optimization is inspired by #5137 which implements the prediction for Python API and it concerned mainly on simplify code.\nI agree the real optimization may be not computing the weights array every time  prediction is made,  but just like you said it seems like small improvements. I think we should solve it when we encounter some performance issues and file another ticket.\n",
+    "commit": "6f47f21a81f8201f50de58677358df60a836831e",
+    "createdAt": "2015-04-01T05:34:55Z",
+    "diffHunk": "@@ -145,13 +135,20 @@ class LogisticRegressionModel (\n        */\n       var bestClass = 0\n       var maxMargin = 0.0\n-      var i = 0\n-      while(i < margins.size) {\n-        if (margins(i) > maxMargin) {\n-          maxMargin = margins(i)\n+      val withBias = if (dataMatrix.size + 1 == dataWithBiasSize) true else false\n+      (0 until numClasses - 1).map { i =>\n+        var margin = 0.0\n+        dataMatrix.foreachActive { (index, value) =>\n+          if (value != 0.0) margin += value * weightsArray((i * dataWithBiasSize) + index)"
+  }],
+  "prId": 5249
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "This can be more like `foreach` instead of `map`?\n",
+    "commit": "6f47f21a81f8201f50de58677358df60a836831e",
+    "createdAt": "2015-03-31T09:20:33Z",
+    "diffHunk": "@@ -145,13 +135,20 @@ class LogisticRegressionModel (\n        */\n       var bestClass = 0\n       var maxMargin = 0.0\n-      var i = 0\n-      while(i < margins.size) {\n-        if (margins(i) > maxMargin) {\n-          maxMargin = margins(i)\n+      val withBias = if (dataMatrix.size + 1 == dataWithBiasSize) true else false\n+      (0 until numClasses - 1).map { i =>"
+  }, {
+    "author": {
+      "login": "yanboliang"
+    },
+    "body": "Yes, `foreach` is more suitable.\n",
+    "commit": "6f47f21a81f8201f50de58677358df60a836831e",
+    "createdAt": "2015-03-31T16:56:26Z",
+    "diffHunk": "@@ -145,13 +135,20 @@ class LogisticRegressionModel (\n        */\n       var bestClass = 0\n       var maxMargin = 0.0\n-      var i = 0\n-      while(i < margins.size) {\n-        if (margins(i) > maxMargin) {\n-          maxMargin = margins(i)\n+      val withBias = if (dataMatrix.size + 1 == dataWithBiasSize) true else false\n+      (0 until numClasses - 1).map { i =>"
+  }],
+  "prId": 5249
+}]

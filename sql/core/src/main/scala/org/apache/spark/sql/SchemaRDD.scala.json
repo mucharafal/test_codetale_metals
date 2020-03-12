@@ -1,0 +1,22 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "rxin"
+    },
+    "body": "Do you know if grouped is stream based or does it materialize the whole thing in memory? If it is the latter, we should rewrite it to to be stream based.\n",
+    "commit": "2d1915e1c75b7b0405a693b8fceb0ab4c9bf9e52",
+    "createdAt": "2014-06-14T20:19:43Z",
+    "diffHunk": "@@ -343,16 +343,11 @@ class SchemaRDD(\n       val pickle = new Pickler\n       iter.map { row =>\n         val map: JMap[String, Any] = new java.util.HashMap\n-        // TODO: We place the map in an ArrayList so that the object is pickled to a List[Dict].\n-        // Ideally we should be able to pickle an object directly into a Python collection so we\n-        // don't have to create an ArrayList every time.\n-        val arr: java.util.ArrayList[Any] = new java.util.ArrayList\n         row.zip(fieldNames).foreach { case (obj, name) =>\n           map.put(name, obj)\n         }\n-        arr.add(map)\n-        pickle.dumps(arr)\n-      }\n+        map\n+      }.grouped(10).map(batched => pickle.dumps(batched.toArray))",
+    "line": 15
+  }, {
+    "author": {
+      "login": "kanzhang"
+    },
+    "body": "@rxin yes, it is stream based. It is also used in `RDD.saveAsObjectFile` and `PairwiseRDD.compute`. Thanks for the review!\n",
+    "commit": "2d1915e1c75b7b0405a693b8fceb0ab4c9bf9e52",
+    "createdAt": "2014-06-15T04:12:52Z",
+    "diffHunk": "@@ -343,16 +343,11 @@ class SchemaRDD(\n       val pickle = new Pickler\n       iter.map { row =>\n         val map: JMap[String, Any] = new java.util.HashMap\n-        // TODO: We place the map in an ArrayList so that the object is pickled to a List[Dict].\n-        // Ideally we should be able to pickle an object directly into a Python collection so we\n-        // don't have to create an ArrayList every time.\n-        val arr: java.util.ArrayList[Any] = new java.util.ArrayList\n         row.zip(fieldNames).foreach { case (obj, name) =>\n           map.put(name, obj)\n         }\n-        arr.add(map)\n-        pickle.dumps(arr)\n-      }\n+        map\n+      }.grouped(10).map(batched => pickle.dumps(batched.toArray))",
+    "line": 15
+  }],
+  "prId": 1023
+}]

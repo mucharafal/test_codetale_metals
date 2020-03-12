@@ -1,0 +1,101 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "@sandeep-katta . This is a `inMemoryCatalog` created in this test case. The catalog will not affect the others.\r\nDo you need to remove the location used for `default.t1` instead of the table itself?",
+    "commit": "1fc5991c159e9818a2321d6e737e1a8ed66b01e9",
+    "createdAt": "2019-08-13T03:48:48Z",
+    "diffHunk": "@@ -57,6 +57,7 @@ class AnalysisExternalCatalogSuite extends AnalysisTest with Matchers {\n     val plan = Project(Seq(func), testRelation)\n     analyzer.execute(plan)\n     verifyZeroInteractions(catalog)\n+    catalog.dropTable(\"default\", \"t1\", true, false)"
+  }, {
+    "author": {
+      "login": "sandeep-katta"
+    },
+    "body": "yes need to delete the location",
+    "commit": "1fc5991c159e9818a2321d6e737e1a8ed66b01e9",
+    "createdAt": "2019-08-13T04:33:30Z",
+    "diffHunk": "@@ -57,6 +57,7 @@ class AnalysisExternalCatalogSuite extends AnalysisTest with Matchers {\n     val plan = Project(Seq(func), testRelation)\n     analyzer.execute(plan)\n     verifyZeroInteractions(catalog)\n+    catalog.dropTable(\"default\", \"t1\", true, false)"
+  }, {
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "In that case, this cannot guarantee what you want. This test can fail at line 59.\r\nI'd like to recommend to you clean up the leftovers at `def afterAll`. Please refer the other test case which is overriding `afterAll` function. That will be the recommended and more robust way to do this.",
+    "commit": "1fc5991c159e9818a2321d6e737e1a8ed66b01e9",
+    "createdAt": "2019-08-13T18:18:42Z",
+    "diffHunk": "@@ -57,6 +57,7 @@ class AnalysisExternalCatalogSuite extends AnalysisTest with Matchers {\n     val plan = Project(Seq(func), testRelation)\n     analyzer.execute(plan)\n     verifyZeroInteractions(catalog)\n+    catalog.dropTable(\"default\", \"t1\", true, false)"
+  }, {
+    "author": {
+      "login": "sandeep-katta"
+    },
+    "body": "I will add in afterEach, table created in \"query builtin functions don't call the external catalog\" is affecting the testcase \"check the existence of builtin functions don't call the external catalog\".  As per SPARK-25464, database can only be created to empty location. So it is requried to delete the table created in every testcase",
+    "commit": "1fc5991c159e9818a2321d6e737e1a8ed66b01e9",
+    "createdAt": "2019-08-14T03:28:10Z",
+    "diffHunk": "@@ -57,6 +57,7 @@ class AnalysisExternalCatalogSuite extends AnalysisTest with Matchers {\n     val plan = Project(Seq(func), testRelation)\n     analyzer.execute(plan)\n     verifyZeroInteractions(catalog)\n+    catalog.dropTable(\"default\", \"t1\", true, false)"
+  }],
+  "prId": 25427
+}, {
+  "comments": [{
+    "author": {
+      "login": "maropu"
+    },
+    "body": "How about creating a root temp dir here and each temp dir under the root instead of the current one?",
+    "commit": "1fc5991c159e9818a2321d6e737e1a8ed66b01e9",
+    "createdAt": "2019-08-15T01:23:51Z",
+    "diffHunk": "@@ -28,13 +29,28 @@ import org.apache.spark.sql.catalyst.expressions.{Alias, AttributeReference}\n import org.apache.spark.sql.catalyst.plans.logical.{LocalRelation, Project}\n import org.apache.spark.sql.internal.SQLConf\n import org.apache.spark.sql.types._\n+import org.apache.spark.util.Utils\n \n class AnalysisExternalCatalogSuite extends AnalysisTest with Matchers {\n+  var tempDir: File = _\n+\n+  override def beforeAll(): Unit = {\n+    super.beforeAll()\n+    tempDir = Utils.createTempDir()\n+  }\n+\n+  override def afterEach: Unit = {\n+    try {\n+      Utils.deleteRecursively(tempDir)\n+    } finally {\n+      super.afterEach()\n+    }\n+  }"
+  }, {
+    "author": {
+      "login": "sandeep-katta"
+    },
+    "body": "you mean to create and use as follows\r\n```\r\nval rootTempDir  = Utils.createTempDir()\r\nval tempDir = Utils.createTempDir(rootTempDir)\r\n```\r\n\r\nUse this tempDir in each testcase and delete in `afterEach` ?",
+    "commit": "1fc5991c159e9818a2321d6e737e1a8ed66b01e9",
+    "createdAt": "2019-08-16T06:53:50Z",
+    "diffHunk": "@@ -28,13 +29,28 @@ import org.apache.spark.sql.catalyst.expressions.{Alias, AttributeReference}\n import org.apache.spark.sql.catalyst.plans.logical.{LocalRelation, Project}\n import org.apache.spark.sql.internal.SQLConf\n import org.apache.spark.sql.types._\n+import org.apache.spark.util.Utils\n \n class AnalysisExternalCatalogSuite extends AnalysisTest with Matchers {\n+  var tempDir: File = _\n+\n+  override def beforeAll(): Unit = {\n+    super.beforeAll()\n+    tempDir = Utils.createTempDir()\n+  }\n+\n+  override def afterEach: Unit = {\n+    try {\n+      Utils.deleteRecursively(tempDir)\n+    } finally {\n+      super.afterEach()\n+    }\n+  }"
+  }, {
+    "author": {
+      "login": "maropu"
+    },
+    "body": "We need to remove it for each test? I feel ok to remove `rootTempDir` recursively in `afterAll`.",
+    "commit": "1fc5991c159e9818a2321d6e737e1a8ed66b01e9",
+    "createdAt": "2019-08-16T13:43:52Z",
+    "diffHunk": "@@ -28,13 +29,28 @@ import org.apache.spark.sql.catalyst.expressions.{Alias, AttributeReference}\n import org.apache.spark.sql.catalyst.plans.logical.{LocalRelation, Project}\n import org.apache.spark.sql.internal.SQLConf\n import org.apache.spark.sql.types._\n+import org.apache.spark.util.Utils\n \n class AnalysisExternalCatalogSuite extends AnalysisTest with Matchers {\n+  var tempDir: File = _\n+\n+  override def beforeAll(): Unit = {\n+    super.beforeAll()\n+    tempDir = Utils.createTempDir()\n+  }\n+\n+  override def afterEach: Unit = {\n+    try {\n+      Utils.deleteRecursively(tempDir)\n+    } finally {\n+      super.afterEach()\n+    }\n+  }"
+  }, {
+    "author": {
+      "login": "sandeep-katta"
+    },
+    "body": "clean up should happen after each test case execution, so only I ve put in the forEach",
+    "commit": "1fc5991c159e9818a2321d6e737e1a8ed66b01e9",
+    "createdAt": "2019-08-18T02:39:30Z",
+    "diffHunk": "@@ -28,13 +29,28 @@ import org.apache.spark.sql.catalyst.expressions.{Alias, AttributeReference}\n import org.apache.spark.sql.catalyst.plans.logical.{LocalRelation, Project}\n import org.apache.spark.sql.internal.SQLConf\n import org.apache.spark.sql.types._\n+import org.apache.spark.util.Utils\n \n class AnalysisExternalCatalogSuite extends AnalysisTest with Matchers {\n+  var tempDir: File = _\n+\n+  override def beforeAll(): Unit = {\n+    super.beforeAll()\n+    tempDir = Utils.createTempDir()\n+  }\n+\n+  override def afterEach: Unit = {\n+    try {\n+      Utils.deleteRecursively(tempDir)\n+    } finally {\n+      super.afterEach()\n+    }\n+  }"
+  }],
+  "prId": 25427
+}, {
+  "comments": [{
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "How about using `tempDir.toURI`?",
+    "commit": "1fc5991c159e9818a2321d6e737e1a8ed66b01e9",
+    "createdAt": "2019-08-25T03:01:56Z",
+    "diffHunk": "@@ -28,13 +29,28 @@ import org.apache.spark.sql.catalyst.expressions.{Alias, AttributeReference}\n import org.apache.spark.sql.catalyst.plans.logical.{LocalRelation, Project}\n import org.apache.spark.sql.internal.SQLConf\n import org.apache.spark.sql.types._\n+import org.apache.spark.util.Utils\n \n class AnalysisExternalCatalogSuite extends AnalysisTest with Matchers {\n+  var tempDir: File = _\n+\n+  override def beforeAll(): Unit = {\n+    super.beforeAll()\n+    tempDir = Utils.createTempDir()\n+  }\n+\n+  override def afterEach: Unit = {\n+    try {\n+      Utils.deleteRecursively(tempDir)\n+    } finally {\n+      super.afterEach()\n+    }\n+  }\n   private def getAnalyzer(externCatalog: ExternalCatalog): Analyzer = {\n     val conf = new SQLConf()\n     val catalog = new SessionCatalog(externCatalog, FunctionRegistry.builtin, conf)\n     catalog.createDatabase(\n-      CatalogDatabase(\"default\", \"\", new URI(\"loc\"), Map.empty),\n+      CatalogDatabase(\"default\", \"\", new URI(tempDir.toString), Map.empty),"
+  }],
+  "prId": 25427
+}, {
+  "comments": [{
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "Actually, how about just using `withTempDir`?",
+    "commit": "1fc5991c159e9818a2321d6e737e1a8ed66b01e9",
+    "createdAt": "2019-08-25T03:04:07Z",
+    "diffHunk": "@@ -28,13 +29,28 @@ import org.apache.spark.sql.catalyst.expressions.{Alias, AttributeReference}\n import org.apache.spark.sql.catalyst.plans.logical.{LocalRelation, Project}\n import org.apache.spark.sql.internal.SQLConf\n import org.apache.spark.sql.types._\n+import org.apache.spark.util.Utils\n \n class AnalysisExternalCatalogSuite extends AnalysisTest with Matchers {\n+  var tempDir: File = _\n+\n+  override def beforeAll(): Unit = {\n+    super.beforeAll()\n+    tempDir = Utils.createTempDir()\n+  }\n+\n+  override def afterEach: Unit = {\n+    try {\n+      Utils.deleteRecursively(tempDir)\n+    } finally {\n+      super.afterEach()\n+    }\n+  }\n   private def getAnalyzer(externCatalog: ExternalCatalog): Analyzer = {\n     val conf = new SQLConf()\n     val catalog = new SessionCatalog(externCatalog, FunctionRegistry.builtin, conf)\n     catalog.createDatabase(\n-      CatalogDatabase(\"default\", \"\", new URI(\"loc\"), Map.empty),\n+      CatalogDatabase(\"default\", \"\", new URI(tempDir.toString), Map.empty),"
+  }, {
+    "author": {
+      "login": "sandeep-katta"
+    },
+    "body": "> Actually, how about just using `withTempDir`?\r\n\r\nUpdated the code",
+    "commit": "1fc5991c159e9818a2321d6e737e1a8ed66b01e9",
+    "createdAt": "2019-08-25T06:13:45Z",
+    "diffHunk": "@@ -28,13 +29,28 @@ import org.apache.spark.sql.catalyst.expressions.{Alias, AttributeReference}\n import org.apache.spark.sql.catalyst.plans.logical.{LocalRelation, Project}\n import org.apache.spark.sql.internal.SQLConf\n import org.apache.spark.sql.types._\n+import org.apache.spark.util.Utils\n \n class AnalysisExternalCatalogSuite extends AnalysisTest with Matchers {\n+  var tempDir: File = _\n+\n+  override def beforeAll(): Unit = {\n+    super.beforeAll()\n+    tempDir = Utils.createTempDir()\n+  }\n+\n+  override def afterEach: Unit = {\n+    try {\n+      Utils.deleteRecursively(tempDir)\n+    } finally {\n+      super.afterEach()\n+    }\n+  }\n   private def getAnalyzer(externCatalog: ExternalCatalog): Analyzer = {\n     val conf = new SQLConf()\n     val catalog = new SessionCatalog(externCatalog, FunctionRegistry.builtin, conf)\n     catalog.createDatabase(\n-      CatalogDatabase(\"default\", \"\", new URI(\"loc\"), Map.empty),\n+      CatalogDatabase(\"default\", \"\", new URI(tempDir.toString), Map.empty),"
+  }],
+  "prId": 25427
+}]

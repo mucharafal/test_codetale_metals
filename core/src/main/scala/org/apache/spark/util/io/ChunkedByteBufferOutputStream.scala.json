@@ -1,0 +1,28 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "uncleGen"
+    },
+    "body": "As `chunkSize` is passed from many code path, and there is underlying integer overflow when convert from `Long` to `Int`. As we do not have a better solution, introducing a protection check may be a tradeoff way in the first step.\r\n\r\n@JoshRosen @srowen ",
+    "commit": "6b892af78c0ce47352d8f2be1bb765aafaff363a",
+    "createdAt": "2016-12-13T06:16:35Z",
+    "diffHunk": "@@ -30,9 +31,14 @@ import org.apache.spark.storage.StorageUtils\n  * @param chunkSize size of each chunk, in bytes.\n  */\n private[spark] class ChunkedByteBufferOutputStream(\n-    chunkSize: Int,\n+    var chunkSize: Int,\n     allocator: Int => ByteBuffer)\n-  extends OutputStream {\n+  extends OutputStream with Logging{\n+\n+  if (chunkSize < 0) {\n+    logWarning(s\"chunkSize should not be an negative value, replaced as 4MB default.\")\n+    chunkSize = 4 * 1024 * 1024\n+  }\n "
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "This doesn't fix the issue, because a value > Int.MaxValue can still truncate to a (wrong) positive Int.\r\n\r\nIf protecting against Long values > Int.MaxValue is the least we can do to address this problem, we should actually do that. It can't be that many call sites right?",
+    "commit": "6b892af78c0ce47352d8f2be1bb765aafaff363a",
+    "createdAt": "2016-12-13T09:06:05Z",
+    "diffHunk": "@@ -30,9 +31,14 @@ import org.apache.spark.storage.StorageUtils\n  * @param chunkSize size of each chunk, in bytes.\n  */\n private[spark] class ChunkedByteBufferOutputStream(\n-    chunkSize: Int,\n+    var chunkSize: Int,\n     allocator: Int => ByteBuffer)\n-  extends OutputStream {\n+  extends OutputStream with Logging{\n+\n+  if (chunkSize < 0) {\n+    logWarning(s\"chunkSize should not be an negative value, replaced as 4MB default.\")\n+    chunkSize = 4 * 1024 * 1024\n+  }\n "
+  }, {
+    "author": {
+      "login": "uncleGen"
+    },
+    "body": "For now though, there are not too may call sites. Checking Long value is not the best but feasible way to address this problem. ",
+    "commit": "6b892af78c0ce47352d8f2be1bb765aafaff363a",
+    "createdAt": "2016-12-13T09:25:58Z",
+    "diffHunk": "@@ -30,9 +31,14 @@ import org.apache.spark.storage.StorageUtils\n  * @param chunkSize size of each chunk, in bytes.\n  */\n private[spark] class ChunkedByteBufferOutputStream(\n-    chunkSize: Int,\n+    var chunkSize: Int,\n     allocator: Int => ByteBuffer)\n-  extends OutputStream {\n+  extends OutputStream with Logging{\n+\n+  if (chunkSize < 0) {\n+    logWarning(s\"chunkSize should not be an negative value, replaced as 4MB default.\")\n+    chunkSize = 4 * 1024 * 1024\n+  }\n "
+  }],
+  "prId": 15915
+}]

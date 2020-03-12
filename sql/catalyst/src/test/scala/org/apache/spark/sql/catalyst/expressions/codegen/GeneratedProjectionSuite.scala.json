@@ -1,0 +1,63 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "nit: `new GenericInternalRow(N)`",
+    "commit": "678b4ad770cbc891864f73d9b93c51b1ab79f6a5",
+    "createdAt": "2017-06-14T01:40:01Z",
+    "diffHunk": "@@ -83,6 +83,58 @@ class GeneratedProjectionSuite extends SparkFunSuite {\n     assert(result === row2)\n   }\n \n+  test(\"SPARK-18016: generated projections on wider table requiring class-splitting\") {\n+    val N = 4000\n+    val wideRow1 = new GenericInternalRow((1 to N).toArray[Any])"
+  }, {
+    "author": {
+      "login": "bdrillard"
+    },
+    "body": "Fixed. I've cleaned up the test you comment on, and the one above it, since they both have the same structure, just different values for N:\r\nhttps://github.com/apache/spark/pull/18075/commits/678b4ad770cbc891864f73d9b93c51b1ab79f6a5#diff-a14107cf4a4c41671bba24a82f6042d9R36",
+    "commit": "678b4ad770cbc891864f73d9b93c51b1ab79f6a5",
+    "createdAt": "2017-06-14T17:46:06Z",
+    "diffHunk": "@@ -83,6 +83,58 @@ class GeneratedProjectionSuite extends SparkFunSuite {\n     assert(result === row2)\n   }\n \n+  test(\"SPARK-18016: generated projections on wider table requiring class-splitting\") {\n+    val N = 4000\n+    val wideRow1 = new GenericInternalRow((1 to N).toArray[Any])"
+  }],
+  "prId": 18075
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "create input data with `0 until N`, or test it with `1 to N`, to avoid this `i + 1`",
+    "commit": "678b4ad770cbc891864f73d9b93c51b1ab79f6a5",
+    "createdAt": "2017-06-14T01:42:20Z",
+    "diffHunk": "@@ -83,6 +83,58 @@ class GeneratedProjectionSuite extends SparkFunSuite {\n     assert(result === row2)\n   }\n \n+  test(\"SPARK-18016: generated projections on wider table requiring class-splitting\") {\n+    val N = 4000\n+    val wideRow1 = new GenericInternalRow((1 to N).toArray[Any])\n+    val schema1 = StructType((1 to N).map(i => StructField(\"\", IntegerType)))\n+    val wideRow2 = new GenericInternalRow(\n+      (1 to N).map(i => UTF8String.fromString(i.toString)).toArray[Any])\n+    val schema2 = StructType((1 to N).map(i => StructField(\"\", StringType)))\n+    val joined = new JoinedRow(wideRow1, wideRow2)\n+    val joinedSchema = StructType(schema1 ++ schema2)\n+    val nested = new JoinedRow(InternalRow(joined, joined), joined)\n+    val nestedSchema = StructType(\n+      Seq(StructField(\"\", joinedSchema), StructField(\"\", joinedSchema)) ++ joinedSchema)\n+\n+    // test generated UnsafeProjection\n+    val unsafeProj = UnsafeProjection.create(nestedSchema)\n+    val unsafe: UnsafeRow = unsafeProj(nested)\n+    (0 until N).foreach { i =>\n+      val s = UTF8String.fromString((i + 1).toString)"
+  }, {
+    "author": {
+      "login": "bdrillard"
+    },
+    "body": "Fixed. See the above comment. Creating the data with `0 until N` cleans up the indexing on `i`.",
+    "commit": "678b4ad770cbc891864f73d9b93c51b1ab79f6a5",
+    "createdAt": "2017-06-14T17:46:37Z",
+    "diffHunk": "@@ -83,6 +83,58 @@ class GeneratedProjectionSuite extends SparkFunSuite {\n     assert(result === row2)\n   }\n \n+  test(\"SPARK-18016: generated projections on wider table requiring class-splitting\") {\n+    val N = 4000\n+    val wideRow1 = new GenericInternalRow((1 to N).toArray[Any])\n+    val schema1 = StructType((1 to N).map(i => StructField(\"\", IntegerType)))\n+    val wideRow2 = new GenericInternalRow(\n+      (1 to N).map(i => UTF8String.fromString(i.toString)).toArray[Any])\n+    val schema2 = StructType((1 to N).map(i => StructField(\"\", StringType)))\n+    val joined = new JoinedRow(wideRow1, wideRow2)\n+    val joinedSchema = StructType(schema1 ++ schema2)\n+    val nested = new JoinedRow(InternalRow(joined, joined), joined)\n+    val nestedSchema = StructType(\n+      Seq(StructField(\"\", joinedSchema), StructField(\"\", joinedSchema)) ++ joinedSchema)\n+\n+    // test generated UnsafeProjection\n+    val unsafeProj = UnsafeProjection.create(nestedSchema)\n+    val unsafe: UnsafeRow = unsafeProj(nested)\n+    (0 until N).foreach { i =>\n+      val s = UTF8String.fromString((i + 1).toString)"
+  }],
+  "prId": 18075
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "nit: can be `new GenericInternalRow(N)`",
+    "commit": "678b4ad770cbc891864f73d9b93c51b1ab79f6a5",
+    "createdAt": "2017-06-15T05:34:54Z",
+    "diffHunk": "@@ -33,10 +33,10 @@ class GeneratedProjectionSuite extends SparkFunSuite {\n \n   test(\"generated projections on wider table\") {\n     val N = 1000\n-    val wideRow1 = new GenericInternalRow((1 to N).toArray[Any])\n+    val wideRow1 = new GenericInternalRow((0 until N).toArray[Any])",
+    "line": 5
+  }],
+  "prId": 18075
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "ditto",
+    "commit": "678b4ad770cbc891864f73d9b93c51b1ab79f6a5",
+    "createdAt": "2017-06-15T05:35:21Z",
+    "diffHunk": "@@ -62,13 +62,63 @@ class GeneratedProjectionSuite extends SparkFunSuite {\n     val result = safeProj(unsafe)\n     // Can't compare GenericInternalRow with JoinedRow directly\n     (0 until N).foreach { i =>\n-      val r = i + 1\n-      val s = UTF8String.fromString((i + 1).toString)\n-      assert(r === result.getInt(i + 2))\n+      val s = UTF8String.fromString(i.toString)\n+      assert(i === result.getInt(i + 2))\n       assert(s === result.getUTF8String(i + 2 + N))\n-      assert(r === result.getStruct(0, N * 2).getInt(i))\n+      assert(i === result.getStruct(0, N * 2).getInt(i))\n       assert(s === result.getStruct(0, N * 2).getUTF8String(i + N))\n-      assert(r === result.getStruct(1, N * 2).getInt(i))\n+      assert(i === result.getStruct(1, N * 2).getInt(i))\n+      assert(s === result.getStruct(1, N * 2).getUTF8String(i + N))\n+    }\n+\n+    // test generated MutableProjection\n+    val exprs = nestedSchema.fields.zipWithIndex.map { case (f, i) =>\n+      BoundReference(i, f.dataType, true)\n+    }\n+    val mutableProj = GenerateMutableProjection.generate(exprs)\n+    val row1 = mutableProj(result)\n+    assert(result === row1)\n+    val row2 = mutableProj(result)\n+    assert(result === row2)\n+  }\n+\n+  test(\"SPARK-18016: generated projections on wider table requiring class-splitting\") {\n+    val N = 4000\n+    val wideRow1 = new GenericInternalRow((0 until N).toArray[Any])",
+    "line": 61
+  }],
+  "prId": 18075
+}]

@@ -1,0 +1,61 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "I plan to clean this whole ArrowRRunner to deduplicate codes with RRunner after this PR.",
+    "commit": "5a124cb87ff5ee6a033a60a9604b2d852ae4489c",
+    "createdAt": "2019-02-15T03:41:18Z",
+    "diffHunk": "@@ -55,13 +56,32 @@ class ArrowRRunner(\n     numPartitions = -1,\n     isDataFrame = true,\n     schema.fieldNames,\n-    RRunnerModes.DATAFRAME_GAPPLY) {\n+    mode) {\n+\n+  // TODO: it needs to refactor to share the same code with RRunner, and have separate\n+  // ArrowRRunners.\n+  private val getNextBatch = {",
+    "line": 19
+  }, {
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "I filed a JIRA https://issues.apache.org/jira/browse/SPARK-26923",
+    "commit": "5a124cb87ff5ee6a033a60a9604b2d852ae4489c",
+    "createdAt": "2019-02-20T03:39:37Z",
+    "diffHunk": "@@ -55,13 +56,32 @@ class ArrowRRunner(\n     numPartitions = -1,\n     isDataFrame = true,\n     schema.fieldNames,\n-    RRunnerModes.DATAFRAME_GAPPLY) {\n+    mode) {\n+\n+  // TODO: it needs to refactor to share the same code with RRunner, and have separate\n+  // ArrowRRunners.\n+  private val getNextBatch = {",
+    "line": 19
+  }],
+  "prId": 23787
+}, {
+  "comments": [{
+    "author": {
+      "login": "BryanCutler"
+    },
+    "body": "Is it possible for `inputIterator.hasNext` to be false, like from an empty partition, and is there a test for this? It might be better to send an empty Arrow stream in this case, but I'm not entirely sure what the R worker is expecting.",
+    "commit": "5a124cb87ff5ee6a033a60a9604b2d852ae4489c",
+    "createdAt": "2019-02-22T18:43:36Z",
+    "diffHunk": "@@ -55,13 +56,32 @@ class ArrowRRunner(\n     numPartitions = -1,\n     isDataFrame = true,\n     schema.fieldNames,\n-    RRunnerModes.DATAFRAME_GAPPLY) {\n+    mode) {\n+\n+  // TODO: it needs to refactor to share the same code with RRunner, and have separate\n+  // ArrowRRunners.\n+  private val getNextBatch = {\n+    if (mode == RRunnerModes.DATAFRAME_GAPPLY) {\n+      // gapply\n+      (inputIterator: Iterator[_], keys: collection.mutable.ArrayBuffer[Array[Byte]]) => {\n+        val (key, nextBatch) = inputIterator\n+          .asInstanceOf[Iterator[(Array[Byte], Iterator[InternalRow])]].next()\n+        keys.append(key)\n+        nextBatch\n+      }\n+    } else {\n+      // dapply\n+      (inputIterator: Iterator[_], keys: collection.mutable.ArrayBuffer[Array[Byte]]) => {\n+        inputIterator\n+          .asInstanceOf[Iterator[Iterator[InternalRow]]].next()\n+      }\n+    }\n+  }\n \n   protected override def writeData(\n       dataOut: DataOutputStream,\n       printOut: PrintStream,\n-      iter: Iterator[_]): Unit = if (iter.hasNext) {\n-    val inputIterator = iter.asInstanceOf[Iterator[(Array[Byte], Iterator[InternalRow])]]\n+      inputIterator: Iterator[_]): Unit = if (inputIterator.hasNext) {",
+    "line": 42
+  }, {
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "Oh, yea. I actually manually tested them. I'll fix the tests to check it as well.\r\n\r\nActually, I noticed R worker works a bit differently.\r\n\r\nIf the iterator is empty, it sends `0` first and then the other data is not used. (see `isEmpty <- SparkR:::readInt(inputCon)` at `worker.R` and,\r\n\r\n```scala\r\n          if (!iter.hasNext) {\r\n            dataOut.writeInt(0)\r\n          } else {\r\n            dataOut.writeInt(1)\r\n          }\r\n```\r\n\r\nat `RRunner.scala`).\r\n\r\nSo, virtually it doesn't matter if we send the data or not. I just simply decided to ignore this since it's already ignored at R's worker side.\r\n\r\n",
+    "commit": "5a124cb87ff5ee6a033a60a9604b2d852ae4489c",
+    "createdAt": "2019-02-24T03:47:49Z",
+    "diffHunk": "@@ -55,13 +56,32 @@ class ArrowRRunner(\n     numPartitions = -1,\n     isDataFrame = true,\n     schema.fieldNames,\n-    RRunnerModes.DATAFRAME_GAPPLY) {\n+    mode) {\n+\n+  // TODO: it needs to refactor to share the same code with RRunner, and have separate\n+  // ArrowRRunners.\n+  private val getNextBatch = {\n+    if (mode == RRunnerModes.DATAFRAME_GAPPLY) {\n+      // gapply\n+      (inputIterator: Iterator[_], keys: collection.mutable.ArrayBuffer[Array[Byte]]) => {\n+        val (key, nextBatch) = inputIterator\n+          .asInstanceOf[Iterator[(Array[Byte], Iterator[InternalRow])]].next()\n+        keys.append(key)\n+        nextBatch\n+      }\n+    } else {\n+      // dapply\n+      (inputIterator: Iterator[_], keys: collection.mutable.ArrayBuffer[Array[Byte]]) => {\n+        inputIterator\n+          .asInstanceOf[Iterator[Iterator[InternalRow]]].next()\n+      }\n+    }\n+  }\n \n   protected override def writeData(\n       dataOut: DataOutputStream,\n       printOut: PrintStream,\n-      iter: Iterator[_]): Unit = if (iter.hasNext) {\n-    val inputIterator = iter.asInstanceOf[Iterator[(Array[Byte], Iterator[InternalRow])]]\n+      inputIterator: Iterator[_]): Unit = if (inputIterator.hasNext) {",
+    "line": 42
+  }, {
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "and .. I target to add more type specification test at SPARK-26920 (for instance, map type and struct type are not supported). I think this could alleviate the concern about corner cases. \r\n\r\nI tried to only switch data transfer logic so checking empty rows, non-empty rows, columns, type specifications might be okay enough. (BTW, existing dapply itself is a bit flaky with some holes IMHO so it's a bit tricky to compare both).",
+    "commit": "5a124cb87ff5ee6a033a60a9604b2d852ae4489c",
+    "createdAt": "2019-02-24T04:06:56Z",
+    "diffHunk": "@@ -55,13 +56,32 @@ class ArrowRRunner(\n     numPartitions = -1,\n     isDataFrame = true,\n     schema.fieldNames,\n-    RRunnerModes.DATAFRAME_GAPPLY) {\n+    mode) {\n+\n+  // TODO: it needs to refactor to share the same code with RRunner, and have separate\n+  // ArrowRRunners.\n+  private val getNextBatch = {\n+    if (mode == RRunnerModes.DATAFRAME_GAPPLY) {\n+      // gapply\n+      (inputIterator: Iterator[_], keys: collection.mutable.ArrayBuffer[Array[Byte]]) => {\n+        val (key, nextBatch) = inputIterator\n+          .asInstanceOf[Iterator[(Array[Byte], Iterator[InternalRow])]].next()\n+        keys.append(key)\n+        nextBatch\n+      }\n+    } else {\n+      // dapply\n+      (inputIterator: Iterator[_], keys: collection.mutable.ArrayBuffer[Array[Byte]]) => {\n+        inputIterator\n+          .asInstanceOf[Iterator[Iterator[InternalRow]]].next()\n+      }\n+    }\n+  }\n \n   protected override def writeData(\n       dataOut: DataOutputStream,\n       printOut: PrintStream,\n-      iter: Iterator[_]): Unit = if (iter.hasNext) {\n-    val inputIterator = iter.asInstanceOf[Iterator[(Array[Byte], Iterator[InternalRow])]]\n+      inputIterator: Iterator[_]): Unit = if (inputIterator.hasNext) {",
+    "line": 42
+  }, {
+    "author": {
+      "login": "BryanCutler"
+    },
+    "body": "Sounds good to me, thanks!",
+    "commit": "5a124cb87ff5ee6a033a60a9604b2d852ae4489c",
+    "createdAt": "2019-02-25T19:51:04Z",
+    "diffHunk": "@@ -55,13 +56,32 @@ class ArrowRRunner(\n     numPartitions = -1,\n     isDataFrame = true,\n     schema.fieldNames,\n-    RRunnerModes.DATAFRAME_GAPPLY) {\n+    mode) {\n+\n+  // TODO: it needs to refactor to share the same code with RRunner, and have separate\n+  // ArrowRRunners.\n+  private val getNextBatch = {\n+    if (mode == RRunnerModes.DATAFRAME_GAPPLY) {\n+      // gapply\n+      (inputIterator: Iterator[_], keys: collection.mutable.ArrayBuffer[Array[Byte]]) => {\n+        val (key, nextBatch) = inputIterator\n+          .asInstanceOf[Iterator[(Array[Byte], Iterator[InternalRow])]].next()\n+        keys.append(key)\n+        nextBatch\n+      }\n+    } else {\n+      // dapply\n+      (inputIterator: Iterator[_], keys: collection.mutable.ArrayBuffer[Array[Byte]]) => {\n+        inputIterator\n+          .asInstanceOf[Iterator[Iterator[InternalRow]]].next()\n+      }\n+    }\n+  }\n \n   protected override def writeData(\n       dataOut: DataOutputStream,\n       printOut: PrintStream,\n-      iter: Iterator[_]): Unit = if (iter.hasNext) {\n-    val inputIterator = iter.asInstanceOf[Iterator[(Array[Byte], Iterator[InternalRow])]]\n+      inputIterator: Iterator[_]): Unit = if (inputIterator.hasNext) {",
+    "line": 42
+  }],
+  "prId": 23787
+}]

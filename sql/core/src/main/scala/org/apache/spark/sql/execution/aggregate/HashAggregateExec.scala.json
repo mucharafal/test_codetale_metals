@@ -1,0 +1,147 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "maropu"
+    },
+    "body": "We cannot support this in the codegen mode? Technically hard? If we support this filter expr in agg, I personally think we'd be better to support in the codegen mode first.",
+    "commit": "43b15aed468b19efb32c33d43061d7f562e42339",
+    "createdAt": "2019-11-08T08:15:06Z",
+    "diffHunk": "@@ -152,8 +168,9 @@ case class HashAggregateExec(\n   override def usedInputs: AttributeSet = inputSet\n \n   override def supportCodegen: Boolean = {\n-    // ImperativeAggregate is not supported right now\n-    !aggregateExpressions.exists(_.aggregateFunction.isInstanceOf[ImperativeAggregate])\n+    // ImperativeAggregate and filter predicate are not supported right now\n+    !(aggregateExpressions.exists(_.aggregateFunction.isInstanceOf[ImperativeAggregate]) ||\n+        aggregateExpressions.exists(_.filter.isDefined))"
+  }, {
+    "author": {
+      "login": "beliefer"
+    },
+    "body": "Thanks for your review. I think this is a bigger change and I want create two PR to make things simple.\r\nAnother reason is I took a lot of time in other jobs.",
+    "commit": "43b15aed468b19efb32c33d43061d7f562e42339",
+    "createdAt": "2019-11-08T08:58:36Z",
+    "diffHunk": "@@ -152,8 +168,9 @@ case class HashAggregateExec(\n   override def usedInputs: AttributeSet = inputSet\n \n   override def supportCodegen: Boolean = {\n-    // ImperativeAggregate is not supported right now\n-    !aggregateExpressions.exists(_.aggregateFunction.isInstanceOf[ImperativeAggregate])\n+    // ImperativeAggregate and filter predicate are not supported right now\n+    !(aggregateExpressions.exists(_.aggregateFunction.isInstanceOf[ImperativeAggregate]) ||\n+        aggregateExpressions.exists(_.filter.isDefined))"
+  }],
+  "prId": 26420
+}, {
+  "comments": [{
+    "author": {
+      "login": "maropu"
+    },
+    "body": "Why do we need this rename?",
+    "commit": "43b15aed468b19efb32c33d43061d7f562e42339",
+    "createdAt": "2019-11-14T08:22:38Z",
+    "diffHunk": "@@ -29,7 +29,7 @@ import org.apache.spark.sql.catalyst.errors._\n import org.apache.spark.sql.catalyst.expressions._\n import org.apache.spark.sql.catalyst.expressions.BindReferences.bindReferences\n import org.apache.spark.sql.catalyst.expressions.aggregate._\n-import org.apache.spark.sql.catalyst.expressions.codegen._\n+import org.apache.spark.sql.catalyst.expressions.codegen.{Predicate => GenPredicate, _}"
+  }, {
+    "author": {
+      "login": "beliefer"
+    },
+    "body": "OK, I will avoid it.",
+    "commit": "43b15aed468b19efb32c33d43061d7f562e42339",
+    "createdAt": "2019-11-15T08:42:42Z",
+    "diffHunk": "@@ -29,7 +29,7 @@ import org.apache.spark.sql.catalyst.errors._\n import org.apache.spark.sql.catalyst.expressions._\n import org.apache.spark.sql.catalyst.expressions.BindReferences.bindReferences\n import org.apache.spark.sql.catalyst.expressions.aggregate._\n-import org.apache.spark.sql.catalyst.expressions.codegen._\n+import org.apache.spark.sql.catalyst.expressions.codegen.{Predicate => GenPredicate, _}"
+  }],
+  "prId": 26420
+}, {
+  "comments": [{
+    "author": {
+      "login": "maropu"
+    },
+    "body": "Can we move this logic into `AggregationIterator`?",
+    "commit": "43b15aed468b19efb32c33d43061d7f562e42339",
+    "createdAt": "2019-11-14T08:23:34Z",
+    "diffHunk": "@@ -117,6 +117,21 @@ case class HashAggregateExec(\n         // so return an empty iterator.\n         Iterator.empty\n       } else {\n+        val filterPredicates = new mutable.HashMap[Int, GenPredicate]\n+        aggregateExpressions.zipWithIndex.foreach{\n+          case (ae: AggregateExpression, i) =>\n+            ae.mode match {\n+              case Partial | Complete =>\n+                ae.filter.foreach { filterExpr =>\n+                  val filterAttrs = filterExpr.references.toSeq\n+                  val predicate = newPredicate(filterExpr, child.output ++ filterAttrs)\n+                  predicate.initialize(partIndex)\n+                  filterPredicates(i) = predicate\n+                }"
+  }, {
+    "author": {
+      "login": "beliefer"
+    },
+    "body": "Since newPredicate is a protection method for SparkPlan.",
+    "commit": "43b15aed468b19efb32c33d43061d7f562e42339",
+    "createdAt": "2019-11-15T08:33:47Z",
+    "diffHunk": "@@ -117,6 +117,21 @@ case class HashAggregateExec(\n         // so return an empty iterator.\n         Iterator.empty\n       } else {\n+        val filterPredicates = new mutable.HashMap[Int, GenPredicate]\n+        aggregateExpressions.zipWithIndex.foreach{\n+          case (ae: AggregateExpression, i) =>\n+            ae.mode match {\n+              case Partial | Complete =>\n+                ae.filter.foreach { filterExpr =>\n+                  val filterAttrs = filterExpr.references.toSeq\n+                  val predicate = newPredicate(filterExpr, child.output ++ filterAttrs)\n+                  predicate.initialize(partIndex)\n+                  filterPredicates(i) = predicate\n+                }"
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "Can we send a PR to remove `newPredicate` from `SparkPlan`? They are not related and `newPredicate` doesn't use any states of `SparkPlan`. Doing this we can simpliy the PR a lot.",
+    "commit": "43b15aed468b19efb32c33d43061d7f562e42339",
+    "createdAt": "2019-11-19T15:48:46Z",
+    "diffHunk": "@@ -117,6 +117,21 @@ case class HashAggregateExec(\n         // so return an empty iterator.\n         Iterator.empty\n       } else {\n+        val filterPredicates = new mutable.HashMap[Int, GenPredicate]\n+        aggregateExpressions.zipWithIndex.foreach{\n+          case (ae: AggregateExpression, i) =>\n+            ae.mode match {\n+              case Partial | Complete =>\n+                ae.filter.foreach { filterExpr =>\n+                  val filterAttrs = filterExpr.references.toSeq\n+                  val predicate = newPredicate(filterExpr, child.output ++ filterAttrs)\n+                  predicate.initialize(partIndex)\n+                  filterPredicates(i) = predicate\n+                }"
+  }, {
+    "author": {
+      "login": "maropu"
+    },
+    "body": "Ah, that's right. I'll make a pr for that.",
+    "commit": "43b15aed468b19efb32c33d43061d7f562e42339",
+    "createdAt": "2019-11-20T00:13:01Z",
+    "diffHunk": "@@ -117,6 +117,21 @@ case class HashAggregateExec(\n         // so return an empty iterator.\n         Iterator.empty\n       } else {\n+        val filterPredicates = new mutable.HashMap[Int, GenPredicate]\n+        aggregateExpressions.zipWithIndex.foreach{\n+          case (ae: AggregateExpression, i) =>\n+            ae.mode match {\n+              case Partial | Complete =>\n+                ae.filter.foreach { filterExpr =>\n+                  val filterAttrs = filterExpr.references.toSeq\n+                  val predicate = newPredicate(filterExpr, child.output ++ filterAttrs)\n+                  predicate.initialize(partIndex)\n+                  filterPredicates(i) = predicate\n+                }"
+  }, {
+    "author": {
+      "login": "maropu"
+    },
+    "body": "Fixed in https://github.com/apache/spark/pull/26604. Can you brush up this pr based on the commit?",
+    "commit": "43b15aed468b19efb32c33d43061d7f562e42339",
+    "createdAt": "2019-11-20T13:26:52Z",
+    "diffHunk": "@@ -117,6 +117,21 @@ case class HashAggregateExec(\n         // so return an empty iterator.\n         Iterator.empty\n       } else {\n+        val filterPredicates = new mutable.HashMap[Int, GenPredicate]\n+        aggregateExpressions.zipWithIndex.foreach{\n+          case (ae: AggregateExpression, i) =>\n+            ae.mode match {\n+              case Partial | Complete =>\n+                ae.filter.foreach { filterExpr =>\n+                  val filterAttrs = filterExpr.references.toSeq\n+                  val predicate = newPredicate(filterExpr, child.output ++ filterAttrs)\n+                  predicate.initialize(partIndex)\n+                  filterPredicates(i) = predicate\n+                }"
+  }, {
+    "author": {
+      "login": "beliefer"
+    },
+    "body": "I just change this PR based on #26604. ",
+    "commit": "43b15aed468b19efb32c33d43061d7f562e42339",
+    "createdAt": "2019-11-21T04:29:39Z",
+    "diffHunk": "@@ -117,6 +117,21 @@ case class HashAggregateExec(\n         // so return an empty iterator.\n         Iterator.empty\n       } else {\n+        val filterPredicates = new mutable.HashMap[Int, GenPredicate]\n+        aggregateExpressions.zipWithIndex.foreach{\n+          case (ae: AggregateExpression, i) =>\n+            ae.mode match {\n+              case Partial | Complete =>\n+                ae.filter.foreach { filterExpr =>\n+                  val filterAttrs = filterExpr.references.toSeq\n+                  val predicate = newPredicate(filterExpr, child.output ++ filterAttrs)\n+                  predicate.initialize(partIndex)\n+                  filterPredicates(i) = predicate\n+                }"
+  }],
+  "prId": 26420
+}, {
+  "comments": [{
+    "author": {
+      "login": "maropu"
+    },
+    "body": "`genInterpretedPredicate` instead of `newPredicate`?\r\n\r\nbtw, in the interpreter mode `doExecute()` of `FileterExec`, it seems we currently use generated code from `newPredicate` for evaluating predicates. Any reason that we cannot turn off codegen there via `CODEGEN_FACTORY_MODE`? @viirya @cloud-fan \r\nhttps://github.com/apache/spark/blob/e46e487b0831b39afa12ef9cff9b9133f111921b/sql/core/src/main/scala/org/apache/spark/sql/execution/basicPhysicalOperators.scala#L230",
+    "commit": "43b15aed468b19efb32c33d43061d7f562e42339",
+    "createdAt": "2019-11-14T08:30:25Z",
+    "diffHunk": "@@ -117,6 +117,21 @@ case class HashAggregateExec(\n         // so return an empty iterator.\n         Iterator.empty\n       } else {\n+        val filterPredicates = new mutable.HashMap[Int, GenPredicate]\n+        aggregateExpressions.zipWithIndex.foreach{\n+          case (ae: AggregateExpression, i) =>\n+            ae.mode match {\n+              case Partial | Complete =>\n+                ae.filter.foreach { filterExpr =>\n+                  val filterAttrs = filterExpr.references.toSeq\n+                  val predicate = newPredicate(filterExpr, child.output ++ filterAttrs)"
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "The background of adding `CODEGEN_FACTORY_MODE` is to have a config for test only. It is easier for us to test interpreted, codegen paths separately.\r\n\r\nFor non test, I think we always go codegen first and fallback to interpreted if codegen fails.",
+    "commit": "43b15aed468b19efb32c33d43061d7f562e42339",
+    "createdAt": "2019-11-20T00:24:28Z",
+    "diffHunk": "@@ -117,6 +117,21 @@ case class HashAggregateExec(\n         // so return an empty iterator.\n         Iterator.empty\n       } else {\n+        val filterPredicates = new mutable.HashMap[Int, GenPredicate]\n+        aggregateExpressions.zipWithIndex.foreach{\n+          case (ae: AggregateExpression, i) =>\n+            ae.mode match {\n+              case Partial | Complete =>\n+                ae.filter.foreach { filterExpr =>\n+                  val filterAttrs = filterExpr.references.toSeq\n+                  val predicate = newPredicate(filterExpr, child.output ++ filterAttrs)"
+  }],
+  "prId": 26420
+}, {
+  "comments": [{
+    "author": {
+      "login": "maropu"
+    },
+    "body": "Can you file a new jira for the codegen support of filters in aggregates? Then, put a JIRA ID here.",
+    "commit": "43b15aed468b19efb32c33d43061d7f562e42339",
+    "createdAt": "2019-11-14T08:31:45Z",
+    "diffHunk": "@@ -152,8 +168,9 @@ case class HashAggregateExec(\n   override def usedInputs: AttributeSet = inputSet\n \n   override def supportCodegen: Boolean = {\n-    // ImperativeAggregate is not supported right now\n-    !aggregateExpressions.exists(_.aggregateFunction.isInstanceOf[ImperativeAggregate])\n+    // ImperativeAggregate and filter predicate are not supported right now"
+  }, {
+    "author": {
+      "login": "beliefer"
+    },
+    "body": "No problem! But let us wait for @rednaxelafx \r\n\r\n\r\n",
+    "commit": "43b15aed468b19efb32c33d43061d7f562e42339",
+    "createdAt": "2019-11-15T08:36:10Z",
+    "diffHunk": "@@ -152,8 +168,9 @@ case class HashAggregateExec(\n   override def usedInputs: AttributeSet = inputSet\n \n   override def supportCodegen: Boolean = {\n-    // ImperativeAggregate is not supported right now\n-    !aggregateExpressions.exists(_.aggregateFunction.isInstanceOf[ImperativeAggregate])\n+    // ImperativeAggregate and filter predicate are not supported right now"
+  }],
+  "prId": 26420
+}, {
+  "comments": [{
+    "author": {
+      "login": "maropu"
+    },
+    "body": "nit: the format `foreach{` => `foreach {`",
+    "commit": "43b15aed468b19efb32c33d43061d7f562e42339",
+    "createdAt": "2019-11-14T08:34:46Z",
+    "diffHunk": "@@ -117,6 +117,21 @@ case class HashAggregateExec(\n         // so return an empty iterator.\n         Iterator.empty\n       } else {\n+        val filterPredicates = new mutable.HashMap[Int, GenPredicate]\n+        aggregateExpressions.zipWithIndex.foreach{"
+  }, {
+    "author": {
+      "login": "beliefer"
+    },
+    "body": "OK",
+    "commit": "43b15aed468b19efb32c33d43061d7f562e42339",
+    "createdAt": "2019-11-15T08:30:46Z",
+    "diffHunk": "@@ -117,6 +117,21 @@ case class HashAggregateExec(\n         // so return an empty iterator.\n         Iterator.empty\n       } else {\n+        val filterPredicates = new mutable.HashMap[Int, GenPredicate]\n+        aggregateExpressions.zipWithIndex.foreach{"
+  }],
+  "prId": 26420
+}]

@@ -1,0 +1,69 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "I see Spark allows a empty string as a field. So, I wonder if we should rename this with the index and prefix, `C`. Also, I think `\"\"` will throw an NPE whereas empty string without quotes will produce a correct field because the default of `nullValue` is `\"\"`.\n",
+    "commit": "d98371859d78706cb9673f253b4dccbffb9fc385",
+    "createdAt": "2016-05-11T05:00:52Z",
+    "diffHunk": "@@ -61,7 +61,9 @@ class DefaultSource extends FileFormat with DataSourceRegister {\n     val firstRow = new LineCsvReader(csvOptions).parseLine(firstLine)\n \n     val header = if (csvOptions.headerFlag) {\n-      firstRow\n+      firstRow.zipWithIndex.map { case (value, index) =>\n+        if (value == \"\" || value == null) s\"C$index\" else value"
+  }, {
+    "author": {
+      "login": "anabranch"
+    },
+    "body": "This code does rename it with the index and prefix, `C`.\n",
+    "commit": "d98371859d78706cb9673f253b4dccbffb9fc385",
+    "createdAt": "2016-05-11T05:29:52Z",
+    "diffHunk": "@@ -61,7 +61,9 @@ class DefaultSource extends FileFormat with DataSourceRegister {\n     val firstRow = new LineCsvReader(csvOptions).parseLine(firstLine)\n \n     val header = if (csvOptions.headerFlag) {\n-      firstRow\n+      firstRow.zipWithIndex.map { case (value, index) =>\n+        if (value == \"\" || value == null) s\"C$index\" else value"
+  }, {
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "I mean if one of values in the header is a empty string then, I think the field name should be a empty string since apparently it works with fields named empty strings. I tested this by manually giving a schema. \n\nAlso, If the header is used for schema, then I think the names should be as they are. We don't really change field names specified in ORC, Parquet or JSON.\n",
+    "commit": "d98371859d78706cb9673f253b4dccbffb9fc385",
+    "createdAt": "2016-05-11T05:34:19Z",
+    "diffHunk": "@@ -61,7 +61,9 @@ class DefaultSource extends FileFormat with DataSourceRegister {\n     val firstRow = new LineCsvReader(csvOptions).parseLine(firstLine)\n \n     val header = if (csvOptions.headerFlag) {\n-      firstRow\n+      firstRow.zipWithIndex.map { case (value, index) =>\n+        if (value == \"\" || value == null) s\"C$index\" else value"
+  }],
+  "prId": 13041
+}, {
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "I talked to @marmbrus offline. [Elsewhere](https://github.com/apache/spark/blob/master/sql/core/src/main/scala/org/apache/spark/sql/catalyst/SQLBuilder.scala#L523) we use `_c0` instead of `C0`, so we should make that consistent. You're gonna have to change the name both here and in L65.\n",
+    "commit": "d98371859d78706cb9673f253b4dccbffb9fc385",
+    "createdAt": "2016-05-11T20:29:18Z",
+    "diffHunk": "@@ -61,7 +61,9 @@ class DefaultSource extends FileFormat with DataSourceRegister {\n     val firstRow = new LineCsvReader(csvOptions).parseLine(firstLine)\n \n     val header = if (csvOptions.headerFlag) {\n-      firstRow\n+      firstRow.zipWithIndex.map { case (value, index) =>\n+        if (value == \"\" || value == null) s\"C$index\" else value\n+      }\n     } else {\n       firstRow.zipWithIndex.map { case (value, index) => s\"C$index\" }"
+  }],
+  "prId": 13041
+}, {
+  "comments": [{
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "Why should this be `_c`?\n",
+    "commit": "d98371859d78706cb9673f253b4dccbffb9fc385",
+    "createdAt": "2016-05-11T22:12:06Z",
+    "diffHunk": "@@ -61,9 +61,11 @@ class DefaultSource extends FileFormat with DataSourceRegister {\n     val firstRow = new LineCsvReader(csvOptions).parseLine(firstLine)\n \n     val header = if (csvOptions.headerFlag) {\n-      firstRow\n+      firstRow.zipWithIndex.map { case (value, index) =>\n+        if (value == null || value.isEmpty || value == csvOptions.nullValue) s\"_c$index\" else value\n+      }\n     } else {\n-      firstRow.zipWithIndex.map { case (value, index) => s\"C$index\" }\n+      firstRow.zipWithIndex.map { case (value, index) => s\"_c$index\" }",
+    "line": 10
+  }, {
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "to be consistent with what Spark does with unnamed columns. See my comment above.\n",
+    "commit": "d98371859d78706cb9673f253b4dccbffb9fc385",
+    "createdAt": "2016-05-11T22:18:16Z",
+    "diffHunk": "@@ -61,9 +61,11 @@ class DefaultSource extends FileFormat with DataSourceRegister {\n     val firstRow = new LineCsvReader(csvOptions).parseLine(firstLine)\n \n     val header = if (csvOptions.headerFlag) {\n-      firstRow\n+      firstRow.zipWithIndex.map { case (value, index) =>\n+        if (value == null || value.isEmpty || value == csvOptions.nullValue) s\"_c$index\" else value\n+      }\n     } else {\n-      firstRow.zipWithIndex.map { case (value, index) => s\"C$index\" }\n+      firstRow.zipWithIndex.map { case (value, index) => s\"_c$index\" }",
+    "line": 10
+  }, {
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "I see. Thanks.\n",
+    "commit": "d98371859d78706cb9673f253b4dccbffb9fc385",
+    "createdAt": "2016-05-11T22:36:50Z",
+    "diffHunk": "@@ -61,9 +61,11 @@ class DefaultSource extends FileFormat with DataSourceRegister {\n     val firstRow = new LineCsvReader(csvOptions).parseLine(firstLine)\n \n     val header = if (csvOptions.headerFlag) {\n-      firstRow\n+      firstRow.zipWithIndex.map { case (value, index) =>\n+        if (value == null || value.isEmpty || value == csvOptions.nullValue) s\"_c$index\" else value\n+      }\n     } else {\n-      firstRow.zipWithIndex.map { case (value, index) => s\"C$index\" }\n+      firstRow.zipWithIndex.map { case (value, index) => s\"_c$index\" }",
+    "line": 10
+  }],
+  "prId": 13041
+}]

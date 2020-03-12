@@ -1,0 +1,25 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "This looks a pretty cool feature to me. Can we document it in `TableChange`? Tell users that they can use `a.b.mapField.key` to change map type's key type, etc.",
+    "commit": "5b10bd0164132bf296a07bcb794c3f7af262a72e",
+    "createdAt": "2019-07-11T08:24:05Z",
+    "diffHunk": "@@ -132,16 +132,45 @@ object CatalogV2Util {\n     val pos = struct.getFieldIndex(fieldNames.head)\n         .getOrElse(throw new IllegalArgumentException(s\"Cannot find field: ${fieldNames.head}\"))\n     val field = struct.fields(pos)\n-    val replacement: Option[StructField] = if (fieldNames.tail.isEmpty) {\n-      update(field)\n-    } else {\n-      field.dataType match {\n-        case nestedStruct: StructType =>\n-          val updatedType: StructType = replace(nestedStruct, fieldNames.tail, update)\n-          Some(StructField(field.name, updatedType, field.nullable, field.metadata))\n-        case _ =>\n-          throw new IllegalArgumentException(s\"Not a struct: ${fieldNames.head}\")\n-      }\n+    val replacement: Option[StructField] = (fieldNames.tail, field.dataType) match {\n+      case (Seq(), _) =>\n+        update(field)\n+\n+      case (names, struct: StructType) =>\n+        val updatedType: StructType = replace(struct, names, update)\n+        Some(StructField(field.name, updatedType, field.nullable, field.metadata))\n+\n+      case (Seq(\"key\"), map @ MapType(keyType, _, _)) =>\n+        val updated = update(StructField(\"key\", keyType, nullable = false))\n+            .getOrElse(throw new IllegalArgumentException(s\"Cannot delete map key\"))\n+        Some(field.copy(dataType = map.copy(keyType = updated.dataType)))\n+\n+      case (Seq(\"key\", names @ _*), map @ MapType(keyStruct: StructType, _, _)) =>\n+        Some(field.copy(dataType = map.copy(keyType = replace(keyStruct, names, update))))\n+\n+      case (Seq(\"value\"), map @ MapType(_, mapValueType, isNullable)) =>\n+        val updated = update(StructField(\"value\", mapValueType, nullable = isNullable))\n+            .getOrElse(throw new IllegalArgumentException(s\"Cannot delete map value\"))\n+        Some(field.copy(dataType = map.copy(\n+          valueType = updated.dataType,\n+          valueContainsNull = updated.nullable)))\n+\n+      case (Seq(\"value\", names @ _*), map @ MapType(_, valueStruct: StructType, _)) =>\n+        Some(field.copy(dataType = map.copy(valueType = replace(valueStruct, names, update))))\n+\n+      case (Seq(\"element\"), array @ ArrayType(elementType, isNullable)) =>\n+        val updated = update(StructField(\"element\", elementType, nullable = isNullable))\n+            .getOrElse(throw new IllegalArgumentException(s\"Cannot delete array element\"))\n+        Some(field.copy(dataType = array.copy(\n+          elementType = updated.dataType,\n+          containsNull = updated.nullable)))\n+\n+      case (Seq(\"element\", names @ _*), array @ ArrayType(elementStruct: StructType, _)) =>\n+        Some(field.copy(dataType = array.copy(elementType = replace(elementStruct, names, update))))\n+",
+    "line": 58
+  }],
+  "prId": 24937
+}, {
+  "comments": [{
+    "author": {
+      "login": "brkyvz"
+    },
+    "body": "Do you need to perform name resolution according to case sensitivity instead of strict equality when calling getFieldIndex?",
+    "commit": "5b10bd0164132bf296a07bcb794c3f7af262a72e",
+    "createdAt": "2019-07-11T18:24:35Z",
+    "diffHunk": "@@ -132,16 +132,45 @@ object CatalogV2Util {\n     val pos = struct.getFieldIndex(fieldNames.head)\n         .getOrElse(throw new IllegalArgumentException(s\"Cannot find field: ${fieldNames.head}\"))\n     val field = struct.fields(pos)\n-    val replacement: Option[StructField] = if (fieldNames.tail.isEmpty) {",
+    "line": 13
+  }],
+  "prId": 24937
+}]

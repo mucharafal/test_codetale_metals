@@ -1,0 +1,61 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "petermaxlee"
+    },
+    "body": "I'm using whatever cast as decimal is using here, but I think it is a bug to by default cast to USER_DEFAULT, which has scale = 0.\n",
+    "commit": "37b7127cdbf93334daa05dc5f48715b78966d032",
+    "createdAt": "2016-07-26T04:54:34Z",
+    "diffHunk": "@@ -0,0 +1,49 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst.analysis\n+\n+import org.apache.spark.sql.catalyst.expressions.Cast\n+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan\n+import org.apache.spark.sql.catalyst.rules.Rule\n+import org.apache.spark.sql.types._\n+\n+/**\n+ * An analyzer rule that handles function aliases.\n+ */\n+object SubstituteFunctionAliases extends Rule[LogicalPlan] {\n+  def apply(plan: LogicalPlan): LogicalPlan = plan.resolveExpressions {\n+    // SPARK-16730: The following functions are aliases for cast in Hive.\n+    case u: UnresolvedFunction\n+        if u.name.database.isEmpty && u.children.size == 1 && !u.isDistinct =>\n+      u.name.funcName.toLowerCase match {\n+        case \"boolean\" => Cast(u.children.head, BooleanType)\n+        case \"tinyint\" => Cast(u.children.head, ByteType)\n+        case \"smallint\" => Cast(u.children.head, ShortType)\n+        case \"int\" => Cast(u.children.head, IntegerType)\n+        case \"bigint\" => Cast(u.children.head, LongType)\n+        case \"float\" => Cast(u.children.head, FloatType)\n+        case \"double\" => Cast(u.children.head, DoubleType)\n+        case \"decimal\" => Cast(u.children.head, DecimalType.USER_DEFAULT)",
+    "line": 41
+  }],
+  "prId": 14362
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "can we use `FunctionRegister` to handle these?\n",
+    "commit": "37b7127cdbf93334daa05dc5f48715b78966d032",
+    "createdAt": "2016-07-26T05:34:50Z",
+    "diffHunk": "@@ -0,0 +1,49 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst.analysis\n+\n+import org.apache.spark.sql.catalyst.expressions.Cast\n+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan\n+import org.apache.spark.sql.catalyst.rules.Rule\n+import org.apache.spark.sql.types._\n+\n+/**\n+ * An analyzer rule that handles function aliases.\n+ */\n+object SubstituteFunctionAliases extends Rule[LogicalPlan] {\n+  def apply(plan: LogicalPlan): LogicalPlan = plan.resolveExpressions {\n+    // SPARK-16730: The following functions are aliases for cast in Hive.\n+    case u: UnresolvedFunction\n+        if u.name.database.isEmpty && u.children.size == 1 && !u.isDistinct =>\n+      u.name.funcName.toLowerCase match {\n+        case \"boolean\" => Cast(u.children.head, BooleanType)",
+    "line": 34
+  }, {
+    "author": {
+      "login": "petermaxlee"
+    },
+    "body": "do you mean putting in FunctionRegistry?\n",
+    "commit": "37b7127cdbf93334daa05dc5f48715b78966d032",
+    "createdAt": "2016-07-26T06:11:16Z",
+    "diffHunk": "@@ -0,0 +1,49 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst.analysis\n+\n+import org.apache.spark.sql.catalyst.expressions.Cast\n+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan\n+import org.apache.spark.sql.catalyst.rules.Rule\n+import org.apache.spark.sql.types._\n+\n+/**\n+ * An analyzer rule that handles function aliases.\n+ */\n+object SubstituteFunctionAliases extends Rule[LogicalPlan] {\n+  def apply(plan: LogicalPlan): LogicalPlan = plan.resolveExpressions {\n+    // SPARK-16730: The following functions are aliases for cast in Hive.\n+    case u: UnresolvedFunction\n+        if u.name.database.isEmpty && u.children.size == 1 && !u.isDistinct =>\n+      u.name.funcName.toLowerCase match {\n+        case \"boolean\" => Cast(u.children.head, BooleanType)",
+    "line": 34
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "yup, but not sure if it can work\n",
+    "commit": "37b7127cdbf93334daa05dc5f48715b78966d032",
+    "createdAt": "2016-07-26T06:14:31Z",
+    "diffHunk": "@@ -0,0 +1,49 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst.analysis\n+\n+import org.apache.spark.sql.catalyst.expressions.Cast\n+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan\n+import org.apache.spark.sql.catalyst.rules.Rule\n+import org.apache.spark.sql.types._\n+\n+/**\n+ * An analyzer rule that handles function aliases.\n+ */\n+object SubstituteFunctionAliases extends Rule[LogicalPlan] {\n+  def apply(plan: LogicalPlan): LogicalPlan = plan.resolveExpressions {\n+    // SPARK-16730: The following functions are aliases for cast in Hive.\n+    case u: UnresolvedFunction\n+        if u.name.database.isEmpty && u.children.size == 1 && !u.isDistinct =>\n+      u.name.funcName.toLowerCase match {\n+        case \"boolean\" => Cast(u.children.head, BooleanType)",
+    "line": 34
+  }, {
+    "author": {
+      "login": "hvanhovell"
+    },
+    "body": "+1 for this. I think you can make it work. Implement a method that creates the same as `FunctionRegistry.expression[T <: Expression](name: String)` method, e.g.:\n\n``` scala\ndef cast(name: String, dt: DataType): (String, (ExpressionInfo, FunctionBuilder)) = {\n  val info = new ExpressionInfo(classOf[Cast].getName, name)\n  name -> (info, Cast(_, dt))\n}\n```\n\nand use that method to register these casts...\n",
+    "commit": "37b7127cdbf93334daa05dc5f48715b78966d032",
+    "createdAt": "2016-07-26T21:37:49Z",
+    "diffHunk": "@@ -0,0 +1,49 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst.analysis\n+\n+import org.apache.spark.sql.catalyst.expressions.Cast\n+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan\n+import org.apache.spark.sql.catalyst.rules.Rule\n+import org.apache.spark.sql.types._\n+\n+/**\n+ * An analyzer rule that handles function aliases.\n+ */\n+object SubstituteFunctionAliases extends Rule[LogicalPlan] {\n+  def apply(plan: LogicalPlan): LogicalPlan = plan.resolveExpressions {\n+    // SPARK-16730: The following functions are aliases for cast in Hive.\n+    case u: UnresolvedFunction\n+        if u.name.database.isEmpty && u.children.size == 1 && !u.isDistinct =>\n+      u.name.funcName.toLowerCase match {\n+        case \"boolean\" => Cast(u.children.head, BooleanType)",
+    "line": 34
+  }, {
+    "author": {
+      "login": "petermaxlee"
+    },
+    "body": "That was in https://github.com/apache/spark/pull/14364\n",
+    "commit": "37b7127cdbf93334daa05dc5f48715b78966d032",
+    "createdAt": "2016-07-26T22:57:58Z",
+    "diffHunk": "@@ -0,0 +1,49 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst.analysis\n+\n+import org.apache.spark.sql.catalyst.expressions.Cast\n+import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan\n+import org.apache.spark.sql.catalyst.rules.Rule\n+import org.apache.spark.sql.types._\n+\n+/**\n+ * An analyzer rule that handles function aliases.\n+ */\n+object SubstituteFunctionAliases extends Rule[LogicalPlan] {\n+  def apply(plan: LogicalPlan): LogicalPlan = plan.resolveExpressions {\n+    // SPARK-16730: The following functions are aliases for cast in Hive.\n+    case u: UnresolvedFunction\n+        if u.name.database.isEmpty && u.children.size == 1 && !u.isDistinct =>\n+      u.name.funcName.toLowerCase match {\n+        case \"boolean\" => Cast(u.children.head, BooleanType)",
+    "line": 34
+  }],
+  "prId": 14362
+}]

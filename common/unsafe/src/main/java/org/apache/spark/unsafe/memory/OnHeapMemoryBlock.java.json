@@ -1,0 +1,187 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "Ngone51"
+    },
+    "body": "Shall we move this ```assert``` to ```subBlock()```, since Instantiate from constructor ```OnHeapMemoryBlock(long size) ``` do not need to check? And we can avoid doing some unnecessary work. BTW, if we can add some tips after the assert fail, it would be better.",
+    "commit": "50326ca2fff63ef0a88f3c7924fa8f1d53d17ec1",
+    "createdAt": "2018-03-03T08:23:52Z",
+    "diffHunk": "@@ -0,0 +1,141 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.unsafe.memory;\n+\n+import org.apache.spark.unsafe.Platform;\n+\n+/**\n+ * A consecutive block of memory with a long array on Java heap.\n+ */\n+public final class OnHeapMemoryBlock extends MemoryBlock {\n+\n+  private final long[] array;\n+\n+  public OnHeapMemoryBlock(long[] obj, long offset, long size) {\n+    super(obj, offset, size);\n+    this.array = obj;\n+    assert(offset - Platform.LONG_ARRAY_OFFSET + size <= obj.length * 8L);"
+  }, {
+    "author": {
+      "login": "kiszk"
+    },
+    "body": "@Ngone51 could you please elaborate on your idea about `MemoryLocation` while we do not have `MemoryLocation` now? I think that it would be good to have a `final` method for `getBaseObject` for performance.",
+    "commit": "50326ca2fff63ef0a88f3c7924fa8f1d53d17ec1",
+    "createdAt": "2018-03-03T12:16:37Z",
+    "diffHunk": "@@ -0,0 +1,141 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.unsafe.memory;\n+\n+import org.apache.spark.unsafe.Platform;\n+\n+/**\n+ * A consecutive block of memory with a long array on Java heap.\n+ */\n+public final class OnHeapMemoryBlock extends MemoryBlock {\n+\n+  private final long[] array;\n+\n+  public OnHeapMemoryBlock(long[] obj, long offset, long size) {\n+    super(obj, offset, size);\n+    this.array = obj;\n+    assert(offset - Platform.LONG_ARRAY_OFFSET + size <= obj.length * 8L);"
+  }, {
+    "author": {
+      "login": "kiszk"
+    },
+    "body": "Thanks, I will add some works to this assert.",
+    "commit": "50326ca2fff63ef0a88f3c7924fa8f1d53d17ec1",
+    "createdAt": "2018-03-03T12:31:52Z",
+    "diffHunk": "@@ -0,0 +1,141 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.unsafe.memory;\n+\n+import org.apache.spark.unsafe.Platform;\n+\n+/**\n+ * A consecutive block of memory with a long array on Java heap.\n+ */\n+public final class OnHeapMemoryBlock extends MemoryBlock {\n+\n+  private final long[] array;\n+\n+  public OnHeapMemoryBlock(long[] obj, long offset, long size) {\n+    super(obj, offset, size);\n+    this.array = obj;\n+    assert(offset - Platform.LONG_ARRAY_OFFSET + size <= obj.length * 8L);"
+  }],
+  "prId": 19222
+}, {
+  "comments": [{
+    "author": {
+      "login": "Ngone51"
+    },
+    "body": "Should the third param just be ```size```, which is the actual memory size we can use by ```MemoryBlock```? Though, it may less than the real allocated memory, which is ```(size + 7) / 8) * 8L```.\r\nAnd this also decides whether the upper bound is ```size``` or ```array.length * 8L``` in asserts in those getXXX/putXXX methods.\r\n",
+    "commit": "50326ca2fff63ef0a88f3c7924fa8f1d53d17ec1",
+    "createdAt": "2018-03-03T08:25:35Z",
+    "diffHunk": "@@ -0,0 +1,141 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.unsafe.memory;\n+\n+import org.apache.spark.unsafe.Platform;\n+\n+/**\n+ * A consecutive block of memory with a long array on Java heap.\n+ */\n+public final class OnHeapMemoryBlock extends MemoryBlock {\n+\n+  private final long[] array;\n+\n+  public OnHeapMemoryBlock(long[] obj, long offset, long size) {\n+    super(obj, offset, size);\n+    this.array = obj;\n+    assert(offset - Platform.LONG_ARRAY_OFFSET + size <= obj.length * 8L);\n+  }\n+\n+  public OnHeapMemoryBlock(long size) {\n+    this(new long[(int)((size + 7) / 8)], Platform.LONG_ARRAY_OFFSET,\n+      ((size + 7) / 8) * 8L);"
+  }, {
+    "author": {
+      "login": "kiszk"
+    },
+    "body": "Good catch",
+    "commit": "50326ca2fff63ef0a88f3c7924fa8f1d53d17ec1",
+    "createdAt": "2018-03-03T12:36:20Z",
+    "diffHunk": "@@ -0,0 +1,141 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.unsafe.memory;\n+\n+import org.apache.spark.unsafe.Platform;\n+\n+/**\n+ * A consecutive block of memory with a long array on Java heap.\n+ */\n+public final class OnHeapMemoryBlock extends MemoryBlock {\n+\n+  private final long[] array;\n+\n+  public OnHeapMemoryBlock(long[] obj, long offset, long size) {\n+    super(obj, offset, size);\n+    this.array = obj;\n+    assert(offset - Platform.LONG_ARRAY_OFFSET + size <= obj.length * 8L);\n+  }\n+\n+  public OnHeapMemoryBlock(long size) {\n+    this(new long[(int)((size + 7) / 8)], Platform.LONG_ARRAY_OFFSET,\n+      ((size + 7) / 8) * 8L);"
+  }],
+  "prId": 19222
+}, {
+  "comments": [{
+    "author": {
+      "login": "Ngone51"
+    },
+    "body": "I think this class could be named as ```LongArrayMemoryBlock```, in order to correspond to ```ByteArrayMemoryBlock```, as they are both on-heap memory block.",
+    "commit": "50326ca2fff63ef0a88f3c7924fa8f1d53d17ec1",
+    "createdAt": "2018-03-03T10:49:18Z",
+    "diffHunk": "@@ -0,0 +1,141 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.unsafe.memory;\n+\n+import org.apache.spark.unsafe.Platform;\n+\n+/**\n+ * A consecutive block of memory with a long array on Java heap.\n+ */\n+public final class OnHeapMemoryBlock extends MemoryBlock {",
+    "line": 27
+  }, {
+    "author": {
+      "login": "kiszk"
+    },
+    "body": "Originally, the name was `LongArrayMemoryBlock`. After the discussion with @cloud-fan, we decided to be named as `OnHeapMemoryBlock` compared to `OffHeapMemoryBlock`.\r\n\r\nWDTY?",
+    "commit": "50326ca2fff63ef0a88f3c7924fa8f1d53d17ec1",
+    "createdAt": "2018-03-03T12:14:59Z",
+    "diffHunk": "@@ -0,0 +1,141 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.unsafe.memory;\n+\n+import org.apache.spark.unsafe.Platform;\n+\n+/**\n+ * A consecutive block of memory with a long array on Java heap.\n+ */\n+public final class OnHeapMemoryBlock extends MemoryBlock {",
+    "line": 27
+  }, {
+    "author": {
+      "login": "Ngone51"
+    },
+    "body": "I still suggest ```LongArrayMemoryBlock```.",
+    "commit": "50326ca2fff63ef0a88f3c7924fa8f1d53d17ec1",
+    "createdAt": "2018-03-03T14:53:00Z",
+    "diffHunk": "@@ -0,0 +1,141 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.unsafe.memory;\n+\n+import org.apache.spark.unsafe.Platform;\n+\n+/**\n+ * A consecutive block of memory with a long array on Java heap.\n+ */\n+public final class OnHeapMemoryBlock extends MemoryBlock {",
+    "line": 27
+  }, {
+    "author": {
+      "login": "kiszk"
+    },
+    "body": "Thank you for your suggestion. I would like to hear other opinions, too.",
+    "commit": "50326ca2fff63ef0a88f3c7924fa8f1d53d17ec1",
+    "createdAt": "2018-03-04T07:01:22Z",
+    "diffHunk": "@@ -0,0 +1,141 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.unsafe.memory;\n+\n+import org.apache.spark.unsafe.Platform;\n+\n+/**\n+ * A consecutive block of memory with a long array on Java heap.\n+ */\n+public final class OnHeapMemoryBlock extends MemoryBlock {",
+    "line": 27
+  }, {
+    "author": {
+      "login": "Ngone51"
+    },
+    "body": "It's okay.",
+    "commit": "50326ca2fff63ef0a88f3c7924fa8f1d53d17ec1",
+    "createdAt": "2018-03-04T10:18:17Z",
+    "diffHunk": "@@ -0,0 +1,141 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.unsafe.memory;\n+\n+import org.apache.spark.unsafe.Platform;\n+\n+/**\n+ * A consecutive block of memory with a long array on Java heap.\n+ */\n+public final class OnHeapMemoryBlock extends MemoryBlock {",
+    "line": 27
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "So the basic idea is, `OnHeapMemoryBlock` and `OffHeapMemoryBlock` are the major memory blocks that should be used inside Spark, returned by the memory manager according to the memory mode. `ByteArrayMemoryBlock` would only be used in some certain places where data is always `bye[]`, and the memory is not allocated from the memory manager. Hopefully we can always use memory returned by memory manager and track the memory usage, and eventually remove `ByteArrayMemoryBlock`.",
+    "commit": "50326ca2fff63ef0a88f3c7924fa8f1d53d17ec1",
+    "createdAt": "2018-03-05T22:50:01Z",
+    "diffHunk": "@@ -0,0 +1,141 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.unsafe.memory;\n+\n+import org.apache.spark.unsafe.Platform;\n+\n+/**\n+ * A consecutive block of memory with a long array on Java heap.\n+ */\n+public final class OnHeapMemoryBlock extends MemoryBlock {",
+    "line": 27
+  }, {
+    "author": {
+      "login": "Ngone51"
+    },
+    "body": "👍 ",
+    "commit": "50326ca2fff63ef0a88f3c7924fa8f1d53d17ec1",
+    "createdAt": "2018-03-06T02:49:07Z",
+    "diffHunk": "@@ -0,0 +1,141 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.unsafe.memory;\n+\n+import org.apache.spark.unsafe.Platform;\n+\n+/**\n+ * A consecutive block of memory with a long array on Java heap.\n+ */\n+public final class OnHeapMemoryBlock extends MemoryBlock {",
+    "line": 27
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "Can we put @cloud-fan's comment https://github.com/apache/spark/pull/19222/files#r172356146 into `OnHeapMemoryBlock`'s doc?",
+    "commit": "50326ca2fff63ef0a88f3c7924fa8f1d53d17ec1",
+    "createdAt": "2018-04-05T00:17:10Z",
+    "diffHunk": "@@ -0,0 +1,141 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.unsafe.memory;\n+\n+import org.apache.spark.unsafe.Platform;\n+\n+/**\n+ * A consecutive block of memory with a long array on Java heap.\n+ */\n+public final class OnHeapMemoryBlock extends MemoryBlock {",
+    "line": 27
+  }],
+  "prId": 19222
+}, {
+  "comments": [{
+    "author": {
+      "login": "Ngone51"
+    },
+    "body": "So, in asserts in getXXX/putXXX methods, we should change ```array.length * 8L``` to ```size()```, right?",
+    "commit": "50326ca2fff63ef0a88f3c7924fa8f1d53d17ec1",
+    "createdAt": "2018-03-03T15:05:26Z",
+    "diffHunk": "@@ -0,0 +1,142 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.unsafe.memory;\n+\n+import org.apache.spark.unsafe.Platform;\n+\n+/**\n+ * A consecutive block of memory with a long array on Java heap.\n+ */\n+public final class OnHeapMemoryBlock extends MemoryBlock {\n+\n+  private final long[] array;\n+\n+  public OnHeapMemoryBlock(long[] obj, long offset, long size) {\n+    super(obj, offset, size);\n+    this.array = obj;\n+    assert(offset - Platform.LONG_ARRAY_OFFSET + size <= obj.length * 8L) :\n+     \"The size \" + size + \" and size \" + size + \" are larger than the array size \" +\n+       ((obj.length * 8L) - Platform.LONG_ARRAY_OFFSET);\n+  }\n+\n+  public OnHeapMemoryBlock(long size) {\n+    this(new long[(int)((size + 7) / 8)], Platform.LONG_ARRAY_OFFSET, size);\n+  }\n+\n+  @Override\n+  public MemoryBlock subBlock(long offset, long size) {\n+    return new OnHeapMemoryBlock(array, this.offset + offset, size);\n+  }\n+\n+  public long[] getLongArray() { return array; }\n+\n+  /**\n+   * Creates a memory block pointing to the memory used by the long array.\n+   */\n+  public static OnHeapMemoryBlock fromArray(final long[] array) {\n+    return new OnHeapMemoryBlock(array, Platform.LONG_ARRAY_OFFSET, array.length * 8L);\n+  }\n+\n+  public static OnHeapMemoryBlock fromArray(final long[] array, long size) {\n+    return new OnHeapMemoryBlock(array, Platform.LONG_ARRAY_OFFSET, size);\n+  }\n+\n+  @Override\n+  public final int getInt(long offset) {\n+    assert(offset + 4 - Platform.LONG_ARRAY_OFFSET <= array.length * 8L);"
+  }, {
+    "author": {
+      "login": "kiszk"
+    },
+    "body": "Thank you very much for your comment. I should have to remove these assertions due to performance reason as other classes did.",
+    "commit": "50326ca2fff63ef0a88f3c7924fa8f1d53d17ec1",
+    "createdAt": "2018-03-03T16:08:36Z",
+    "diffHunk": "@@ -0,0 +1,142 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.unsafe.memory;\n+\n+import org.apache.spark.unsafe.Platform;\n+\n+/**\n+ * A consecutive block of memory with a long array on Java heap.\n+ */\n+public final class OnHeapMemoryBlock extends MemoryBlock {\n+\n+  private final long[] array;\n+\n+  public OnHeapMemoryBlock(long[] obj, long offset, long size) {\n+    super(obj, offset, size);\n+    this.array = obj;\n+    assert(offset - Platform.LONG_ARRAY_OFFSET + size <= obj.length * 8L) :\n+     \"The size \" + size + \" and size \" + size + \" are larger than the array size \" +\n+       ((obj.length * 8L) - Platform.LONG_ARRAY_OFFSET);\n+  }\n+\n+  public OnHeapMemoryBlock(long size) {\n+    this(new long[(int)((size + 7) / 8)], Platform.LONG_ARRAY_OFFSET, size);\n+  }\n+\n+  @Override\n+  public MemoryBlock subBlock(long offset, long size) {\n+    return new OnHeapMemoryBlock(array, this.offset + offset, size);\n+  }\n+\n+  public long[] getLongArray() { return array; }\n+\n+  /**\n+   * Creates a memory block pointing to the memory used by the long array.\n+   */\n+  public static OnHeapMemoryBlock fromArray(final long[] array) {\n+    return new OnHeapMemoryBlock(array, Platform.LONG_ARRAY_OFFSET, array.length * 8L);\n+  }\n+\n+  public static OnHeapMemoryBlock fromArray(final long[] array, long size) {\n+    return new OnHeapMemoryBlock(array, Platform.LONG_ARRAY_OFFSET, size);\n+  }\n+\n+  @Override\n+  public final int getInt(long offset) {\n+    assert(offset + 4 - Platform.LONG_ARRAY_OFFSET <= array.length * 8L);"
+  }],
+  "prId": 19222
+}, {
+  "comments": [{
+    "author": {
+      "login": "Ngone51"
+    },
+    "body": "So, ```obj.length * 8L``` should also change to ```size```, right?",
+    "commit": "50326ca2fff63ef0a88f3c7924fa8f1d53d17ec1",
+    "createdAt": "2018-03-03T15:07:50Z",
+    "diffHunk": "@@ -0,0 +1,142 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.unsafe.memory;\n+\n+import org.apache.spark.unsafe.Platform;\n+\n+/**\n+ * A consecutive block of memory with a long array on Java heap.\n+ */\n+public final class OnHeapMemoryBlock extends MemoryBlock {\n+\n+  private final long[] array;\n+\n+  public OnHeapMemoryBlock(long[] obj, long offset, long size) {\n+    super(obj, offset, size);\n+    this.array = obj;\n+    assert(offset - Platform.LONG_ARRAY_OFFSET + size <= obj.length * 8L) :"
+  }, {
+    "author": {
+      "login": "kiszk"
+    },
+    "body": "This condition is correct, but the message is not correct. Good catch.",
+    "commit": "50326ca2fff63ef0a88f3c7924fa8f1d53d17ec1",
+    "createdAt": "2018-03-03T16:07:53Z",
+    "diffHunk": "@@ -0,0 +1,142 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.unsafe.memory;\n+\n+import org.apache.spark.unsafe.Platform;\n+\n+/**\n+ * A consecutive block of memory with a long array on Java heap.\n+ */\n+public final class OnHeapMemoryBlock extends MemoryBlock {\n+\n+  private final long[] array;\n+\n+  public OnHeapMemoryBlock(long[] obj, long offset, long size) {\n+    super(obj, offset, size);\n+    this.array = obj;\n+    assert(offset - Platform.LONG_ARRAY_OFFSET + size <= obj.length * 8L) :"
+  }, {
+    "author": {
+      "login": "Ngone51"
+    },
+    "body": "Hi, @kiszk. I still doubt about this ```assert```'s correctness. Below is my understanding, please feel free to point my wrong spot out. \r\n\r\nThis method ```public OnHeapMemoryBlock(long[] obj, long offset, long size)``` could be called from three paths:\r\n1. called from ```public OnHeapMemoryBlock(long size)```\r\nIn this case, this ```assert``` certainly to be true, and ```offset``` is equal to ```Platform.LONG_ARRAY_OFFSET```.\r\n\r\n2. called directly from other methods \r\nIn this case, I think the caller will mostly set ```offset``` to be ```Platform.LONG_ARRAY_OFFSET```. And the ```assert``` is also right, but the result due to caller's settings.\r\n\r\n3. called from ``` public MemoryBlock subBlock(long offset, long size)```\r\nIn this case, a sub block can only use the memory which a super block could use, which is super block's ```size```, rather than ```obj.length * 8L``` (as we reach agreement before).\r\nSo, I think, here, the ```assert``` should be ```(offset - Platform.LONG_ARRAY_OFFSET + sub block's size <= super block's size)```. More precisely, we should ```assert(offset >=  Platform.LONG_ARRAY_OFFSET)```.\r\n",
+    "commit": "50326ca2fff63ef0a88f3c7924fa8f1d53d17ec1",
+    "createdAt": "2018-03-04T05:07:14Z",
+    "diffHunk": "@@ -0,0 +1,142 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.unsafe.memory;\n+\n+import org.apache.spark.unsafe.Platform;\n+\n+/**\n+ * A consecutive block of memory with a long array on Java heap.\n+ */\n+public final class OnHeapMemoryBlock extends MemoryBlock {\n+\n+  private final long[] array;\n+\n+  public OnHeapMemoryBlock(long[] obj, long offset, long size) {\n+    super(obj, offset, size);\n+    this.array = obj;\n+    assert(offset - Platform.LONG_ARRAY_OFFSET + size <= obj.length * 8L) :"
+  }, {
+    "author": {
+      "login": "kiszk"
+    },
+    "body": "Thank you for your explanation. Now, we focus on the path 3. I understand what you pointed out. How the following code should work?\r\n```\r\nval mb = new OnHeapMemoryBlock(new long[16]), Platform.LONG_ARRAY_OFFSET, 8);\r\nval mb1 = mb.subBlock(0, 96);\r\nval mb2 = new OnHeapMemoryBlock(mb.getLongArray(), Platform.LONG_ARRAY_OFFSET, 96);\r\n```\r\n\r\nI see. Let us add a new exception check that you pointed out in `subBlock` and keep this assertion in the constructor.",
+    "commit": "50326ca2fff63ef0a88f3c7924fa8f1d53d17ec1",
+    "createdAt": "2018-03-04T05:43:50Z",
+    "diffHunk": "@@ -0,0 +1,142 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.unsafe.memory;\n+\n+import org.apache.spark.unsafe.Platform;\n+\n+/**\n+ * A consecutive block of memory with a long array on Java heap.\n+ */\n+public final class OnHeapMemoryBlock extends MemoryBlock {\n+\n+  private final long[] array;\n+\n+  public OnHeapMemoryBlock(long[] obj, long offset, long size) {\n+    super(obj, offset, size);\n+    this.array = obj;\n+    assert(offset - Platform.LONG_ARRAY_OFFSET + size <= obj.length * 8L) :"
+  }],
+  "prId": 19222
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "ditto, shall we check size overflow?",
+    "commit": "50326ca2fff63ef0a88f3c7924fa8f1d53d17ec1",
+    "createdAt": "2018-03-05T23:18:48Z",
+    "diffHunk": "@@ -0,0 +1,133 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.unsafe.memory;\n+\n+import org.apache.spark.unsafe.Platform;\n+\n+/**\n+ * A consecutive block of memory with a long array on Java heap.\n+ */\n+public final class OnHeapMemoryBlock extends MemoryBlock {\n+\n+  private final long[] array;\n+\n+  public OnHeapMemoryBlock(long[] obj, long offset, long size) {\n+    super(obj, offset, size);\n+    this.array = obj;\n+    assert(offset - Platform.LONG_ARRAY_OFFSET + size <= obj.length * 8L) :\n+      \"The sum of size \" + size + \" and offset \" + offset + \" should not be larger than \" +\n+        \"the array size \" + ((obj.length * 8L) - Platform.LONG_ARRAY_OFFSET);\n+  }\n+\n+  public OnHeapMemoryBlock(long size) {\n+    this(new long[(int)((size + 7) / 8)], Platform.LONG_ARRAY_OFFSET, size);"
+  }],
+  "prId": 19222
+}]

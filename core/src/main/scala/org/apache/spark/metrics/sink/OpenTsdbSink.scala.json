@@ -1,0 +1,52 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "alex-kolesnikov"
+    },
+    "body": "It looks like you forgot to import org.apache.spark.SecurityManager and use inappropriate java.lang.SecurityManager.\n\nMetricsSystem uses the former here (spark-core_2.10-1.4.1, org/apache/spark/metrics/MetricsSystem.scala:187):\n`.getConstructor(classOf[Properties], classOf[MetricRegistry], classOf[SecurityManager])`\n",
+    "commit": "df43bb46d055611167c1253a497ff36f23248733",
+    "createdAt": "2016-05-24T08:02:32Z",
+    "diffHunk": "@@ -0,0 +1,165 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.metrics.sink\n+\n+import java.util.Properties\n+import java.util.concurrent.TimeUnit\n+\n+import com.codahale.metrics.MetricRegistry\n+import com.github.sps.metrics.OpenTsdbReporter\n+import com.github.sps.metrics.opentsdb.OpenTsdb\n+import org.apache.spark.{Logging, SparkEnv}\n+import org.apache.spark.metrics.MetricsSystem\n+\n+/**\n+ * Created by kapil on 1/12/15.\n+ */\n+private[spark] class OpenTsdbSink(val property: Properties, val registry: MetricRegistry,\n+                   securityMgr: SecurityManager) extends Sink with Logging {",
+    "line": 33
+  }, {
+    "author": {
+      "login": "kapilsingh5050"
+    },
+    "body": "Yes, I had fixed it in my local version. But due to inactivity from admins on this pull request, haven't really worked on it. Let me know if you have privileges to merge these changes, I can update the pull request.\n",
+    "commit": "df43bb46d055611167c1253a497ff36f23248733",
+    "createdAt": "2016-05-25T08:25:33Z",
+    "diffHunk": "@@ -0,0 +1,165 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.metrics.sink\n+\n+import java.util.Properties\n+import java.util.concurrent.TimeUnit\n+\n+import com.codahale.metrics.MetricRegistry\n+import com.github.sps.metrics.OpenTsdbReporter\n+import com.github.sps.metrics.opentsdb.OpenTsdb\n+import org.apache.spark.{Logging, SparkEnv}\n+import org.apache.spark.metrics.MetricsSystem\n+\n+/**\n+ * Created by kapil on 1/12/15.\n+ */\n+private[spark] class OpenTsdbSink(val property: Properties, val registry: MetricRegistry,\n+                   securityMgr: SecurityManager) extends Sink with Logging {",
+    "line": 33
+  }],
+  "prId": 10187
+}, {
+  "comments": [{
+    "author": {
+      "login": "alex-kolesnikov"
+    },
+    "body": "It throws NullPointerException when executor starts.\nIn driver all is OK.\nI changed this to `Option(SparkEnv.get).map(_.conf).map(_.getAppId).getOrElse(\"\")` as workaround.\n",
+    "commit": "df43bb46d055611167c1253a497ff36f23248733",
+    "createdAt": "2016-05-24T22:00:44Z",
+    "diffHunk": "@@ -0,0 +1,165 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.metrics.sink\n+\n+import java.util.Properties\n+import java.util.concurrent.TimeUnit\n+\n+import com.codahale.metrics.MetricRegistry\n+import com.github.sps.metrics.OpenTsdbReporter\n+import com.github.sps.metrics.opentsdb.OpenTsdb\n+import org.apache.spark.{Logging, SparkEnv}\n+import org.apache.spark.metrics.MetricsSystem\n+\n+/**\n+ * Created by kapil on 1/12/15.\n+ */\n+private[spark] class OpenTsdbSink(val property: Properties, val registry: MetricRegistry,\n+                   securityMgr: SecurityManager) extends Sink with Logging {\n+  val OPENTSDB_DEFAULT_PERIOD = 10\n+  val OPENTSDB_DEFAULT_UNIT = \"SECONDS\"\n+  val OPENTSDB_DEFAULT_PREFIX = \"\"\n+  val OPENTSDB_DEFAULT_TAG_NAME_1 = \"appId\"\n+  val OPENTSDB_DEFAULT_TAG_VALUE_1 = SparkEnv.get.conf.getAppId",
+    "line": 38
+  }, {
+    "author": {
+      "login": "kapilsingh5050"
+    },
+    "body": "Again, a known issue which I've fixed in my local version.\n",
+    "commit": "df43bb46d055611167c1253a497ff36f23248733",
+    "createdAt": "2016-05-25T08:25:58Z",
+    "diffHunk": "@@ -0,0 +1,165 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.metrics.sink\n+\n+import java.util.Properties\n+import java.util.concurrent.TimeUnit\n+\n+import com.codahale.metrics.MetricRegistry\n+import com.github.sps.metrics.OpenTsdbReporter\n+import com.github.sps.metrics.opentsdb.OpenTsdb\n+import org.apache.spark.{Logging, SparkEnv}\n+import org.apache.spark.metrics.MetricsSystem\n+\n+/**\n+ * Created by kapil on 1/12/15.\n+ */\n+private[spark] class OpenTsdbSink(val property: Properties, val registry: MetricRegistry,\n+                   securityMgr: SecurityManager) extends Sink with Logging {\n+  val OPENTSDB_DEFAULT_PERIOD = 10\n+  val OPENTSDB_DEFAULT_UNIT = \"SECONDS\"\n+  val OPENTSDB_DEFAULT_PREFIX = \"\"\n+  val OPENTSDB_DEFAULT_TAG_NAME_1 = \"appId\"\n+  val OPENTSDB_DEFAULT_TAG_VALUE_1 = SparkEnv.get.conf.getAppId",
+    "line": 38
+  }, {
+    "author": {
+      "login": "alex-kolesnikov"
+    },
+    "body": "I'm not a Spark comitter.\nI took your code and made a separate jar. So I didn't patch Spark, I just added my jar to classpath. It works great!\nPlease let me now if you have made other important code improvements :)\nMay be your code can live as a github repo?\n",
+    "commit": "df43bb46d055611167c1253a497ff36f23248733",
+    "createdAt": "2016-05-25T11:21:55Z",
+    "diffHunk": "@@ -0,0 +1,165 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.metrics.sink\n+\n+import java.util.Properties\n+import java.util.concurrent.TimeUnit\n+\n+import com.codahale.metrics.MetricRegistry\n+import com.github.sps.metrics.OpenTsdbReporter\n+import com.github.sps.metrics.opentsdb.OpenTsdb\n+import org.apache.spark.{Logging, SparkEnv}\n+import org.apache.spark.metrics.MetricsSystem\n+\n+/**\n+ * Created by kapil on 1/12/15.\n+ */\n+private[spark] class OpenTsdbSink(val property: Properties, val registry: MetricRegistry,\n+                   securityMgr: SecurityManager) extends Sink with Logging {\n+  val OPENTSDB_DEFAULT_PERIOD = 10\n+  val OPENTSDB_DEFAULT_UNIT = \"SECONDS\"\n+  val OPENTSDB_DEFAULT_PREFIX = \"\"\n+  val OPENTSDB_DEFAULT_TAG_NAME_1 = \"appId\"\n+  val OPENTSDB_DEFAULT_TAG_VALUE_1 = SparkEnv.get.conf.getAppId",
+    "line": 38
+  }],
+  "prId": 10187
+}]

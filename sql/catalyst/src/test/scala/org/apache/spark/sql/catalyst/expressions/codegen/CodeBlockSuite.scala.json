@@ -1,0 +1,71 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "kiszk"
+    },
+    "body": "nit: I know the current code works correctly. How about replacing `_` with `CodeGenerator.javaClass(IntegerType)`?",
+    "commit": "c9dee44c6b4e9fdd41b2460fbd331f8f0e9235f4",
+    "createdAt": "2018-05-23T12:36:01Z",
+    "diffHunk": "@@ -120,11 +120,11 @@ class CodeBlockSuite extends SparkFunSuite {\n            |}\"\"\".stripMargin\n \n     val aliasedParam = JavaCode.variable(\"aliased\", expr.javaType)\n-    val aliasedInputs = code.asInstanceOf[CodeBlock].blockInputs.map {\n-      case _: SimpleExprValue => aliasedParam\n-      case other => other\n+\n+    // We want to replace all occurrences of `expr` with the variable `aliasedParam`.\n+    val aliasedCode = code.transformExprValues {\n+      case SimpleExprValue(\"1 + 1\", _) => aliasedParam"
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "Ok.",
+    "commit": "c9dee44c6b4e9fdd41b2460fbd331f8f0e9235f4",
+    "createdAt": "2018-05-23T13:26:27Z",
+    "diffHunk": "@@ -120,11 +120,11 @@ class CodeBlockSuite extends SparkFunSuite {\n            |}\"\"\".stripMargin\n \n     val aliasedParam = JavaCode.variable(\"aliased\", expr.javaType)\n-    val aliasedInputs = code.asInstanceOf[CodeBlock].blockInputs.map {\n-      case _: SimpleExprValue => aliasedParam\n-      case other => other\n+\n+    // We want to replace all occurrences of `expr` with the variable `aliasedParam`.\n+    val aliasedCode = code.transformExprValues {\n+      case SimpleExprValue(\"1 + 1\", _) => aliasedParam"
+  }],
+  "prId": 21405
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "not related to this PR, shall we remove `isNullVariable` and always use `expression(..., BooleanType)`? Or we can add a bunch of `intExpression(...)`, `booleanExpression(...)` etc.",
+    "commit": "c9dee44c6b4e9fdd41b2460fbd331f8f0e9235f4",
+    "createdAt": "2018-07-05T06:38:36Z",
+    "diffHunk": "@@ -133,4 +133,55 @@ class CodeBlockSuite extends SparkFunSuite {\n            |}\"\"\".stripMargin\n     assert(aliasedCode.toString == expected.toString)\n   }\n+\n+  test (\"transform expr in nested blocks\") {\n+    val expr = JavaCode.expression(\"1 + 1\", IntegerType)\n+    val isNull = JavaCode.isNullVariable(\"expr1_isNull\")",
+    "line": 54
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "I think it is fine and maybe more clear. I was thinking the name of `isNullVariable`  is a bit confusing at the first look actually.",
+    "commit": "c9dee44c6b4e9fdd41b2460fbd331f8f0e9235f4",
+    "createdAt": "2018-07-05T07:47:09Z",
+    "diffHunk": "@@ -133,4 +133,55 @@ class CodeBlockSuite extends SparkFunSuite {\n            |}\"\"\".stripMargin\n     assert(aliasedCode.toString == expected.toString)\n   }\n+\n+  test (\"transform expr in nested blocks\") {\n+    val expr = JavaCode.expression(\"1 + 1\", IntegerType)\n+    val isNull = JavaCode.isNullVariable(\"expr1_isNull\")",
+    "line": 54
+  }],
+  "prId": 21405
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "hmmm, I'd image `transformExprValues` will also transform child blocks.",
+    "commit": "c9dee44c6b4e9fdd41b2460fbd331f8f0e9235f4",
+    "createdAt": "2018-07-05T06:48:41Z",
+    "diffHunk": "@@ -133,4 +133,55 @@ class CodeBlockSuite extends SparkFunSuite {\n            |}\"\"\".stripMargin\n     assert(aliasedCode.toString == expected.toString)\n   }\n+\n+  test (\"transform expr in nested blocks\") {\n+    val expr = JavaCode.expression(\"1 + 1\", IntegerType)\n+    val isNull = JavaCode.isNullVariable(\"expr1_isNull\")\n+    val exprInFunc = JavaCode.variable(\"expr1\", IntegerType)\n+\n+    val funcs = Seq(\"callFunc1\", \"callFunc2\", \"callFunc3\")\n+    val subBlocks = funcs.map { funcName =>\n+      code\"\"\"\n+           |$funcName(int $expr) {\n+           |  boolean $isNull = false;\n+           |  int $exprInFunc = $expr + 1;\n+           |}\"\"\".stripMargin\n+    }\n+\n+    val aliasedParam = JavaCode.variable(\"aliased\", expr.javaType)\n+\n+    val block = code\"${subBlocks(0)}\\n${subBlocks(1)}\\n${subBlocks(2)}\"\n+    val transformedBlock = block.transform {\n+      case b: Block => b.transformExprValues {",
+    "line": 70
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "so the this should be\r\n```\r\nblock.transformExprValues {\r\n  case SimpleExprValue ...\r\n}\r\n```",
+    "commit": "c9dee44c6b4e9fdd41b2460fbd331f8f0e9235f4",
+    "createdAt": "2018-07-05T06:49:43Z",
+    "diffHunk": "@@ -133,4 +133,55 @@ class CodeBlockSuite extends SparkFunSuite {\n            |}\"\"\".stripMargin\n     assert(aliasedCode.toString == expected.toString)\n   }\n+\n+  test (\"transform expr in nested blocks\") {\n+    val expr = JavaCode.expression(\"1 + 1\", IntegerType)\n+    val isNull = JavaCode.isNullVariable(\"expr1_isNull\")\n+    val exprInFunc = JavaCode.variable(\"expr1\", IntegerType)\n+\n+    val funcs = Seq(\"callFunc1\", \"callFunc2\", \"callFunc3\")\n+    val subBlocks = funcs.map { funcName =>\n+      code\"\"\"\n+           |$funcName(int $expr) {\n+           |  boolean $isNull = false;\n+           |  int $exprInFunc = $expr + 1;\n+           |}\"\"\".stripMargin\n+    }\n+\n+    val aliasedParam = JavaCode.variable(\"aliased\", expr.javaType)\n+\n+    val block = code\"${subBlocks(0)}\\n${subBlocks(1)}\\n${subBlocks(2)}\"\n+    val transformedBlock = block.transform {\n+      case b: Block => b.transformExprValues {",
+    "line": 70
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "Then I may call it `transformAllExprValues`.",
+    "commit": "c9dee44c6b4e9fdd41b2460fbd331f8f0e9235f4",
+    "createdAt": "2018-07-05T06:59:02Z",
+    "diffHunk": "@@ -133,4 +133,55 @@ class CodeBlockSuite extends SparkFunSuite {\n            |}\"\"\".stripMargin\n     assert(aliasedCode.toString == expected.toString)\n   }\n+\n+  test (\"transform expr in nested blocks\") {\n+    val expr = JavaCode.expression(\"1 + 1\", IntegerType)\n+    val isNull = JavaCode.isNullVariable(\"expr1_isNull\")\n+    val exprInFunc = JavaCode.variable(\"expr1\", IntegerType)\n+\n+    val funcs = Seq(\"callFunc1\", \"callFunc2\", \"callFunc3\")\n+    val subBlocks = funcs.map { funcName =>\n+      code\"\"\"\n+           |$funcName(int $expr) {\n+           |  boolean $isNull = false;\n+           |  int $exprInFunc = $expr + 1;\n+           |}\"\"\".stripMargin\n+    }\n+\n+    val aliasedParam = JavaCode.variable(\"aliased\", expr.javaType)\n+\n+    val block = code\"${subBlocks(0)}\\n${subBlocks(1)}\\n${subBlocks(2)}\"\n+    val transformedBlock = block.transform {\n+      case b: Block => b.transformExprValues {",
+    "line": 70
+  }],
+  "prId": 21405
+}]

@@ -1,0 +1,39 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "How about `countOnRetry`? The name `dataProperty` is not obvious what it means.\n",
+    "commit": "59db4af635fd53e2723d187b60dee6856af74df4",
+    "createdAt": "2016-05-03T04:23:50Z",
+    "diffHunk": "@@ -21,33 +21,77 @@ import java.{lang => jl}\n import java.io.ObjectInputStream\n import java.util.concurrent.ConcurrentHashMap\n import java.util.concurrent.atomic.AtomicLong\n+import javax.annotation.concurrent.GuardedBy\n+\n+import scala.collection.mutable\n \n import org.apache.spark.scheduler.AccumulableInfo\n import org.apache.spark.util.Utils\n \n-\n+/**\n+ * Metadata for the Accumulator\n+ *\n+ *\n+ * @param countFailedValues whether to accumulate values from failed tasks. This is set to true\n+ *                          for system and time metrics like serialization time or bytes spilled,\n+ *                          and false for things with absolute values like number of input rows.\n+ *                          This should be used for internal metrics only.\n+\n+ * @param dataProperty Data property accumulators will only have values added once for each"
+  }, {
+    "author": {
+      "login": "holdenk"
+    },
+    "body": "I think `dataProperty` might possibly be clearer than `countOnRetry`, what do @squito / @rxin think?\n",
+    "commit": "59db4af635fd53e2723d187b60dee6856af74df4",
+    "createdAt": "2016-05-03T04:28:06Z",
+    "diffHunk": "@@ -21,33 +21,77 @@ import java.{lang => jl}\n import java.io.ObjectInputStream\n import java.util.concurrent.ConcurrentHashMap\n import java.util.concurrent.atomic.AtomicLong\n+import javax.annotation.concurrent.GuardedBy\n+\n+import scala.collection.mutable\n \n import org.apache.spark.scheduler.AccumulableInfo\n import org.apache.spark.util.Utils\n \n-\n+/**\n+ * Metadata for the Accumulator\n+ *\n+ *\n+ * @param countFailedValues whether to accumulate values from failed tasks. This is set to true\n+ *                          for system and time metrics like serialization time or bytes spilled,\n+ *                          and false for things with absolute values like number of input rows.\n+ *                          This should be used for internal metrics only.\n+\n+ * @param dataProperty Data property accumulators will only have values added once for each"
+  }],
+  "prId": 11105
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "If we can know we are re-computing tasks at executor side, then we can ignore the accumulator values at executor side, and don't need to track the RDD id, shuffle id, and partition id at driver side right?\n",
+    "commit": "59db4af635fd53e2723d187b60dee6856af74df4",
+    "createdAt": "2016-05-03T04:33:45Z",
+    "diffHunk": "@@ -21,33 +21,77 @@ import java.{lang => jl}\n import java.io.ObjectInputStream\n import java.util.concurrent.ConcurrentHashMap\n import java.util.concurrent.atomic.AtomicLong\n+import javax.annotation.concurrent.GuardedBy\n+\n+import scala.collection.mutable\n \n import org.apache.spark.scheduler.AccumulableInfo\n import org.apache.spark.util.Utils\n \n-\n+/**\n+ * Metadata for the Accumulator\n+ *\n+ *\n+ * @param countFailedValues whether to accumulate values from failed tasks. This is set to true\n+ *                          for system and time metrics like serialization time or bytes spilled,\n+ *                          and false for things with absolute values like number of input rows.\n+ *                          This should be used for internal metrics only.\n+\n+ * @param dataProperty Data property accumulators will only have values added once for each\n+ *                     RDD/Partition/Shuffle combination. This prevents double counting on\n+ *                     reevaluation. Partial evaluation of a partition will not increment a data\n+ *                     property accumulator. Data property accumulators are currently experimental\n+ *                     and the behaviour may change in future versions.\n+ *\n+ */\n private[spark] case class AccumulatorMetadata(\n     id: Long,\n     name: Option[String],\n-    countFailedValues: Boolean) extends Serializable\n+    countFailedValues: Boolean,\n+    dataProperty: Boolean) extends Serializable\n \n \n /**\n  * The base class for accumulators, that can accumulate inputs of type `IN`, and produce output of\n  * type `OUT`.\n  */\n-abstract class AccumulatorV2[IN, OUT] extends Serializable {\n+abstract class AccumulatorV2[@specialized(Int, Long, Double) IN, OUT] extends Serializable {\n   private[spark] var metadata: AccumulatorMetadata = _\n-  private[this] var atDriverSide = true\n+  private[spark] var atDriverSide = true\n+\n+  /**\n+   * The following values are used for data property [[AccumulatorV2]]s.\n+   * Data property [[AccumulatorV2]]s have only-once semantics. These semantics are implemented\n+   * by keeping track of which RDD id, shuffle id, and partition id the current function is"
+  }, {
+    "author": {
+      "login": "holdenk"
+    },
+    "body": "So that isn't the only case where this would happen, if we have a shared parent etc.\n",
+    "commit": "59db4af635fd53e2723d187b60dee6856af74df4",
+    "createdAt": "2016-05-03T05:03:13Z",
+    "diffHunk": "@@ -21,33 +21,77 @@ import java.{lang => jl}\n import java.io.ObjectInputStream\n import java.util.concurrent.ConcurrentHashMap\n import java.util.concurrent.atomic.AtomicLong\n+import javax.annotation.concurrent.GuardedBy\n+\n+import scala.collection.mutable\n \n import org.apache.spark.scheduler.AccumulableInfo\n import org.apache.spark.util.Utils\n \n-\n+/**\n+ * Metadata for the Accumulator\n+ *\n+ *\n+ * @param countFailedValues whether to accumulate values from failed tasks. This is set to true\n+ *                          for system and time metrics like serialization time or bytes spilled,\n+ *                          and false for things with absolute values like number of input rows.\n+ *                          This should be used for internal metrics only.\n+\n+ * @param dataProperty Data property accumulators will only have values added once for each\n+ *                     RDD/Partition/Shuffle combination. This prevents double counting on\n+ *                     reevaluation. Partial evaluation of a partition will not increment a data\n+ *                     property accumulator. Data property accumulators are currently experimental\n+ *                     and the behaviour may change in future versions.\n+ *\n+ */\n private[spark] case class AccumulatorMetadata(\n     id: Long,\n     name: Option[String],\n-    countFailedValues: Boolean) extends Serializable\n+    countFailedValues: Boolean,\n+    dataProperty: Boolean) extends Serializable\n \n \n /**\n  * The base class for accumulators, that can accumulate inputs of type `IN`, and produce output of\n  * type `OUT`.\n  */\n-abstract class AccumulatorV2[IN, OUT] extends Serializable {\n+abstract class AccumulatorV2[@specialized(Int, Long, Double) IN, OUT] extends Serializable {\n   private[spark] var metadata: AccumulatorMetadata = _\n-  private[this] var atDriverSide = true\n+  private[spark] var atDriverSide = true\n+\n+  /**\n+   * The following values are used for data property [[AccumulatorV2]]s.\n+   * Data property [[AccumulatorV2]]s have only-once semantics. These semantics are implemented\n+   * by keeping track of which RDD id, shuffle id, and partition id the current function is"
+  }],
+  "prId": 11105
+}]

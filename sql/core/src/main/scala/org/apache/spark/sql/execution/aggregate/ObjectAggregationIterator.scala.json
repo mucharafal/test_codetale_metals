@@ -1,0 +1,88 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "why it's `var` instead of `val`?",
+    "commit": "28ea0f9e9fefe7a23ab43843286812a68e9fa7b9",
+    "createdAt": "2019-03-20T08:55:19Z",
+    "diffHunk": "@@ -59,17 +59,21 @@ class ObjectAggregationIterator(\n   private[this] var aggBufferIterator: Iterator[AggregationBufferEntry] = _\n \n   // Hacking the aggregation mode to call AggregateFunction.merge to merge two aggregation buffers\n-  private val mergeAggregationBuffers: (InternalRow, InternalRow) => Unit = {\n+  var (sortBasedAggExpressions, sortBasedAggFunctions): ("
+  }, {
+    "author": {
+      "login": "pgandhi999"
+    },
+    "body": "Changed it to val",
+    "commit": "28ea0f9e9fefe7a23ab43843286812a68e9fa7b9",
+    "createdAt": "2019-03-21T16:26:30Z",
+    "diffHunk": "@@ -59,17 +59,21 @@ class ObjectAggregationIterator(\n   private[this] var aggBufferIterator: Iterator[AggregationBufferEntry] = _\n \n   // Hacking the aggregation mode to call AggregateFunction.merge to merge two aggregation buffers\n-  private val mergeAggregationBuffers: (InternalRow, InternalRow) => Unit = {\n+  var (sortBasedAggExpressions, sortBasedAggFunctions): ("
+  }],
+  "prId": 24149
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "4 space indentation here.",
+    "commit": "28ea0f9e9fefe7a23ab43843286812a68e9fa7b9",
+    "createdAt": "2019-03-20T08:58:33Z",
+    "diffHunk": "@@ -106,26 +110,28 @@ class ObjectAggregationIterator(\n   //\n   //  - when creating aggregation buffer for a new group in the hash map, and\n   //  - when creating the re-used buffer for sort-based aggregation\n-  private def createNewAggregationBuffer(): SpecificInternalRow = {\n-    val bufferFieldTypes = aggregateFunctions.flatMap(_.aggBufferAttributes.map(_.dataType))\n+  private def createNewAggregationBuffer(\n+    functions: Array[AggregateFunction]): SpecificInternalRow = {"
+  }, {
+    "author": {
+      "login": "pgandhi999"
+    },
+    "body": "Done",
+    "commit": "28ea0f9e9fefe7a23ab43843286812a68e9fa7b9",
+    "createdAt": "2019-03-21T16:26:36Z",
+    "diffHunk": "@@ -106,26 +110,28 @@ class ObjectAggregationIterator(\n   //\n   //  - when creating aggregation buffer for a new group in the hash map, and\n   //  - when creating the re-used buffer for sort-based aggregation\n-  private def createNewAggregationBuffer(): SpecificInternalRow = {\n-    val bufferFieldTypes = aggregateFunctions.flatMap(_.aggBufferAttributes.map(_.dataType))\n+  private def createNewAggregationBuffer(\n+    functions: Array[AggregateFunction]): SpecificInternalRow = {"
+  }],
+  "prId": 24149
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "it's only called once, let's inline it",
+    "commit": "28ea0f9e9fefe7a23ab43843286812a68e9fa7b9",
+    "createdAt": "2019-03-20T08:59:07Z",
+    "diffHunk": "@@ -106,26 +110,28 @@ class ObjectAggregationIterator(\n   //\n   //  - when creating aggregation buffer for a new group in the hash map, and\n   //  - when creating the re-used buffer for sort-based aggregation\n-  private def createNewAggregationBuffer(): SpecificInternalRow = {\n-    val bufferFieldTypes = aggregateFunctions.flatMap(_.aggBufferAttributes.map(_.dataType))\n+  private def createNewAggregationBuffer(\n+    functions: Array[AggregateFunction]): SpecificInternalRow = {\n+    val bufferFieldTypes = functions.flatMap(_.aggBufferAttributes.map(_.dataType))\n     val buffer = new SpecificInternalRow(bufferFieldTypes)\n-    initAggregationBuffer(buffer)\n+    initAggregationBuffer(buffer, functions)\n     buffer\n   }\n \n-  private def initAggregationBuffer(buffer: SpecificInternalRow): Unit = {\n+  private def initAggregationBuffer("
+  }, {
+    "author": {
+      "login": "pgandhi999"
+    },
+    "body": "Done",
+    "commit": "28ea0f9e9fefe7a23ab43843286812a68e9fa7b9",
+    "createdAt": "2019-03-21T16:26:43Z",
+    "diffHunk": "@@ -106,26 +110,28 @@ class ObjectAggregationIterator(\n   //\n   //  - when creating aggregation buffer for a new group in the hash map, and\n   //  - when creating the re-used buffer for sort-based aggregation\n-  private def createNewAggregationBuffer(): SpecificInternalRow = {\n-    val bufferFieldTypes = aggregateFunctions.flatMap(_.aggBufferAttributes.map(_.dataType))\n+  private def createNewAggregationBuffer(\n+    functions: Array[AggregateFunction]): SpecificInternalRow = {\n+    val bufferFieldTypes = functions.flatMap(_.aggBufferAttributes.map(_.dataType))\n     val buffer = new SpecificInternalRow(bufferFieldTypes)\n-    initAggregationBuffer(buffer)\n+    initAggregationBuffer(buffer, functions)\n     buffer\n   }\n \n-  private def initAggregationBuffer(buffer: SpecificInternalRow): Unit = {\n+  private def initAggregationBuffer("
+  }],
+  "prId": 24149
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "I think the data flow is\r\n1. start with hash agg, create and initialize an empty buffer for each group key, and consume input records by calling `update`\r\n2. fallback to sort based agg\r\n3. create and initialize an empty buffer for current group key, and consume input records by calling `update`.\r\n4. when all the input records for current group key are consumed up, call `merge` to merge the agg buffer that is generated by hash agg.\r\n\r\nThis data flow is fine most of the time, but is problematic for hive UDAF, because it doesn't support INIT -> UPDATE -> MERGE -> FINISH.\r\n\r\nThat said, this patch may cause perf regression for normal UDAFs. We should only do it for hive UDAF, to switch from `INIT -> UPDATE -> MERGE -> FINISH` to `INIT -> UPDATE -> FINISH, INIT -> MERGE -> FINISH`",
+    "commit": "28ea0f9e9fefe7a23ab43843286812a68e9fa7b9",
+    "createdAt": "2019-04-23T15:08:21Z",
+    "diffHunk": "@@ -258,21 +275,29 @@ class SortBasedAggregator(\n         if (hasNextInput || hasNextAggBuffer) {\n           // Find smaller key of the initialAggBufferIterator and initialAggBufferIterator\n           groupingKey = findGroupingKey()\n-          result = new AggregationBufferEntry(groupingKey, makeEmptyAggregationBuffer)\n+          updateResult = new AggregationBufferEntry(\n+            groupingKey, makeEmptyAggregationBufferForSortBasedUpdateAggFunctions)\n+          finalResult = new AggregationBufferEntry(\n+            groupingKey, makeEmptyAggregationBufferForSortBasedMergeAggFunctions)\n \n           // Firstly, update the aggregation buffer with input rows.\n           while (hasNextInput &&\n             groupingKeyOrdering.compare(inputIterator.getKey, groupingKey) == 0) {\n-            processRow(result.aggregationBuffer, inputIterator.getValue)\n+            processRow(updateResult.aggregationBuffer, inputIterator.getValue)\n             hasNextInput = inputIterator.next()\n           }\n \n+          // This step ensures that the contents of the updateResult aggregation buffer are\n+          // merged with the finalResult aggregation buffer to maintain consistency\n+          serializeBuffer(updateResult.aggregationBuffer)\n+          mergeAggregationBuffers(finalResult.aggregationBuffer, updateResult.aggregationBuffer)\n           // Secondly, merge the aggregation buffer with existing aggregation buffers.\n           // NOTE: the ordering of these two while-block matter, mergeAggregationBuffer() should\n           // be called after calling processRow.\n           while (hasNextAggBuffer &&\n             groupingKeyOrdering.compare(initialAggBufferIterator.getKey, groupingKey) == 0) {"
+  }, {
+    "author": {
+      "login": "m44444"
+    },
+    "body": "Hi @cloud-fan, what you said here is really killing! With Spark 2.4.1 by turning this conf off I see the DataSketches hll issue being solved: `--conf spark.sql.execution.useObjectHashAggregateExec=false`. Which basically disable the hash agg attempt. But as you said, this is downgrading the general performance (not so bad when people have a sense about how big their data is).\r\nHowever my question is, is it possible that it can be automatically done for the framework to recognize Hive UDAF and only apply its way to it? e.g. For such a query `select year, count(month), hive_udaf_count(month) from ... group by year` run by spark-sql, I want the Spark count() to behave as the way INIT -> UPDATE -> MERGE -> FINISH, while the hive_udaf_count() to behave as the way INIT -> UPDATE -> FINISH, INIT -> MERGE -> FINISH **at the same time**.",
+    "commit": "28ea0f9e9fefe7a23ab43843286812a68e9fa7b9",
+    "createdAt": "2019-04-23T23:58:47Z",
+    "diffHunk": "@@ -258,21 +275,29 @@ class SortBasedAggregator(\n         if (hasNextInput || hasNextAggBuffer) {\n           // Find smaller key of the initialAggBufferIterator and initialAggBufferIterator\n           groupingKey = findGroupingKey()\n-          result = new AggregationBufferEntry(groupingKey, makeEmptyAggregationBuffer)\n+          updateResult = new AggregationBufferEntry(\n+            groupingKey, makeEmptyAggregationBufferForSortBasedUpdateAggFunctions)\n+          finalResult = new AggregationBufferEntry(\n+            groupingKey, makeEmptyAggregationBufferForSortBasedMergeAggFunctions)\n \n           // Firstly, update the aggregation buffer with input rows.\n           while (hasNextInput &&\n             groupingKeyOrdering.compare(inputIterator.getKey, groupingKey) == 0) {\n-            processRow(result.aggregationBuffer, inputIterator.getValue)\n+            processRow(updateResult.aggregationBuffer, inputIterator.getValue)\n             hasNextInput = inputIterator.next()\n           }\n \n+          // This step ensures that the contents of the updateResult aggregation buffer are\n+          // merged with the finalResult aggregation buffer to maintain consistency\n+          serializeBuffer(updateResult.aggregationBuffer)\n+          mergeAggregationBuffers(finalResult.aggregationBuffer, updateResult.aggregationBuffer)\n           // Secondly, merge the aggregation buffer with existing aggregation buffers.\n           // NOTE: the ordering of these two while-block matter, mergeAggregationBuffer() should\n           // be called after calling processRow.\n           while (hasNextAggBuffer &&\n             groupingKeyOrdering.compare(initialAggBufferIterator.getKey, groupingKey) == 0) {"
+  }],
+  "prId": 24149
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "I think this comment should be put before\r\n```\r\nval newExpressions = aggregateExpressions.map {\r\n      case agg @ AggregateExpression(_, Partial, _, _) =>\r\n        agg.copy(mode = PartialMerge)\r\n      case agg @ AggregateExpression(_, Complete, _, _) =>\r\n        agg.copy(mode = Final)\r\n      case other => other\r\n    }\r\n```",
+    "commit": "28ea0f9e9fefe7a23ab43843286812a68e9fa7b9",
+    "createdAt": "2019-05-07T16:50:34Z",
+    "diffHunk": "@@ -58,18 +58,23 @@ class ObjectAggregationIterator(\n \n   private[this] var aggBufferIterator: Iterator[AggregationBufferEntry] = _\n \n-  // Hacking the aggregation mode to call AggregateFunction.merge to merge two aggregation buffers\n-  private val mergeAggregationBuffers: (InternalRow, InternalRow) => Unit = {\n+  val (sortBasedMergeAggExpressions, sortBasedMergeAggFunctions): (\n+    Seq[AggregateExpression], Array[AggregateFunction]) = {\n     val newExpressions = aggregateExpressions.map {\n       case agg @ AggregateExpression(_, Partial, _, _) =>\n         agg.copy(mode = PartialMerge)\n       case agg @ AggregateExpression(_, Complete, _, _) =>\n         agg.copy(mode = Final)\n       case other => other\n     }\n-    val newFunctions = initializeAggregateFunctions(newExpressions, 0)\n-    val newInputAttributes = newFunctions.flatMap(_.inputAggBufferAttributes)\n-    generateProcessRow(newExpressions, newFunctions, newInputAttributes)\n+    (newExpressions, initializeAggregateFunctions(newExpressions, 0))\n+  }\n+\n+  // Hacking the aggregation mode to call AggregateFunction.merge to merge two aggregation buffers"
+  }],
+  "prId": 24149
+}]

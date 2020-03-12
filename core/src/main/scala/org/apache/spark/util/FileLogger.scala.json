@@ -1,0 +1,107 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "tgravescs"
+    },
+    "body": "FileSystem has a function to give you the default filesystem without you have to look at the configs directly:\n\npublic static URI getDefaultUri(Configuration conf)\n",
+    "commit": "592cdb3d711295465dd1822bd80b580a33f29c28",
+    "createdAt": "2014-04-21T16:16:09Z",
+    "diffHunk": "@@ -86,10 +88,17 @@ private[spark] class FileLogger(\n     val logPath = logDir + \"/\" + fileName\n     val uri = new URI(logPath)\n \n+    val defaultFs = new URI(hadoopConfiguration.get(FileSystem.FS_DEFAULT_NAME_KEY,"
+  }],
+  "prId": 450
+}, {
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "Is there a case where the scheme is `file` but the default is not local? That is, if `file` always implies local then we can combine these two cases.\n",
+    "commit": "592cdb3d711295465dd1822bd80b580a33f29c28",
+    "createdAt": "2014-04-22T21:55:42Z",
+    "diffHunk": "@@ -86,10 +88,16 @@ private[spark] class FileLogger(\n     val logPath = logDir + \"/\" + fileName\n     val uri = new URI(logPath)\n \n+    val defaultFs = FileSystem.getDefaultUri(hadoopConfiguration).getScheme;\n+    val isDefaultLocal = (defaultFs == null || \"file\".equals(defaultFs))\n+\n     /* The Hadoop LocalFileSystem (r1.0.4) has known issues with syncing (HADOOP-7844).\n      * Therefore, for local files, use FileOutputStream instead. */\n     val dstream = uri.getScheme match {\n-      case \"file\" | null =>\n+      case null if isDefaultLocal =>\n+        new FileOutputStream(uri.getPath, !overwrite)\n+\n+      case \"file\" =>"
+  }, {
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Good point. That should work too.\n",
+    "commit": "592cdb3d711295465dd1822bd80b580a33f29c28",
+    "createdAt": "2014-04-22T21:58:08Z",
+    "diffHunk": "@@ -86,10 +88,16 @@ private[spark] class FileLogger(\n     val logPath = logDir + \"/\" + fileName\n     val uri = new URI(logPath)\n \n+    val defaultFs = FileSystem.getDefaultUri(hadoopConfiguration).getScheme;\n+    val isDefaultLocal = (defaultFs == null || \"file\".equals(defaultFs))\n+\n     /* The Hadoop LocalFileSystem (r1.0.4) has known issues with syncing (HADOOP-7844).\n      * Therefore, for local files, use FileOutputStream instead. */\n     val dstream = uri.getScheme match {\n-      case \"file\" | null =>\n+      case null if isDefaultLocal =>\n+        new FileOutputStream(uri.getPath, !overwrite)\n+\n+      case \"file\" =>"
+  }],
+  "prId": 450
+}, {
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "nit: remove this new line\n",
+    "commit": "592cdb3d711295465dd1822bd80b580a33f29c28",
+    "createdAt": "2014-04-22T21:57:31Z",
+    "diffHunk": "@@ -86,10 +88,16 @@ private[spark] class FileLogger(\n     val logPath = logDir + \"/\" + fileName\n     val uri = new URI(logPath)\n "
+  }],
+  "prId": 450
+}, {
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "I would probably just call this `isLocal`, and set it to `defaultFs == null || uri.getScheme == \"file\"`. In Scala you can do `==` on strings :)\n\n(Here I'm assuming `defaultFs == \"file\"` is always the same as `uri.getScheme == \"file\"`. Is this true?)\n",
+    "commit": "592cdb3d711295465dd1822bd80b580a33f29c28",
+    "createdAt": "2014-04-22T21:59:52Z",
+    "diffHunk": "@@ -86,10 +88,16 @@ private[spark] class FileLogger(\n     val logPath = logDir + \"/\" + fileName\n     val uri = new URI(logPath)\n \n+    val defaultFs = FileSystem.getDefaultUri(hadoopConfiguration).getScheme;\n+    val isDefaultLocal = (defaultFs == null || \"file\".equals(defaultFs))"
+  }, {
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "and then down below I'd do\n\n```\nval dstream =\n  if (isLocal) {\n    new FileOutputStream(uri.getPath, !overwrite)\n  } else {\n    // do the Hadoop stuff\n  }\n```\n",
+    "commit": "592cdb3d711295465dd1822bd80b580a33f29c28",
+    "createdAt": "2014-04-22T22:02:53Z",
+    "diffHunk": "@@ -86,10 +88,16 @@ private[spark] class FileLogger(\n     val logPath = logDir + \"/\" + fileName\n     val uri = new URI(logPath)\n \n+    val defaultFs = FileSystem.getDefaultUri(hadoopConfiguration).getScheme;\n+    val isDefaultLocal = (defaultFs == null || \"file\".equals(defaultFs))"
+  }, {
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "That check wouldn't cover all cases. It would need to be:\n\n  ((defaultFs == null || defaultFs == \"file\") && uri.getScheme == null)) || uri.getScheme == \"file\"\n\n(Which, btw, is the same check the pattern matcher is doing.) At that point I think the current code is more readable.\n",
+    "commit": "592cdb3d711295465dd1822bd80b580a33f29c28",
+    "createdAt": "2014-04-22T22:11:06Z",
+    "diffHunk": "@@ -86,10 +88,16 @@ private[spark] class FileLogger(\n     val logPath = logDir + \"/\" + fileName\n     val uri = new URI(logPath)\n \n+    val defaultFs = FileSystem.getDefaultUri(hadoopConfiguration).getScheme;\n+    val isDefaultLocal = (defaultFs == null || \"file\".equals(defaultFs))"
+  }],
+  "prId": 450
+}, {
+  "comments": [{
+    "author": {
+      "login": "pwendell"
+    },
+    "body": "semi colon...\n",
+    "commit": "592cdb3d711295465dd1822bd80b580a33f29c28",
+    "createdAt": "2014-04-22T22:15:35Z",
+    "diffHunk": "@@ -85,11 +87,13 @@ private[spark] class FileLogger(\n   private def createWriter(fileName: String): PrintWriter = {\n     val logPath = logDir + \"/\" + fileName\n     val uri = new URI(logPath)\n+    val defaultFs = FileSystem.getDefaultUri(hadoopConfiguration).getScheme;"
+  }, {
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Old habits die hard (and scalac not complaining does not help).\n",
+    "commit": "592cdb3d711295465dd1822bd80b580a33f29c28",
+    "createdAt": "2014-04-22T22:16:53Z",
+    "diffHunk": "@@ -85,11 +87,13 @@ private[spark] class FileLogger(\n   private def createWriter(fileName: String): PrintWriter = {\n     val logPath = logDir + \"/\" + fileName\n     val uri = new URI(logPath)\n+    val defaultFs = FileSystem.getDefaultUri(hadoopConfiguration).getScheme;"
+  }, {
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "ha, good catch\n",
+    "commit": "592cdb3d711295465dd1822bd80b580a33f29c28",
+    "createdAt": "2014-04-22T22:48:09Z",
+    "diffHunk": "@@ -85,11 +87,13 @@ private[spark] class FileLogger(\n   private def createWriter(fileName: String): PrintWriter = {\n     val logPath = logDir + \"/\" + fileName\n     val uri = new URI(logPath)\n+    val defaultFs = FileSystem.getDefaultUri(hadoopConfiguration).getScheme;"
+  }],
+  "prId": 450
+}, {
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "Actually, this is incorrect I think. If the default is not local, but the user specifies `file://` then this will use the next case and fail silently because of sync issues.\n\nBy the way the logic is a little obfuscated to me right now. Since we only match on 2 cases here, I think it's more straightforward to write it out with `if-else`.\n",
+    "commit": "592cdb3d711295465dd1822bd80b580a33f29c28",
+    "createdAt": "2014-04-22T22:56:00Z",
+    "diffHunk": "@@ -85,11 +87,13 @@ private[spark] class FileLogger(\n   private def createWriter(fileName: String): PrintWriter = {\n     val logPath = logDir + \"/\" + fileName\n     val uri = new URI(logPath)\n+    val defaultFs = FileSystem.getDefaultUri(hadoopConfiguration).getScheme\n+    val isDefaultLocal = (defaultFs == null || \"file\".equals(defaultFs))\n \n     /* The Hadoop LocalFileSystem (r1.0.4) has known issues with syncing (HADOOP-7844).\n      * Therefore, for local files, use FileOutputStream instead. */\n     val dstream = uri.getScheme match {\n-      case \"file\" | null =>\n+      case null | \"file\" if isDefaultLocal =>"
+  }],
+  "prId": 450
+}]

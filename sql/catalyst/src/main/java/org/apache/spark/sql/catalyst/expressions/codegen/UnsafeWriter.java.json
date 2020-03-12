@@ -1,0 +1,36 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "This looks pretty weird. At the first glance I'm wondering why we don't have `setBoolean/Float/Double`, then I realized we don't need to, because we just need a way to set null for 1/2/4/8 bytes.\r\n\r\nmaybe it's better to name them `setNull1/2/4/8Bytes`, and ask the `UnsafeArrayWriter` to follow",
+    "commit": "3197d7f55a01c505f9a8500d39660b9bcdda3ae3",
+    "createdAt": "2018-03-14T19:38:14Z",
+    "diffHunk": "@@ -0,0 +1,43 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+package org.apache.spark.sql.catalyst.expressions.codegen;\n+\n+import org.apache.spark.sql.types.Decimal;\n+import org.apache.spark.unsafe.types.CalendarInterval;\n+import org.apache.spark.unsafe.types.UTF8String;\n+\n+/**\n+ * Base class for writing Unsafe* structures.\n+ */\n+public abstract class UnsafeWriter {\n+  public abstract void setNullByte(int ordinal);"
+  }, {
+    "author": {
+      "login": "hvanhovell"
+    },
+    "body": "See my previous discussion with @mgaido91. I am fine either way, I can also add the missing methods an be done with it, that will just make the interpreted code path a bit messier.",
+    "commit": "3197d7f55a01c505f9a8500d39660b9bcdda3ae3",
+    "createdAt": "2018-03-14T19:44:03Z",
+    "diffHunk": "@@ -0,0 +1,43 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+package org.apache.spark.sql.catalyst.expressions.codegen;\n+\n+import org.apache.spark.sql.types.Decimal;\n+import org.apache.spark.unsafe.types.CalendarInterval;\n+import org.apache.spark.unsafe.types.UTF8String;\n+\n+/**\n+ * Base class for writing Unsafe* structures.\n+ */\n+public abstract class UnsafeWriter {\n+  public abstract void setNullByte(int ordinal);"
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "I feel `setNull1/2/4/8Bytes` is better. It's also easy to codegen, just `setNull${dt.defaultSize}Bytes`.",
+    "commit": "3197d7f55a01c505f9a8500d39660b9bcdda3ae3",
+    "createdAt": "2018-03-14T20:51:17Z",
+    "diffHunk": "@@ -0,0 +1,43 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+package org.apache.spark.sql.catalyst.expressions.codegen;\n+\n+import org.apache.spark.sql.types.Decimal;\n+import org.apache.spark.unsafe.types.CalendarInterval;\n+import org.apache.spark.unsafe.types.UTF8String;\n+\n+/**\n+ * Base class for writing Unsafe* structures.\n+ */\n+public abstract class UnsafeWriter {\n+  public abstract void setNullByte(int ordinal);"
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "Actually this was my mistake... I thought `Platform.setInt(0)` is different from `Platform.setFloat(0.0f)`, and that's why I introduced a `setNull` method for each primitive type.",
+    "commit": "3197d7f55a01c505f9a8500d39660b9bcdda3ae3",
+    "createdAt": "2018-03-14T20:53:11Z",
+    "diffHunk": "@@ -0,0 +1,43 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+package org.apache.spark.sql.catalyst.expressions.codegen;\n+\n+import org.apache.spark.sql.types.Decimal;\n+import org.apache.spark.unsafe.types.CalendarInterval;\n+import org.apache.spark.unsafe.types.UTF8String;\n+\n+/**\n+ * Base class for writing Unsafe* structures.\n+ */\n+public abstract class UnsafeWriter {\n+  public abstract void setNullByte(int ordinal);"
+  }],
+  "prId": 20750
+}]

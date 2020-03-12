@@ -1,0 +1,39 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "This is a blocking call.  From a high-performance HTTP server standpoint, this is probably a bad idea; it might improve throughput to handle this in some sort of future / continuation so that we don't starve the request handling threadpool while waiting on a remote RPC.  On the other hand, I don't think that we should over-engineer things right now; we can always move towards a fancier request handling strategy if we discover that we need it.\n",
+    "commit": "3c21a5dcd7be7ad648d9e17b6643a72404cf34a4",
+    "createdAt": "2014-10-29T06:09:28Z",
+    "diffHunk": "@@ -0,0 +1,71 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.ui.exec\n+\n+import javax.servlet.http.HttpServletRequest\n+\n+import scala.util.Try\n+import scala.xml.{Text, Node}\n+\n+import org.apache.spark.ui.{UIUtils, WebUIPage}\n+\n+class ThreadDumpPage(parent: ExecutorsTab) extends WebUIPage(\"threadDump\") {\n+\n+  private val sc = parent.sc\n+\n+  def render(request: HttpServletRequest): Seq[Node] = {\n+    val executorId = Option(request.getParameter(\"executorId\")).getOrElse {\n+      return Text(s\"Missing executorId parameter\")\n+    }\n+    val time = System.currentTimeMillis()\n+    val maybeThreadDump = Try(sc.get.getExecutorThreadDump(executorId))"
+  }, {
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "Do we want to log some exception or warning if this fails?\n",
+    "commit": "3c21a5dcd7be7ad648d9e17b6643a72404cf34a4",
+    "createdAt": "2014-11-03T19:53:05Z",
+    "diffHunk": "@@ -0,0 +1,71 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.ui.exec\n+\n+import javax.servlet.http.HttpServletRequest\n+\n+import scala.util.Try\n+import scala.xml.{Text, Node}\n+\n+import org.apache.spark.ui.{UIUtils, WebUIPage}\n+\n+class ThreadDumpPage(parent: ExecutorsTab) extends WebUIPage(\"threadDump\") {\n+\n+  private val sc = parent.sc\n+\n+  def render(request: HttpServletRequest): Seq[Node] = {\n+    val executorId = Option(request.getParameter(\"executorId\")).getOrElse {\n+      return Text(s\"Missing executorId parameter\")\n+    }\n+    val time = System.currentTimeMillis()\n+    val maybeThreadDump = Try(sc.get.getExecutorThreadDump(executorId))"
+  }],
+  "prId": 2944
+}, {
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "This needs to be `private[spark]` or even `private[ui]`\n",
+    "commit": "3c21a5dcd7be7ad648d9e17b6643a72404cf34a4",
+    "createdAt": "2014-11-03T19:51:51Z",
+    "diffHunk": "@@ -0,0 +1,71 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.ui.exec\n+\n+import javax.servlet.http.HttpServletRequest\n+\n+import scala.util.Try\n+import scala.xml.{Text, Node}\n+\n+import org.apache.spark.ui.{UIUtils, WebUIPage}\n+\n+class ThreadDumpPage(parent: ExecutorsTab) extends WebUIPage(\"threadDump\") {"
+  }, {
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "Also, maybe we should call this `ExecutorThreadDumpPage` to be more explicit\n",
+    "commit": "3c21a5dcd7be7ad648d9e17b6643a72404cf34a4",
+    "createdAt": "2014-11-03T19:52:06Z",
+    "diffHunk": "@@ -0,0 +1,71 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.ui.exec\n+\n+import javax.servlet.http.HttpServletRequest\n+\n+import scala.util.Try\n+import scala.xml.{Text, Node}\n+\n+import org.apache.spark.ui.{UIUtils, WebUIPage}\n+\n+class ThreadDumpPage(parent: ExecutorsTab) extends WebUIPage(\"threadDump\") {"
+  }],
+  "prId": 2944
+}]

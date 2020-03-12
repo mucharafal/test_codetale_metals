@@ -1,0 +1,58 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "squito"
+    },
+    "body": "hmm, ok maybe take back my previous comment about thinking pinned mode is OK.  This sounds like a major problem.  Long-running job-server style deployments seem like cases where you'd want the advantage of this feature, but also where not having proper GC would be a huge problem.\r\n\r\nHave you had a chance to look at this anymore, or ask the py4j community about it?",
+    "commit": "9e2d83277635b02cc03f35502294892dc7d8a3d2",
+    "createdAt": "2019-10-01T00:49:56Z",
+    "diffHunk": "@@ -28,6 +29,11 @@\n \n class JavaWrapperMemoryTests(SparkSessionTestCase):\n \n+    @unittest.skipIf(\n+        os.environ.get(\"PYSPARK_PIN_THREAD\", \"false\").lower() == \"true\",\n+        \"When the thread is pinned between Python and JVM, detaching seems not \"\n+        \"working. This is potentially a bug in Py4J and SPARK-18630 can be persistent when \"\n+        \"PYSPARK_PIN_THREAD is enabled, skipping for now.\")"
+  }, {
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "Not yet. I think it might be a bug at `gateway.detach(java_obj)`. From my reading, it happens when the Java instance is copied via Py4J, which seems happening in ML; however, I don't think we don't do it often in other components. So I suspected the affected scope might be smaller than I think.\r\n\r\nAnyway, I will have to double check the test and check along with Py4J community soon .. ",
+    "commit": "9e2d83277635b02cc03f35502294892dc7d8a3d2",
+    "createdAt": "2019-10-02T01:42:44Z",
+    "diffHunk": "@@ -28,6 +29,11 @@\n \n class JavaWrapperMemoryTests(SparkSessionTestCase):\n \n+    @unittest.skipIf(\n+        os.environ.get(\"PYSPARK_PIN_THREAD\", \"false\").lower() == \"true\",\n+        \"When the thread is pinned between Python and JVM, detaching seems not \"\n+        \"working. This is potentially a bug in Py4J and SPARK-18630 can be persistent when \"\n+        \"PYSPARK_PIN_THREAD is enabled, skipping for now.\")"
+  }, {
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "@squito, sorry for my late update. It seems passing when I added some sleeps. Seems it just needed some delays to avoid flakiness. I fixed the tests.",
+    "commit": "9e2d83277635b02cc03f35502294892dc7d8a3d2",
+    "createdAt": "2019-10-22T13:22:49Z",
+    "diffHunk": "@@ -28,6 +29,11 @@\n \n class JavaWrapperMemoryTests(SparkSessionTestCase):\n \n+    @unittest.skipIf(\n+        os.environ.get(\"PYSPARK_PIN_THREAD\", \"false\").lower() == \"true\",\n+        \"When the thread is pinned between Python and JVM, detaching seems not \"\n+        \"working. This is potentially a bug in Py4J and SPARK-18630 can be persistent when \"\n+        \"PYSPARK_PIN_THREAD is enabled, skipping for now.\")"
+  }],
+  "prId": 24898
+}, {
+  "comments": [{
+    "author": {
+      "login": "WeichenXu123"
+    },
+    "body": "So the old test here is flaky because of without sleep for a while and then test ?",
+    "commit": "9e2d83277635b02cc03f35502294892dc7d8a3d2",
+    "createdAt": "2019-10-23T13:47:13Z",
+    "diffHunk": "@@ -50,19 +51,27 @@ def test_java_object_gets_detached(self):\n \n         model.__del__()\n \n-        with self.assertRaisesRegexp(py4j.protocol.Py4JError, error_no_object):\n-            model._java_obj.toString()\n-        self.assertIn(\"LinearRegressionTrainingSummary\", summary._java_obj.toString())\n+        def condition():\n+            with self.assertRaisesRegexp(py4j.protocol.Py4JError, error_no_object):\n+                model._java_obj.toString()\n+            self.assertIn(\"LinearRegressionTrainingSummary\", summary._java_obj.toString())\n+            return True\n+\n+        eventually(condition, timeout=10, catch_assertions=True)\n \n         try:\n             summary.__del__()\n         except:\n             pass\n \n-        with self.assertRaisesRegexp(py4j.protocol.Py4JError, error_no_object):\n-            model._java_obj.toString()\n-        with self.assertRaisesRegexp(py4j.protocol.Py4JError, error_no_object):\n-            summary._java_obj.toString()\n+        def condition():\n+            with self.assertRaisesRegexp(py4j.protocol.Py4JError, error_no_object):\n+                model._java_obj.toString()\n+            with self.assertRaisesRegexp(py4j.protocol.Py4JError, error_no_object):\n+                summary._java_obj.toString()\n+            return True\n+\n+        eventually(condition, timeout=10, catch_assertions=True)",
+    "line": 39
+  }, {
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "Yeah, I just needed to wait a bit until it detaches. I don't know the root cause but I guess it's fine since at least it's not the leak case.",
+    "commit": "9e2d83277635b02cc03f35502294892dc7d8a3d2",
+    "createdAt": "2019-10-23T14:36:28Z",
+    "diffHunk": "@@ -50,19 +51,27 @@ def test_java_object_gets_detached(self):\n \n         model.__del__()\n \n-        with self.assertRaisesRegexp(py4j.protocol.Py4JError, error_no_object):\n-            model._java_obj.toString()\n-        self.assertIn(\"LinearRegressionTrainingSummary\", summary._java_obj.toString())\n+        def condition():\n+            with self.assertRaisesRegexp(py4j.protocol.Py4JError, error_no_object):\n+                model._java_obj.toString()\n+            self.assertIn(\"LinearRegressionTrainingSummary\", summary._java_obj.toString())\n+            return True\n+\n+        eventually(condition, timeout=10, catch_assertions=True)\n \n         try:\n             summary.__del__()\n         except:\n             pass\n \n-        with self.assertRaisesRegexp(py4j.protocol.Py4JError, error_no_object):\n-            model._java_obj.toString()\n-        with self.assertRaisesRegexp(py4j.protocol.Py4JError, error_no_object):\n-            summary._java_obj.toString()\n+        def condition():\n+            with self.assertRaisesRegexp(py4j.protocol.Py4JError, error_no_object):\n+                model._java_obj.toString()\n+            with self.assertRaisesRegexp(py4j.protocol.Py4JError, error_no_object):\n+                summary._java_obj.toString()\n+            return True\n+\n+        eventually(condition, timeout=10, catch_assertions=True)",
+    "line": 39
+  }, {
+    "author": {
+      "login": "WeichenXu123"
+    },
+    "body": "Nice!",
+    "commit": "9e2d83277635b02cc03f35502294892dc7d8a3d2",
+    "createdAt": "2019-10-24T03:01:57Z",
+    "diffHunk": "@@ -50,19 +51,27 @@ def test_java_object_gets_detached(self):\n \n         model.__del__()\n \n-        with self.assertRaisesRegexp(py4j.protocol.Py4JError, error_no_object):\n-            model._java_obj.toString()\n-        self.assertIn(\"LinearRegressionTrainingSummary\", summary._java_obj.toString())\n+        def condition():\n+            with self.assertRaisesRegexp(py4j.protocol.Py4JError, error_no_object):\n+                model._java_obj.toString()\n+            self.assertIn(\"LinearRegressionTrainingSummary\", summary._java_obj.toString())\n+            return True\n+\n+        eventually(condition, timeout=10, catch_assertions=True)\n \n         try:\n             summary.__del__()\n         except:\n             pass\n \n-        with self.assertRaisesRegexp(py4j.protocol.Py4JError, error_no_object):\n-            model._java_obj.toString()\n-        with self.assertRaisesRegexp(py4j.protocol.Py4JError, error_no_object):\n-            summary._java_obj.toString()\n+        def condition():\n+            with self.assertRaisesRegexp(py4j.protocol.Py4JError, error_no_object):\n+                model._java_obj.toString()\n+            with self.assertRaisesRegexp(py4j.protocol.Py4JError, error_no_object):\n+                summary._java_obj.toString()\n+            return True\n+\n+        eventually(condition, timeout=10, catch_assertions=True)",
+    "line": 39
+  }],
+  "prId": 24898
+}]

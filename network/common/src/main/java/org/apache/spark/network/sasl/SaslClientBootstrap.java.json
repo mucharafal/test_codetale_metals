@@ -1,0 +1,31 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "squito"
+    },
+    "body": "rather than setting `saslClient = null` in the `encrypt` block, and then checking for null here, why not just use `if (!encrypt)` here?  If there is not another reason to `saslClient = null`, I think that would be clearer.\n",
+    "commit": "ff019662055edeaf8d709087e0279afa37011353",
+    "createdAt": "2015-04-13T16:23:43Z",
+    "diffHunk": "@@ -62,13 +76,26 @@ public void doBootstrap(TransportClient client) {\n         byte[] response = client.sendRpcSync(buf.array(), conf.saslRTTimeoutMs());\n         payload = saslClient.response(response);\n       }\n+\n+      if (encrypt) {\n+        if (!SparkSaslServer.QOP_AUTH_CONF.equals(saslClient.getNegotiatedProperty(Sasl.QOP))) {\n+          throw new RuntimeException(\n+            new SaslException(\"Encryption requests by negotiated non-encrypted connection.\"));\n+        }\n+        SaslEncryption.addToChannel(channel, saslClient, conf.maxSaslEncryptedBlockSize());\n+        saslClient = null;\n+        logger.debug(\"Channel {} configured for SASL encryption.\", client);\n+      }\n     } finally {\n-      try {\n-        // Once authentication is complete, the server will trust all remaining communication.\n-        saslClient.dispose();\n-      } catch (RuntimeException e) {\n-        logger.error(\"Error while disposing SASL client\", e);\n+      if (saslClient != null) {",
+    "line": 69
+  }, {
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Checking for `encrypt` wouldn't work because we still want to dispose of the client instance when some error is thrown.\n",
+    "commit": "ff019662055edeaf8d709087e0279afa37011353",
+    "createdAt": "2015-04-13T21:45:52Z",
+    "diffHunk": "@@ -62,13 +76,26 @@ public void doBootstrap(TransportClient client) {\n         byte[] response = client.sendRpcSync(buf.array(), conf.saslRTTimeoutMs());\n         payload = saslClient.response(response);\n       }\n+\n+      if (encrypt) {\n+        if (!SparkSaslServer.QOP_AUTH_CONF.equals(saslClient.getNegotiatedProperty(Sasl.QOP))) {\n+          throw new RuntimeException(\n+            new SaslException(\"Encryption requests by negotiated non-encrypted connection.\"));\n+        }\n+        SaslEncryption.addToChannel(channel, saslClient, conf.maxSaslEncryptedBlockSize());\n+        saslClient = null;\n+        logger.debug(\"Channel {} configured for SASL encryption.\", client);\n+      }\n     } finally {\n-      try {\n-        // Once authentication is complete, the server will trust all remaining communication.\n-        saslClient.dispose();\n-      } catch (RuntimeException e) {\n-        logger.error(\"Error while disposing SASL client\", e);\n+      if (saslClient != null) {",
+    "line": 69
+  }, {
+    "author": {
+      "login": "squito"
+    },
+    "body": "oh, sorry, I should have realized that.  thanks\n",
+    "commit": "ff019662055edeaf8d709087e0279afa37011353",
+    "createdAt": "2015-04-14T13:54:17Z",
+    "diffHunk": "@@ -62,13 +76,26 @@ public void doBootstrap(TransportClient client) {\n         byte[] response = client.sendRpcSync(buf.array(), conf.saslRTTimeoutMs());\n         payload = saslClient.response(response);\n       }\n+\n+      if (encrypt) {\n+        if (!SparkSaslServer.QOP_AUTH_CONF.equals(saslClient.getNegotiatedProperty(Sasl.QOP))) {\n+          throw new RuntimeException(\n+            new SaslException(\"Encryption requests by negotiated non-encrypted connection.\"));\n+        }\n+        SaslEncryption.addToChannel(channel, saslClient, conf.maxSaslEncryptedBlockSize());\n+        saslClient = null;\n+        logger.debug(\"Channel {} configured for SASL encryption.\", client);\n+      }\n     } finally {\n-      try {\n-        // Once authentication is complete, the server will trust all remaining communication.\n-        saslClient.dispose();\n-      } catch (RuntimeException e) {\n-        logger.error(\"Error while disposing SASL client\", e);\n+      if (saslClient != null) {",
+    "line": 69
+  }],
+  "prId": 5377
+}]

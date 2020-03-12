@@ -1,0 +1,31 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "beliefer"
+    },
+    "body": "This change looks useful!",
+    "commit": "b98580112b752042d7099e787b6adc4226281652",
+    "createdAt": "2019-02-26T03:21:02Z",
+    "diffHunk": "@@ -37,4 +39,17 @@\n   public static Row create(Object ... values) {\n     return new GenericRow(values);\n   }\n+\n+  /**\n+   * Create a {@link Row} from the given arguments. Provided schema is incorporated into\n+   * created {@link Row} object, and allows getAs(fieldName) to access the value of column.\n+   *\n+   * Note that every Rows will contain the duplicated schema, hence in high volume it is still\n+   * recommended to use `create` with accessing column by position.\n+   *\n+   * @since 3.0.0\n+   */\n+  public static Row createWithSchema(StructType schema, Object ... values) {",
+    "line": 23
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "This is probably OK, but what's the use case?\r\nNit: remove space before `...` and can you use the `@Since` annotation?\r\nAny test at all for it would be great too.",
+    "commit": "b98580112b752042d7099e787b6adc4226281652",
+    "createdAt": "2019-03-01T21:01:14Z",
+    "diffHunk": "@@ -37,4 +39,17 @@\n   public static Row create(Object ... values) {\n     return new GenericRow(values);\n   }\n+\n+  /**\n+   * Create a {@link Row} from the given arguments. Provided schema is incorporated into\n+   * created {@link Row} object, and allows getAs(fieldName) to access the value of column.\n+   *\n+   * Note that every Rows will contain the duplicated schema, hence in high volume it is still\n+   * recommended to use `create` with accessing column by position.\n+   *\n+   * @since 3.0.0\n+   */\n+  public static Row createWithSchema(StructType schema, Object ... values) {",
+    "line": 23
+  }, {
+    "author": {
+      "login": "HeartSaVioR"
+    },
+    "body": "This forces Row to have schema inside which is necessary to use `getAs(fieldName)` in downstream operator.\r\n\r\nPlease take a look at the query I've added in PR description. You can see Spark provides `GenericRowWithSchema` in MapFunction, but when users create Row with `RowFactory.\r\ncreate`, newly created rows don't have schema and not able to use `getAs(fieldName)`. \r\n\r\nMore weird thing is, the schema information is conditionally provided, depending on the query plan. (adding withWatermark in prior to filter makes getAs(fieldName) be available even we return `RowFactory.create` in map.\r\n\r\nBut in overall I agree with @HyukjinKwon that fixing root cause would be ideal. This is just a way to mitigation, and I wouldn't mind the mitigation would not be accepted. If you feel OK with taking workaround I'll address your comment. Thanks!\r\n\r\nBtw, actually I feel this sounds the matter of interface contract - Row interface should provide getAs(fieldName) regardless of its implementation (otherwise methods should have doc that getAs(fieldName) is depending on implementation and implementation may just throw exception), and if not, Row should remove the methods and some other interface should extend Row and have them.",
+    "commit": "b98580112b752042d7099e787b6adc4226281652",
+    "createdAt": "2019-03-01T23:38:02Z",
+    "diffHunk": "@@ -37,4 +39,17 @@\n   public static Row create(Object ... values) {\n     return new GenericRow(values);\n   }\n+\n+  /**\n+   * Create a {@link Row} from the given arguments. Provided schema is incorporated into\n+   * created {@link Row} object, and allows getAs(fieldName) to access the value of column.\n+   *\n+   * Note that every Rows will contain the duplicated schema, hence in high volume it is still\n+   * recommended to use `create` with accessing column by position.\n+   *\n+   * @since 3.0.0\n+   */\n+  public static Row createWithSchema(StructType schema, Object ... values) {",
+    "line": 23
+  }],
+  "prId": 23891
+}]

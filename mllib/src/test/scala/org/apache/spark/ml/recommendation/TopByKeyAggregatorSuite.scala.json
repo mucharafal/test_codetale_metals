@@ -1,0 +1,24 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "MLnick"
+    },
+    "body": "maybe a good idea to have varying # values = like maybe one with only `1` etc.",
+    "commit": "6a7e3d138b33c66644cdf68b6b20287ab0705aa6",
+    "createdAt": "2017-03-02T19:19:25Z",
+    "diffHunk": "@@ -0,0 +1,81 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.ml.recommendation\n+\n+import org.apache.spark.SparkFunSuite\n+import org.apache.spark.mllib.util.MLlibTestSparkContext\n+import org.apache.spark.sql.Dataset\n+\n+\n+class TopByKeyAggregatorSuite extends SparkFunSuite with MLlibTestSparkContext {\n+\n+  private def getTopK(k: Int): Dataset[(Int, Array[(Int, Float)])] = {\n+    val sqlContext = spark.sqlContext\n+    import sqlContext.implicits._\n+\n+    val topKAggregator = new TopByKeyAggregator[Int, Int, Float](k, Ordering.by(_._2))\n+    Seq(\n+      (0, 3, 54f),",
+    "line": 33
+  }],
+  "prId": 17090
+}, {
+  "comments": [{
+    "author": {
+      "login": "MLnick"
+    },
+    "body": "slightly prefer `foreach { case (id, recs) => ...` ",
+    "commit": "6a7e3d138b33c66644cdf68b6b20287ab0705aa6",
+    "createdAt": "2017-03-02T19:20:35Z",
+    "diffHunk": "@@ -0,0 +1,81 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.ml.recommendation\n+\n+import org.apache.spark.SparkFunSuite\n+import org.apache.spark.mllib.util.MLlibTestSparkContext\n+import org.apache.spark.sql.Dataset\n+\n+\n+class TopByKeyAggregatorSuite extends SparkFunSuite with MLlibTestSparkContext {\n+\n+  private def getTopK(k: Int): Dataset[(Int, Array[(Int, Float)])] = {\n+    val sqlContext = spark.sqlContext\n+    import sqlContext.implicits._\n+\n+    val topKAggregator = new TopByKeyAggregator[Int, Int, Float](k, Ordering.by(_._2))\n+    Seq(\n+      (0, 3, 54f),\n+      (0, 4, 44f),\n+      (0, 5, 42f),\n+      (0, 6, 28f),\n+      (1, 3, 39f),\n+      (1, 4, 26f),\n+      (1, 5, 33f),\n+      (1, 6, 16f),\n+      (2, 3, 51f),\n+      (2, 4, 30f),\n+      (2, 5, 45f),\n+      (2, 6, 18f)\n+    ).toDS().groupByKey(_._1).agg(topKAggregator.toColumn)\n+  }\n+\n+  test(\"topByKey with k < #items\") {\n+    val topK = getTopK(2)\n+    assert(topK.count() === 3)\n+\n+    val expected = Map(\n+      0 -> Array((3, 54f), (4, 44f)),\n+      1 -> Array((3, 39f), (5, 33f)),\n+      2 -> Array((3, 51f), (5, 45f))\n+    )\n+    checkTopK(topK, expected)\n+  }\n+\n+  test(\"topByKey with k > #items\") {\n+    val topK = getTopK(5)\n+    assert(topK.count() === 3)\n+\n+    val expected = Map(\n+      0 -> Array((3, 54f), (4, 44f), (5, 42f), (6, 28f)),\n+      1 -> Array((3, 39f), (5, 33f), (4, 26f), (6, 16f)),\n+      2 -> Array((3, 51f), (5, 45f), (4, 30f), (6, 18f))\n+    )\n+    checkTopK(topK, expected)\n+  }\n+\n+  private def checkTopK(\n+      topK: Dataset[(Int, Array[(Int, Float)])],\n+      expected: Map[Int, Array[(Int, Float)]]): Unit = {\n+    topK.collect().foreach { record =>"
+  }],
+  "prId": 17090
+}]

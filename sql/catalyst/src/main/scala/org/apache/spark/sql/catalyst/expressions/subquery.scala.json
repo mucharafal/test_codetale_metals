@@ -1,0 +1,81 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "rxin"
+    },
+    "body": "style nit\n\n```\ncase class Exists(query: LogicalPlan)\n  extends CorrelatedSubqueryExpression with Unevaluable with Predicate {\n```\n",
+    "commit": "2658e0a4e72a810988686d2fb951bc436684db52",
+    "createdAt": "2016-04-11T21:50:40Z",
+    "diffHunk": "@@ -77,3 +77,24 @@ case class ScalarSubquery(\n \n   override def toString: String = s\"subquery#${exprId.id}\"\n }\n+\n+/**\n+ * Base interface for correlated subquery expressions.\n+ */\n+abstract class CorrelatedSubqueryExpression extends SubqueryExpression{\n+  override lazy val resolved: Boolean = false  // can't be resolved\n+  override def plan: LogicalPlan = SubqueryAlias(toString, query)\n+}\n+\n+case class InSubQuery(query: LogicalPlan) extends CorrelatedSubqueryExpression with Unevaluable  {\n+  override def dataType: DataType = ArrayType(NullType)\n+  override def nullable: Boolean = true\n+  override def withNewPlan(plan: LogicalPlan): InSubQuery = InSubQuery(plan)\n+}\n+\n+case class Exists("
+  }],
+  "prId": 12306
+}, {
+  "comments": [{
+    "author": {
+      "login": "rxin"
+    },
+    "body": "space after SubqueryExpression\n\nFor the classdoc, we should document that this gets replaced in the analyzer\n",
+    "commit": "2658e0a4e72a810988686d2fb951bc436684db52",
+    "createdAt": "2016-04-11T21:51:18Z",
+    "diffHunk": "@@ -77,3 +77,24 @@ case class ScalarSubquery(\n \n   override def toString: String = s\"subquery#${exprId.id}\"\n }\n+\n+/**\n+ * Base interface for correlated subquery expressions.\n+ */\n+abstract class CorrelatedSubqueryExpression extends SubqueryExpression{"
+  }, {
+    "author": {
+      "login": "rxin"
+    },
+    "body": "would be great to document the rest to indicate that they are replaced before execution\n",
+    "commit": "2658e0a4e72a810988686d2fb951bc436684db52",
+    "createdAt": "2016-04-11T21:51:39Z",
+    "diffHunk": "@@ -77,3 +77,24 @@ case class ScalarSubquery(\n \n   override def toString: String = s\"subquery#${exprId.id}\"\n }\n+\n+/**\n+ * Base interface for correlated subquery expressions.\n+ */\n+abstract class CorrelatedSubqueryExpression extends SubqueryExpression{"
+  }],
+  "prId": 12306
+}, {
+  "comments": [{
+    "author": {
+      "login": "davies"
+    },
+    "body": "This could be uncorrelated, so I'd like not have this (it's confusing).\n",
+    "commit": "2658e0a4e72a810988686d2fb951bc436684db52",
+    "createdAt": "2016-04-15T21:21:28Z",
+    "diffHunk": "@@ -77,3 +79,53 @@ case class ScalarSubquery(\n \n   override def toString: String = s\"subquery#${exprId.id}\"\n }\n+\n+/**\n+ * Base interface for (potentially) correlated subquery expressions.\n+ */\n+abstract class CorrelatedSubqueryExpression extends SubqueryExpression {"
+  }],
+  "prId": 12306
+}, {
+  "comments": [{
+    "author": {
+      "login": "davies"
+    },
+    "body": "Should we pull out the attributes in query from outer plan as the references of `Exists`, so we can push down this correctly? Same for all the sub-queries.\n",
+    "commit": "2658e0a4e72a810988686d2fb951bc436684db52",
+    "createdAt": "2016-04-18T06:03:11Z",
+    "diffHunk": "@@ -77,3 +79,81 @@ case class ScalarSubquery(\n \n   override def toString: String = s\"subquery#${exprId.id}\"\n }\n+\n+/**\n+ * A predicate subquery checks the existence of a value in a sub-query. We currently only allow\n+ * [[PredicateSubquery]] expressions within a Filter plan (i.e. WHERE or a HAVING clause). This will\n+ * be rewritten into a left semi/anti join during analysis.\n+ */\n+abstract class PredicateSubquery extends SubqueryExpression with Unevaluable with Predicate {\n+  override def nullable: Boolean = false\n+  override def plan: LogicalPlan = SubqueryAlias(prettyName, query)\n+}\n+\n+object PredicateSubquery {\n+  def hasPredicateSubquery(e: Expression): Boolean = {\n+    e.find(_.isInstanceOf[PredicateSubquery]).isDefined\n+  }\n+}\n+\n+/**\n+ * The [[InSubQuery]] predicate checks the existence of a value in a sub-query. For example (SQL):\n+ * {{{\n+ *   SELECT  *\n+ *   FROM    a\n+ *   WHERE   a.id IN (SELECT  id\n+ *                    FROM    b)\n+ * }}}\n+ */\n+case class InSubQuery(value: Expression, query: LogicalPlan) extends PredicateSubquery {\n+  override def children: Seq[Expression] = value :: Nil\n+  override lazy val resolved: Boolean = value.resolved && query.resolved\n+  override def withNewPlan(plan: LogicalPlan): InSubQuery = InSubQuery(value, plan)\n+\n+  /**\n+   * The unwrapped value side expressions.\n+   */\n+  lazy val expressions: Seq[Expression] = value match {\n+    case CreateStruct(cols) => cols\n+    case col => Seq(col)\n+  }\n+\n+  /**\n+   * Check if the number of columns and the data types on both sides match.\n+   */\n+  override def checkInputDataTypes(): TypeCheckResult = {\n+    // Check the number of arguments.\n+    if (expressions.length != query.output.length) {\n+      TypeCheckResult.TypeCheckFailure(\n+        s\"The number of fields in the value (${expressions.length}) does not match with \" +\n+          s\"the number of columns in the subquery (${query.output.length})\")\n+    }\n+\n+    // Check the argument types.\n+    expressions.zip(query.output).zipWithIndex.foreach {\n+      case ((e, a), i) if e.dataType != a.dataType =>\n+        TypeCheckResult.TypeCheckFailure(\n+          s\"The data type of value[$i](${e.dataType}) does not match \" +\n+            s\"subquery column '${a.name}' (${a.dataType}).\")\n+      case _ =>\n+    }\n+\n+    TypeCheckResult.TypeCheckSuccess\n+  }\n+}\n+\n+/**\n+ * The [[Exists]] expression checks if a row exists in a subquery given some correlated condition.\n+ * For example (SQL):\n+ * {{{\n+ *   SELECT  *\n+ *   FROM    a\n+ *   WHERE   EXISTS (SELECT  *\n+ *                   FROM    b\n+ *                   WHERE   b.id = a.id)\n+ * }}}\n+ */\n+case class Exists(query: LogicalPlan) extends PredicateSubquery {\n+  override def children: Seq[Expression] = Nil\n+  override def withNewPlan(plan: LogicalPlan): Exists = Exists(plan)",
+    "line": 104
+  }, {
+    "author": {
+      "login": "hvanhovell"
+    },
+    "body": "We could also push down entire left semi/anti joins (assuming we keep the rewrite in the Optimizer). \n\nI would pull out all the entire correlated conditions (getting references from this is trivial). I was actually working on this. This involves rewriting the plan and the (small) downside here is that generating SQL will be more complicated after this step.\n",
+    "commit": "2658e0a4e72a810988686d2fb951bc436684db52",
+    "createdAt": "2016-04-18T08:41:54Z",
+    "diffHunk": "@@ -77,3 +79,81 @@ case class ScalarSubquery(\n \n   override def toString: String = s\"subquery#${exprId.id}\"\n }\n+\n+/**\n+ * A predicate subquery checks the existence of a value in a sub-query. We currently only allow\n+ * [[PredicateSubquery]] expressions within a Filter plan (i.e. WHERE or a HAVING clause). This will\n+ * be rewritten into a left semi/anti join during analysis.\n+ */\n+abstract class PredicateSubquery extends SubqueryExpression with Unevaluable with Predicate {\n+  override def nullable: Boolean = false\n+  override def plan: LogicalPlan = SubqueryAlias(prettyName, query)\n+}\n+\n+object PredicateSubquery {\n+  def hasPredicateSubquery(e: Expression): Boolean = {\n+    e.find(_.isInstanceOf[PredicateSubquery]).isDefined\n+  }\n+}\n+\n+/**\n+ * The [[InSubQuery]] predicate checks the existence of a value in a sub-query. For example (SQL):\n+ * {{{\n+ *   SELECT  *\n+ *   FROM    a\n+ *   WHERE   a.id IN (SELECT  id\n+ *                    FROM    b)\n+ * }}}\n+ */\n+case class InSubQuery(value: Expression, query: LogicalPlan) extends PredicateSubquery {\n+  override def children: Seq[Expression] = value :: Nil\n+  override lazy val resolved: Boolean = value.resolved && query.resolved\n+  override def withNewPlan(plan: LogicalPlan): InSubQuery = InSubQuery(value, plan)\n+\n+  /**\n+   * The unwrapped value side expressions.\n+   */\n+  lazy val expressions: Seq[Expression] = value match {\n+    case CreateStruct(cols) => cols\n+    case col => Seq(col)\n+  }\n+\n+  /**\n+   * Check if the number of columns and the data types on both sides match.\n+   */\n+  override def checkInputDataTypes(): TypeCheckResult = {\n+    // Check the number of arguments.\n+    if (expressions.length != query.output.length) {\n+      TypeCheckResult.TypeCheckFailure(\n+        s\"The number of fields in the value (${expressions.length}) does not match with \" +\n+          s\"the number of columns in the subquery (${query.output.length})\")\n+    }\n+\n+    // Check the argument types.\n+    expressions.zip(query.output).zipWithIndex.foreach {\n+      case ((e, a), i) if e.dataType != a.dataType =>\n+        TypeCheckResult.TypeCheckFailure(\n+          s\"The data type of value[$i](${e.dataType}) does not match \" +\n+            s\"subquery column '${a.name}' (${a.dataType}).\")\n+      case _ =>\n+    }\n+\n+    TypeCheckResult.TypeCheckSuccess\n+  }\n+}\n+\n+/**\n+ * The [[Exists]] expression checks if a row exists in a subquery given some correlated condition.\n+ * For example (SQL):\n+ * {{{\n+ *   SELECT  *\n+ *   FROM    a\n+ *   WHERE   EXISTS (SELECT  *\n+ *                   FROM    b\n+ *                   WHERE   b.id = a.id)\n+ * }}}\n+ */\n+case class Exists(query: LogicalPlan) extends PredicateSubquery {\n+  override def children: Seq[Expression] = Nil\n+  override def withNewPlan(plan: LogicalPlan): Exists = Exists(plan)",
+    "line": 104
+  }, {
+    "author": {
+      "login": "davies"
+    },
+    "body": "Keep generating SQL in mind, would pulling out the references be easier?\n",
+    "commit": "2658e0a4e72a810988686d2fb951bc436684db52",
+    "createdAt": "2016-04-18T17:16:30Z",
+    "diffHunk": "@@ -77,3 +79,81 @@ case class ScalarSubquery(\n \n   override def toString: String = s\"subquery#${exprId.id}\"\n }\n+\n+/**\n+ * A predicate subquery checks the existence of a value in a sub-query. We currently only allow\n+ * [[PredicateSubquery]] expressions within a Filter plan (i.e. WHERE or a HAVING clause). This will\n+ * be rewritten into a left semi/anti join during analysis.\n+ */\n+abstract class PredicateSubquery extends SubqueryExpression with Unevaluable with Predicate {\n+  override def nullable: Boolean = false\n+  override def plan: LogicalPlan = SubqueryAlias(prettyName, query)\n+}\n+\n+object PredicateSubquery {\n+  def hasPredicateSubquery(e: Expression): Boolean = {\n+    e.find(_.isInstanceOf[PredicateSubquery]).isDefined\n+  }\n+}\n+\n+/**\n+ * The [[InSubQuery]] predicate checks the existence of a value in a sub-query. For example (SQL):\n+ * {{{\n+ *   SELECT  *\n+ *   FROM    a\n+ *   WHERE   a.id IN (SELECT  id\n+ *                    FROM    b)\n+ * }}}\n+ */\n+case class InSubQuery(value: Expression, query: LogicalPlan) extends PredicateSubquery {\n+  override def children: Seq[Expression] = value :: Nil\n+  override lazy val resolved: Boolean = value.resolved && query.resolved\n+  override def withNewPlan(plan: LogicalPlan): InSubQuery = InSubQuery(value, plan)\n+\n+  /**\n+   * The unwrapped value side expressions.\n+   */\n+  lazy val expressions: Seq[Expression] = value match {\n+    case CreateStruct(cols) => cols\n+    case col => Seq(col)\n+  }\n+\n+  /**\n+   * Check if the number of columns and the data types on both sides match.\n+   */\n+  override def checkInputDataTypes(): TypeCheckResult = {\n+    // Check the number of arguments.\n+    if (expressions.length != query.output.length) {\n+      TypeCheckResult.TypeCheckFailure(\n+        s\"The number of fields in the value (${expressions.length}) does not match with \" +\n+          s\"the number of columns in the subquery (${query.output.length})\")\n+    }\n+\n+    // Check the argument types.\n+    expressions.zip(query.output).zipWithIndex.foreach {\n+      case ((e, a), i) if e.dataType != a.dataType =>\n+        TypeCheckResult.TypeCheckFailure(\n+          s\"The data type of value[$i](${e.dataType}) does not match \" +\n+            s\"subquery column '${a.name}' (${a.dataType}).\")\n+      case _ =>\n+    }\n+\n+    TypeCheckResult.TypeCheckSuccess\n+  }\n+}\n+\n+/**\n+ * The [[Exists]] expression checks if a row exists in a subquery given some correlated condition.\n+ * For example (SQL):\n+ * {{{\n+ *   SELECT  *\n+ *   FROM    a\n+ *   WHERE   EXISTS (SELECT  *\n+ *                   FROM    b\n+ *                   WHERE   b.id = a.id)\n+ * }}}\n+ */\n+case class Exists(query: LogicalPlan) extends PredicateSubquery {\n+  override def children: Seq[Expression] = Nil\n+  override def withNewPlan(plan: LogicalPlan): Exists = Exists(plan)",
+    "line": 104
+  }, {
+    "author": {
+      "login": "hvanhovell"
+    },
+    "body": "I have tried to pull out the entire correlated condition in the analyzer but this gets very messy. For now I want to leave it like this.\n",
+    "commit": "2658e0a4e72a810988686d2fb951bc436684db52",
+    "createdAt": "2016-04-18T21:16:53Z",
+    "diffHunk": "@@ -77,3 +79,81 @@ case class ScalarSubquery(\n \n   override def toString: String = s\"subquery#${exprId.id}\"\n }\n+\n+/**\n+ * A predicate subquery checks the existence of a value in a sub-query. We currently only allow\n+ * [[PredicateSubquery]] expressions within a Filter plan (i.e. WHERE or a HAVING clause). This will\n+ * be rewritten into a left semi/anti join during analysis.\n+ */\n+abstract class PredicateSubquery extends SubqueryExpression with Unevaluable with Predicate {\n+  override def nullable: Boolean = false\n+  override def plan: LogicalPlan = SubqueryAlias(prettyName, query)\n+}\n+\n+object PredicateSubquery {\n+  def hasPredicateSubquery(e: Expression): Boolean = {\n+    e.find(_.isInstanceOf[PredicateSubquery]).isDefined\n+  }\n+}\n+\n+/**\n+ * The [[InSubQuery]] predicate checks the existence of a value in a sub-query. For example (SQL):\n+ * {{{\n+ *   SELECT  *\n+ *   FROM    a\n+ *   WHERE   a.id IN (SELECT  id\n+ *                    FROM    b)\n+ * }}}\n+ */\n+case class InSubQuery(value: Expression, query: LogicalPlan) extends PredicateSubquery {\n+  override def children: Seq[Expression] = value :: Nil\n+  override lazy val resolved: Boolean = value.resolved && query.resolved\n+  override def withNewPlan(plan: LogicalPlan): InSubQuery = InSubQuery(value, plan)\n+\n+  /**\n+   * The unwrapped value side expressions.\n+   */\n+  lazy val expressions: Seq[Expression] = value match {\n+    case CreateStruct(cols) => cols\n+    case col => Seq(col)\n+  }\n+\n+  /**\n+   * Check if the number of columns and the data types on both sides match.\n+   */\n+  override def checkInputDataTypes(): TypeCheckResult = {\n+    // Check the number of arguments.\n+    if (expressions.length != query.output.length) {\n+      TypeCheckResult.TypeCheckFailure(\n+        s\"The number of fields in the value (${expressions.length}) does not match with \" +\n+          s\"the number of columns in the subquery (${query.output.length})\")\n+    }\n+\n+    // Check the argument types.\n+    expressions.zip(query.output).zipWithIndex.foreach {\n+      case ((e, a), i) if e.dataType != a.dataType =>\n+        TypeCheckResult.TypeCheckFailure(\n+          s\"The data type of value[$i](${e.dataType}) does not match \" +\n+            s\"subquery column '${a.name}' (${a.dataType}).\")\n+      case _ =>\n+    }\n+\n+    TypeCheckResult.TypeCheckSuccess\n+  }\n+}\n+\n+/**\n+ * The [[Exists]] expression checks if a row exists in a subquery given some correlated condition.\n+ * For example (SQL):\n+ * {{{\n+ *   SELECT  *\n+ *   FROM    a\n+ *   WHERE   EXISTS (SELECT  *\n+ *                   FROM    b\n+ *                   WHERE   b.id = a.id)\n+ * }}}\n+ */\n+case class Exists(query: LogicalPlan) extends PredicateSubquery {\n+  override def children: Seq[Expression] = Nil\n+  override def withNewPlan(plan: LogicalPlan): Exists = Exists(plan)",
+    "line": 104
+  }],
+  "prId": 12306
+}]

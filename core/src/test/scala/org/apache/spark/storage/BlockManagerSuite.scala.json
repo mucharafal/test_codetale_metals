@@ -1,0 +1,107 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "attilapiros"
+    },
+    "body": "I have removed this line as it is not needed. See [BlockManager.scala#L157](https://github.com/apache/spark/blob/master/core/src/main/scala/org/apache/spark/storage/BlockManager.scala#L157).",
+    "commit": "9d158c1dab3b61ec43810a229a5e3b86f519b266",
+    "createdAt": "2019-01-29T21:17:20Z",
+    "diffHunk": "@@ -890,7 +894,6 @@ class BlockManagerSuite extends SparkFunSuite with Matchers with BeforeAndAfterE\n     val store = new BlockManager(SparkContext.DRIVER_IDENTIFIER, rpcEnv, master,\n       serializerManager, conf, memoryManager, mapOutputTracker,\n       shuffleManager, transfer, securityMgr, 0)\n-    memoryManager.setMemoryStore(store.memoryStore)",
+    "line": 35
+  }],
+  "prId": 23688
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "If you change this to update an existing conf instead of creating a new one, you don't need the change to `EncryptionFunSuite`. Is there a reason why that doesn't work here?",
+    "commit": "9d158c1dab3b61ec43810a229a5e3b86f519b266",
+    "createdAt": "2019-01-30T19:23:50Z",
+    "diffHunk": "@@ -80,6 +80,15 @@ class BlockManagerSuite extends SparkFunSuite with Matchers with BeforeAndAfterE\n   implicit def StringToBlockId(value: String): BlockId = new TestBlockId(value)\n   def rdd(rddId: Int, splitId: Int): RDDBlockId = RDDBlockId(rddId, splitId)\n \n+  private def createSparkConf(): SparkConf ="
+  }, {
+    "author": {
+      "login": "attilapiros"
+    },
+    "body": "There is no reason. Both works => reverted `EncryptionFunSuite` changes.",
+    "commit": "9d158c1dab3b61ec43810a229a5e3b86f519b266",
+    "createdAt": "2019-01-30T22:37:02Z",
+    "diffHunk": "@@ -80,6 +80,15 @@ class BlockManagerSuite extends SparkFunSuite with Matchers with BeforeAndAfterE\n   implicit def StringToBlockId(value: String): BlockId = new TestBlockId(value)\n   def rdd(rddId: Int, splitId: Int): RDDBlockId = RDDBlockId(rddId, splitId)\n \n+  private def createSparkConf(): SparkConf ="
+  }],
+  "prId": 23688
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "You'll probably want a test where you have multiple storage dirs, to cover the issue I mentioned in the code.",
+    "commit": "9d158c1dab3b61ec43810a229a5e3b86f519b266",
+    "createdAt": "2019-01-30T19:25:06Z",
+    "diffHunk": "@@ -906,6 +908,51 @@ class BlockManagerSuite extends SparkFunSuite with Matchers with BeforeAndAfterE\n     }\n   }\n \n+  def testPutBlockDataAsStream(\n+      name: String,\n+      blockManager: BlockManager,\n+      storageLevel: StorageLevel): Unit = {\n+    val message = \"message\"\n+    val ser = serializer.newInstance().serialize(message).array()\n+    val blockId = new ShuffleDataBlockId(0, 0, 0)\n+    val streamCallbackWithId =\n+      blockManager.putBlockDataAsStream(blockId, storageLevel, ClassTag(message.getClass))\n+    streamCallbackWithId.onData(\"0\", ByteBuffer.wrap(ser))\n+    streamCallbackWithId.onComplete(\"0\")\n+    val blockStatusOption = blockManager.getStatus(blockId)\n+    assert(!blockStatusOption.isEmpty)\n+    val blockStatus = blockStatusOption.get\n+    assert((blockStatus.diskSize > 0) === storageLevel.useDisk)\n+    assert((blockStatus.memSize > 0) === storageLevel.useMemory)\n+    assert(blockManager.getBlockData(blockId).nioByteBuffer().array() === ser)\n+  }\n+\n+  Seq(\n+    \"caching\" -> StorageLevel.MEMORY_ONLY,\n+    \"caching on disk\" -> StorageLevel.DISK_ONLY\n+  ).foreach { case (name, storageLevel) =>\n+    encryptionTestHelper(name, createSparkConf()) { case (name, conf) =>\n+      test(s\"test putBlockDataAsStream with $name\") {"
+  }, {
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Actually nevermind, both dirs would be in the same file system, so it would not really work as a test for that...",
+    "commit": "9d158c1dab3b61ec43810a229a5e3b86f519b266",
+    "createdAt": "2019-01-30T19:32:34Z",
+    "diffHunk": "@@ -906,6 +908,51 @@ class BlockManagerSuite extends SparkFunSuite with Matchers with BeforeAndAfterE\n     }\n   }\n \n+  def testPutBlockDataAsStream(\n+      name: String,\n+      blockManager: BlockManager,\n+      storageLevel: StorageLevel): Unit = {\n+    val message = \"message\"\n+    val ser = serializer.newInstance().serialize(message).array()\n+    val blockId = new ShuffleDataBlockId(0, 0, 0)\n+    val streamCallbackWithId =\n+      blockManager.putBlockDataAsStream(blockId, storageLevel, ClassTag(message.getClass))\n+    streamCallbackWithId.onData(\"0\", ByteBuffer.wrap(ser))\n+    streamCallbackWithId.onComplete(\"0\")\n+    val blockStatusOption = blockManager.getStatus(blockId)\n+    assert(!blockStatusOption.isEmpty)\n+    val blockStatus = blockStatusOption.get\n+    assert((blockStatus.diskSize > 0) === storageLevel.useDisk)\n+    assert((blockStatus.memSize > 0) === storageLevel.useMemory)\n+    assert(blockManager.getBlockData(blockId).nioByteBuffer().array() === ser)\n+  }\n+\n+  Seq(\n+    \"caching\" -> StorageLevel.MEMORY_ONLY,\n+    \"caching on disk\" -> StorageLevel.DISK_ONLY\n+  ).foreach { case (name, storageLevel) =>\n+    encryptionTestHelper(name, createSparkConf()) { case (name, conf) =>\n+      test(s\"test putBlockDataAsStream with $name\") {"
+  }],
+  "prId": 23688
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "This can just use `encryptionTest` directly, no?",
+    "commit": "9d158c1dab3b61ec43810a229a5e3b86f519b266",
+    "createdAt": "2019-02-05T00:11:15Z",
+    "diffHunk": "@@ -906,6 +909,52 @@ class BlockManagerSuite extends SparkFunSuite with Matchers with BeforeAndAfterE\n     }\n   }\n \n+  def testPutBlockDataAsStream(\n+      name: String,\n+      blockManager: BlockManager,\n+      storageLevel: StorageLevel): Unit = {\n+    val message = \"message\"\n+    val ser = serializer.newInstance().serialize(message).array()\n+    val blockId = new ShuffleDataBlockId(0, 0, 0)\n+    val streamCallbackWithId =\n+      blockManager.putBlockDataAsStream(blockId, storageLevel, ClassTag(message.getClass))\n+    streamCallbackWithId.onData(\"0\", ByteBuffer.wrap(ser))\n+    streamCallbackWithId.onComplete(\"0\")\n+    val blockStatusOption = blockManager.getStatus(blockId)\n+    assert(!blockStatusOption.isEmpty)\n+    val blockStatus = blockStatusOption.get\n+    assert((blockStatus.diskSize > 0) === storageLevel.useDisk)\n+    assert((blockStatus.memSize > 0) === storageLevel.useMemory)\n+    assert(blockManager.getBlockData(blockId).nioByteBuffer().array() === ser)\n+  }\n+\n+  Seq(\n+    \"caching\" -> StorageLevel.MEMORY_ONLY,\n+    \"caching on disk\" -> StorageLevel.DISK_ONLY\n+  ).foreach { case (name, storageLevel) =>\n+    encryptionTestHelper(name) { case (name, conf) =>"
+  }],
+  "prId": 23688
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Add braces.",
+    "commit": "9d158c1dab3b61ec43810a229a5e3b86f519b266",
+    "createdAt": "2019-02-05T00:11:35Z",
+    "diffHunk": "@@ -80,6 +80,15 @@ class BlockManagerSuite extends SparkFunSuite with Matchers with BeforeAndAfterE\n   implicit def StringToBlockId(value: String): BlockId = new TestBlockId(value)\n   def rdd(rddId: Int, splitId: Int): RDDBlockId = RDDBlockId(rddId, splitId)\n \n+  private def init(sparkConf: SparkConf): Unit ="
+  }],
+  "prId": 23688
+}, {
+  "comments": [{
+    "author": {
+      "login": "squito"
+    },
+    "body": "though it shouldn't really matter, use `RDDBlockId` here, since that is the type of block that will actually get replicated & go through this code.",
+    "commit": "9d158c1dab3b61ec43810a229a5e3b86f519b266",
+    "createdAt": "2019-02-05T22:06:55Z",
+    "diffHunk": "@@ -906,6 +910,55 @@ class BlockManagerSuite extends SparkFunSuite with Matchers with BeforeAndAfterE\n     }\n   }\n \n+  def testPutBlockDataAsStream(\n+      name: String,\n+      blockManager: BlockManager,\n+      storageLevel: StorageLevel): Unit = {\n+    val message = \"message\"\n+    val ser = serializer.newInstance().serialize(message).array()\n+    val blockId = new ShuffleDataBlockId(0, 0, 0)"
+  }],
+  "prId": 23688
+}, {
+  "comments": [{
+    "author": {
+      "login": "squito"
+    },
+    "body": "you've only setup one BlockManager here, so is there any point in running the tests w/ replication? Replication will be covered by the tests in DistributedSuite.",
+    "commit": "9d158c1dab3b61ec43810a229a5e3b86f519b266",
+    "createdAt": "2019-02-05T22:30:56Z",
+    "diffHunk": "@@ -906,6 +910,55 @@ class BlockManagerSuite extends SparkFunSuite with Matchers with BeforeAndAfterE\n     }\n   }\n \n+  def testPutBlockDataAsStream(\n+      name: String,\n+      blockManager: BlockManager,\n+      storageLevel: StorageLevel): Unit = {\n+    val message = \"message\"\n+    val ser = serializer.newInstance().serialize(message).array()\n+    val blockId = new ShuffleDataBlockId(0, 0, 0)\n+    val streamCallbackWithId =\n+      blockManager.putBlockDataAsStream(blockId, storageLevel, ClassTag(message.getClass))\n+    streamCallbackWithId.onData(\"0\", ByteBuffer.wrap(ser))\n+    streamCallbackWithId.onComplete(\"0\")\n+    val blockStatusOption = blockManager.getStatus(blockId)\n+    assert(!blockStatusOption.isEmpty)\n+    val blockStatus = blockStatusOption.get\n+    assert((blockStatus.diskSize > 0) === !storageLevel.useMemory)\n+    assert((blockStatus.memSize > 0) === storageLevel.useMemory)\n+    assert(blockManager.getBlockData(blockId).nioByteBuffer().array() === ser)\n+  }\n+\n+  Seq(\n+    \"caching\" -> StorageLevel.MEMORY_ONLY,\n+    \"caching on disk\" -> StorageLevel.DISK_ONLY,\n+    \"caching in memory, replicated\" -> StorageLevel.MEMORY_ONLY_2,\n+    \"caching in memory, serialized, replicated\" -> StorageLevel.MEMORY_ONLY_SER_2,\n+    \"caching on disk, replicated\" -> StorageLevel.DISK_ONLY_2,\n+    \"caching in memory and disk, replicated\" -> StorageLevel.MEMORY_AND_DISK_2,\n+    \"caching in memory and disk, serialized, replicated\" -> StorageLevel.MEMORY_AND_DISK_SER_2"
+  }],
+  "prId": 23688
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Add `MEMORY_ONLY_SER`?",
+    "commit": "9d158c1dab3b61ec43810a229a5e3b86f519b266",
+    "createdAt": "2019-02-11T19:34:31Z",
+    "diffHunk": "@@ -906,6 +910,47 @@ class BlockManagerSuite extends SparkFunSuite with Matchers with BeforeAndAfterE\n     }\n   }\n \n+  def testPutBlockDataAsStream(blockManager: BlockManager, storageLevel: StorageLevel): Unit = {\n+    val message = \"message\"\n+    val ser = serializer.newInstance().serialize(message).array()\n+    val blockId = new RDDBlockId(0, 0)\n+    val streamCallbackWithId =\n+      blockManager.putBlockDataAsStream(blockId, storageLevel, ClassTag(message.getClass))\n+    streamCallbackWithId.onData(\"0\", ByteBuffer.wrap(ser))\n+    streamCallbackWithId.onComplete(\"0\")\n+    val blockStatusOption = blockManager.getStatus(blockId)\n+    assert(!blockStatusOption.isEmpty)\n+    val blockStatus = blockStatusOption.get\n+    assert((blockStatus.diskSize > 0) === !storageLevel.useMemory)\n+    assert((blockStatus.memSize > 0) === storageLevel.useMemory)\n+    assert(blockManager.getBlockData(blockId).nioByteBuffer().array() === ser)\n+  }\n+\n+  Seq(\n+    \"caching\" -> StorageLevel.MEMORY_ONLY,",
+    "line": 60
+  }],
+  "prId": 23688
+}]

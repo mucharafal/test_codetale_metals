@@ -1,0 +1,139 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "Can you add return type here and a short javadoc on what this does?\n",
+    "commit": "aeb458ab0552174f5fb3b72c0a6607fc93d3bd44",
+    "createdAt": "2014-09-27T04:59:55Z",
+    "diffHunk": "@@ -69,7 +74,32 @@ private class YarnRMClientImpl(args: ApplicationMasterArguments) extends YarnRMC\n     appAttemptId\n   }\n \n-  override def getProxyHostAndPort(conf: YarnConfiguration) = WebAppUtils.getProxyHostAndPort(conf)\n+  override def getAmIpFilterParams(conf: YarnConfiguration, proxyBase: String) = {",
+    "line": 19
+  }, {
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Those are in the parent class (YarnRMClient).\n",
+    "commit": "aeb458ab0552174f5fb3b72c0a6607fc93d3bd44",
+    "createdAt": "2014-09-29T18:16:28Z",
+    "diffHunk": "@@ -69,7 +74,32 @@ private class YarnRMClientImpl(args: ApplicationMasterArguments) extends YarnRMC\n     appAttemptId\n   }\n \n-  override def getProxyHostAndPort(conf: YarnConfiguration) = WebAppUtils.getProxyHostAndPort(conf)\n+  override def getAmIpFilterParams(conf: YarnConfiguration, proxyBase: String) = {",
+    "line": 19
+  }, {
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "I see. Can you add the return type still? It's OK if the docs live in the parent class.\n",
+    "commit": "aeb458ab0552174f5fb3b72c0a6607fc93d3bd44",
+    "createdAt": "2014-09-29T18:42:50Z",
+    "diffHunk": "@@ -69,7 +74,32 @@ private class YarnRMClientImpl(args: ApplicationMasterArguments) extends YarnRMC\n     appAttemptId\n   }\n \n-  override def getProxyHostAndPort(conf: YarnConfiguration) = WebAppUtils.getProxyHostAndPort(conf)\n+  override def getAmIpFilterParams(conf: YarnConfiguration, proxyBase: String) = {",
+    "line": 19
+  }, {
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Mind if I skip this one? That would make this method not consistent with the others, it would make the line go over 100 chars, and well, it just feels a little redundant.\n",
+    "commit": "aeb458ab0552174f5fb3b72c0a6607fc93d3bd44",
+    "createdAt": "2014-09-29T18:58:29Z",
+    "diffHunk": "@@ -69,7 +74,32 @@ private class YarnRMClientImpl(args: ApplicationMasterArguments) extends YarnRMC\n     appAttemptId\n   }\n \n-  override def getProxyHostAndPort(conf: YarnConfiguration) = WebAppUtils.getProxyHostAndPort(conf)\n+  override def getAmIpFilterParams(conf: YarnConfiguration, proxyBase: String) = {",
+    "line": 19
+  }, {
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "Ok, though in general it really helps someone who's not familiar with the code to understand it. We can add it in later in a general clean up patch.\n",
+    "commit": "aeb458ab0552174f5fb3b72c0a6607fc93d3bd44",
+    "createdAt": "2014-09-29T19:37:08Z",
+    "diffHunk": "@@ -69,7 +74,32 @@ private class YarnRMClientImpl(args: ApplicationMasterArguments) extends YarnRMC\n     appAttemptId\n   }\n \n-  override def getProxyHostAndPort(conf: YarnConfiguration) = WebAppUtils.getProxyHostAndPort(conf)\n+  override def getAmIpFilterParams(conf: YarnConfiguration, proxyBase: String) = {",
+    "line": 19
+  }],
+  "prId": 2469
+}, {
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "These few lines look a lot like `YarnRMClientImpl#getAmIpFilterParams`. Maybe put them in a function?\n",
+    "commit": "aeb458ab0552174f5fb3b72c0a6607fc93d3bd44",
+    "createdAt": "2014-09-27T05:02:36Z",
+    "diffHunk": "@@ -69,7 +74,32 @@ private class YarnRMClientImpl(args: ApplicationMasterArguments) extends YarnRMC\n     appAttemptId\n   }\n \n-  override def getProxyHostAndPort(conf: YarnConfiguration) = WebAppUtils.getProxyHostAndPort(conf)\n+  override def getAmIpFilterParams(conf: YarnConfiguration, proxyBase: String) = {\n+    // Figure out which scheme Yarn is using. Note the method seems to have been added after 2.2,\n+    // so not all stable releases have it.\n+    val prefix = Try(classOf[WebAppUtils].getMethod(\"getHttpSchemePrefix\", classOf[Configuration])\n+        .invoke(null, conf).asInstanceOf[String]).getOrElse(\"http://\")\n+\n+    // If running a new enough Yarn, use the HA-aware API for retrieving the RM addresses.\n+    val method = Try(classOf[WebAppUtils].getMethod(\"getProxyHostsAndPortsForAmFilter\",\n+      classOf[Configuration]))\n+    method match {\n+      case Success(proxiesMethod) =>\n+        val proxies = proxiesMethod.invoke(null, conf).asInstanceOf[JList[String]]\n+        val hosts = proxies.map { proxy => proxy.split(\":\")(0) }\n+        val uriBases = proxies.map { proxy => prefix + proxy + proxyBase }\n+        Map(\"PROXY_HOSTS\" -> hosts.mkString(\",\"), \"PROXY_URI_BASES\" -> uriBases.mkString(\",\"))\n+\n+      case Failure(e: NoSuchMethodException) =>\n+        val proxy = WebAppUtils.getProxyHostAndPort(conf)\n+        val parts = proxy.split(\":\")\n+        val uriBase = prefix + proxy + proxyBase\n+        Map(\"PROXY_HOST\" -> parts(0), \"PROXY_URI_BASE\" -> uriBase)"
+  }, {
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "They're slightly different, though (alpha API is a little bit different here).\n",
+    "commit": "aeb458ab0552174f5fb3b72c0a6607fc93d3bd44",
+    "createdAt": "2014-09-29T18:17:14Z",
+    "diffHunk": "@@ -69,7 +74,32 @@ private class YarnRMClientImpl(args: ApplicationMasterArguments) extends YarnRMC\n     appAttemptId\n   }\n \n-  override def getProxyHostAndPort(conf: YarnConfiguration) = WebAppUtils.getProxyHostAndPort(conf)\n+  override def getAmIpFilterParams(conf: YarnConfiguration, proxyBase: String) = {\n+    // Figure out which scheme Yarn is using. Note the method seems to have been added after 2.2,\n+    // so not all stable releases have it.\n+    val prefix = Try(classOf[WebAppUtils].getMethod(\"getHttpSchemePrefix\", classOf[Configuration])\n+        .invoke(null, conf).asInstanceOf[String]).getOrElse(\"http://\")\n+\n+    // If running a new enough Yarn, use the HA-aware API for retrieving the RM addresses.\n+    val method = Try(classOf[WebAppUtils].getMethod(\"getProxyHostsAndPortsForAmFilter\",\n+      classOf[Configuration]))\n+    method match {\n+      case Success(proxiesMethod) =>\n+        val proxies = proxiesMethod.invoke(null, conf).asInstanceOf[JList[String]]\n+        val hosts = proxies.map { proxy => proxy.split(\":\")(0) }\n+        val uriBases = proxies.map { proxy => prefix + proxy + proxyBase }\n+        Map(\"PROXY_HOSTS\" -> hosts.mkString(\",\"), \"PROXY_URI_BASES\" -> uriBases.mkString(\",\"))\n+\n+      case Failure(e: NoSuchMethodException) =>\n+        val proxy = WebAppUtils.getProxyHostAndPort(conf)\n+        val parts = proxy.split(\":\")\n+        val uriBase = prefix + proxy + proxyBase\n+        Map(\"PROXY_HOST\" -> parts(0), \"PROXY_URI_BASE\" -> uriBase)"
+  }],
+  "prId": 2469
+}, {
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "I actually think this whole block is clearer with Java's plain old try catch, particular because the things you are `Try`ing are pretty long.\n",
+    "commit": "aeb458ab0552174f5fb3b72c0a6607fc93d3bd44",
+    "createdAt": "2014-09-27T05:04:03Z",
+    "diffHunk": "@@ -69,7 +74,32 @@ private class YarnRMClientImpl(args: ApplicationMasterArguments) extends YarnRMC\n     appAttemptId\n   }\n \n-  override def getProxyHostAndPort(conf: YarnConfiguration) = WebAppUtils.getProxyHostAndPort(conf)\n+  override def getAmIpFilterParams(conf: YarnConfiguration, proxyBase: String) = {\n+    // Figure out which scheme Yarn is using. Note the method seems to have been added after 2.2,\n+    // so not all stable releases have it.\n+    val prefix = Try(classOf[WebAppUtils].getMethod(\"getHttpSchemePrefix\", classOf[Configuration])\n+        .invoke(null, conf).asInstanceOf[String]).getOrElse(\"http://\")\n+\n+    // If running a new enough Yarn, use the HA-aware API for retrieving the RM addresses.\n+    val method = Try(classOf[WebAppUtils].getMethod(\"getProxyHostsAndPortsForAmFilter\",\n+      classOf[Configuration]))\n+    method match {\n+      case Success(proxiesMethod) =>\n+        val proxies = proxiesMethod.invoke(null, conf).asInstanceOf[JList[String]]\n+        val hosts = proxies.map { proxy => proxy.split(\":\")(0) }\n+        val uriBases = proxies.map { proxy => prefix + proxy + proxyBase }\n+        Map(\"PROXY_HOSTS\" -> hosts.mkString(\",\"), \"PROXY_URI_BASES\" -> uriBases.mkString(\",\"))\n+\n+      case Failure(e: NoSuchMethodException) =>\n+        val proxy = WebAppUtils.getProxyHostAndPort(conf)\n+        val parts = proxy.split(\":\")\n+        val uriBase = prefix + proxy + proxyBase\n+        Map(\"PROXY_HOST\" -> parts(0), \"PROXY_URI_BASE\" -> uriBase)\n+\n+      case Failure(e) =>\n+        throw e\n+    }\n+  }"
+  }],
+  "prId": 2469
+}, {
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "Looks like this wasn't in 2.3.0 either. Actually it seems that both `getHttpSchemePrefix` and `getProxyHostsAndPortsForAmFilter` were added in 2.4.0\n",
+    "commit": "aeb458ab0552174f5fb3b72c0a6607fc93d3bd44",
+    "createdAt": "2014-10-03T18:08:24Z",
+    "diffHunk": "@@ -69,7 +74,28 @@ private class YarnRMClientImpl(args: ApplicationMasterArguments) extends YarnRMC\n     appAttemptId\n   }\n \n-  override def getProxyHostAndPort(conf: YarnConfiguration) = WebAppUtils.getProxyHostAndPort(conf)\n+  override def getAmIpFilterParams(conf: YarnConfiguration, proxyBase: String) = {\n+    // Figure out which scheme Yarn is using. Note the method seems to have been added after 2.2,",
+    "line": 20
+  }, {
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "When exactly doesn't matter; what matters is that 2.2 is the first release in what Spark considers \"stable\", so if 2.2 doesn't have it, then the hack is necessary.\n",
+    "commit": "aeb458ab0552174f5fb3b72c0a6607fc93d3bd44",
+    "createdAt": "2014-10-03T18:11:15Z",
+    "diffHunk": "@@ -69,7 +74,28 @@ private class YarnRMClientImpl(args: ApplicationMasterArguments) extends YarnRMC\n     appAttemptId\n   }\n \n-  override def getProxyHostAndPort(conf: YarnConfiguration) = WebAppUtils.getProxyHostAndPort(conf)\n+  override def getAmIpFilterParams(conf: YarnConfiguration, proxyBase: String) = {\n+    // Figure out which scheme Yarn is using. Note the method seems to have been added after 2.2,",
+    "line": 20
+  }, {
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "Yeah I pointed this out because the comment could be more specific (the code doesn't need to change because of this)\n",
+    "commit": "aeb458ab0552174f5fb3b72c0a6607fc93d3bd44",
+    "createdAt": "2014-10-03T18:16:33Z",
+    "diffHunk": "@@ -69,7 +74,28 @@ private class YarnRMClientImpl(args: ApplicationMasterArguments) extends YarnRMC\n     appAttemptId\n   }\n \n-  override def getProxyHostAndPort(conf: YarnConfiguration) = WebAppUtils.getProxyHostAndPort(conf)\n+  override def getAmIpFilterParams(conf: YarnConfiguration, proxyBase: String) = {\n+    // Figure out which scheme Yarn is using. Note the method seems to have been added after 2.2,",
+    "line": 20
+  }, {
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "2.4 is still after 2.2. 2.2 is the key version here (oldest version we need to support).\n",
+    "commit": "aeb458ab0552174f5fb3b72c0a6607fc93d3bd44",
+    "createdAt": "2014-10-03T18:19:11Z",
+    "diffHunk": "@@ -69,7 +74,28 @@ private class YarnRMClientImpl(args: ApplicationMasterArguments) extends YarnRMC\n     appAttemptId\n   }\n \n-  override def getProxyHostAndPort(conf: YarnConfiguration) = WebAppUtils.getProxyHostAndPort(conf)\n+  override def getAmIpFilterParams(conf: YarnConfiguration, proxyBase: String) = {\n+    // Figure out which scheme Yarn is using. Note the method seems to have been added after 2.2,",
+    "line": 20
+  }],
+  "prId": 2469
+}, {
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "I think `WebAppUtils` doesn't actually exist in alpha (at least not in 0.23.3). We might need to catch a more general exception here.\n",
+    "commit": "aeb458ab0552174f5fb3b72c0a6607fc93d3bd44",
+    "createdAt": "2014-10-03T18:15:35Z",
+    "diffHunk": "@@ -69,7 +74,28 @@ private class YarnRMClientImpl(args: ApplicationMasterArguments) extends YarnRMC\n     appAttemptId\n   }\n \n-  override def getProxyHostAndPort(conf: YarnConfiguration) = WebAppUtils.getProxyHostAndPort(conf)\n+  override def getAmIpFilterParams(conf: YarnConfiguration, proxyBase: String) = {\n+    // Figure out which scheme Yarn is using. Note the method seems to have been added after 2.2,\n+    // so not all stable releases have it.\n+    val prefix = Try(classOf[WebAppUtils].getMethod(\"getHttpSchemePrefix\", classOf[Configuration])\n+        .invoke(null, conf).asInstanceOf[String]).getOrElse(\"http://\")\n+\n+    // If running a new enough Yarn, use the HA-aware API for retrieving the RM addresses.\n+    try {\n+      val method = classOf[WebAppUtils].getMethod(\"getProxyHostsAndPortsForAmFilter\",\n+        classOf[Configuration])\n+      val proxies = method.invoke(null, conf).asInstanceOf[JList[String]]\n+      val hosts = proxies.map { proxy => proxy.split(\":\")(0) }\n+      val uriBases = proxies.map { proxy => prefix + proxy + proxyBase }\n+      Map(\"PROXY_HOSTS\" -> hosts.mkString(\",\"), \"PROXY_URI_BASES\" -> uriBases.mkString(\",\"))\n+    } catch {\n+      case e: NoSuchMethodException =>",
+    "line": 34
+  }, {
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "Oh never mind this is in the stable module\n",
+    "commit": "aeb458ab0552174f5fb3b72c0a6607fc93d3bd44",
+    "createdAt": "2014-10-03T18:19:31Z",
+    "diffHunk": "@@ -69,7 +74,28 @@ private class YarnRMClientImpl(args: ApplicationMasterArguments) extends YarnRMC\n     appAttemptId\n   }\n \n-  override def getProxyHostAndPort(conf: YarnConfiguration) = WebAppUtils.getProxyHostAndPort(conf)\n+  override def getAmIpFilterParams(conf: YarnConfiguration, proxyBase: String) = {\n+    // Figure out which scheme Yarn is using. Note the method seems to have been added after 2.2,\n+    // so not all stable releases have it.\n+    val prefix = Try(classOf[WebAppUtils].getMethod(\"getHttpSchemePrefix\", classOf[Configuration])\n+        .invoke(null, conf).asInstanceOf[String]).getOrElse(\"http://\")\n+\n+    // If running a new enough Yarn, use the HA-aware API for retrieving the RM addresses.\n+    try {\n+      val method = classOf[WebAppUtils].getMethod(\"getProxyHostsAndPortsForAmFilter\",\n+        classOf[Configuration])\n+      val proxies = method.invoke(null, conf).asInstanceOf[JList[String]]\n+      val hosts = proxies.map { proxy => proxy.split(\":\")(0) }\n+      val uriBases = proxies.map { proxy => prefix + proxy + proxyBase }\n+      Map(\"PROXY_HOSTS\" -> hosts.mkString(\",\"), \"PROXY_URI_BASES\" -> uriBases.mkString(\",\"))\n+    } catch {\n+      case e: NoSuchMethodException =>",
+    "line": 34
+  }],
+  "prId": 2469
+}]

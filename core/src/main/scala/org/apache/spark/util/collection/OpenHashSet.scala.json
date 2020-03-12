@@ -1,0 +1,101 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "I think you're right that this is a subtle but important bug, but it looks like the intent is to use all but the top bit. That's 0x7FFFFFFF not 0x1FFFFFFF. Therefore the max position and size is 2^31-1, not 2^29, and that's already the max value of an int, so I don't think the check is needed. Well you could check for a negative value. Basically it's reusing the sign bit that would never otherwise be used since position and size must be positive.\n",
+    "commit": "8557445e79c42460890ca76c0894dc090f7bf862",
+    "createdAt": "2015-06-11T21:21:05Z",
+    "diffHunk": "@@ -278,7 +279,7 @@ object OpenHashSet {\n \n   val INVALID_POS = -1\n   val NONEXISTENCE_MASK = 0x80000000\n-  val POSITION_MASK = 0xEFFFFFF\n+  val POSITION_MASK = 0x1FFFFFFF"
+  }, {
+    "author": {
+      "login": "SlavikBaranov"
+    },
+    "body": "It's easy to make it support 2^30 capacity, but support of 2^31 will require some hacks. In JDK8 maximum array size is 2^31 - 1, so we'd need to store the item with hashCode 2^31 - 1 somewhere else. It will require additional check that will probably affect performance.\nAs I remember, in JDK6 max array size is either 2^31 - 4 or 2^31 - 5, so JDK6 support will require some additional work.\n\nI see following possibilities:\n1. Leave the fix as is\n2. Update it to support capacity 2^30\n3. Make it support 2^31 with some hacks\n4. Make it support even larger capacity by splitting value storage into several arrays.\n\nIMO, second option is most reasonable, since 1B max capacity is definitely better than 500M. :)\nOn the other hand, options 3 & 4 look like an overkill: due to distributed nature of Spark, it's usually not necessary to collect more than a billion items on a single machine even when working with multi-billion datasets.\n",
+    "commit": "8557445e79c42460890ca76c0894dc090f7bf862",
+    "createdAt": "2015-06-11T22:39:32Z",
+    "diffHunk": "@@ -278,7 +279,7 @@ object OpenHashSet {\n \n   val INVALID_POS = -1\n   val NONEXISTENCE_MASK = 0x80000000\n-  val POSITION_MASK = 0xEFFFFFF\n+  val POSITION_MASK = 0x1FFFFFFF"
+  }],
+  "prId": 6763
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Ah right, because it chooses the next greater power of 2 as a capacity, so this limit sounds correct.\n\nStill I'm not sure why the code had 1 << 29 then, and actually the old `POSITION_MAX` was `0x0EFFFFFF` not `0xEFFFFFFF`. It looks like it really should be `0x7FFFFFFF` but maybe we should check with @rxin to make sure I'm not missing something?\n",
+    "commit": "8557445e79c42460890ca76c0894dc090f7bf862",
+    "createdAt": "2015-06-12T17:59:34Z",
+    "diffHunk": "@@ -45,7 +45,7 @@ class OpenHashSet[@specialized(Long, Int) T: ClassTag](\n     loadFactor: Double)\n   extends Serializable {\n \n-  require(initialCapacity <= (1 << 29), \"Can't make capacity bigger than 2^29 elements\")\n+  require(initialCapacity <= (1 << 30), \"Can't make capacity bigger than 2^30 elements\")"
+  }],
+  "prId": 6763
+}, {
+  "comments": [{
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "Could you change `NONEXISTENCE_MASK` to `1 << 31` and `POSITION_MASK` to `(1 << 31) - 1`? Just for readability.\n",
+    "commit": "8557445e79c42460890ca76c0894dc090f7bf862",
+    "createdAt": "2015-06-13T13:30:46Z",
+    "diffHunk": "@@ -278,7 +279,7 @@ object OpenHashSet {\n \n   val INVALID_POS = -1\n   val NONEXISTENCE_MASK = 0x80000000\n-  val POSITION_MASK = 0xEFFFFFF\n+  val POSITION_MASK = 0x7FFFFFFF"
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "As these are masks, I'm not sure that's more readable. A hex string is what I would expect.\n",
+    "commit": "8557445e79c42460890ca76c0894dc090f7bf862",
+    "createdAt": "2015-06-14T08:57:15Z",
+    "diffHunk": "@@ -278,7 +279,7 @@ object OpenHashSet {\n \n   val INVALID_POS = -1\n   val NONEXISTENCE_MASK = 0x80000000\n-  val POSITION_MASK = 0xEFFFFFF\n+  val POSITION_MASK = 0x7FFFFFFF"
+  }, {
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "@srowen I think it's very easy to miss some `F` in a hex string just like this issue.\n",
+    "commit": "8557445e79c42460890ca76c0894dc090f7bf862",
+    "createdAt": "2015-06-15T07:30:11Z",
+    "diffHunk": "@@ -278,7 +279,7 @@ object OpenHashSet {\n \n   val INVALID_POS = -1\n   val NONEXISTENCE_MASK = 0x80000000\n-  val POSITION_MASK = 0xEFFFFFF\n+  val POSITION_MASK = 0x7FFFFFFF"
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "It's a fair case-in-point here, yes. We fixed it. Well I'm not against the alternate expression.\n",
+    "commit": "8557445e79c42460890ca76c0894dc090f7bf862",
+    "createdAt": "2015-06-15T07:35:49Z",
+    "diffHunk": "@@ -278,7 +279,7 @@ object OpenHashSet {\n \n   val INVALID_POS = -1\n   val NONEXISTENCE_MASK = 0x80000000\n-  val POSITION_MASK = 0xEFFFFFF\n+  val POSITION_MASK = 0x7FFFFFFF"
+  }],
+  "prId": 6763
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "I agree this is the theoretically largest number of elements that can be in the set. The failure will occur any time that twice the grow threshold exceeds `MAX_CAPACITY`, which can happen when the collection is less full than this. So I am actually not sure what's clearer here. Up to you.\n\nI think we still have a little problem here, because when capacity reaches 2^30, twice that number becomes negative and `newCapacity <= OpenHashSet.MAX_CAPACITY` is true, still, because of overflow. Check whether the existing capacity is `<= OpenHashSet.MAX_CAPACITY / 2` first?\n",
+    "commit": "8557445e79c42460890ca76c0894dc090f7bf862",
+    "createdAt": "2015-06-16T06:09:42Z",
+    "diffHunk": "@@ -223,6 +224,8 @@ class OpenHashSet[@specialized(Long, Int) T: ClassTag](\n    */\n   private def rehash(k: T, allocateFunc: (Int) => Unit, moveFunc: (Int, Int) => Unit) {\n     val newCapacity = _capacity * 2\n+    require(newCapacity <= OpenHashSet.MAX_CAPACITY,"
+  }, {
+    "author": {
+      "login": "SlavikBaranov"
+    },
+    "body": "@srowen Integer overflow is not possible with current MAX_CAPACITY setting, since 2^31 is still positive number. Anyway, I've added check for positive capacity. IMO it's more clear way to guard against overflow.\n",
+    "commit": "8557445e79c42460890ca76c0894dc090f7bf862",
+    "createdAt": "2015-06-16T10:58:01Z",
+    "diffHunk": "@@ -223,6 +224,8 @@ class OpenHashSet[@specialized(Long, Int) T: ClassTag](\n    */\n   private def rehash(k: T, allocateFunc: (Int) => Unit, moveFunc: (Int, Int) => Unit) {\n     val newCapacity = _capacity * 2\n+    require(newCapacity <= OpenHashSet.MAX_CAPACITY,"
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "2^31 is positive, but it is not representable as a 32-bit signed int.\n\n```\nscala> val _capacity = 1 << 30\n_capacity: Int = 1073741824\n\nscala> val newCapacity = _capacity * 2\nnewCapacity: Int = -2147483648\n```\n\nSo that's an important check.\n",
+    "commit": "8557445e79c42460890ca76c0894dc090f7bf862",
+    "createdAt": "2015-06-16T11:30:01Z",
+    "diffHunk": "@@ -223,6 +224,8 @@ class OpenHashSet[@specialized(Long, Int) T: ClassTag](\n    */\n   private def rehash(k: T, allocateFunc: (Int) => Unit, moveFunc: (Int, Int) => Unit) {\n     val newCapacity = _capacity * 2\n+    require(newCapacity <= OpenHashSet.MAX_CAPACITY,"
+  }, {
+    "author": {
+      "login": "SlavikBaranov"
+    },
+    "body": "Oh, yes. Sorry :)\n",
+    "commit": "8557445e79c42460890ca76c0894dc090f7bf862",
+    "createdAt": "2015-06-16T13:58:00Z",
+    "diffHunk": "@@ -223,6 +224,8 @@ class OpenHashSet[@specialized(Long, Int) T: ClassTag](\n    */\n   private def rehash(k: T, allocateFunc: (Int) => Unit, moveFunc: (Int, Int) => Unit) {\n     val newCapacity = _capacity * 2\n+    require(newCapacity <= OpenHashSet.MAX_CAPACITY,"
+  }],
+  "prId": 6763
+}]

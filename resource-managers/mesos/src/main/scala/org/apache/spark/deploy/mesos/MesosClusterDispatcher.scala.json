@@ -1,0 +1,52 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "tnachen"
+    },
+    "body": "I think it might be better to place this in the MesosRestServer code, since it's not really about the framework (MesosClusterDispatcher) but the RestServer receiving requests. ",
+    "commit": "897b587a19d8fc5bc67d2daf015d476f93bab40c",
+    "createdAt": "2018-08-12T19:00:36Z",
+    "diffHunk": "@@ -51,6 +51,13 @@ private[mesos] class MesosClusterDispatcher(\n     conf: SparkConf)\n   extends Logging {\n \n+  {\n+    val authKey = SecurityManager.SPARK_AUTH_SECRET_CONF"
+  }, {
+    "author": {
+      "login": "squito"
+    },
+    "body": "I thought about this too, and originally wrote it that way ... but then I figured the way it works now, its really the same thing.  If I put it in the MesosRestServer, it might seem like you could run the ClusterDispatcher without the RestServer somehow -- but maybe the exception itself is clear enough?\r\n\r\nanyway, don't feel particularly strongly either way.",
+    "commit": "897b587a19d8fc5bc67d2daf015d476f93bab40c",
+    "createdAt": "2018-08-13T14:36:27Z",
+    "diffHunk": "@@ -51,6 +51,13 @@ private[mesos] class MesosClusterDispatcher(\n     conf: SparkConf)\n   extends Logging {\n \n+  {\n+    val authKey = SecurityManager.SPARK_AUTH_SECRET_CONF"
+  }, {
+    "author": {
+      "login": "tnachen"
+    },
+    "body": "Got it, my reasoning is that it could be harder for someone looking at the code to figure out why this is not allowed, since we don't really mention about the rest server which is really the one requiring security to be turned off. Another reason it will be beneficial to have the check in the MesosRestServer is that the MesosClusterDispatcher framework could technically be decoupled from the MesosRestServer and allow another way to receive requests, so to increase flexibility and avoid someone forgetting about why we put this here, my suggestion is to move the check closer to where it's being required will help maintain this a bit better.",
+    "commit": "897b587a19d8fc5bc67d2daf015d476f93bab40c",
+    "createdAt": "2018-08-13T18:36:19Z",
+    "diffHunk": "@@ -51,6 +51,13 @@ private[mesos] class MesosClusterDispatcher(\n     conf: SparkConf)\n   extends Logging {\n \n+  {\n+    val authKey = SecurityManager.SPARK_AUTH_SECRET_CONF"
+  }, {
+    "author": {
+      "login": "tgravescs"
+    },
+    "body": "Personally the way I read this, I agree with @squito and it should be here. From my understanding from reading the docs on running on mesos, the user doesn't start the rest server, they start the dispatcher. The dispatcher doesn't support any sort of authentication.  The fact that it uses the rest server is an implementation detail the user doesn't necessarily care about.  If you change the dispatcher to have another way then it should support authentication as well or have this same error. Someone adding another way other then rest server should be made aware of this, so it being here accomplishes that.\r\n\r\nPerhaps just adding a comment in the code about the rest server would help to clarify to developers?  Or please correct me if my understanding of running the dispatcher is wrong.",
+    "commit": "897b587a19d8fc5bc67d2daf015d476f93bab40c",
+    "createdAt": "2018-08-13T20:14:41Z",
+    "diffHunk": "@@ -51,6 +51,13 @@ private[mesos] class MesosClusterDispatcher(\n     conf: SparkConf)\n   extends Logging {\n \n+  {\n+    val authKey = SecurityManager.SPARK_AUTH_SECRET_CONF"
+  }, {
+    "author": {
+      "login": "tgravescs"
+    },
+    "body": "Note if someone add another way to that supports authentication we just move it at that point.",
+    "commit": "897b587a19d8fc5bc67d2daf015d476f93bab40c",
+    "createdAt": "2018-08-13T20:17:06Z",
+    "diffHunk": "@@ -51,6 +51,13 @@ private[mesos] class MesosClusterDispatcher(\n     conf: SparkConf)\n   extends Logging {\n \n+  {\n+    val authKey = SecurityManager.SPARK_AUTH_SECRET_CONF"
+  }, {
+    "author": {
+      "login": "squito"
+    },
+    "body": "> MesosClusterDispatcher framework could technically be decoupled from the MesosRestServer\r\n\r\nI actually think that is a reason to keep it here.  If somebody adds another way, then this check is still in place for the new way -- unless they consciously think about making it work, and then they'd move the check to a more appropriate spot.\r\n\r\nI can add a comment in the code: `// This doesn't support authentication because the RestSubmissionServer doesn't support it.`",
+    "commit": "897b587a19d8fc5bc67d2daf015d476f93bab40c",
+    "createdAt": "2018-08-13T20:26:49Z",
+    "diffHunk": "@@ -51,6 +51,13 @@ private[mesos] class MesosClusterDispatcher(\n     conf: SparkConf)\n   extends Logging {\n \n+  {\n+    val authKey = SecurityManager.SPARK_AUTH_SECRET_CONF"
+  }],
+  "prId": 22071
+}]

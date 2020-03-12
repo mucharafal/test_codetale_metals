@@ -1,0 +1,61 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "The previous name (`tokenRenewer`) was more readable.",
+    "commit": "c4149ddb940c32285fde8b1c08a5b212fced5d66",
+    "createdAt": "2017-04-28T23:41:06Z",
+    "diffHunk": "@@ -21,66 +21,47 @@ import scala.collection.JavaConverters._\n import scala.util.Try\n \n import org.apache.hadoop.conf.Configuration\n-import org.apache.hadoop.fs.{FileSystem, Path}\n+import org.apache.hadoop.fs.FileSystem\n+import org.apache.hadoop.fs.Path\n import org.apache.hadoop.mapred.Master\n import org.apache.hadoop.security.Credentials\n import org.apache.hadoop.security.token.delegation.AbstractDelegationTokenIdentifier\n \n import org.apache.spark.{SparkConf, SparkException}\n+import org.apache.spark.deploy.security.{HadoopAccessManager}\n import org.apache.spark.deploy.yarn.config._\n import org.apache.spark.internal.Logging\n import org.apache.spark.internal.config._\n \n-private[security] class HadoopFSCredentialProvider\n-    extends ServiceCredentialProvider with Logging {\n-  // Token renewal interval, this value will be set in the first call,\n-  // if None means no token renewer specified or no token can be renewed,\n-  // so cannot get token renewal interval.\n-  private var tokenRenewalInterval: Option[Long] = null\n+private[yarn] class YARNHadoopAccessManager(\n+    hadoopConf: Configuration,\n+    sparkConf: SparkConf) extends HadoopAccessManager with Logging {\n \n-  override val serviceName: String = \"hadoopfs\"\n-\n-  override def obtainCredentials(\n-      hadoopConf: Configuration,\n-      sparkConf: SparkConf,\n-      creds: Credentials): Option[Long] = {\n-    // NameNode to access, used to get tokens from different FileSystems\n-    val tmpCreds = new Credentials()\n-    val tokenRenewer = getTokenRenewer(hadoopConf)\n-    hadoopFSsToAccess(hadoopConf, sparkConf).foreach { dst =>\n-      val dstFs = dst.getFileSystem(hadoopConf)\n-      logInfo(\"getting token for: \" + dst)\n-      dstFs.addDelegationTokens(tokenRenewer, tmpCreds)\n-    }\n-\n-    // Get the token renewal interval if it is not set. It will only be called once.\n-    if (tokenRenewalInterval == null) {\n-      tokenRenewalInterval = getTokenRenewalInterval(hadoopConf, sparkConf)\n+  def getTokenRenewer: String = {\n+    val delegTokenRenewer = Master.getMasterPrincipal(hadoopConf)"
+  }, {
+    "author": {
+      "login": "mgummelt"
+    },
+    "body": "reverted",
+    "commit": "c4149ddb940c32285fde8b1c08a5b212fced5d66",
+    "createdAt": "2017-05-18T20:21:11Z",
+    "diffHunk": "@@ -21,66 +21,47 @@ import scala.collection.JavaConverters._\n import scala.util.Try\n \n import org.apache.hadoop.conf.Configuration\n-import org.apache.hadoop.fs.{FileSystem, Path}\n+import org.apache.hadoop.fs.FileSystem\n+import org.apache.hadoop.fs.Path\n import org.apache.hadoop.mapred.Master\n import org.apache.hadoop.security.Credentials\n import org.apache.hadoop.security.token.delegation.AbstractDelegationTokenIdentifier\n \n import org.apache.spark.{SparkConf, SparkException}\n+import org.apache.spark.deploy.security.{HadoopAccessManager}\n import org.apache.spark.deploy.yarn.config._\n import org.apache.spark.internal.Logging\n import org.apache.spark.internal.config._\n \n-private[security] class HadoopFSCredentialProvider\n-    extends ServiceCredentialProvider with Logging {\n-  // Token renewal interval, this value will be set in the first call,\n-  // if None means no token renewer specified or no token can be renewed,\n-  // so cannot get token renewal interval.\n-  private var tokenRenewalInterval: Option[Long] = null\n+private[yarn] class YARNHadoopAccessManager(\n+    hadoopConf: Configuration,\n+    sparkConf: SparkConf) extends HadoopAccessManager with Logging {\n \n-  override val serviceName: String = \"hadoopfs\"\n-\n-  override def obtainCredentials(\n-      hadoopConf: Configuration,\n-      sparkConf: SparkConf,\n-      creds: Credentials): Option[Long] = {\n-    // NameNode to access, used to get tokens from different FileSystems\n-    val tmpCreds = new Credentials()\n-    val tokenRenewer = getTokenRenewer(hadoopConf)\n-    hadoopFSsToAccess(hadoopConf, sparkConf).foreach { dst =>\n-      val dstFs = dst.getFileSystem(hadoopConf)\n-      logInfo(\"getting token for: \" + dst)\n-      dstFs.addDelegationTokens(tokenRenewer, tmpCreds)\n-    }\n-\n-    // Get the token renewal interval if it is not set. It will only be called once.\n-    if (tokenRenewalInterval == null) {\n-      tokenRenewalInterval = getTokenRenewalInterval(hadoopConf, sparkConf)\n+  def getTokenRenewer: String = {\n+    val delegTokenRenewer = Master.getMasterPrincipal(hadoopConf)"
+  }],
+  "prId": 17723
+}, {
+  "comments": [{
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "Could you rename it to `HadoopFSCredentialProvider.scala`? It can reduce the code changes.",
+    "commit": "c4149ddb940c32285fde8b1c08a5b212fced5d66",
+    "createdAt": "2017-05-19T18:42:01Z",
+    "diffHunk": "@@ -21,66 +21,47 @@ import scala.collection.JavaConverters._\n import scala.util.Try\n \n import org.apache.hadoop.conf.Configuration\n-import org.apache.hadoop.fs.{FileSystem, Path}\n+import org.apache.hadoop.fs.FileSystem\n+import org.apache.hadoop.fs.Path\n import org.apache.hadoop.mapred.Master\n import org.apache.hadoop.security.Credentials\n import org.apache.hadoop.security.token.delegation.AbstractDelegationTokenIdentifier\n \n import org.apache.spark.{SparkConf, SparkException}\n+import org.apache.spark.deploy.security.{HadoopAccessManager}\n import org.apache.spark.deploy.yarn.config._\n import org.apache.spark.internal.Logging\n import org.apache.spark.internal.config._\n \n-private[security] class HadoopFSCredentialProvider"
+  }],
+  "prId": 17723
+}, {
+  "comments": [{
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "The three functions need to add `override`?",
+    "commit": "c4149ddb940c32285fde8b1c08a5b212fced5d66",
+    "createdAt": "2017-05-19T18:55:19Z",
+    "diffHunk": "@@ -21,66 +21,47 @@ import scala.collection.JavaConverters._\n import scala.util.Try\n \n import org.apache.hadoop.conf.Configuration\n-import org.apache.hadoop.fs.{FileSystem, Path}\n+import org.apache.hadoop.fs.FileSystem\n+import org.apache.hadoop.fs.Path\n import org.apache.hadoop.mapred.Master\n import org.apache.hadoop.security.Credentials\n import org.apache.hadoop.security.token.delegation.AbstractDelegationTokenIdentifier\n \n import org.apache.spark.{SparkConf, SparkException}\n+import org.apache.spark.deploy.security.{HadoopAccessManager}\n import org.apache.spark.deploy.yarn.config._\n import org.apache.spark.internal.Logging\n import org.apache.spark.internal.config._\n \n-private[security] class HadoopFSCredentialProvider\n-    extends ServiceCredentialProvider with Logging {\n-  // Token renewal interval, this value will be set in the first call,\n-  // if None means no token renewer specified or no token can be renewed,\n-  // so cannot get token renewal interval.\n-  private var tokenRenewalInterval: Option[Long] = null\n+private[yarn] class YARNHadoopAccessManager(\n+    hadoopConf: Configuration,\n+    sparkConf: SparkConf) extends HadoopAccessManager with Logging {\n \n-  override val serviceName: String = \"hadoopfs\"\n-\n-  override def obtainCredentials(\n-      hadoopConf: Configuration,\n-      sparkConf: SparkConf,\n-      creds: Credentials): Option[Long] = {\n-    // NameNode to access, used to get tokens from different FileSystems\n-    val tmpCreds = new Credentials()\n-    val tokenRenewer = getTokenRenewer(hadoopConf)\n-    hadoopFSsToAccess(hadoopConf, sparkConf).foreach { dst =>\n-      val dstFs = dst.getFileSystem(hadoopConf)\n-      logInfo(\"getting token for: \" + dst)\n-      dstFs.addDelegationTokens(tokenRenewer, tmpCreds)\n-    }\n-\n-    // Get the token renewal interval if it is not set. It will only be called once.\n-    if (tokenRenewalInterval == null) {\n-      tokenRenewalInterval = getTokenRenewalInterval(hadoopConf, sparkConf)\n+  def getTokenRenewer: String = {\n+    val tokenRenewer = Master.getMasterPrincipal(hadoopConf)\n+    logDebug(\"delegation token renewer is: \" + tokenRenewer)\n+    if (tokenRenewer == null || tokenRenewer.length() == 0) {\n+      val errorMessage = \"Can't get Master Kerberos principal for use as renewer\"\n+      logError(errorMessage)\n+      throw new SparkException(errorMessage)\n     }\n \n-    // Get the time of next renewal.\n-    val nextRenewalDate = tokenRenewalInterval.flatMap { interval =>\n-      val nextRenewalDates = tmpCreds.getAllTokens.asScala\n-        .filter(_.decodeIdentifier().isInstanceOf[AbstractDelegationTokenIdentifier])\n-        .map { t =>\n-          val identifier = t.decodeIdentifier().asInstanceOf[AbstractDelegationTokenIdentifier]\n-          identifier.getIssueDate + interval\n-        }\n-      if (nextRenewalDates.isEmpty) None else Some(nextRenewalDates.min)\n-    }\n+    tokenRenewer\n+  }\n \n-    creds.addAll(tmpCreds)\n-    nextRenewalDate\n+  def hadoopFSsToAccess: Set[Path] = {\n+    sparkConf.get(FILESYSTEMS_TO_ACCESS).map(new Path(_)).toSet +\n+      sparkConf.get(STAGING_DIR).map(new Path(_))\n+        .getOrElse(FileSystem.get(hadoopConf).getHomeDirectory)\n   }\n \n-  private def getTokenRenewalInterval(\n-      hadoopConf: Configuration, sparkConf: SparkConf): Option[Long] = {\n+  def getTokenRenewalInterval: Option[Long] = {"
+  }],
+  "prId": 17723
+}, {
+  "comments": [{
+    "author": {
+      "login": "mgummelt"
+    },
+    "body": "@vanzin I'm refactoring this code, and trying to understand this part.  Why would STAGING_DIR override the default hadoop file system?  I would think you would want to fetch a delegation token for the default hadoop file system regardless, and then if STAGING_DIR is set, you'd want to fetch that one as well.",
+    "commit": "c4149ddb940c32285fde8b1c08a5b212fced5d66",
+    "createdAt": "2017-05-22T20:55:27Z",
+    "diffHunk": "@@ -100,21 +81,4 @@ private[security] class HadoopFSCredentialProvider\n     }\n   }\n \n-  private def getTokenRenewer(conf: Configuration): String = {\n-    val delegTokenRenewer = Master.getMasterPrincipal(conf)\n-    logDebug(\"delegation token renewer is: \" + delegTokenRenewer)\n-    if (delegTokenRenewer == null || delegTokenRenewer.length() == 0) {\n-      val errorMessage = \"Can't get Master Kerberos principal for use as renewer\"\n-      logError(errorMessage)\n-      throw new SparkException(errorMessage)\n-    }\n-\n-    delegTokenRenewer\n-  }\n-\n-  private def hadoopFSsToAccess(hadoopConf: Configuration, sparkConf: SparkConf): Set[Path] = {\n-    sparkConf.get(FILESYSTEMS_TO_ACCESS).map(new Path(_)).toSet +\n-      sparkConf.get(STAGING_DIR).map(new Path(_))\n-        .getOrElse(FileSystem.get(hadoopConf).getHomeDirectory)"
+  }, {
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Not sure why it's this way, but I agree with what you're suggesting. It probably would cause some minor overhead since you'd have the same NN address twice on the list, but the HDFS library probably optimizes for that (as in it doesn't try to fetch a new delegation token for the second time the same address shows up on the list).",
+    "commit": "c4149ddb940c32285fde8b1c08a5b212fced5d66",
+    "createdAt": "2017-05-22T21:02:56Z",
+    "diffHunk": "@@ -100,21 +81,4 @@ private[security] class HadoopFSCredentialProvider\n     }\n   }\n \n-  private def getTokenRenewer(conf: Configuration): String = {\n-    val delegTokenRenewer = Master.getMasterPrincipal(conf)\n-    logDebug(\"delegation token renewer is: \" + delegTokenRenewer)\n-    if (delegTokenRenewer == null || delegTokenRenewer.length() == 0) {\n-      val errorMessage = \"Can't get Master Kerberos principal for use as renewer\"\n-      logError(errorMessage)\n-      throw new SparkException(errorMessage)\n-    }\n-\n-    delegTokenRenewer\n-  }\n-\n-  private def hadoopFSsToAccess(hadoopConf: Configuration, sparkConf: SparkConf): Set[Path] = {\n-    sparkConf.get(FILESYSTEMS_TO_ACCESS).map(new Path(_)).toSet +\n-      sparkConf.get(STAGING_DIR).map(new Path(_))\n-        .getOrElse(FileSystem.get(hadoopConf).getHomeDirectory)"
+  }],
+  "prId": 17723
+}]

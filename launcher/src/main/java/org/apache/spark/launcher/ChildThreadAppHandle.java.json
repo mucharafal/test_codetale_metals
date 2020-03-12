@@ -1,0 +1,66 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "tgravescs"
+    },
+    "body": "space before !=\n",
+    "commit": "10513ec4a1cee2de26104945dc2eae54efeed9d2",
+    "createdAt": "2016-09-09T14:14:06Z",
+    "diffHunk": "@@ -0,0 +1,54 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.launcher;\n+\n+import java.util.logging.Logger;\n+\n+public class ChildThreadAppHandle extends AbstractSparkAppHandle {\n+  private static final Logger LOG = Logger.getLogger(ChildThreadAppHandle.class.getName());\n+  private Thread childThread;\n+\n+  public ChildThreadAppHandle(String secret, LauncherServer server) {\n+    super(server, secret);\n+  }\n+\n+  @Override\n+  public synchronized void  kill() {\n+    if (!disposed) {\n+      disconnect();\n+    }\n+    if (childThread!= null) {"
+  }],
+  "prId": 15009
+}, {
+  "comments": [{
+    "author": {
+      "login": "tgravescs"
+    },
+    "body": "I don't see join throwing a IllegalThreadStateException\n",
+    "commit": "10513ec4a1cee2de26104945dc2eae54efeed9d2",
+    "createdAt": "2016-09-09T14:25:25Z",
+    "diffHunk": "@@ -0,0 +1,54 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.launcher;\n+\n+import java.util.logging.Logger;\n+\n+public class ChildThreadAppHandle extends AbstractSparkAppHandle {\n+  private static final Logger LOG = Logger.getLogger(ChildThreadAppHandle.class.getName());\n+  private Thread childThread;\n+\n+  public ChildThreadAppHandle(String secret, LauncherServer server) {\n+    super(server, secret);\n+  }\n+\n+  @Override\n+  public synchronized void  kill() {\n+    if (!disposed) {\n+      disconnect();\n+    }\n+    if (childThread!= null) {\n+      try {\n+        childThread.join(3000);\n+      } catch (IllegalThreadStateException | InterruptedException e) {"
+  }],
+  "prId": 15009
+}, {
+  "comments": [{
+    "author": {
+      "login": "tgravescs"
+    },
+    "body": "remove extra new line\n",
+    "commit": "10513ec4a1cee2de26104945dc2eae54efeed9d2",
+    "createdAt": "2016-09-09T14:26:46Z",
+    "diffHunk": "@@ -0,0 +1,54 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.launcher;\n+\n+import java.util.logging.Logger;\n+\n+public class ChildThreadAppHandle extends AbstractSparkAppHandle {\n+  private static final Logger LOG = Logger.getLogger(ChildThreadAppHandle.class.getName());\n+  private Thread childThread;\n+\n+  public ChildThreadAppHandle(String secret, LauncherServer server) {\n+    super(server, secret);\n+  }\n+\n+  @Override\n+  public synchronized void  kill() {\n+    if (!disposed) {\n+      disconnect();\n+    }\n+    if (childThread!= null) {\n+      try {\n+        childThread.join(3000);\n+      } catch (IllegalThreadStateException | InterruptedException e) {\n+        try {\n+          childThread.interrupt();\n+        } catch (Exception inner) {\n+          LOG.info(\"Failed to stop Thread: \"+ inner.getMessage());\n+        }\n+      } finally {\n+        childThread = null;\n+      }\n+    }\n+"
+  }],
+  "prId": 15009
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Why join before interrupting? This is a kill, you're not really expecting the thread to already be exiting or something. `disconnect()` is not expected to stop the application.\n",
+    "commit": "10513ec4a1cee2de26104945dc2eae54efeed9d2",
+    "createdAt": "2016-10-24T21:31:02Z",
+    "diffHunk": "@@ -0,0 +1,53 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.launcher;\n+\n+import java.util.logging.Logger;\n+\n+public class ChildThreadAppHandle extends AbstractSparkAppHandle {\n+  private static final Logger LOG = Logger.getLogger(ChildThreadAppHandle.class.getName());\n+  private Thread childThread;\n+\n+  public ChildThreadAppHandle(String secret, LauncherServer server) {\n+    super(server, secret);\n+  }\n+\n+  @Override\n+  public synchronized void kill() {\n+    if (!disposed) {\n+      disconnect();\n+    }\n+    if (childThread != null) {\n+      try {\n+        childThread.join(3000);",
+    "line": 38
+  }, {
+    "author": {
+      "login": "kishorvpatil"
+    },
+    "body": "`disconnect()` does not, but if shopIfShutdown is setup, we would like to give sufficient time for `childTread` to run shutdownHook as it detects the launcherserver is disconnected.\n",
+    "commit": "10513ec4a1cee2de26104945dc2eae54efeed9d2",
+    "createdAt": "2016-11-07T21:15:24Z",
+    "diffHunk": "@@ -0,0 +1,53 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.launcher;\n+\n+import java.util.logging.Logger;\n+\n+public class ChildThreadAppHandle extends AbstractSparkAppHandle {\n+  private static final Logger LOG = Logger.getLogger(ChildThreadAppHandle.class.getName());\n+  private Thread childThread;\n+\n+  public ChildThreadAppHandle(String secret, LauncherServer server) {\n+    super(server, secret);\n+  }\n+\n+  @Override\n+  public synchronized void kill() {\n+    if (!disposed) {\n+      disconnect();\n+    }\n+    if (childThread != null) {\n+      try {\n+        childThread.join(3000);",
+    "line": 38
+  }],
+  "prId": 15009
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "nit: blank line between static and non-static.\n",
+    "commit": "10513ec4a1cee2de26104945dc2eae54efeed9d2",
+    "createdAt": "2016-10-24T21:31:49Z",
+    "diffHunk": "@@ -0,0 +1,53 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.launcher;\n+\n+import java.util.logging.Logger;\n+\n+public class ChildThreadAppHandle extends AbstractSparkAppHandle {\n+  private static final Logger LOG = Logger.getLogger(ChildThreadAppHandle.class.getName());\n+  private Thread childThread;"
+  }],
+  "prId": 15009
+}]

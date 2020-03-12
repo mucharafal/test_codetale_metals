@@ -1,0 +1,47 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "maropu"
+    },
+    "body": "Since this is only used for codegen, how about moving this to `org.apache.spark.sql.catalyst.expressions.codegen`?",
+    "commit": "4700b89004380e48ed484311018686856df3027e",
+    "createdAt": "2019-09-08T08:06:04Z",
+    "diffHunk": "@@ -65,6 +65,40 @@ case class BoundReference(ordinal: Int, dataType: DataType, nullable: Boolean)\n   }\n }\n \n+/**\n+ * This bound reference points to a parameterized slot in an input tuple. It is used in\n+ * common sub-expression elimination. When some common sub-expressions have same structural\n+ * but different slots of input tuple, we replace `BoundReference` with this parameterized\n+ * version. The slot position is parameterized and is given at runtime.\n+ */\n+case class ParameterizedBoundReference(parameter: String, dataType: DataType, nullable: Boolean)"
+  }, {
+    "author": {
+      "login": "maropu"
+    },
+    "body": "nit: `parameter` -> `variableNameForOrdinal` or `paramNameForOrdinal`?",
+    "commit": "4700b89004380e48ed484311018686856df3027e",
+    "createdAt": "2019-09-08T08:07:09Z",
+    "diffHunk": "@@ -65,6 +65,40 @@ case class BoundReference(ordinal: Int, dataType: DataType, nullable: Boolean)\n   }\n }\n \n+/**\n+ * This bound reference points to a parameterized slot in an input tuple. It is used in\n+ * common sub-expression elimination. When some common sub-expressions have same structural\n+ * but different slots of input tuple, we replace `BoundReference` with this parameterized\n+ * version. The slot position is parameterized and is given at runtime.\n+ */\n+case class ParameterizedBoundReference(parameter: String, dataType: DataType, nullable: Boolean)"
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "Yeah, ok, I will. ",
+    "commit": "4700b89004380e48ed484311018686856df3027e",
+    "createdAt": "2019-09-08T16:05:59Z",
+    "diffHunk": "@@ -65,6 +65,40 @@ case class BoundReference(ordinal: Int, dataType: DataType, nullable: Boolean)\n   }\n }\n \n+/**\n+ * This bound reference points to a parameterized slot in an input tuple. It is used in\n+ * common sub-expression elimination. When some common sub-expressions have same structural\n+ * but different slots of input tuple, we replace `BoundReference` with this parameterized\n+ * version. The slot position is parameterized and is given at runtime.\n+ */\n+case class ParameterizedBoundReference(parameter: String, dataType: DataType, nullable: Boolean)"
+  }],
+  "prId": 25717
+}, {
+  "comments": [{
+    "author": {
+      "login": "maropu"
+    },
+    "body": "Any barrier to support the whole-stage codegen case? ",
+    "commit": "4700b89004380e48ed484311018686856df3027e",
+    "createdAt": "2019-09-08T08:52:07Z",
+    "diffHunk": "@@ -65,6 +65,40 @@ case class BoundReference(ordinal: Int, dataType: DataType, nullable: Boolean)\n   }\n }\n \n+/**\n+ * This bound reference points to a parameterized slot in an input tuple. It is used in\n+ * common sub-expression elimination. When some common sub-expressions have same structural\n+ * but different slots of input tuple, we replace `BoundReference` with this parameterized\n+ * version. The slot position is parameterized and is given at runtime.\n+ */\n+case class ParameterizedBoundReference(parameter: String, dataType: DataType, nullable: Boolean)\n+  extends LeafExpression {\n+\n+  override def toString: String = s\"input[$parameter, ${dataType.simpleString}, $nullable]\"\n+\n+  override def eval(input: InternalRow): Any = {\n+    throw new UnsupportedOperationException(\n+      \"ParameterizedBoundReference does not implement eval\")\n+  }\n+\n+  override def doGenCode(ctx: CodegenContext, ev: ExprCode): ExprCode = {\n+    assert(ctx.currentVars == null && ctx.INPUT_ROW != null,\n+      \"ParameterizedBoundReference can not be used in whole-stage codegen yet.\")"
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "I think it can be used in whole-stage codegen. As this is applied to sub-expression elimination which is non whole-stage only, I'd also like to reduce the change of code in a single PR.",
+    "commit": "4700b89004380e48ed484311018686856df3027e",
+    "createdAt": "2019-09-08T16:02:20Z",
+    "diffHunk": "@@ -65,6 +65,40 @@ case class BoundReference(ordinal: Int, dataType: DataType, nullable: Boolean)\n   }\n }\n \n+/**\n+ * This bound reference points to a parameterized slot in an input tuple. It is used in\n+ * common sub-expression elimination. When some common sub-expressions have same structural\n+ * but different slots of input tuple, we replace `BoundReference` with this parameterized\n+ * version. The slot position is parameterized and is given at runtime.\n+ */\n+case class ParameterizedBoundReference(parameter: String, dataType: DataType, nullable: Boolean)\n+  extends LeafExpression {\n+\n+  override def toString: String = s\"input[$parameter, ${dataType.simpleString}, $nullable]\"\n+\n+  override def eval(input: InternalRow): Any = {\n+    throw new UnsupportedOperationException(\n+      \"ParameterizedBoundReference does not implement eval\")\n+  }\n+\n+  override def doGenCode(ctx: CodegenContext, ev: ExprCode): ExprCode = {\n+    assert(ctx.currentVars == null && ctx.INPUT_ROW != null,\n+      \"ParameterizedBoundReference can not be used in whole-stage codegen yet.\")"
+  }],
+  "prId": 25717
+}]

@@ -1,0 +1,80 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "Seems missed to update.",
+    "commit": "4e76ffde10f175fe71c7a4db544941e2bfad1132",
+    "createdAt": "2018-06-24T03:48:45Z",
+    "diffHunk": "@@ -573,32 +578,6 @@ object DataSourceReadBenchmark {\n           }\n         }\n \n-        /*\n-        Intel(R) Xeon(R) CPU E5-2686 v4 @ 2.30GHz\n-        Partitioned Table:                   Best/Avg Time(ms)    Rate(M/s)   Per Row(ns)   Relative\n-        --------------------------------------------------------------------------------------------"
+  }, {
+    "author": {
+      "login": "maropu"
+    },
+    "body": "oh, thanks. I'll update soon.",
+    "commit": "4e76ffde10f175fe71c7a4db544941e2bfad1132",
+    "createdAt": "2018-06-24T05:21:16Z",
+    "diffHunk": "@@ -573,32 +578,6 @@ object DataSourceReadBenchmark {\n           }\n         }\n \n-        /*\n-        Intel(R) Xeon(R) CPU E5-2686 v4 @ 2.30GHz\n-        Partitioned Table:                   Best/Avg Time(ms)    Rate(M/s)   Per Row(ns)   Relative\n-        --------------------------------------------------------------------------------------------"
+  }, {
+    "author": {
+      "login": "maropu"
+    },
+    "body": "oh, I hit the bug in csv parsing when updating this benchmark...\r\n```\r\nscala> val dir = \"/tmp/spark-csv/csv\"\r\nscala> spark.range(10).selectExpr(\"id % 2 AS p\", \"id\").write.mode(\"overwrite\").partitionBy(\"p\").csv(dir)\r\nscala> spark.read.csv(dir).selectExpr(\"sum(p)\").collect()\r\n18/06/25 13:12:51 ERROR Executor: Exception in task 0.0 in stage 2.0 (TID 5)\r\njava.lang.NullPointerException\r\n        at org.apache.spark.sql.execution.datasources.csv.UnivocityParser.org$apache$spark$sql$execution$datasources$csv$UnivocityParser$$convert(UnivocityParser.scala:197)  \r\n        at org.apache.spark.sql.execution.datasources.csv.UnivocityParser.parse(UnivocityParser.scala:190)\r\n        at org.apache.spark.sql.execution.datasources.csv.UnivocityParser$$anonfun$5.apply(UnivocityParser.scala:309)\r\n        at org.apache.spark.sql.execution.datasources.csv.UnivocityParser$$anonfun$5.apply(UnivocityParser.scala:309)\r\n        at org.apache.spark.sql.execution.datasources.FailureSafeParser.parse(FailureSafeParser.scala:61)\r\n        ...\r\n```",
+    "commit": "4e76ffde10f175fe71c7a4db544941e2bfad1132",
+    "createdAt": "2018-06-25T04:15:00Z",
+    "diffHunk": "@@ -573,32 +578,6 @@ object DataSourceReadBenchmark {\n           }\n         }\n \n-        /*\n-        Intel(R) Xeon(R) CPU E5-2686 v4 @ 2.30GHz\n-        Partitioned Table:                   Best/Avg Time(ms)    Rate(M/s)   Per Row(ns)   Relative\n-        --------------------------------------------------------------------------------------------"
+  }, {
+    "author": {
+      "login": "maropu"
+    },
+    "body": "I filed a jira; https://issues.apache.org/jira/browse/SPARK-24645",
+    "commit": "4e76ffde10f175fe71c7a4db544941e2bfad1132",
+    "createdAt": "2018-06-25T04:17:54Z",
+    "diffHunk": "@@ -573,32 +578,6 @@ object DataSourceReadBenchmark {\n           }\n         }\n \n-        /*\n-        Intel(R) Xeon(R) CPU E5-2686 v4 @ 2.30GHz\n-        Partitioned Table:                   Best/Avg Time(ms)    Rate(M/s)   Per Row(ns)   Relative\n-        --------------------------------------------------------------------------------------------"
+  }, {
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "@maropu, if the JIRA blocks this PR and looks taking a while to fix it, please feel free to set the configuration to false within this benchmark and proceed. Technically, looks that's what the benchmark originally covered at that time it's merged in. Setting it true can be separately done in the JIRA you opened.",
+    "commit": "4e76ffde10f175fe71c7a4db544941e2bfad1132",
+    "createdAt": "2018-06-25T04:43:27Z",
+    "diffHunk": "@@ -573,32 +578,6 @@ object DataSourceReadBenchmark {\n           }\n         }\n \n-        /*\n-        Intel(R) Xeon(R) CPU E5-2686 v4 @ 2.30GHz\n-        Partitioned Table:                   Best/Avg Time(ms)    Rate(M/s)   Per Row(ns)   Relative\n-        --------------------------------------------------------------------------------------------"
+  }, {
+    "author": {
+      "login": "maropu"
+    },
+    "body": "yea, I though I would do so first, but I couldn't because I hit another bug when the column pruning disabled...;\r\n```\r\n./bin/spark-shell --conf spark.sql.csv.parser.columnPruning.enabled=false\r\nscala> val dir = \"/tmp/spark-csv/csv\"\r\nscala> spark.range(10).selectExpr(\"id % 2 AS p\", \"id\").write.mode(\"overwrite\").partitionBy(\"p\").csv(dir)\r\nscala> spark.read.csv(dir).selectExpr(\"sum(p)\").collect()\r\n18/06/25 13:48:46 ERROR Executor: Exception in task 2.0 in stage 2.0 (TID 7)\r\njava.lang.ClassCastException: org.apache.spark.unsafe.types.UTF8String cannot be cast to java.lang.Integer\r\n        at scala.runtime.BoxesRunTime.unboxToInt(BoxesRunTime.java:101)\r\n        at org.apache.spark.sql.catalyst.expressions.BaseGenericInternalRow$class.getInt(rows.scala:41)\r\n        ...\r\n```",
+    "commit": "4e76ffde10f175fe71c7a4db544941e2bfad1132",
+    "createdAt": "2018-06-25T04:51:26Z",
+    "diffHunk": "@@ -573,32 +578,6 @@ object DataSourceReadBenchmark {\n           }\n         }\n \n-        /*\n-        Intel(R) Xeon(R) CPU E5-2686 v4 @ 2.30GHz\n-        Partitioned Table:                   Best/Avg Time(ms)    Rate(M/s)   Per Row(ns)   Relative\n-        --------------------------------------------------------------------------------------------"
+  }, {
+    "author": {
+      "login": "maropu"
+    },
+    "body": "@HyukjinKwon I'm currently fixing this now. But, it seems this bug is similar to SPARK-24645. So, would it be better to merge this fix with SPARK-24645?",
+    "commit": "4e76ffde10f175fe71c7a4db544941e2bfad1132",
+    "createdAt": "2018-06-25T04:52:45Z",
+    "diffHunk": "@@ -573,32 +578,6 @@ object DataSourceReadBenchmark {\n           }\n         }\n \n-        /*\n-        Intel(R) Xeon(R) CPU E5-2686 v4 @ 2.30GHz\n-        Partitioned Table:                   Best/Avg Time(ms)    Rate(M/s)   Per Row(ns)   Relative\n-        --------------------------------------------------------------------------------------------"
+  }, {
+    "author": {
+      "login": "maropu"
+    },
+    "body": "Anyway, I updated the results by applying #21631",
+    "commit": "4e76ffde10f175fe71c7a4db544941e2bfad1132",
+    "createdAt": "2018-06-25T08:04:06Z",
+    "diffHunk": "@@ -573,32 +578,6 @@ object DataSourceReadBenchmark {\n           }\n         }\n \n-        /*\n-        Intel(R) Xeon(R) CPU E5-2686 v4 @ 2.30GHz\n-        Partitioned Table:                   Best/Avg Time(ms)    Rate(M/s)   Per Row(ns)   Relative\n-        --------------------------------------------------------------------------------------------"
+  }],
+  "prId": 21625
+}, {
+  "comments": [{
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "Thank you for fixing this and updating the result, @maropu .",
+    "commit": "4e76ffde10f175fe71c7a4db544941e2bfad1132",
+    "createdAt": "2018-06-24T20:45:25Z",
+    "diffHunk": "@@ -39,9 +39,11 @@ import org.apache.spark.util.{Benchmark, Utils}\n object DataSourceReadBenchmark {\n   val conf = new SparkConf()\n     .setAppName(\"DataSourceReadBenchmark\")\n-    .setIfMissing(\"spark.master\", \"local[1]\")\n+    // Since `spark.master` always exists, overrides this value\n+    .set(\"spark.master\", \"local[1]\")",
+    "line": 6
+  }],
+  "prId": 21625
+}]

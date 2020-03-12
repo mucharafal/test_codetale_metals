@@ -1,0 +1,23 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "lr is already of type LogisticRegression (no need to cast)",
+    "commit": "6a7162dfbefbc900cc103f6fd7d7df5510cf2154",
+    "createdAt": "2017-07-02T06:43:58Z",
+    "diffHunk": "@@ -134,6 +134,59 @@ class TrainValidationSplitSuite\n \n     assert(tvs.getTrainRatio === tvs2.getTrainRatio)\n     assert(tvs.getSeed === tvs2.getSeed)\n+\n+    TrainValidationSplitSuite\n+      .compareParamMaps(tvs.getEstimatorParamMaps, tvs2.getEstimatorParamMaps)\n+\n+    tvs2.getEstimator match {\n+      case lr2: LogisticRegression =>\n+        assert(lr.uid === lr2.uid)\n+        assert(lr.getMaxIter === lr2.getMaxIter)\n+      case other =>\n+        throw new AssertionError(s\"Loaded TrainValidationSplit expected estimator of type\" +\n+          s\" LogisticRegression but found ${other.getClass.getName}\")\n+    }\n+  }\n+\n+  test(\"read/write: TrainValidationSplit with nested estimator\") {\n+    val ova = new OneVsRest()\n+      .setClassifier(new LogisticRegression)\n+    val evaluator = new BinaryClassificationEvaluator()\n+      .setMetricName(\"areaUnderPR\")  // not default metric\n+    val classifier1 = new LogisticRegression().setRegParam(2.0)\n+    val classifier2 = new LogisticRegression().setRegParam(3.0)\n+    val paramMaps = new ParamGridBuilder()\n+      .addGrid(ova.classifier, Array(classifier1, classifier2))\n+      .build()\n+    val tvs = new TrainValidationSplit()\n+      .setEstimator(ova)\n+      .setEvaluator(evaluator)\n+      .setTrainRatio(0.5)\n+      .setEstimatorParamMaps(paramMaps)\n+      .setSeed(42L)\n+\n+    val tvs2 = testDefaultReadWrite(tvs, testParams = false)\n+\n+    assert(tvs.getTrainRatio === tvs2.getTrainRatio)\n+    assert(tvs.getSeed === tvs2.getSeed)\n+\n+    tvs2.getEstimator match {\n+      case ova2: OneVsRest =>\n+        assert(ova.uid === ova2.uid)\n+        val classifier = ova2.getClassifier\n+        classifier match {\n+          case lr: LogisticRegression =>\n+            assert(ova.getClassifier.asInstanceOf[LogisticRegression].getMaxIter\n+              === lr.asInstanceOf[LogisticRegression].getMaxIter)"
+  }],
+  "prId": 18428
+}, {
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "If this is the same as in CrossValidatorSuite, then can you please move them to a shared file (maybe ValidatorParamsSuite)?",
+    "commit": "6a7162dfbefbc900cc103f6fd7d7df5510cf2154",
+    "createdAt": "2017-07-02T06:55:26Z",
+    "diffHunk": "@@ -160,8 +213,21 @@ class TrainValidationSplitSuite\n   }\n }\n \n-object TrainValidationSplitSuite {\n-\n+object TrainValidationSplitSuite extends SparkFunSuite{\n+  /**\n+   * Assert sequences of estimatorParamMaps are identical.\n+   * Params must be simple types comparable with `===`.\n+   */\n+  def compareParamMaps(pMaps: Array[ParamMap], pMaps2: Array[ParamMap]): Unit = {"
+  }],
+  "prId": 18428
+}]

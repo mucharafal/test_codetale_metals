@@ -1,0 +1,22 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "Nit, Can we remove the duplication of `varcharKeys` logic by moving into `convertFilters` like the following? `table` was removed from `convertBasicFilters` and `convertCompexFilters`, too.\r\n```scala\r\ndef convertFilters(table: Table, filters: Seq[Expression]): String = {\r\n    // hive varchar is treated as catalyst string, but hive varchar can't be pushed down.\r\n    lazy val varcharKeys = table.getPartitionKeys.asScala\r\n      .filter(col => col.getType.startsWith(serdeConstants.VARCHAR_TYPE_NAME) ||\r\n        col.getType.startsWith(serdeConstants.CHAR_TYPE_NAME))\r\n      .map(col => col.getName).toSet\r\n\r\n    if (SQLConf.get.advancedPartitionPredicatePushdownEnabled) {\r\n      convertComplexFilters(filters, varcharKeys)\r\n    } else {\r\n      convertBasicFilters(filters, varcharKeys)\r\n    }\r\n  }\r\n```",
+    "commit": "40576020301e551dc0c66375b00a5fcc150e9ab7",
+    "createdAt": "2017-10-21T16:29:52Z",
+    "diffHunk": "@@ -585,6 +585,35 @@ private[client] class Shim_v0_13 extends Shim_v0_12 {\n    * Unsupported predicates are skipped.\n    */\n   def convertFilters(table: Table, filters: Seq[Expression]): String = {\n+    if (SQLConf.get.advancedPartitionPredicatePushdownEnabled) {\n+      convertComplexFilters(table, filters)\n+    } else {\n+      convertBasicFilters(table, filters)\n+    }",
+    "line": 8
+  }, {
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "Thanks! We can do it when enhancing `convertComplexFilters `. Here, it is just to keep the original codes (from Spark 2.2) untouched.  ",
+    "commit": "40576020301e551dc0c66375b00a5fcc150e9ab7",
+    "createdAt": "2017-10-21T17:05:24Z",
+    "diffHunk": "@@ -585,6 +585,35 @@ private[client] class Shim_v0_13 extends Shim_v0_12 {\n    * Unsupported predicates are skipped.\n    */\n   def convertFilters(table: Table, filters: Seq[Expression]): String = {\n+    if (SQLConf.get.advancedPartitionPredicatePushdownEnabled) {\n+      convertComplexFilters(table, filters)\n+    } else {\n+      convertBasicFilters(table, filters)\n+    }",
+    "line": 8
+  }],
+  "prId": 19547
+}]

@@ -1,0 +1,31 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "ksakellis"
+    },
+    "body": "So, do you think we should disable it across all tests? just in case there are other tests that also modify the hadoop configuration thinking that the config objects are local to them? It might bite someone else in the butt later if we don't globally do this. I don't think there is a global test class that every tests inherits, maybe we can add it in SparkSparkContext since a lot of the new tests written use that trait? \n",
+    "commit": "47dc4473cb817f5bf14a00f0c487c984aa2cc7c6",
+    "createdAt": "2015-02-13T23:54:55Z",
+    "diffHunk": "@@ -42,7 +42,15 @@ class WholeTextFileRecordReaderSuite extends FunSuite with BeforeAndAfterAll {\n   private var factory: CompressionCodecFactory = _\n \n   override def beforeAll() {\n-    sc = new SparkContext(\"local\", \"test\")\n+    // Hadoop's FileSystem caching does not use the Configuration as part of its cache key, which\n+    // can cause Filesystem.get(Configuration) to return a cached instance created with a different\n+    // configuration than the one passed to get() (see HADOOP-8490 for more details). This caused\n+    // hard-to-reproduce test failures, since any suites that were run after this one would inherit\n+    // the new value of \"fs.local.block.size\" (see SPARK-5227 and SPARK-5679). To work around this,\n+    // we disable FileSystem caching in this suite.\n+    val conf = new SparkConf().set(\"spark.hadoop.fs.file.impl.disable.cache\", \"true\")",
+    "line": 20
+  }, {
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "Good question.  If we wanted to disable this in all tests, then I think the right place to do that would be in the Maven and SBT builds via system properties.\n\nI chose not to do that here because I wasn't sure whether doing so might mask bugs, since most users of Spark will run with FileSystem caching enabled (I think that disabling it across the board may harm performance, since it sounds like a lot of Hadoop code assumes that FileSystem.get is cheap, and, accordingly, calls it many times).\n",
+    "commit": "47dc4473cb817f5bf14a00f0c487c984aa2cc7c6",
+    "createdAt": "2015-02-14T00:05:11Z",
+    "diffHunk": "@@ -42,7 +42,15 @@ class WholeTextFileRecordReaderSuite extends FunSuite with BeforeAndAfterAll {\n   private var factory: CompressionCodecFactory = _\n \n   override def beforeAll() {\n-    sc = new SparkContext(\"local\", \"test\")\n+    // Hadoop's FileSystem caching does not use the Configuration as part of its cache key, which\n+    // can cause Filesystem.get(Configuration) to return a cached instance created with a different\n+    // configuration than the one passed to get() (see HADOOP-8490 for more details). This caused\n+    // hard-to-reproduce test failures, since any suites that were run after this one would inherit\n+    // the new value of \"fs.local.block.size\" (see SPARK-5227 and SPARK-5679). To work around this,\n+    // we disable FileSystem caching in this suite.\n+    val conf = new SparkConf().set(\"spark.hadoop.fs.file.impl.disable.cache\", \"true\")",
+    "line": 20
+  }, {
+    "author": {
+      "login": "sryza"
+    },
+    "body": "My opinion is that doing it for all tests would be a bit drastic.  It's not that modifications to `Configuration` objects arbitrarily affect other `Configuration` objects.  It's that this test specifically relies on some underlying properties set on the `FileSystem`, and the FS Cache allows these to leak to other FS instances.\n",
+    "commit": "47dc4473cb817f5bf14a00f0c487c984aa2cc7c6",
+    "createdAt": "2015-02-14T00:30:00Z",
+    "diffHunk": "@@ -42,7 +42,15 @@ class WholeTextFileRecordReaderSuite extends FunSuite with BeforeAndAfterAll {\n   private var factory: CompressionCodecFactory = _\n \n   override def beforeAll() {\n-    sc = new SparkContext(\"local\", \"test\")\n+    // Hadoop's FileSystem caching does not use the Configuration as part of its cache key, which\n+    // can cause Filesystem.get(Configuration) to return a cached instance created with a different\n+    // configuration than the one passed to get() (see HADOOP-8490 for more details). This caused\n+    // hard-to-reproduce test failures, since any suites that were run after this one would inherit\n+    // the new value of \"fs.local.block.size\" (see SPARK-5227 and SPARK-5679). To work around this,\n+    // we disable FileSystem caching in this suite.\n+    val conf = new SparkConf().set(\"spark.hadoop.fs.file.impl.disable.cache\", \"true\")",
+    "line": 20
+  }],
+  "prId": 4599
+}]

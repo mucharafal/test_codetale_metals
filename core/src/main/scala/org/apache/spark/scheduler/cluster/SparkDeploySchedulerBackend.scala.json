@@ -1,0 +1,53 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "On the one hand, this sounds like it could be an `AtomicBoolean`. On another hand -- this whole mechanism could be replaced by something more robust in `java.util.concurrent`\n",
+    "commit": "c146c93b3df500881f716b5007304315a70fb641",
+    "createdAt": "2014-12-24T08:32:36Z",
+    "diffHunk": "@@ -31,16 +31,17 @@ private[spark] class SparkDeploySchedulerBackend(\n   with AppClientListener\n   with Logging {\n \n-  var client: AppClient = null\n-  var stopping = false\n-  var shutdownCallback : (SparkDeploySchedulerBackend) => Unit = _\n-  @volatile var appId: String = _\n+  private var client: AppClient = null\n+  private var stopping = false\n+  private val shutdownCallbackLock = new Object()\n+  private var shutdownCallback : (SparkDeploySchedulerBackend) => Unit = _\n+  @volatile private var appId: String = _\n \n-  val registrationLock = new Object()\n-  var registrationDone = false\n+  private val registrationLock = new Object()"
+  }],
+  "prId": 3781
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Same for the new lock\n",
+    "commit": "c146c93b3df500881f716b5007304315a70fb641",
+    "createdAt": "2014-12-24T08:33:42Z",
+    "diffHunk": "@@ -31,16 +31,17 @@ private[spark] class SparkDeploySchedulerBackend(\n   with AppClientListener\n   with Logging {\n \n-  var client: AppClient = null\n-  var stopping = false\n-  var shutdownCallback : (SparkDeploySchedulerBackend) => Unit = _\n-  @volatile var appId: String = _\n+  private var client: AppClient = null\n+  private var stopping = false\n+  private val shutdownCallbackLock = new Object()"
+  }],
+  "prId": 3781
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "@sarutak  would this not be simpler as a `@volatile` reference? that's how `appId` is handled below.\n",
+    "commit": "c146c93b3df500881f716b5007304315a70fb641",
+    "createdAt": "2015-02-16T19:36:48Z",
+    "diffHunk": "@@ -31,16 +34,16 @@ private[spark] class SparkDeploySchedulerBackend(\n   with AppClientListener\n   with Logging {\n \n-  var client: AppClient = null\n-  var stopping = false\n-  var shutdownCallback : (SparkDeploySchedulerBackend) => Unit = _\n-  @volatile var appId: String = _\n+  private var client: AppClient = null\n+  private var stopping = false\n+  private val shutdownCallback: AtomicReference[(SparkDeploySchedulerBackend) => Unit] ="
+  }],
+  "prId": 3781
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "OK, but why do you need this setter now?\n",
+    "commit": "c146c93b3df500881f716b5007304315a70fb641",
+    "createdAt": "2015-02-18T10:10:44Z",
+    "diffHunk": "@@ -148,19 +152,16 @@ private[spark] class SparkDeploySchedulerBackend(\n       super.applicationId\n     }\n \n+  def setShutdownCallback(f: SparkDeploySchedulerBackend => Unit) {"
+  }, {
+    "author": {
+      "login": "sarutak"
+    },
+    "body": "It's no longer needed so I remove it soon.\n",
+    "commit": "c146c93b3df500881f716b5007304315a70fb641",
+    "createdAt": "2015-02-18T10:56:49Z",
+    "diffHunk": "@@ -148,19 +152,16 @@ private[spark] class SparkDeploySchedulerBackend(\n       super.applicationId\n     }\n \n+  def setShutdownCallback(f: SparkDeploySchedulerBackend => Unit) {"
+  }],
+  "prId": 3781
+}]

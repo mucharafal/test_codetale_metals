@@ -1,0 +1,106 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "This pattern appears many times in the code base, we may need to create a `ctx.splitExpressionsWithCurrentInput` for it later.",
+    "commit": "0e9998e0704b54d8f1352a1936c9b6367ebee15e",
+    "createdAt": "2017-12-04T15:37:10Z",
+    "diffHunk": "@@ -270,17 +270,36 @@ abstract class HashExpression[E] extends Expression {\n \n   override def doGenCode(ctx: CodegenContext, ev: ExprCode): ExprCode = {\n     ev.isNull = \"false\"\n-    val childrenHash = ctx.splitExpressions(children.map { child =>\n+\n+    val childrenHash = children.map { child =>\n       val childGen = child.genCode(ctx)\n       childGen.code + ctx.nullSafeExec(child.nullable, childGen.isNull) {\n         computeHash(childGen.value, child.dataType, ev.value, ctx)\n       }\n-    })\n+    }\n+\n+    val hashResultType = ctx.javaType(dataType)\n+    val codes = if (ctx.INPUT_ROW == null || ctx.currentVars != null) {",
+    "line": 15
+  }, {
+    "author": {
+      "login": "mgaido91"
+    },
+    "body": "I think @kiszk is doing this",
+    "commit": "0e9998e0704b54d8f1352a1936c9b6367ebee15e",
+    "createdAt": "2017-12-04T15:39:55Z",
+    "diffHunk": "@@ -270,17 +270,36 @@ abstract class HashExpression[E] extends Expression {\n \n   override def doGenCode(ctx: CodegenContext, ev: ExprCode): ExprCode = {\n     ev.isNull = \"false\"\n-    val childrenHash = ctx.splitExpressions(children.map { child =>\n+\n+    val childrenHash = children.map { child =>\n       val childGen = child.genCode(ctx)\n       childGen.code + ctx.nullSafeExec(child.nullable, childGen.isNull) {\n         computeHash(childGen.value, child.dataType, ev.value, ctx)\n       }\n-    })\n+    }\n+\n+    val hashResultType = ctx.javaType(dataType)\n+    val codes = if (ctx.INPUT_ROW == null || ctx.currentVars != null) {",
+    "line": 15
+  }, {
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "[That one](https://github.com/apache/spark/pull/19821) has been merged, but this one is still different. ",
+    "commit": "0e9998e0704b54d8f1352a1936c9b6367ebee15e",
+    "createdAt": "2017-12-04T23:18:02Z",
+    "diffHunk": "@@ -270,17 +270,36 @@ abstract class HashExpression[E] extends Expression {\n \n   override def doGenCode(ctx: CodegenContext, ev: ExprCode): ExprCode = {\n     ev.isNull = \"false\"\n-    val childrenHash = ctx.splitExpressions(children.map { child =>\n+\n+    val childrenHash = children.map { child =>\n       val childGen = child.genCode(ctx)\n       childGen.code + ctx.nullSafeExec(child.nullable, childGen.isNull) {\n         computeHash(childGen.value, child.dataType, ev.value, ctx)\n       }\n-    })\n+    }\n+\n+    val hashResultType = ctx.javaType(dataType)\n+    val codes = if (ctx.INPUT_ROW == null || ctx.currentVars != null) {",
+    "line": 15
+  }],
+  "prId": 19878
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "We forgot to split the code for computing hive hash of struct, it's fixed now.",
+    "commit": "0e9998e0704b54d8f1352a1936c9b6367ebee15e",
+    "createdAt": "2017-12-04T15:40:25Z",
+    "diffHunk": "@@ -730,23 +776,29 @@ case class HiveHash(children: Seq[Expression]) extends HashExpression[Int] {\n       input: String,\n       result: String,\n       fields: Array[StructField]): String = {\n-    val localResult = ctx.freshName(\"localResult\")\n     val childResult = ctx.freshName(\"childResult\")\n-    fields.zipWithIndex.map { case (field, index) =>\n+    val fieldsHash = fields.zipWithIndex.map { case (field, index) =>\n+      val computeFieldHash = nullSafeElementHash(\n+        input, index.toString, field.nullable, field.dataType, childResult, ctx)\n       s\"\"\"\n-         $childResult = 0;\n-         ${nullSafeElementHash(input, index.toString, field.nullable, field.dataType,\n-           childResult, ctx)}\n-         $localResult = (31 * $localResult) + $childResult;\n-       \"\"\"\n-    }.mkString(",
+    "line": 138
+  }],
+  "prId": 19878
+}, {
+  "comments": [{
+    "author": {
+      "login": "mgaido91"
+    },
+    "body": "nit: this is done also in line 281. Can we do this only once? maybe with a `lazy val`?",
+    "commit": "0e9998e0704b54d8f1352a1936c9b6367ebee15e",
+    "createdAt": "2017-12-04T15:51:20Z",
+    "diffHunk": "@@ -389,13 +408,21 @@ abstract class HashExpression[E] extends Expression {\n       input: String,\n       result: String,\n       fields: Array[StructField]): String = {\n-    val hashes = fields.zipWithIndex.map { case (field, index) =>\n+    val fieldsHash = fields.zipWithIndex.map { case (field, index) =>\n       nullSafeElementHash(input, index.toString, field.nullable, field.dataType, result, ctx)\n     }\n+    val hashResultType = ctx.javaType(dataType)",
+    "line": 51
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "`ctx` is only available inside `doGenCode`",
+    "commit": "0e9998e0704b54d8f1352a1936c9b6367ebee15e",
+    "createdAt": "2017-12-04T16:05:29Z",
+    "diffHunk": "@@ -389,13 +408,21 @@ abstract class HashExpression[E] extends Expression {\n       input: String,\n       result: String,\n       fields: Array[StructField]): String = {\n-    val hashes = fields.zipWithIndex.map { case (field, index) =>\n+    val fieldsHash = fields.zipWithIndex.map { case (field, index) =>\n       nullSafeElementHash(input, index.toString, field.nullable, field.dataType, result, ctx)\n     }\n+    val hashResultType = ctx.javaType(dataType)",
+    "line": 51
+  }],
+  "prId": 19878
+}, {
+  "comments": [{
+    "author": {
+      "login": "viirya"
+    },
+    "body": "nit: `childHash` is only needed to declare here when we don't split functions.",
+    "commit": "0e9998e0704b54d8f1352a1936c9b6367ebee15e",
+    "createdAt": "2017-12-05T00:40:15Z",
+    "diffHunk": "@@ -610,25 +637,44 @@ case class HiveHash(children: Seq[Expression]) extends HashExpression[Int] {\n \n   override def doGenCode(ctx: CodegenContext, ev: ExprCode): ExprCode = {\n     ev.isNull = \"false\"\n+\n     val childHash = ctx.freshName(\"childHash\")\n-    val childrenHash = ctx.splitExpressions(children.map { child =>\n+    val childrenHash = children.map { child =>\n       val childGen = child.genCode(ctx)\n       val codeToComputeHash = ctx.nullSafeExec(child.nullable, childGen.isNull) {\n         computeHash(childGen.value, child.dataType, childHash, ctx)\n       }\n       s\"\"\"\n          |${childGen.code}\n+         |$childHash = 0;\n          |$codeToComputeHash\n          |${ev.value} = (31 * ${ev.value}) + $childHash;\n-         |$childHash = 0;\n        \"\"\".stripMargin\n-    })\n+    }\n \n-    ctx.addMutableState(ctx.javaType(dataType), ev.value)\n-    ctx.addMutableState(ctx.JAVA_INT, childHash, s\"$childHash = 0;\")\n-    ev.copy(code = s\"\"\"\n-      ${ev.value} = $seed;\n-      $childrenHash\"\"\")\n+    val codes = if (ctx.INPUT_ROW == null || ctx.currentVars != null) {\n+      childrenHash.mkString(\"\\n\")\n+    } else {\n+      ctx.splitExpressions(\n+        expressions = childrenHash,\n+        funcName = \"computeHash\",\n+        arguments = Seq(\"InternalRow\" -> ctx.INPUT_ROW, ctx.JAVA_INT -> ev.value),\n+        returnType = ctx.JAVA_INT,\n+        makeSplitFunction = body =>\n+          s\"\"\"\n+             |${ctx.JAVA_INT} $childHash = 0;\n+             |$body\n+             |return ${ev.value};\n+           \"\"\".stripMargin,\n+        foldFunctions = _.map(funcCall => s\"${ev.value} = $funcCall;\").mkString(\"\\n\"))\n+    }\n+\n+    ev.copy(code =\n+      s\"\"\"\n+         |${ctx.JAVA_INT} ${ev.value} = $seed;\n+         |${ctx.JAVA_INT} $childHash = 0;",
+    "line": 116
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "nvm, `splitExpressions` could possibly not split expressions if only one block.",
+    "commit": "0e9998e0704b54d8f1352a1936c9b6367ebee15e",
+    "createdAt": "2017-12-05T00:45:13Z",
+    "diffHunk": "@@ -610,25 +637,44 @@ case class HiveHash(children: Seq[Expression]) extends HashExpression[Int] {\n \n   override def doGenCode(ctx: CodegenContext, ev: ExprCode): ExprCode = {\n     ev.isNull = \"false\"\n+\n     val childHash = ctx.freshName(\"childHash\")\n-    val childrenHash = ctx.splitExpressions(children.map { child =>\n+    val childrenHash = children.map { child =>\n       val childGen = child.genCode(ctx)\n       val codeToComputeHash = ctx.nullSafeExec(child.nullable, childGen.isNull) {\n         computeHash(childGen.value, child.dataType, childHash, ctx)\n       }\n       s\"\"\"\n          |${childGen.code}\n+         |$childHash = 0;\n          |$codeToComputeHash\n          |${ev.value} = (31 * ${ev.value}) + $childHash;\n-         |$childHash = 0;\n        \"\"\".stripMargin\n-    })\n+    }\n \n-    ctx.addMutableState(ctx.javaType(dataType), ev.value)\n-    ctx.addMutableState(ctx.JAVA_INT, childHash, s\"$childHash = 0;\")\n-    ev.copy(code = s\"\"\"\n-      ${ev.value} = $seed;\n-      $childrenHash\"\"\")\n+    val codes = if (ctx.INPUT_ROW == null || ctx.currentVars != null) {\n+      childrenHash.mkString(\"\\n\")\n+    } else {\n+      ctx.splitExpressions(\n+        expressions = childrenHash,\n+        funcName = \"computeHash\",\n+        arguments = Seq(\"InternalRow\" -> ctx.INPUT_ROW, ctx.JAVA_INT -> ev.value),\n+        returnType = ctx.JAVA_INT,\n+        makeSplitFunction = body =>\n+          s\"\"\"\n+             |${ctx.JAVA_INT} $childHash = 0;\n+             |$body\n+             |return ${ev.value};\n+           \"\"\".stripMargin,\n+        foldFunctions = _.map(funcCall => s\"${ev.value} = $funcCall;\").mkString(\"\\n\"))\n+    }\n+\n+    ev.copy(code =\n+      s\"\"\"\n+         |${ctx.JAVA_INT} ${ev.value} = $seed;\n+         |${ctx.JAVA_INT} $childHash = 0;",
+    "line": 116
+  }],
+  "prId": 19878
+}, {
+  "comments": [{
+    "author": {
+      "login": "viirya"
+    },
+    "body": "No need to check `ctx.INPUT_ROW == null || ctx.currentVars != null` here?",
+    "commit": "0e9998e0704b54d8f1352a1936c9b6367ebee15e",
+    "createdAt": "2017-12-05T00:47:59Z",
+    "diffHunk": "@@ -730,23 +776,29 @@ case class HiveHash(children: Seq[Expression]) extends HashExpression[Int] {\n       input: String,\n       result: String,\n       fields: Array[StructField]): String = {\n-    val localResult = ctx.freshName(\"localResult\")\n     val childResult = ctx.freshName(\"childResult\")\n-    fields.zipWithIndex.map { case (field, index) =>\n+    val fieldsHash = fields.zipWithIndex.map { case (field, index) =>\n+      val computeFieldHash = nullSafeElementHash(\n+        input, index.toString, field.nullable, field.dataType, childResult, ctx)\n       s\"\"\"\n-         $childResult = 0;\n-         ${nullSafeElementHash(input, index.toString, field.nullable, field.dataType,\n-           childResult, ctx)}\n-         $localResult = (31 * $localResult) + $childResult;\n-       \"\"\"\n-    }.mkString(\n-      s\"\"\"\n-         int $localResult = 0;\n-         int $childResult = 0;\n-       \"\"\",\n-      \"\",\n-      s\"$result = (31 * $result) + $localResult;\"\n-    )\n+         |$childResult = 0;\n+         |$computeFieldHash\n+         |$result = (31 * $result) + $childResult;\n+       \"\"\".stripMargin\n+    }\n+\n+    s\"${ctx.JAVA_INT} $childResult = 0;\\n\" + ctx.splitExpressions(",
+    "line": 152
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "Yea, the input here is a row that may be produced by `row.getStruct` instead of `ctx.INPUT_ROW`, so we don't need this check as the input won't be `ctx.currentVars`.",
+    "commit": "0e9998e0704b54d8f1352a1936c9b6367ebee15e",
+    "createdAt": "2017-12-05T04:41:59Z",
+    "diffHunk": "@@ -730,23 +776,29 @@ case class HiveHash(children: Seq[Expression]) extends HashExpression[Int] {\n       input: String,\n       result: String,\n       fields: Array[StructField]): String = {\n-    val localResult = ctx.freshName(\"localResult\")\n     val childResult = ctx.freshName(\"childResult\")\n-    fields.zipWithIndex.map { case (field, index) =>\n+    val fieldsHash = fields.zipWithIndex.map { case (field, index) =>\n+      val computeFieldHash = nullSafeElementHash(\n+        input, index.toString, field.nullable, field.dataType, childResult, ctx)\n       s\"\"\"\n-         $childResult = 0;\n-         ${nullSafeElementHash(input, index.toString, field.nullable, field.dataType,\n-           childResult, ctx)}\n-         $localResult = (31 * $localResult) + $childResult;\n-       \"\"\"\n-    }.mkString(\n-      s\"\"\"\n-         int $localResult = 0;\n-         int $childResult = 0;\n-       \"\"\",\n-      \"\",\n-      s\"$result = (31 * $result) + $localResult;\"\n-    )\n+         |$childResult = 0;\n+         |$computeFieldHash\n+         |$result = (31 * $result) + $childResult;\n+       \"\"\".stripMargin\n+    }\n+\n+    s\"${ctx.JAVA_INT} $childResult = 0;\\n\" + ctx.splitExpressions(",
+    "line": 152
+  }],
+  "prId": 19878
+}]

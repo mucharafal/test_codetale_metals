@@ -1,0 +1,108 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "rxin"
+    },
+    "body": "does this work if the query looks like\n\nselect \\* from a union (select \\* from b limit 10)?\n",
+    "commit": "109cc06b0d1c241ac6296388de2f3f8e05b520b3",
+    "createdAt": "2016-02-14T05:09:33Z",
+    "diffHunk": "@@ -105,6 +105,18 @@ class LogicalPlanToSQLSuite extends SQLBuilderTest with SQLTestUtils {\n     checkHiveQl(\"SELECT id FROM t0 UNION ALL SELECT CAST(id AS INT) AS id FROM t0\")\n   }\n \n+  test(\"union distinct\") {\n+    checkHiveQl(\"SELECT * FROM t0 UNION SELECT * FROM t0\")",
+    "line": 5
+  }, {
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "Hive parser is unable to recognize the SQL. \n\nDo you want me to reopen this PR https://github.com/apache/spark/pull/10689? That is for resolving this issue. Thanks!\n",
+    "commit": "109cc06b0d1c241ac6296388de2f3f8e05b520b3",
+    "createdAt": "2016-02-14T06:37:50Z",
+    "diffHunk": "@@ -105,6 +105,18 @@ class LogicalPlanToSQLSuite extends SQLBuilderTest with SQLTestUtils {\n     checkHiveQl(\"SELECT id FROM t0 UNION ALL SELECT CAST(id AS INT) AS id FROM t0\")\n   }\n \n+  test(\"union distinct\") {\n+    checkHiveQl(\"SELECT * FROM t0 UNION SELECT * FROM t0\")",
+    "line": 5
+  }, {
+    "author": {
+      "login": "rxin"
+    },
+    "body": "well my worry is that if we do support that in the future, nobody will remember coming back to this place and fix it. let's just add parentheses around so it is robust against future changes.\n",
+    "commit": "109cc06b0d1c241ac6296388de2f3f8e05b520b3",
+    "createdAt": "2016-02-14T06:42:29Z",
+    "diffHunk": "@@ -105,6 +105,18 @@ class LogicalPlanToSQLSuite extends SQLBuilderTest with SQLTestUtils {\n     checkHiveQl(\"SELECT id FROM t0 UNION ALL SELECT CAST(id AS INT) AS id FROM t0\")\n   }\n \n+  test(\"union distinct\") {\n+    checkHiveQl(\"SELECT * FROM t0 UNION SELECT * FROM t0\")",
+    "line": 5
+  }, {
+    "author": {
+      "login": "rxin"
+    },
+    "body": "basically for the sql generation stuff, we need to anticipate future changes, and can't focus on what we have at this moment.\n",
+    "commit": "109cc06b0d1c241ac6296388de2f3f8e05b520b3",
+    "createdAt": "2016-02-14T06:43:16Z",
+    "diffHunk": "@@ -105,6 +105,18 @@ class LogicalPlanToSQLSuite extends SQLBuilderTest with SQLTestUtils {\n     checkHiveQl(\"SELECT id FROM t0 UNION ALL SELECT CAST(id AS INT) AS id FROM t0\")\n   }\n \n+  test(\"union distinct\") {\n+    checkHiveQl(\"SELECT * FROM t0 UNION SELECT * FROM t0\")",
+    "line": 5
+  }, {
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "I see. Will do it. Thanks!\n",
+    "commit": "109cc06b0d1c241ac6296388de2f3f8e05b520b3",
+    "createdAt": "2016-02-14T08:12:38Z",
+    "diffHunk": "@@ -105,6 +105,18 @@ class LogicalPlanToSQLSuite extends SQLBuilderTest with SQLTestUtils {\n     checkHiveQl(\"SELECT id FROM t0 UNION ALL SELECT CAST(id AS INT) AS id FROM t0\")\n   }\n \n+  test(\"union distinct\") {\n+    checkHiveQl(\"SELECT * FROM t0 UNION SELECT * FROM t0\")",
+    "line": 5
+  }],
+  "prId": 11195
+}, {
+  "comments": [{
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "@hvanhovell @viirya Could you take a look at this issue? I am wondering if we need to fix this issue in the parser. Thanks!\n",
+    "commit": "109cc06b0d1c241ac6296388de2f3f8e05b520b3",
+    "createdAt": "2016-02-14T20:38:06Z",
+    "diffHunk": "@@ -105,6 +105,27 @@ class LogicalPlanToSQLSuite extends SQLBuilderTest with SQLTestUtils {\n     checkHiveQl(\"SELECT id FROM t0 UNION ALL SELECT CAST(id AS INT) AS id FROM t0\")\n   }\n \n+  test(\"union distinct\") {\n+    checkHiveQl(\"SELECT * FROM t0 UNION SELECT * FROM t0\")\n+  }\n+\n+  // Parser is unable to parse the following query:\n+  // SELECT  `u_1`.`id`\n+  // FROM (((SELECT  `t0`.`id` FROM `default`.`t0`)\n+  // UNION ALL (SELECT  `t0`.`id` FROM `default`.`t0`))\n+  // UNION ALL (SELECT  `t0`.`id` FROM `default`.`t0`)) AS u_1\n+  ignore(\"three-child union\") {"
+  }, {
+    "author": {
+      "login": "hvanhovell"
+    },
+    "body": "@gatorsmile Yeah we should fix this. The parser does not like the nesting within the UNION ALL. It parses fine if you remove the first nested `UNION ALL`:\n\n```\nSELECT  `u_1`.`id`\nFROM ((SELECT  `t0`.`id` FROM `default`.`t0`)\nUNION ALL (SELECT  `t0`.`id` FROM `default`.`t0`)\nUNION ALL (SELECT  `t0`.`id` FROM `default`.`t0`)) AS u_1\n```\n",
+    "commit": "109cc06b0d1c241ac6296388de2f3f8e05b520b3",
+    "createdAt": "2016-02-14T23:34:04Z",
+    "diffHunk": "@@ -105,6 +105,27 @@ class LogicalPlanToSQLSuite extends SQLBuilderTest with SQLTestUtils {\n     checkHiveQl(\"SELECT id FROM t0 UNION ALL SELECT CAST(id AS INT) AS id FROM t0\")\n   }\n \n+  test(\"union distinct\") {\n+    checkHiveQl(\"SELECT * FROM t0 UNION SELECT * FROM t0\")\n+  }\n+\n+  // Parser is unable to parse the following query:\n+  // SELECT  `u_1`.`id`\n+  // FROM (((SELECT  `t0`.`id` FROM `default`.`t0`)\n+  // UNION ALL (SELECT  `t0`.`id` FROM `default`.`t0`))\n+  // UNION ALL (SELECT  `t0`.`id` FROM `default`.`t0`)) AS u_1\n+  ignore(\"three-child union\") {"
+  }, {
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "Thank you! @hvanhovell \n\nBased on the comment by @rxin , I think we still need a nesting version here for future extension, instead hacking the SQL generation. \n\nSaw @viirya did a similar work last month: https://github.com/apache/spark/pull/10660. Maybe @viirya can do me a favor for completing this? Thank you! : )\n\nAlso cc @liancheng \n",
+    "commit": "109cc06b0d1c241ac6296388de2f3f8e05b520b3",
+    "createdAt": "2016-02-14T23:49:24Z",
+    "diffHunk": "@@ -105,6 +105,27 @@ class LogicalPlanToSQLSuite extends SQLBuilderTest with SQLTestUtils {\n     checkHiveQl(\"SELECT id FROM t0 UNION ALL SELECT CAST(id AS INT) AS id FROM t0\")\n   }\n \n+  test(\"union distinct\") {\n+    checkHiveQl(\"SELECT * FROM t0 UNION SELECT * FROM t0\")\n+  }\n+\n+  // Parser is unable to parse the following query:\n+  // SELECT  `u_1`.`id`\n+  // FROM (((SELECT  `t0`.`id` FROM `default`.`t0`)\n+  // UNION ALL (SELECT  `t0`.`id` FROM `default`.`t0`))\n+  // UNION ALL (SELECT  `t0`.`id` FROM `default`.`t0`)) AS u_1\n+  ignore(\"three-child union\") {"
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "Yeah, I will look into this issue today.\n",
+    "commit": "109cc06b0d1c241ac6296388de2f3f8e05b520b3",
+    "createdAt": "2016-02-15T00:36:59Z",
+    "diffHunk": "@@ -105,6 +105,27 @@ class LogicalPlanToSQLSuite extends SQLBuilderTest with SQLTestUtils {\n     checkHiveQl(\"SELECT id FROM t0 UNION ALL SELECT CAST(id AS INT) AS id FROM t0\")\n   }\n \n+  test(\"union distinct\") {\n+    checkHiveQl(\"SELECT * FROM t0 UNION SELECT * FROM t0\")\n+  }\n+\n+  // Parser is unable to parse the following query:\n+  // SELECT  `u_1`.`id`\n+  // FROM (((SELECT  `t0`.`id` FROM `default`.`t0`)\n+  // UNION ALL (SELECT  `t0`.`id` FROM `default`.`t0`))\n+  // UNION ALL (SELECT  `t0`.`id` FROM `default`.`t0`)) AS u_1\n+  ignore(\"three-child union\") {"
+  }, {
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "Thank you! @viirya \n",
+    "commit": "109cc06b0d1c241ac6296388de2f3f8e05b520b3",
+    "createdAt": "2016-02-15T00:38:34Z",
+    "diffHunk": "@@ -105,6 +105,27 @@ class LogicalPlanToSQLSuite extends SQLBuilderTest with SQLTestUtils {\n     checkHiveQl(\"SELECT id FROM t0 UNION ALL SELECT CAST(id AS INT) AS id FROM t0\")\n   }\n \n+  test(\"union distinct\") {\n+    checkHiveQl(\"SELECT * FROM t0 UNION SELECT * FROM t0\")\n+  }\n+\n+  // Parser is unable to parse the following query:\n+  // SELECT  `u_1`.`id`\n+  // FROM (((SELECT  `t0`.`id` FROM `default`.`t0`)\n+  // UNION ALL (SELECT  `t0`.`id` FROM `default`.`t0`))\n+  // UNION ALL (SELECT  `t0`.`id` FROM `default`.`t0`)) AS u_1\n+  ignore(\"three-child union\") {"
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "Submitted #11204 for this issue.\n",
+    "commit": "109cc06b0d1c241ac6296388de2f3f8e05b520b3",
+    "createdAt": "2016-02-15T06:09:53Z",
+    "diffHunk": "@@ -105,6 +105,27 @@ class LogicalPlanToSQLSuite extends SQLBuilderTest with SQLTestUtils {\n     checkHiveQl(\"SELECT id FROM t0 UNION ALL SELECT CAST(id AS INT) AS id FROM t0\")\n   }\n \n+  test(\"union distinct\") {\n+    checkHiveQl(\"SELECT * FROM t0 UNION SELECT * FROM t0\")\n+  }\n+\n+  // Parser is unable to parse the following query:\n+  // SELECT  `u_1`.`id`\n+  // FROM (((SELECT  `t0`.`id` FROM `default`.`t0`)\n+  // UNION ALL (SELECT  `t0`.`id` FROM `default`.`t0`))\n+  // UNION ALL (SELECT  `t0`.`id` FROM `default`.`t0`)) AS u_1\n+  ignore(\"three-child union\") {"
+  }, {
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "Thank you for your fast work! @viirya \n",
+    "commit": "109cc06b0d1c241ac6296388de2f3f8e05b520b3",
+    "createdAt": "2016-02-16T00:02:51Z",
+    "diffHunk": "@@ -105,6 +105,27 @@ class LogicalPlanToSQLSuite extends SQLBuilderTest with SQLTestUtils {\n     checkHiveQl(\"SELECT id FROM t0 UNION ALL SELECT CAST(id AS INT) AS id FROM t0\")\n   }\n \n+  test(\"union distinct\") {\n+    checkHiveQl(\"SELECT * FROM t0 UNION SELECT * FROM t0\")\n+  }\n+\n+  // Parser is unable to parse the following query:\n+  // SELECT  `u_1`.`id`\n+  // FROM (((SELECT  `t0`.`id` FROM `default`.`t0`)\n+  // UNION ALL (SELECT  `t0`.`id` FROM `default`.`t0`))\n+  // UNION ALL (SELECT  `t0`.`id` FROM `default`.`t0`)) AS u_1\n+  ignore(\"three-child union\") {"
+  }],
+  "prId": 11195
+}]

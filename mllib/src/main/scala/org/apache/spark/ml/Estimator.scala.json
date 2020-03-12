@@ -1,0 +1,42 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "WeichenXu123"
+    },
+    "body": "I will add doc for this interface later. But it can be reviewed first, currently this interface looks a little ugly.",
+    "commit": "1b4a38407f6308b8ce041f5f673e4876adc66c12",
+    "createdAt": "2017-09-26T10:19:16Z",
+    "diffHunk": "@@ -82,5 +85,32 @@ abstract class Estimator[M <: Model[M]] extends PipelineStage {\n     paramMaps.map(fit(dataset, _))\n   }\n \n+  @Since(\"2.3.0\")\n+  def fit(dataset: Dataset[_], paramMaps: Array[ParamMap],"
+  }],
+  "prId": 19350
+}, {
+  "comments": [{
+    "author": {
+      "login": "MLnick"
+    },
+    "body": "How will this work in a pipeline?\r\n\r\nIf the `Estimator` in CV is a `Pipeline`, then here it will call `fit(dataset, paramMap)` on the `Pipeline` which will in turn fit on each stage with that `paramMap`. This is what the current parallel CV is doing.\r\n\r\nBut if we have a stage with model-specific optimization (let's say for arguments sake a `LinearRegression` that can internally optimize `maxIter`) then its `fit` will be called with only a single `paramMap` arg.\r\n\r\nSo that pushing the parallel fit into `Estimator` nullifies any benefit from model-specific optimizations? ",
+    "commit": "1b4a38407f6308b8ce041f5f673e4876adc66c12",
+    "createdAt": "2017-12-13T09:19:54Z",
+    "diffHunk": "@@ -82,5 +86,49 @@ abstract class Estimator[M <: Model[M]] extends PipelineStage {\n     paramMaps.map(fit(dataset, _))\n   }\n \n+  /**\n+   * (Java-specific)\n+   */\n+  @Since(\"2.3.0\")\n+  def fit(dataset: Dataset[_], paramMaps: Array[ParamMap],\n+    unpersistDatasetAfterFitting: Boolean, executionContext: ExecutionContext,\n+    modelCallback: VoidFunction2[Model[_], Int]): Unit = {\n+    // Fit models in a Future for training in parallel\n+    val modelFutures = paramMaps.map { paramMap =>\n+      Future[Model[_]] {\n+        fit(dataset, paramMap).asInstanceOf[Model[_]]",
+    "line": 29
+  }, {
+    "author": {
+      "login": "WeichenXu123"
+    },
+    "body": "@MLnick Oh, the design is still under discussion on JIRA and will be changed I think. I should mark this WIP. thanks!",
+    "commit": "1b4a38407f6308b8ce041f5f673e4876adc66c12",
+    "createdAt": "2017-12-13T09:35:03Z",
+    "diffHunk": "@@ -82,5 +86,49 @@ abstract class Estimator[M <: Model[M]] extends PipelineStage {\n     paramMaps.map(fit(dataset, _))\n   }\n \n+  /**\n+   * (Java-specific)\n+   */\n+  @Since(\"2.3.0\")\n+  def fit(dataset: Dataset[_], paramMaps: Array[ParamMap],\n+    unpersistDatasetAfterFitting: Boolean, executionContext: ExecutionContext,\n+    modelCallback: VoidFunction2[Model[_], Int]): Unit = {\n+    // Fit models in a Future for training in parallel\n+    val modelFutures = paramMaps.map { paramMap =>\n+      Future[Model[_]] {\n+        fit(dataset, paramMap).asInstanceOf[Model[_]]",
+    "line": 29
+  }, {
+    "author": {
+      "login": "WeichenXu123"
+    },
+    "body": "@MLnick I dicussed with @jkbradley @MrBago offline and here is the newest proposal\r\nhttps://docs.google.com/document/d/1xw5M4sp1e0eQie75yIt-r6-GTuD5vpFf_I6v-AFBM3M/edit?usp=sharing\r\nThanks!",
+    "commit": "1b4a38407f6308b8ce041f5f673e4876adc66c12",
+    "createdAt": "2017-12-15T03:41:42Z",
+    "diffHunk": "@@ -82,5 +86,49 @@ abstract class Estimator[M <: Model[M]] extends PipelineStage {\n     paramMaps.map(fit(dataset, _))\n   }\n \n+  /**\n+   * (Java-specific)\n+   */\n+  @Since(\"2.3.0\")\n+  def fit(dataset: Dataset[_], paramMaps: Array[ParamMap],\n+    unpersistDatasetAfterFitting: Boolean, executionContext: ExecutionContext,\n+    modelCallback: VoidFunction2[Model[_], Int]): Unit = {\n+    // Fit models in a Future for training in parallel\n+    val modelFutures = paramMaps.map { paramMap =>\n+      Future[Model[_]] {\n+        fit(dataset, paramMap).asInstanceOf[Model[_]]",
+    "line": 29
+  }],
+  "prId": 19350
+}]

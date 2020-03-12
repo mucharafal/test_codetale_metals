@@ -1,0 +1,84 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "gaborgsomogyi"
+    },
+    "body": "This structure makes it impossible to execute test independently (at least I don't know). The whole suite has to be executed which makes even small modifications time consuming.",
+    "commit": "687c3e40063eeda156fe666544722d08a385f9e3",
+    "createdAt": "2019-01-22T09:15:38Z",
+    "diffHunk": "@@ -1079,6 +1079,42 @@ class StreamSuite extends StreamTest {\n       assert(query.exception.isEmpty)\n     }\n   }\n+\n+  Seq(true, false).foreach { useV2Sink =>"
+  }, {
+    "author": {
+      "login": "HeartSaVioR"
+    },
+    "body": "RIght. That was to minimize the code, but I guess only some lines will be added and it will become easier to test so better to apply your suggestion. Thanks!",
+    "commit": "687c3e40063eeda156fe666544722d08a385f9e3",
+    "createdAt": "2019-01-22T10:04:38Z",
+    "diffHunk": "@@ -1079,6 +1079,42 @@ class StreamSuite extends StreamTest {\n       assert(query.exception.isEmpty)\n     }\n   }\n+\n+  Seq(true, false).foreach { useV2Sink =>"
+  }],
+  "prId": 23609
+}, {
+  "comments": [{
+    "author": {
+      "login": "gaborgsomogyi"
+    },
+    "body": "Already imported.",
+    "commit": "687c3e40063eeda156fe666544722d08a385f9e3",
+    "createdAt": "2019-01-22T09:16:54Z",
+    "diffHunk": "@@ -1079,6 +1079,42 @@ class StreamSuite extends StreamTest {\n       assert(query.exception.isEmpty)\n     }\n   }\n+\n+  Seq(true, false).foreach { useV2Sink =>\n+    import org.apache.spark.sql.functions._"
+  }],
+  "prId": 23609
+}, {
+  "comments": [{
+    "author": {
+      "login": "gaborgsomogyi"
+    },
+    "body": "Not much functional difference but maybe this could be now.",
+    "commit": "687c3e40063eeda156fe666544722d08a385f9e3",
+    "createdAt": "2019-01-22T09:29:13Z",
+    "diffHunk": "@@ -1079,6 +1079,42 @@ class StreamSuite extends StreamTest {\n       assert(query.exception.isEmpty)\n     }\n   }\n+\n+  Seq(true, false).foreach { useV2Sink =>\n+    import org.apache.spark.sql.functions._\n+\n+    val newTestName = \"SPARK-26379 Structured Streaming - Exception on adding column to Dataset\" +\n+      s\" - use v2 sink - $useV2Sink\"\n+\n+    test(newTestName) {\n+      val input = MemoryStream[Int]\n+      val df = input.toDS().withColumn(\"cur_timestamp\", lit(current_timestamp()))\n+\n+      def assertBatchOutputAndUpdateLastTimestamp(\n+          rows: Seq[Row],\n+          curTimestamp: Long,\n+          expectedValue: Int): Long = {\n+        assert(rows.size === 1)\n+        val row = rows.head\n+        assert(row.getInt(0) === expectedValue)\n+        assert(row.getTimestamp(1).getTime > curTimestamp)\n+        row.getTimestamp(1).getTime\n+      }\n+\n+      var lastTimestamp = -1L"
+  }],
+  "prId": 23609
+}, {
+  "comments": [{
+    "author": {
+      "login": "gaborgsomogyi"
+    },
+    "body": "As I see this covers `CurrentTimestamp`, maybe worth to add test for `CurrentDate` as well.",
+    "commit": "687c3e40063eeda156fe666544722d08a385f9e3",
+    "createdAt": "2019-01-22T10:00:16Z",
+    "diffHunk": "@@ -1079,6 +1079,42 @@ class StreamSuite extends StreamTest {\n       assert(query.exception.isEmpty)\n     }\n   }\n+\n+  Seq(true, false).foreach { useV2Sink =>\n+    import org.apache.spark.sql.functions._\n+\n+    val newTestName = \"SPARK-26379 Structured Streaming - Exception on adding column to Dataset\" +\n+      s\" - use v2 sink - $useV2Sink\"\n+\n+    test(newTestName) {\n+      val input = MemoryStream[Int]\n+      val df = input.toDS().withColumn(\"cur_timestamp\", lit(current_timestamp()))"
+  }],
+  "prId": 23609
+}, {
+  "comments": [{
+    "author": {
+      "login": "gaborgsomogyi"
+    },
+    "body": "No strong opinion but spending 6 seconds for 2 tests maybe overkill.",
+    "commit": "687c3e40063eeda156fe666544722d08a385f9e3",
+    "createdAt": "2019-01-22T10:54:23Z",
+    "diffHunk": "@@ -1079,6 +1080,51 @@ class StreamSuite extends StreamTest {\n       assert(query.exception.isEmpty)\n     }\n   }\n+\n+  test(\"SPARK-26379 Structured Streaming - Exception on adding current_timestamp / current_date\" +\n+    \" to Dataset - use v2 sink\") {\n+    testCurrentTimestampOnStreamingQuery(useV2Sink = true)\n+  }\n+\n+  test(\"SPARK-26379 Structured Streaming - Exception on adding current_timestamp / current_date\" +\n+    \" to Dataset - use v1 sink\") {\n+    testCurrentTimestampOnStreamingQuery(useV2Sink = false)\n+  }\n+\n+  private def testCurrentTimestampOnStreamingQuery(useV2Sink: Boolean): Unit = {\n+    val input = MemoryStream[Int]\n+    val df = input.toDS()\n+      .withColumn(\"cur_timestamp\", lit(current_timestamp()))\n+      .withColumn(\"cur_date\", lit(current_date()))\n+\n+    def assertBatchOutputAndUpdateLastTimestamp(\n+        rows: Seq[Row],\n+        curTimestamp: Long,\n+        curDate: Int,\n+        expectedValue: Int): Long = {\n+      assert(rows.size === 1)\n+      val row = rows.head\n+      assert(row.getInt(0) === expectedValue)\n+      assert(row.getTimestamp(1).getTime >= curTimestamp)\n+      val days = DateTimeUtils.millisToDays(row.getDate(2).getTime)\n+      assert(days == curDate || days == curDate + 1)\n+      row.getTimestamp(1).getTime\n+    }\n+\n+    var lastTimestamp = System.currentTimeMillis()\n+    val currentDate = DateTimeUtils.millisToDays(lastTimestamp)\n+    testStream(df, useV2Sink = useV2Sink) (\n+      AddData(input, 1),\n+      CheckLastBatch { rows: Seq[Row] =>\n+        lastTimestamp = assertBatchOutputAndUpdateLastTimestamp(rows, lastTimestamp, currentDate, 1)\n+      },\n+      Execute { _ => Thread.sleep(3 * 1000) },"
+  }, {
+    "author": {
+      "login": "HeartSaVioR"
+    },
+    "body": "Yeah good suggestion. 1s would be enough.",
+    "commit": "687c3e40063eeda156fe666544722d08a385f9e3",
+    "createdAt": "2019-01-22T10:56:59Z",
+    "diffHunk": "@@ -1079,6 +1080,51 @@ class StreamSuite extends StreamTest {\n       assert(query.exception.isEmpty)\n     }\n   }\n+\n+  test(\"SPARK-26379 Structured Streaming - Exception on adding current_timestamp / current_date\" +\n+    \" to Dataset - use v2 sink\") {\n+    testCurrentTimestampOnStreamingQuery(useV2Sink = true)\n+  }\n+\n+  test(\"SPARK-26379 Structured Streaming - Exception on adding current_timestamp / current_date\" +\n+    \" to Dataset - use v1 sink\") {\n+    testCurrentTimestampOnStreamingQuery(useV2Sink = false)\n+  }\n+\n+  private def testCurrentTimestampOnStreamingQuery(useV2Sink: Boolean): Unit = {\n+    val input = MemoryStream[Int]\n+    val df = input.toDS()\n+      .withColumn(\"cur_timestamp\", lit(current_timestamp()))\n+      .withColumn(\"cur_date\", lit(current_date()))\n+\n+    def assertBatchOutputAndUpdateLastTimestamp(\n+        rows: Seq[Row],\n+        curTimestamp: Long,\n+        curDate: Int,\n+        expectedValue: Int): Long = {\n+      assert(rows.size === 1)\n+      val row = rows.head\n+      assert(row.getInt(0) === expectedValue)\n+      assert(row.getTimestamp(1).getTime >= curTimestamp)\n+      val days = DateTimeUtils.millisToDays(row.getDate(2).getTime)\n+      assert(days == curDate || days == curDate + 1)\n+      row.getTimestamp(1).getTime\n+    }\n+\n+    var lastTimestamp = System.currentTimeMillis()\n+    val currentDate = DateTimeUtils.millisToDays(lastTimestamp)\n+    testStream(df, useV2Sink = useV2Sink) (\n+      AddData(input, 1),\n+      CheckLastBatch { rows: Seq[Row] =>\n+        lastTimestamp = assertBatchOutputAndUpdateLastTimestamp(rows, lastTimestamp, currentDate, 1)\n+      },\n+      Execute { _ => Thread.sleep(3 * 1000) },"
+  }],
+  "prId": 23609
+}, {
+  "comments": [{
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "Currently, this hides `current_timestamp` and makes this test case succeeds always.",
+    "commit": "687c3e40063eeda156fe666544722d08a385f9e3",
+    "createdAt": "2019-01-26T07:16:20Z",
+    "diffHunk": "@@ -1079,6 +1080,51 @@ class StreamSuite extends StreamTest {\n       assert(query.exception.isEmpty)\n     }\n   }\n+\n+  test(\"SPARK-26379 Structured Streaming - Exception on adding current_timestamp / current_date\" +\n+    \" to Dataset - use v2 sink\") {\n+    testCurrentTimestampOnStreamingQuery(useV2Sink = true)\n+  }\n+\n+  test(\"SPARK-26379 Structured Streaming - Exception on adding current_timestamp / current_date\" +\n+    \" to Dataset - use v1 sink\") {\n+    testCurrentTimestampOnStreamingQuery(useV2Sink = false)\n+  }\n+\n+  private def testCurrentTimestampOnStreamingQuery(useV2Sink: Boolean): Unit = {\n+    val input = MemoryStream[Int]\n+    val df = input.toDS()\n+      .withColumn(\"cur_timestamp\", lit(current_timestamp()))\n+      .withColumn(\"cur_date\", lit(current_date()))",
+    "line": 27
+  }],
+  "prId": 23609
+}]

@@ -1,0 +1,69 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "dbtsai"
+    },
+    "body": "can you add another tests that select `name.first` and `name.last,` and apply `where clause` on `name.first`. We should only read `name.first` and `name.last` without name.middle.",
+    "commit": "03bf5406f990db21a980a3c1d86cf962e5e51258",
+    "createdAt": "2018-09-07T06:02:34Z",
+    "diffHunk": "@@ -155,6 +155,30 @@ class ParquetSchemaPruningSuite\n       Row(null) :: Row(null) :: Nil)\n   }\n \n+  testSchemaPruning(\"select a single complex field and in where clause\") {\n+    val query = sql(\"select name.first from contacts where name.first = 'Jane'\")\n+    checkScan(query, \"struct<name:struct<first:string>>\")\n+    checkAnswer(query, Row(\"Jane\") :: Nil)"
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "Yes. Added test case for it.",
+    "commit": "03bf5406f990db21a980a3c1d86cf962e5e51258",
+    "createdAt": "2018-09-07T09:27:00Z",
+    "diffHunk": "@@ -155,6 +155,30 @@ class ParquetSchemaPruningSuite\n       Row(null) :: Row(null) :: Nil)\n   }\n \n+  testSchemaPruning(\"select a single complex field and in where clause\") {\n+    val query = sql(\"select name.first from contacts where name.first = 'Jane'\")\n+    checkScan(query, \"struct<name:struct<first:string>>\")\n+    checkAnswer(query, Row(\"Jane\") :: Nil)"
+  }],
+  "prId": 22357
+}, {
+  "comments": [{
+    "author": {
+      "login": "dbtsai"
+    },
+    "body": "Let's say a user adds  `where employer.company is not null`, can we still read schema with `employer:struct<company:struct<name:string>>>` as we only mark `contentAccessed = false` when `IsNotNull` is on an attribute?",
+    "commit": "03bf5406f990db21a980a3c1d86cf962e5e51258",
+    "createdAt": "2018-09-10T05:51:08Z",
+    "diffHunk": "@@ -155,6 +161,47 @@ class ParquetSchemaPruningSuite\n       Row(null) :: Row(null) :: Nil)\n   }\n \n+  testSchemaPruning(\"select a single complex field and in where clause\") {\n+    val query1 = sql(\"select name.first from contacts where name.first = 'Jane'\")\n+    checkScan(query1, \"struct<name:struct<first:string>>\")\n+    checkAnswer(query1, Row(\"Jane\") :: Nil)\n+\n+    val query2 = sql(\"select name.first, name.last from contacts where name.first = 'Jane'\")\n+    checkScan(query2, \"struct<name:struct<first:string,last:string>>\")\n+    checkAnswer(query2, Row(\"Jane\", \"Doe\") :: Nil)\n+\n+    val query3 = sql(\"select name.first from contacts \" +\n+      \"where employer.company.name = 'abc' and p = 1\")",
+    "line": 64
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "Added one query test for this case. Thanks.",
+    "commit": "03bf5406f990db21a980a3c1d86cf962e5e51258",
+    "createdAt": "2018-09-10T08:55:46Z",
+    "diffHunk": "@@ -155,6 +161,47 @@ class ParquetSchemaPruningSuite\n       Row(null) :: Row(null) :: Nil)\n   }\n \n+  testSchemaPruning(\"select a single complex field and in where clause\") {\n+    val query1 = sql(\"select name.first from contacts where name.first = 'Jane'\")\n+    checkScan(query1, \"struct<name:struct<first:string>>\")\n+    checkAnswer(query1, Row(\"Jane\") :: Nil)\n+\n+    val query2 = sql(\"select name.first, name.last from contacts where name.first = 'Jane'\")\n+    checkScan(query2, \"struct<name:struct<first:string,last:string>>\")\n+    checkAnswer(query2, Row(\"Jane\", \"Doe\") :: Nil)\n+\n+    val query3 = sql(\"select name.first from contacts \" +\n+      \"where employer.company.name = 'abc' and p = 1\")",
+    "line": 64
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "When there is a nested field access in the query like `employer.company.name`, then we don't need other fields inside `employ.company` other than `name`.\r\n\r\nBut if there is no such access but just `employer.company is not null` in where clause, it will read full schema of `employ.company`.\r\n",
+    "commit": "03bf5406f990db21a980a3c1d86cf962e5e51258",
+    "createdAt": "2018-09-10T09:30:25Z",
+    "diffHunk": "@@ -155,6 +161,47 @@ class ParquetSchemaPruningSuite\n       Row(null) :: Row(null) :: Nil)\n   }\n \n+  testSchemaPruning(\"select a single complex field and in where clause\") {\n+    val query1 = sql(\"select name.first from contacts where name.first = 'Jane'\")\n+    checkScan(query1, \"struct<name:struct<first:string>>\")\n+    checkAnswer(query1, Row(\"Jane\") :: Nil)\n+\n+    val query2 = sql(\"select name.first, name.last from contacts where name.first = 'Jane'\")\n+    checkScan(query2, \"struct<name:struct<first:string,last:string>>\")\n+    checkAnswer(query2, Row(\"Jane\", \"Doe\") :: Nil)\n+\n+    val query3 = sql(\"select name.first from contacts \" +\n+      \"where employer.company.name = 'abc' and p = 1\")",
+    "line": 64
+  }],
+  "prId": 22357
+}, {
+  "comments": [{
+    "author": {
+      "login": "mallman"
+    },
+    "body": "Do you mean `having is not null predicate`?",
+    "commit": "03bf5406f990db21a980a3c1d86cf962e5e51258",
+    "createdAt": "2018-09-11T14:18:40Z",
+    "diffHunk": "@@ -155,6 +163,60 @@ class ParquetSchemaPruningSuite\n       Row(null) :: Row(null) :: Nil)\n   }\n \n+  testSchemaPruning(\"select a single complex field and in where clause\") {\n+    val query1 = sql(\"select name.first from contacts where name.first = 'Jane'\")\n+    checkScan(query1, \"struct<name:struct<first:string>>\")\n+    checkAnswer(query1, Row(\"Jane\") :: Nil)\n+\n+    val query2 = sql(\"select name.first, name.last from contacts where name.first = 'Jane'\")\n+    checkScan(query2, \"struct<name:struct<first:string,last:string>>\")\n+    checkAnswer(query2, Row(\"Jane\", \"Doe\") :: Nil)\n+\n+    val query3 = sql(\"select name.first from contacts \" +\n+      \"where employer.company.name = 'abc' and p = 1\")\n+    checkScan(query3, \"struct<name:struct<first:string>,\" +\n+      \"employer:struct<company:struct<name:string>>>\")\n+    checkAnswer(query3, Row(\"Jane\") :: Nil)\n+\n+    val query4 = sql(\"select name.first, employer.company.name from contacts \" +\n+      \"where employer.company is not null and p = 1\")\n+    checkScan(query4, \"struct<name:struct<first:string>,\" +\n+      \"employer:struct<company:struct<name:string>>>\")\n+    checkAnswer(query4, Row(\"Jane\", \"abc\") :: Nil)\n+  }\n+\n+  testSchemaPruning(\"select nullable complex field and having is null predicate\") {"
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "Oops, yes, thanks.",
+    "commit": "03bf5406f990db21a980a3c1d86cf962e5e51258",
+    "createdAt": "2018-09-11T14:38:21Z",
+    "diffHunk": "@@ -155,6 +163,60 @@ class ParquetSchemaPruningSuite\n       Row(null) :: Row(null) :: Nil)\n   }\n \n+  testSchemaPruning(\"select a single complex field and in where clause\") {\n+    val query1 = sql(\"select name.first from contacts where name.first = 'Jane'\")\n+    checkScan(query1, \"struct<name:struct<first:string>>\")\n+    checkAnswer(query1, Row(\"Jane\") :: Nil)\n+\n+    val query2 = sql(\"select name.first, name.last from contacts where name.first = 'Jane'\")\n+    checkScan(query2, \"struct<name:struct<first:string,last:string>>\")\n+    checkAnswer(query2, Row(\"Jane\", \"Doe\") :: Nil)\n+\n+    val query3 = sql(\"select name.first from contacts \" +\n+      \"where employer.company.name = 'abc' and p = 1\")\n+    checkScan(query3, \"struct<name:struct<first:string>,\" +\n+      \"employer:struct<company:struct<name:string>>>\")\n+    checkAnswer(query3, Row(\"Jane\") :: Nil)\n+\n+    val query4 = sql(\"select name.first, employer.company.name from contacts \" +\n+      \"where employer.company is not null and p = 1\")\n+    checkScan(query4, \"struct<name:struct<first:string>,\" +\n+      \"employer:struct<company:struct<name:string>>>\")\n+    checkAnswer(query4, Row(\"Jane\", \"abc\") :: Nil)\n+  }\n+\n+  testSchemaPruning(\"select nullable complex field and having is null predicate\") {"
+  }],
+  "prId": 22357
+}]

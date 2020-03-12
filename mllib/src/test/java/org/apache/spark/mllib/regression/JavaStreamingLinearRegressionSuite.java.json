@@ -1,0 +1,63 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "order\n",
+    "commit": "6a79b85396d435874e9e04233477dc8f946abb8a",
+    "createdAt": "2015-02-06T20:17:56Z",
+    "diffHunk": "@@ -0,0 +1,80 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.mllib.regression;\n+\n+import java.io.Serializable;\n+import java.util.List;\n+\n+import scala.Tuple2;\n+\n+import com.google.common.collect.Lists;\n+import static org.apache.spark.streaming.JavaTestUtils.*;"
+  }],
+  "prId": 4432
+}, {
+  "comments": [{
+    "author": {
+      "login": "freeman-lab"
+    },
+    "body": "Worth adding a basic test for accuracy, or maybe that's unnecessary duplication?\n",
+    "commit": "6a79b85396d435874e9e04233477dc8f946abb8a",
+    "createdAt": "2015-02-06T21:35:26Z",
+    "diffHunk": "@@ -0,0 +1,80 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.mllib.regression;\n+\n+import java.io.Serializable;\n+import java.util.List;\n+\n+import scala.Tuple2;\n+\n+import com.google.common.collect.Lists;\n+import org.junit.After;\n+import org.junit.Before;\n+import org.junit.Test;\n+\n+import org.apache.spark.SparkConf;\n+import org.apache.spark.mllib.linalg.Vector;\n+import org.apache.spark.mllib.linalg.Vectors;\n+import org.apache.spark.streaming.Duration;\n+import org.apache.spark.streaming.api.java.JavaDStream;\n+import org.apache.spark.streaming.api.java.JavaPairDStream;\n+import org.apache.spark.streaming.api.java.JavaStreamingContext;\n+import static org.apache.spark.streaming.JavaTestUtils.*;\n+\n+public class JavaStreamingLinearRegressionSuite implements Serializable {\n+\n+  protected transient JavaStreamingContext ssc;\n+\n+  @Before\n+  public void setUp() {\n+    SparkConf conf = new SparkConf()\n+      .setMaster(\"local[2]\")\n+      .setAppName(\"test\")\n+      .set(\"spark.streaming.clock\", \"org.apache.spark.streaming.util.ManualClock\");\n+    ssc = new JavaStreamingContext(conf, new Duration(1000));\n+    ssc.checkpoint(\"checkpoint\");\n+  }\n+\n+  @After\n+  public void tearDown() {\n+    ssc.stop();\n+    ssc = null;\n+  }\n+\n+  @Test\n+  @SuppressWarnings(\"unchecked\")\n+  public void javaAPI() {\n+    List<LabeledPoint> trainingBatch = Lists.newArrayList(\n+      new LabeledPoint(1.0, Vectors.dense(1.0)),\n+      new LabeledPoint(0.0, Vectors.dense(0.0)));\n+    JavaDStream<LabeledPoint> training =\n+      attachTestInputStream(ssc, Lists.newArrayList(trainingBatch, trainingBatch), 2);\n+    List<Tuple2<Integer, Vector>> testBatch = Lists.newArrayList(\n+      new Tuple2<Integer, Vector>(10, Vectors.dense(1.0)),\n+      new Tuple2<Integer, Vector>(11, Vectors.dense(0.0)));\n+    JavaPairDStream<Integer, Vector> test = JavaPairDStream.fromJavaDStream(\n+      attachTestInputStream(ssc, Lists.newArrayList(testBatch, testBatch), 2));\n+    StreamingLinearRegressionWithSGD slr = new StreamingLinearRegressionWithSGD()\n+      .setNumIterations(2)\n+      .setInitialWeights(Vectors.dense(0.0));\n+    slr.trainOn(training);\n+    JavaPairDStream<Integer, Double> prediction = slr.predictOnValues(test);",
+    "line": 76
+  }, {
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "That test is in the Scala suite. This is just to test Java APIs. It is harder to maintain if we check accuracy in both places.\n",
+    "commit": "6a79b85396d435874e9e04233477dc8f946abb8a",
+    "createdAt": "2015-02-06T22:10:09Z",
+    "diffHunk": "@@ -0,0 +1,80 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.mllib.regression;\n+\n+import java.io.Serializable;\n+import java.util.List;\n+\n+import scala.Tuple2;\n+\n+import com.google.common.collect.Lists;\n+import org.junit.After;\n+import org.junit.Before;\n+import org.junit.Test;\n+\n+import org.apache.spark.SparkConf;\n+import org.apache.spark.mllib.linalg.Vector;\n+import org.apache.spark.mllib.linalg.Vectors;\n+import org.apache.spark.streaming.Duration;\n+import org.apache.spark.streaming.api.java.JavaDStream;\n+import org.apache.spark.streaming.api.java.JavaPairDStream;\n+import org.apache.spark.streaming.api.java.JavaStreamingContext;\n+import static org.apache.spark.streaming.JavaTestUtils.*;\n+\n+public class JavaStreamingLinearRegressionSuite implements Serializable {\n+\n+  protected transient JavaStreamingContext ssc;\n+\n+  @Before\n+  public void setUp() {\n+    SparkConf conf = new SparkConf()\n+      .setMaster(\"local[2]\")\n+      .setAppName(\"test\")\n+      .set(\"spark.streaming.clock\", \"org.apache.spark.streaming.util.ManualClock\");\n+    ssc = new JavaStreamingContext(conf, new Duration(1000));\n+    ssc.checkpoint(\"checkpoint\");\n+  }\n+\n+  @After\n+  public void tearDown() {\n+    ssc.stop();\n+    ssc = null;\n+  }\n+\n+  @Test\n+  @SuppressWarnings(\"unchecked\")\n+  public void javaAPI() {\n+    List<LabeledPoint> trainingBatch = Lists.newArrayList(\n+      new LabeledPoint(1.0, Vectors.dense(1.0)),\n+      new LabeledPoint(0.0, Vectors.dense(0.0)));\n+    JavaDStream<LabeledPoint> training =\n+      attachTestInputStream(ssc, Lists.newArrayList(trainingBatch, trainingBatch), 2);\n+    List<Tuple2<Integer, Vector>> testBatch = Lists.newArrayList(\n+      new Tuple2<Integer, Vector>(10, Vectors.dense(1.0)),\n+      new Tuple2<Integer, Vector>(11, Vectors.dense(0.0)));\n+    JavaPairDStream<Integer, Vector> test = JavaPairDStream.fromJavaDStream(\n+      attachTestInputStream(ssc, Lists.newArrayList(testBatch, testBatch), 2));\n+    StreamingLinearRegressionWithSGD slr = new StreamingLinearRegressionWithSGD()\n+      .setNumIterations(2)\n+      .setInitialWeights(Vectors.dense(0.0));\n+    slr.trainOn(training);\n+    JavaPairDStream<Integer, Double> prediction = slr.predictOnValues(test);",
+    "line": 76
+  }, {
+    "author": {
+      "login": "freeman-lab"
+    },
+    "body": "Cool, agreed.\n",
+    "commit": "6a79b85396d435874e9e04233477dc8f946abb8a",
+    "createdAt": "2015-02-06T22:12:10Z",
+    "diffHunk": "@@ -0,0 +1,80 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.mllib.regression;\n+\n+import java.io.Serializable;\n+import java.util.List;\n+\n+import scala.Tuple2;\n+\n+import com.google.common.collect.Lists;\n+import org.junit.After;\n+import org.junit.Before;\n+import org.junit.Test;\n+\n+import org.apache.spark.SparkConf;\n+import org.apache.spark.mllib.linalg.Vector;\n+import org.apache.spark.mllib.linalg.Vectors;\n+import org.apache.spark.streaming.Duration;\n+import org.apache.spark.streaming.api.java.JavaDStream;\n+import org.apache.spark.streaming.api.java.JavaPairDStream;\n+import org.apache.spark.streaming.api.java.JavaStreamingContext;\n+import static org.apache.spark.streaming.JavaTestUtils.*;\n+\n+public class JavaStreamingLinearRegressionSuite implements Serializable {\n+\n+  protected transient JavaStreamingContext ssc;\n+\n+  @Before\n+  public void setUp() {\n+    SparkConf conf = new SparkConf()\n+      .setMaster(\"local[2]\")\n+      .setAppName(\"test\")\n+      .set(\"spark.streaming.clock\", \"org.apache.spark.streaming.util.ManualClock\");\n+    ssc = new JavaStreamingContext(conf, new Duration(1000));\n+    ssc.checkpoint(\"checkpoint\");\n+  }\n+\n+  @After\n+  public void tearDown() {\n+    ssc.stop();\n+    ssc = null;\n+  }\n+\n+  @Test\n+  @SuppressWarnings(\"unchecked\")\n+  public void javaAPI() {\n+    List<LabeledPoint> trainingBatch = Lists.newArrayList(\n+      new LabeledPoint(1.0, Vectors.dense(1.0)),\n+      new LabeledPoint(0.0, Vectors.dense(0.0)));\n+    JavaDStream<LabeledPoint> training =\n+      attachTestInputStream(ssc, Lists.newArrayList(trainingBatch, trainingBatch), 2);\n+    List<Tuple2<Integer, Vector>> testBatch = Lists.newArrayList(\n+      new Tuple2<Integer, Vector>(10, Vectors.dense(1.0)),\n+      new Tuple2<Integer, Vector>(11, Vectors.dense(0.0)));\n+    JavaPairDStream<Integer, Vector> test = JavaPairDStream.fromJavaDStream(\n+      attachTestInputStream(ssc, Lists.newArrayList(testBatch, testBatch), 2));\n+    StreamingLinearRegressionWithSGD slr = new StreamingLinearRegressionWithSGD()\n+      .setNumIterations(2)\n+      .setInitialWeights(Vectors.dense(0.0));\n+    slr.trainOn(training);\n+    JavaPairDStream<Integer, Double> prediction = slr.predictOnValues(test);",
+    "line": 76
+  }],
+  "prId": 4432
+}, {
+  "comments": [{
+    "author": {
+      "login": "freeman-lab"
+    },
+    "body": "Do you want to add a similar `JavaStreamingLogisticRegressionSuite`? Given that the primary change here is to the base class (used by both linear and logistic regression), might make sense to include in the same PR.\n",
+    "commit": "6a79b85396d435874e9e04233477dc8f946abb8a",
+    "createdAt": "2015-02-06T21:36:46Z",
+    "diffHunk": "@@ -0,0 +1,80 @@\n+/*",
+    "line": 1
+  }, {
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "Sure.\n",
+    "commit": "6a79b85396d435874e9e04233477dc8f946abb8a",
+    "createdAt": "2015-02-06T22:13:59Z",
+    "diffHunk": "@@ -0,0 +1,80 @@\n+/*",
+    "line": 1
+  }],
+  "prId": 4432
+}]

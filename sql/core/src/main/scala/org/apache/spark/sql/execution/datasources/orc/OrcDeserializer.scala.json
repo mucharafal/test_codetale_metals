@@ -1,0 +1,59 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "viirya"
+    },
+    "body": "Good catch!",
+    "commit": "9059e020af595f5f149c4f089cd215e0b670cb27",
+    "createdAt": "2019-02-13T01:03:10Z",
+    "diffHunk": "@@ -47,18 +47,20 @@ class OrcDeserializer(\n       }.toArray\n   }\n \n-  private val validColIds = requestedColIds.filterNot(_ == -1)\n-\n   def deserialize(orcStruct: OrcStruct): InternalRow = {\n-    var i = 0\n-    while (i < validColIds.length) {\n-      val value = orcStruct.getFieldValue(validColIds(i))\n-      if (value == null) {\n-        resultRow.setNullAt(i)\n-      } else {\n-        fieldWriters(i)(value)\n+    var fieldWriterIndex = 0\n+    var targetColumnIndex = 0\n+    while (targetColumnIndex < requestedColIds.length) {\n+      if (requestedColIds(targetColumnIndex) != -1) {\n+        val value = orcStruct.getFieldValue(requestedColIds(targetColumnIndex))\n+        if (value == null) {\n+          resultRow.setNullAt(targetColumnIndex)",
+    "line": 39
+  }],
+  "prId": 23766
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "now this loop looks a little complicated, as there are 2 indexes.\r\n\r\nHow about we make the `fieldWriters` has the same size as `requiredSchema`? i.e.\r\n```\r\nprivate val fieldWriters: Array[WritableComparable[_] => Unit] = requiredSchema.zipWithIndex.map {\r\n  case (f, index) =>\r\n    if (requestedColIds(index) == -1) {\r\n      null\r\n    } else {\r\n      // create writer\r\n    }\r\n}\r\n```\r\n\r\nThen this loop becomes\r\n```\r\nvar i = 0\r\nwhile (i < fieldWriters.length) {\r\n  if (fieldWrites(i) != null) {\r\n    ...\r\n  }\r\n}\r\n```",
+    "commit": "9059e020af595f5f149c4f089cd215e0b670cb27",
+    "createdAt": "2019-02-14T07:26:03Z",
+    "diffHunk": "@@ -47,18 +47,20 @@ class OrcDeserializer(\n       }.toArray\n   }\n \n-  private val validColIds = requestedColIds.filterNot(_ == -1)\n-\n   def deserialize(orcStruct: OrcStruct): InternalRow = {\n-    var i = 0\n-    while (i < validColIds.length) {\n-      val value = orcStruct.getFieldValue(validColIds(i))\n-      if (value == null) {\n-        resultRow.setNullAt(i)\n-      } else {\n-        fieldWriters(i)(value)\n+    var fieldWriterIndex = 0\n+    var targetColumnIndex = 0\n+    while (targetColumnIndex < requestedColIds.length) {"
+  }, {
+    "author": {
+      "login": "IvanVergiliev"
+    },
+    "body": "I considered this as well. The currently implemented version allowed me to keep the change more isolated (a single method only), which seemed less risky and easier to review.\r\n\r\nHowever, I agree that changing `fieldWriters` as well is probably better for readability in the long run. I’m definitely open to implementing it this way if there’s consensus that this is better.\r\n\r\n(Minor note: if we do switch to that implementation, I would make the missing field writers None instead of null.)",
+    "commit": "9059e020af595f5f149c4f089cd215e0b670cb27",
+    "createdAt": "2019-02-14T15:53:26Z",
+    "diffHunk": "@@ -47,18 +47,20 @@ class OrcDeserializer(\n       }.toArray\n   }\n \n-  private val validColIds = requestedColIds.filterNot(_ == -1)\n-\n   def deserialize(orcStruct: OrcStruct): InternalRow = {\n-    var i = 0\n-    while (i < validColIds.length) {\n-      val value = orcStruct.getFieldValue(validColIds(i))\n-      if (value == null) {\n-        resultRow.setNullAt(i)\n-      } else {\n-        fieldWriters(i)(value)\n+    var fieldWriterIndex = 0\n+    var targetColumnIndex = 0\n+    while (targetColumnIndex < requestedColIds.length) {"
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "In performance critical code path, we should prefer the java style, i.e. using null instead of `Option` to avoid overhead.",
+    "commit": "9059e020af595f5f149c4f089cd215e0b670cb27",
+    "createdAt": "2019-02-15T02:26:15Z",
+    "diffHunk": "@@ -47,18 +47,20 @@ class OrcDeserializer(\n       }.toArray\n   }\n \n-  private val validColIds = requestedColIds.filterNot(_ == -1)\n-\n   def deserialize(orcStruct: OrcStruct): InternalRow = {\n-    var i = 0\n-    while (i < validColIds.length) {\n-      val value = orcStruct.getFieldValue(validColIds(i))\n-      if (value == null) {\n-        resultRow.setNullAt(i)\n-      } else {\n-        fieldWriters(i)(value)\n+    var fieldWriterIndex = 0\n+    var targetColumnIndex = 0\n+    while (targetColumnIndex < requestedColIds.length) {"
+  }],
+  "prId": 23766
+}, {
+  "comments": [{
+    "author": {
+      "login": "viirya"
+    },
+    "body": "`value` can be `val` instead of `var`. ",
+    "commit": "9059e020af595f5f149c4f089cd215e0b670cb27",
+    "createdAt": "2019-02-19T10:19:26Z",
+    "diffHunk": "@@ -37,28 +37,34 @@ class OrcDeserializer(\n \n   private val resultRow = new SpecificInternalRow(requiredSchema.map(_.dataType))\n \n+  // `fieldWriters(index)` is\n+  // - null if the respective source column is missing, since the output value\n+  //   is always null in this case\n+  // - a function that updates target column `index` otherwise.\n   private val fieldWriters: Array[WritableComparable[_] => Unit] = {\n     requiredSchema.zipWithIndex\n-      // The value of missing columns are always null, do not need writers.\n-      .filterNot { case (_, index) => requestedColIds(index) == -1 }\n       .map { case (f, index) =>\n-        val writer = newWriter(f.dataType, new RowUpdater(resultRow))\n-        (value: WritableComparable[_]) => writer(index, value)\n+        if (requestedColIds(index) == -1) {\n+          null\n+        } else {\n+          val writer = newWriter(f.dataType, new RowUpdater(resultRow))\n+          (value: WritableComparable[_]) => writer(index, value)\n+        }\n       }.toArray\n   }\n \n-  private val validColIds = requestedColIds.filterNot(_ == -1)\n-\n   def deserialize(orcStruct: OrcStruct): InternalRow = {\n-    var i = 0\n-    while (i < validColIds.length) {\n-      val value = orcStruct.getFieldValue(validColIds(i))\n-      if (value == null) {\n-        resultRow.setNullAt(i)\n-      } else {\n-        fieldWriters(i)(value)\n+    var targetColumnIndex = 0\n+    while (targetColumnIndex < fieldWriters.length) {\n+      if (fieldWriters(targetColumnIndex) != null) {\n+        var value = orcStruct.getFieldValue(requestedColIds(targetColumnIndex))"
+  }, {
+    "author": {
+      "login": "IvanVergiliev"
+    },
+    "body": "No idea how that happened.",
+    "commit": "9059e020af595f5f149c4f089cd215e0b670cb27",
+    "createdAt": "2019-02-19T15:31:17Z",
+    "diffHunk": "@@ -37,28 +37,34 @@ class OrcDeserializer(\n \n   private val resultRow = new SpecificInternalRow(requiredSchema.map(_.dataType))\n \n+  // `fieldWriters(index)` is\n+  // - null if the respective source column is missing, since the output value\n+  //   is always null in this case\n+  // - a function that updates target column `index` otherwise.\n   private val fieldWriters: Array[WritableComparable[_] => Unit] = {\n     requiredSchema.zipWithIndex\n-      // The value of missing columns are always null, do not need writers.\n-      .filterNot { case (_, index) => requestedColIds(index) == -1 }\n       .map { case (f, index) =>\n-        val writer = newWriter(f.dataType, new RowUpdater(resultRow))\n-        (value: WritableComparable[_]) => writer(index, value)\n+        if (requestedColIds(index) == -1) {\n+          null\n+        } else {\n+          val writer = newWriter(f.dataType, new RowUpdater(resultRow))\n+          (value: WritableComparable[_]) => writer(index, value)\n+        }\n       }.toArray\n   }\n \n-  private val validColIds = requestedColIds.filterNot(_ == -1)\n-\n   def deserialize(orcStruct: OrcStruct): InternalRow = {\n-    var i = 0\n-    while (i < validColIds.length) {\n-      val value = orcStruct.getFieldValue(validColIds(i))\n-      if (value == null) {\n-        resultRow.setNullAt(i)\n-      } else {\n-        fieldWriters(i)(value)\n+    var targetColumnIndex = 0\n+    while (targetColumnIndex < fieldWriters.length) {\n+      if (fieldWriters(targetColumnIndex) != null) {\n+        var value = orcStruct.getFieldValue(requestedColIds(targetColumnIndex))"
+  }],
+  "prId": 23766
+}]

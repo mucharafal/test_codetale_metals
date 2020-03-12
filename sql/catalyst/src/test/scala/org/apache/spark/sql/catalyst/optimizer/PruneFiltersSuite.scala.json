@@ -1,0 +1,47 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "nsyca"
+    },
+    "body": "This behaviour does not make sense to me. If I write a query like\r\n\r\n`select * from (select * from t1 where t1.a1 > 1) tx where tx.a1 > 1`\r\n\r\nI expect that Spark evaluates the predicate only once. The wording of \"constraint propagation\" is misleading. In this example, there is no activity of propagation at all. Perhaps we want to distinguish the \"constraints\" between the ones written originally and the ones that are inferred from relationships with other predicates. When the \"propagation\" (or perhaps a more meaningful term \"predicate inference\") is set to OFF, we want to exclude those inferred predicates in the `def constraints`.",
+    "commit": "a02c8cbf80a8977e80ce21e0db9b4c0b61753331",
+    "createdAt": "2017-03-15T13:40:22Z",
+    "diffHunk": "@@ -133,4 +146,28 @@ class PruneFiltersSuite extends PlanTest {\n     val correctAnswer = testRelation.where(Rand(10) > 5).where(Rand(10) > 5).select('a).analyze\n     comparePlans(optimized, correctAnswer)\n   }\n+\n+  test(\"No pruning when constraint propagation is disabled\") {\n+    val tr1 = LocalRelation('a.int, 'b.int, 'c.int).subquery('tr1)\n+    val tr2 = LocalRelation('a.int, 'd.int, 'e.int).subquery('tr2)\n+\n+    val query = tr1\n+      .where(\"tr1.a\".attr > 10 || \"tr1.c\".attr < 10)\n+      .join(tr2.where('d.attr < 100), Inner, Some(\"tr1.a\".attr === \"tr2.a\".attr))\n+\n+    val queryWithUselessFilter =\n+      query.where(\n+        (\"tr1.a\".attr > 10 || \"tr1.c\".attr < 10) &&\n+          'd.attr < 100)\n+\n+    val optimized = OptimizeDisableConstraintPropagation.execute(queryWithUselessFilter.analyze)\n+    // When constraint propagation is disabled, the useless filter won't be pruned.\n+    // It gets pushed down. Because the rule `CombineFilters` runs only once, there are redundant\n+    // and duplicate filters."
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "What needs to clarify is, this behaviour is just limited to this test case. That is why I added the comment. In normal optimization, `CombineFilters` will run multiple times and the predicates will be combined.",
+    "commit": "a02c8cbf80a8977e80ce21e0db9b4c0b61753331",
+    "createdAt": "2017-03-15T13:45:59Z",
+    "diffHunk": "@@ -133,4 +146,28 @@ class PruneFiltersSuite extends PlanTest {\n     val correctAnswer = testRelation.where(Rand(10) > 5).where(Rand(10) > 5).select('a).analyze\n     comparePlans(optimized, correctAnswer)\n   }\n+\n+  test(\"No pruning when constraint propagation is disabled\") {\n+    val tr1 = LocalRelation('a.int, 'b.int, 'c.int).subquery('tr1)\n+    val tr2 = LocalRelation('a.int, 'd.int, 'e.int).subquery('tr2)\n+\n+    val query = tr1\n+      .where(\"tr1.a\".attr > 10 || \"tr1.c\".attr < 10)\n+      .join(tr2.where('d.attr < 100), Inner, Some(\"tr1.a\".attr === \"tr2.a\".attr))\n+\n+    val queryWithUselessFilter =\n+      query.where(\n+        (\"tr1.a\".attr > 10 || \"tr1.c\".attr < 10) &&\n+          'd.attr < 100)\n+\n+    val optimized = OptimizeDisableConstraintPropagation.execute(queryWithUselessFilter.analyze)\n+    // When constraint propagation is disabled, the useless filter won't be pruned.\n+    // It gets pushed down. Because the rule `CombineFilters` runs only once, there are redundant\n+    // and duplicate filters."
+  }, {
+    "author": {
+      "login": "nsyca"
+    },
+    "body": "I am aware of it. My point is when users turn on this setting in hope of alleviating the long compilation time, they will get this \"unintentional\" side effect that could lengthen the execution time of evaluating the same predicate twice.\r\n\r\nOverall, I agree with your approach but the point I raised could be a followup work.",
+    "commit": "a02c8cbf80a8977e80ce21e0db9b4c0b61753331",
+    "createdAt": "2017-03-15T13:53:45Z",
+    "diffHunk": "@@ -133,4 +146,28 @@ class PruneFiltersSuite extends PlanTest {\n     val correctAnswer = testRelation.where(Rand(10) > 5).where(Rand(10) > 5).select('a).analyze\n     comparePlans(optimized, correctAnswer)\n   }\n+\n+  test(\"No pruning when constraint propagation is disabled\") {\n+    val tr1 = LocalRelation('a.int, 'b.int, 'c.int).subquery('tr1)\n+    val tr2 = LocalRelation('a.int, 'd.int, 'e.int).subquery('tr2)\n+\n+    val query = tr1\n+      .where(\"tr1.a\".attr > 10 || \"tr1.c\".attr < 10)\n+      .join(tr2.where('d.attr < 100), Inner, Some(\"tr1.a\".attr === \"tr2.a\".attr))\n+\n+    val queryWithUselessFilter =\n+      query.where(\n+        (\"tr1.a\".attr > 10 || \"tr1.c\".attr < 10) &&\n+          'd.attr < 100)\n+\n+    val optimized = OptimizeDisableConstraintPropagation.execute(queryWithUselessFilter.analyze)\n+    // When constraint propagation is disabled, the useless filter won't be pruned.\n+    // It gets pushed down. Because the rule `CombineFilters` runs only once, there are redundant\n+    // and duplicate filters."
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "This is a workaround in short term. Actually I have proposed another approach to bring new data structure for constraint propagation in #16998. But it is more complex and may need more time to consider and review.",
+    "commit": "a02c8cbf80a8977e80ce21e0db9b4c0b61753331",
+    "createdAt": "2017-03-15T14:03:22Z",
+    "diffHunk": "@@ -133,4 +146,28 @@ class PruneFiltersSuite extends PlanTest {\n     val correctAnswer = testRelation.where(Rand(10) > 5).where(Rand(10) > 5).select('a).analyze\n     comparePlans(optimized, correctAnswer)\n   }\n+\n+  test(\"No pruning when constraint propagation is disabled\") {\n+    val tr1 = LocalRelation('a.int, 'b.int, 'c.int).subquery('tr1)\n+    val tr2 = LocalRelation('a.int, 'd.int, 'e.int).subquery('tr2)\n+\n+    val query = tr1\n+      .where(\"tr1.a\".attr > 10 || \"tr1.c\".attr < 10)\n+      .join(tr2.where('d.attr < 100), Inner, Some(\"tr1.a\".attr === \"tr2.a\".attr))\n+\n+    val queryWithUselessFilter =\n+      query.where(\n+        (\"tr1.a\".attr > 10 || \"tr1.c\".attr < 10) &&\n+          'd.attr < 100)\n+\n+    val optimized = OptimizeDisableConstraintPropagation.execute(queryWithUselessFilter.analyze)\n+    // When constraint propagation is disabled, the useless filter won't be pruned.\n+    // It gets pushed down. Because the rule `CombineFilters` runs only once, there are redundant\n+    // and duplicate filters."
+  }],
+  "prId": 17186
+}, {
+  "comments": [{
+    "author": {
+      "login": "sameeragarwal"
+    },
+    "body": "nit: same as above",
+    "commit": "a02c8cbf80a8977e80ce21e0db9b4c0b61753331",
+    "createdAt": "2017-03-23T23:04:57Z",
+    "diffHunk": "@@ -33,7 +34,19 @@ class PruneFiltersSuite extends PlanTest {\n         EliminateSubqueryAliases) ::\n       Batch(\"Filter Pushdown and Pruning\", Once,\n         CombineFilters,\n-        PruneFilters,\n+        PruneFilters(SimpleCatalystConf(caseSensitiveAnalysis = true)),\n+        PushDownPredicate,\n+        PushPredicateThroughJoin) :: Nil\n+  }\n+\n+  object OptimizeDisableConstraintPropagation extends RuleExecutor[LogicalPlan] {"
+  }],
+  "prId": 17186
+}]

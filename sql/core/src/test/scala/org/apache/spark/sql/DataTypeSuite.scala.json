@@ -1,0 +1,20 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "marmbrus"
+    },
+    "body": "This is kind of a Nit, but I think I'd prefer tests that just roundtrip StructFields that have various weird characters instead of those that are dependent on the exact output.  That would test for the desired behavior but would not have to be rewritten if we ever change the format. (I mostly say this because I just spent the last hour rewriting brittle parquet tests :) )\n",
+    "commit": "e837e2b9d7006099dada44397da5890cd318c340",
+    "createdAt": "2014-09-09T02:03:50Z",
+    "diffHunk": "@@ -55,4 +55,38 @@ class DataTypeSuite extends FunSuite {\n       struct(Set(\"b\", \"d\", \"e\", \"f\"))\n     }\n   }\n+\n+  test(\"StructField.toString\") {\n+    def structFieldWithName(name: String) = StructField(name, StringType, nullable = true)\n+\n+    assertResult(\"\"\"StructField(\"a\",StringType,true)\"\"\") {\n+      structFieldWithName(\"a\").toString\n+    }\n+\n+    assertResult(\"\"\"StructField(\"(a)\",StringType,true)\"\"\") {\n+      structFieldWithName(\"(a)\").toString\n+    }\n+\n+    assertResult(\"\"\"StructField(\"a\\\\b\\\"\",StringType,true)\"\"\") {\n+      structFieldWithName(\"\"\"a\\b\"\"\"\").toString\n+    }\n+  }\n+\n+  test(\"parsing StructField string\") {\n+    val expected = StructType(\n+      StructField(\"a\", StringType, true) ::\n+      StructField(\"\\\"b\\\"\", StringType, true) ::\n+      StructField(\"\\\"c\\\\\", StringType, true) ::\n+      Nil)\n+\n+    val structTypeString = Seq(\n+      \"\"\"StructType(List(\"\"\",\n+      \"\"\"StructField(\"a\",StringType,true),\"\"\",\n+      \"\"\"StructField(\"\\\"b\\\"\",StringType,true),\"\"\",\n+      \"\"\"StructField(\"\\\"c\\\\\",StringType,true)\"\"\",\n+      \"\"\"))\"\"\"\n+    ).mkString\n+\n+    assert(catalyst.types.DataType(structTypeString) === expected)"
+  }, {
+    "author": {
+      "login": "liancheng"
+    },
+    "body": "OK, some ScalaCheck style random generated input may be helpful here.\n",
+    "commit": "e837e2b9d7006099dada44397da5890cd318c340",
+    "createdAt": "2014-09-10T02:29:26Z",
+    "diffHunk": "@@ -55,4 +55,38 @@ class DataTypeSuite extends FunSuite {\n       struct(Set(\"b\", \"d\", \"e\", \"f\"))\n     }\n   }\n+\n+  test(\"StructField.toString\") {\n+    def structFieldWithName(name: String) = StructField(name, StringType, nullable = true)\n+\n+    assertResult(\"\"\"StructField(\"a\",StringType,true)\"\"\") {\n+      structFieldWithName(\"a\").toString\n+    }\n+\n+    assertResult(\"\"\"StructField(\"(a)\",StringType,true)\"\"\") {\n+      structFieldWithName(\"(a)\").toString\n+    }\n+\n+    assertResult(\"\"\"StructField(\"a\\\\b\\\"\",StringType,true)\"\"\") {\n+      structFieldWithName(\"\"\"a\\b\"\"\"\").toString\n+    }\n+  }\n+\n+  test(\"parsing StructField string\") {\n+    val expected = StructType(\n+      StructField(\"a\", StringType, true) ::\n+      StructField(\"\\\"b\\\"\", StringType, true) ::\n+      StructField(\"\\\"c\\\\\", StringType, true) ::\n+      Nil)\n+\n+    val structTypeString = Seq(\n+      \"\"\"StructType(List(\"\"\",\n+      \"\"\"StructField(\"a\",StringType,true),\"\"\",\n+      \"\"\"StructField(\"\\\"b\\\"\",StringType,true),\"\"\",\n+      \"\"\"StructField(\"\\\"c\\\\\",StringType,true)\"\"\",\n+      \"\"\"))\"\"\"\n+    ).mkString\n+\n+    assert(catalyst.types.DataType(structTypeString) === expected)"
+  }],
+  "prId": 2291
+}]

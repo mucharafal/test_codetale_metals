@@ -1,0 +1,113 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Don't repeat all this. If includeHeaders, add one element to the Seq, then make a structtype from it.",
+    "commit": "de02de411aa00cbacc94be5b746dc48be0fe77a3",
+    "createdAt": "2019-06-18T18:55:58Z",
+    "diffHunk": "@@ -395,13 +395,28 @@ private[kafka010] class KafkaOffsetReader(\n \n private[kafka010] object KafkaOffsetReader {\n \n-  def kafkaSchema: StructType = StructType(Seq(\n-    StructField(\"key\", BinaryType),\n-    StructField(\"value\", BinaryType),\n-    StructField(\"topic\", StringType),\n-    StructField(\"partition\", IntegerType),\n-    StructField(\"offset\", LongType),\n-    StructField(\"timestamp\", TimestampType),\n-    StructField(\"timestampType\", IntegerType)\n-  ))\n+  def kafkaSchema(includeHeaders: Boolean): StructType = {\n+    if (includeHeaders) {\n+      StructType(Seq(\n+        StructField(\"key\", BinaryType),\n+        StructField(\"value\", BinaryType),\n+        StructField(\"topic\", StringType),\n+        StructField(\"partition\", IntegerType),\n+        StructField(\"offset\", LongType),\n+        StructField(\"timestamp\", TimestampType),\n+        StructField(\"timestampType\", IntegerType),\n+        StructField(\"headers\", MapType(StringType, BinaryType))\n+      ))\n+    } else {\n+      StructType(Seq(\n+        StructField(\"key\", BinaryType),"
+  }],
+  "prId": 22282
+}, {
+  "comments": [{
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "nit: maybe use the following lazy creation to avoid creating the schema in every call.\r\n```scala\r\n  private lazy val schemaWithoutHeaders = new StructType(Array(\r\n    StructField(\"key\", BinaryType),\r\n    StructField(\"value\", BinaryType),\r\n    StructField(\"topic\", StringType),\r\n    StructField(\"partition\", IntegerType),\r\n    StructField(\"offset\", LongType),\r\n    StructField(\"timestamp\", TimestampType),\r\n    StructField(\"timestampType\", IntegerType)\r\n  ))\r\n\r\n  private lazy val schemaWithHeaders = {\r\n    val headersType = ArrayType(StructType(Array(\r\n      StructField(\"key\", StringType),\r\n      StructField(\"value\", BinaryType))))\r\n    new StructType(schemaWithoutHeaders.fields :+ StructField(\"headers\", headersType))\r\n  }\r\n\r\n  def kafkaSchema(includeHeaders: Boolean): StructType = {\r\n    if (includeHeaders) schemaWithHeaders else schemaWithoutHeaders\r\n  }\r\n```",
+    "commit": "de02de411aa00cbacc94be5b746dc48be0fe77a3",
+    "createdAt": "2019-07-22T20:17:08Z",
+    "diffHunk": "@@ -423,13 +423,20 @@ private[kafka010] class KafkaOffsetReader(\n \n private[kafka010] object KafkaOffsetReader {\n \n-  def kafkaSchema: StructType = StructType(Seq(\n-    StructField(\"key\", BinaryType),\n-    StructField(\"value\", BinaryType),\n-    StructField(\"topic\", StringType),\n-    StructField(\"partition\", IntegerType),\n-    StructField(\"offset\", LongType),\n-    StructField(\"timestamp\", TimestampType),\n-    StructField(\"timestampType\", IntegerType)\n-  ))\n+  def kafkaSchema(includeHeaders: Boolean): StructType = {"
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "These don't need to be lazy. They won't be created in every call; they're in the `object`",
+    "commit": "de02de411aa00cbacc94be5b746dc48be0fe77a3",
+    "createdAt": "2019-08-03T13:57:30Z",
+    "diffHunk": "@@ -423,13 +423,20 @@ private[kafka010] class KafkaOffsetReader(\n \n private[kafka010] object KafkaOffsetReader {\n \n-  def kafkaSchema: StructType = StructType(Seq(\n-    StructField(\"key\", BinaryType),\n-    StructField(\"value\", BinaryType),\n-    StructField(\"topic\", StringType),\n-    StructField(\"partition\", IntegerType),\n-    StructField(\"offset\", LongType),\n-    StructField(\"timestamp\", TimestampType),\n-    StructField(\"timestampType\", IntegerType)\n-  ))\n+  def kafkaSchema(includeHeaders: Boolean): StructType = {"
+  }],
+  "prId": 22282
+}, {
+  "comments": [{
+    "author": {
+      "login": "HeartSaVioR"
+    },
+    "body": "I'd say the object `KafkaOffsetReader` is going to become like utility which everything in it are not used in companion class (weird), but `kafkaSchema` also seems to be in wrong place, so well... Let's hear voices on this.",
+    "commit": "de02de411aa00cbacc94be5b746dc48be0fe77a3",
+    "createdAt": "2019-07-25T00:14:22Z",
+    "diffHunk": "@@ -422,21 +426,57 @@ private[kafka010] class KafkaOffsetReader(\n }\n \n private[kafka010] object KafkaOffsetReader {\n+  type Record = ConsumerRecord[Array[Byte], Array[Byte]]"
+  }],
+  "prId": 22282
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Why not just `def` a function here?",
+    "commit": "de02de411aa00cbacc94be5b746dc48be0fe77a3",
+    "createdAt": "2019-08-03T13:57:48Z",
+    "diffHunk": "@@ -432,4 +441,42 @@ private[kafka010] object KafkaOffsetReader {\n     StructField(\"timestamp\", TimestampType),\n     StructField(\"timestampType\", IntegerType)\n   ))\n+\n+  lazy val schemaWithHeaders = {\n+    new StructType(schemaWithoutHeaders.fields :+ StructField(\"headers\", headersType))\n+  }\n+\n+  def kafkaSchema(includeHeaders: Boolean): StructType = {\n+    if (includeHeaders) schemaWithHeaders else schemaWithoutHeaders\n+  }\n+\n+  lazy val toInternalRowWithoutHeaders: Record => InternalRow ="
+  }],
+  "prId": 22282
+}, {
+  "comments": [{
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "This should be a `val`. Otherwise, it will be called once for each record in the closure returned by `toUnsafeRowWithoutHeadersProjector`.",
+    "commit": "de02de411aa00cbacc94be5b746dc48be0fe77a3",
+    "createdAt": "2019-08-08T22:24:06Z",
+    "diffHunk": "@@ -432,4 +441,42 @@ private[kafka010] object KafkaOffsetReader {\n     StructField(\"timestamp\", TimestampType),\n     StructField(\"timestampType\", IntegerType)\n   ))\n+\n+  val schemaWithHeaders = {\n+    new StructType(schemaWithoutHeaders.fields :+ StructField(\"headers\", headersType))\n+  }\n+\n+  def kafkaSchema(includeHeaders: Boolean): StructType = {\n+    if (includeHeaders) schemaWithHeaders else schemaWithoutHeaders\n+  }\n+\n+  def toInternalRowWithoutHeaders: Record => InternalRow ="
+  }],
+  "prId": 22282
+}, {
+  "comments": [{
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "ditto",
+    "commit": "de02de411aa00cbacc94be5b746dc48be0fe77a3",
+    "createdAt": "2019-08-08T22:24:07Z",
+    "diffHunk": "@@ -432,4 +441,42 @@ private[kafka010] object KafkaOffsetReader {\n     StructField(\"timestamp\", TimestampType),\n     StructField(\"timestampType\", IntegerType)\n   ))\n+\n+  val schemaWithHeaders = {\n+    new StructType(schemaWithoutHeaders.fields :+ StructField(\"headers\", headersType))\n+  }\n+\n+  def kafkaSchema(includeHeaders: Boolean): StructType = {\n+    if (includeHeaders) schemaWithHeaders else schemaWithoutHeaders\n+  }\n+\n+  def toInternalRowWithoutHeaders: Record => InternalRow =\n+    (cr: Record) => InternalRow(\n+      cr.key, cr.value, UTF8String.fromString(cr.topic), cr.partition, cr.offset,\n+      DateTimeUtils.fromJavaTimestamp(new java.sql.Timestamp(cr.timestamp)), cr.timestampType.id\n+    )\n+\n+  def toInternalRowWithHeaders: Record => InternalRow ="
+  }],
+  "prId": 22282
+}, {
+  "comments": [{
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "This will create a `UnsafeProjection` for each record.",
+    "commit": "de02de411aa00cbacc94be5b746dc48be0fe77a3",
+    "createdAt": "2019-08-20T18:42:49Z",
+    "diffHunk": "@@ -433,4 +441,42 @@ private[kafka010] object KafkaOffsetReader {\n     StructField(\"timestamp\", TimestampType),\n     StructField(\"timestampType\", IntegerType)\n   ))\n+\n+  val schemaWithHeaders = {\n+    new StructType(schemaWithoutHeaders.fields :+ StructField(\"headers\", headersType))\n+  }\n+\n+  def kafkaSchema(includeHeaders: Boolean): StructType = {\n+    if (includeHeaders) schemaWithHeaders else schemaWithoutHeaders\n+  }\n+\n+  def toInternalRowWithoutHeaders: Record => InternalRow =\n+    (cr: Record) => InternalRow(\n+      cr.key, cr.value, UTF8String.fromString(cr.topic), cr.partition, cr.offset,\n+      DateTimeUtils.fromJavaTimestamp(new java.sql.Timestamp(cr.timestamp)), cr.timestampType.id\n+    )\n+\n+  def toInternalRowWithHeaders: Record => InternalRow =\n+    (cr: Record) => InternalRow(\n+      cr.key, cr.value, UTF8String.fromString(cr.topic), cr.partition, cr.offset,\n+      DateTimeUtils.fromJavaTimestamp(new java.sql.Timestamp(cr.timestamp)), cr.timestampType.id,\n+      if (cr.headers.iterator().hasNext) {\n+        new GenericArrayData(cr.headers.iterator().asScala\n+          .map(header =>\n+            InternalRow(UTF8String.fromString(header.key()), header.value())\n+          ).toArray)\n+      } else {\n+        null\n+      }\n+    )\n+\n+  def toUnsafeRowWithoutHeadersProjector: Record => UnsafeRow =\n+    (cr: Record) => UnsafeProjection.create(schemaWithoutHeaders)(toInternalRowWithoutHeaders(cr))"
+  }, {
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "I meant we should create one `UnsafeProjection` and reuse it for all records in the same task.",
+    "commit": "de02de411aa00cbacc94be5b746dc48be0fe77a3",
+    "createdAt": "2019-08-21T20:11:49Z",
+    "diffHunk": "@@ -433,4 +441,42 @@ private[kafka010] object KafkaOffsetReader {\n     StructField(\"timestamp\", TimestampType),\n     StructField(\"timestampType\", IntegerType)\n   ))\n+\n+  val schemaWithHeaders = {\n+    new StructType(schemaWithoutHeaders.fields :+ StructField(\"headers\", headersType))\n+  }\n+\n+  def kafkaSchema(includeHeaders: Boolean): StructType = {\n+    if (includeHeaders) schemaWithHeaders else schemaWithoutHeaders\n+  }\n+\n+  def toInternalRowWithoutHeaders: Record => InternalRow =\n+    (cr: Record) => InternalRow(\n+      cr.key, cr.value, UTF8String.fromString(cr.topic), cr.partition, cr.offset,\n+      DateTimeUtils.fromJavaTimestamp(new java.sql.Timestamp(cr.timestamp)), cr.timestampType.id\n+    )\n+\n+  def toInternalRowWithHeaders: Record => InternalRow =\n+    (cr: Record) => InternalRow(\n+      cr.key, cr.value, UTF8String.fromString(cr.topic), cr.partition, cr.offset,\n+      DateTimeUtils.fromJavaTimestamp(new java.sql.Timestamp(cr.timestamp)), cr.timestampType.id,\n+      if (cr.headers.iterator().hasNext) {\n+        new GenericArrayData(cr.headers.iterator().asScala\n+          .map(header =>\n+            InternalRow(UTF8String.fromString(header.key()), header.value())\n+          ).toArray)\n+      } else {\n+        null\n+      }\n+    )\n+\n+  def toUnsafeRowWithoutHeadersProjector: Record => UnsafeRow =\n+    (cr: Record) => UnsafeProjection.create(schemaWithoutHeaders)(toInternalRowWithoutHeaders(cr))"
+  }, {
+    "author": {
+      "login": "dongjinleekr"
+    },
+    "body": "Sorry, I misunderstood your intention; now `UnsafeProjection`s are extracted into `val`.",
+    "commit": "de02de411aa00cbacc94be5b746dc48be0fe77a3",
+    "createdAt": "2019-08-22T07:28:03Z",
+    "diffHunk": "@@ -433,4 +441,42 @@ private[kafka010] object KafkaOffsetReader {\n     StructField(\"timestamp\", TimestampType),\n     StructField(\"timestampType\", IntegerType)\n   ))\n+\n+  val schemaWithHeaders = {\n+    new StructType(schemaWithoutHeaders.fields :+ StructField(\"headers\", headersType))\n+  }\n+\n+  def kafkaSchema(includeHeaders: Boolean): StructType = {\n+    if (includeHeaders) schemaWithHeaders else schemaWithoutHeaders\n+  }\n+\n+  def toInternalRowWithoutHeaders: Record => InternalRow =\n+    (cr: Record) => InternalRow(\n+      cr.key, cr.value, UTF8String.fromString(cr.topic), cr.partition, cr.offset,\n+      DateTimeUtils.fromJavaTimestamp(new java.sql.Timestamp(cr.timestamp)), cr.timestampType.id\n+    )\n+\n+  def toInternalRowWithHeaders: Record => InternalRow =\n+    (cr: Record) => InternalRow(\n+      cr.key, cr.value, UTF8String.fromString(cr.topic), cr.partition, cr.offset,\n+      DateTimeUtils.fromJavaTimestamp(new java.sql.Timestamp(cr.timestamp)), cr.timestampType.id,\n+      if (cr.headers.iterator().hasNext) {\n+        new GenericArrayData(cr.headers.iterator().asScala\n+          .map(header =>\n+            InternalRow(UTF8String.fromString(header.key()), header.value())\n+          ).toArray)\n+      } else {\n+        null\n+      }\n+    )\n+\n+  def toUnsafeRowWithoutHeadersProjector: Record => UnsafeRow =\n+    (cr: Record) => UnsafeProjection.create(schemaWithoutHeaders)(toInternalRowWithoutHeaders(cr))"
+  }],
+  "prId": 22282
+}, {
+  "comments": [{
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "ditto",
+    "commit": "de02de411aa00cbacc94be5b746dc48be0fe77a3",
+    "createdAt": "2019-08-20T18:42:57Z",
+    "diffHunk": "@@ -433,4 +441,42 @@ private[kafka010] object KafkaOffsetReader {\n     StructField(\"timestamp\", TimestampType),\n     StructField(\"timestampType\", IntegerType)\n   ))\n+\n+  val schemaWithHeaders = {\n+    new StructType(schemaWithoutHeaders.fields :+ StructField(\"headers\", headersType))\n+  }\n+\n+  def kafkaSchema(includeHeaders: Boolean): StructType = {\n+    if (includeHeaders) schemaWithHeaders else schemaWithoutHeaders\n+  }\n+\n+  def toInternalRowWithoutHeaders: Record => InternalRow =\n+    (cr: Record) => InternalRow(\n+      cr.key, cr.value, UTF8String.fromString(cr.topic), cr.partition, cr.offset,\n+      DateTimeUtils.fromJavaTimestamp(new java.sql.Timestamp(cr.timestamp)), cr.timestampType.id\n+    )\n+\n+  def toInternalRowWithHeaders: Record => InternalRow =\n+    (cr: Record) => InternalRow(\n+      cr.key, cr.value, UTF8String.fromString(cr.topic), cr.partition, cr.offset,\n+      DateTimeUtils.fromJavaTimestamp(new java.sql.Timestamp(cr.timestamp)), cr.timestampType.id,\n+      if (cr.headers.iterator().hasNext) {\n+        new GenericArrayData(cr.headers.iterator().asScala\n+          .map(header =>\n+            InternalRow(UTF8String.fromString(header.key()), header.value())\n+          ).toArray)\n+      } else {\n+        null\n+      }\n+    )\n+\n+  def toUnsafeRowWithoutHeadersProjector: Record => UnsafeRow =\n+    (cr: Record) => UnsafeProjection.create(schemaWithoutHeaders)(toInternalRowWithoutHeaders(cr))\n+\n+  def toUnsafeRowWithHeadersProjector: Record => UnsafeRow =\n+    (cr: Record) => UnsafeProjection.create(schemaWithHeaders)(toInternalRowWithHeaders(cr))"
+  }],
+  "prId": 22282
+}]

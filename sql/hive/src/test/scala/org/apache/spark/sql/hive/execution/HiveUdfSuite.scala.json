@@ -1,0 +1,23 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "marmbrus"
+    },
+    "body": "Use the idomatic syntax for tuple types: `Seq[(Int, Int, Int)]`\n",
+    "commit": "d7fdbbcac89fb3f4d085355f8bd0b2b3ca218a09",
+    "createdAt": "2014-10-05T03:10:31Z",
+    "diffHunk": "@@ -17,29 +17,32 @@\n \n package org.apache.spark.sql.hive.execution\n \n-import java.io.{DataOutput, DataInput}\n+import java.io.{DataInput, DataOutput}\n import java.util\n import java.util.Properties\n \n-import org.apache.spark.util.Utils\n-\n-import scala.collection.JavaConversions._\n-\n import org.apache.hadoop.conf.Configuration\n-import org.apache.hadoop.hive.serde2.{SerDeStats, AbstractSerDe}\n-import org.apache.hadoop.io.Writable\n-import org.apache.hadoop.hive.serde2.objectinspector.{ObjectInspectorFactory, ObjectInspector}\n-\n-import org.apache.hadoop.hive.serde2.objectinspector.primitive.PrimitiveObjectInspectorFactory\n import org.apache.hadoop.hive.ql.udf.generic.GenericUDF\n import org.apache.hadoop.hive.ql.udf.generic.GenericUDF.DeferredObject\n-\n+import org.apache.hadoop.hive.serde2.objectinspector.primitive.PrimitiveObjectInspectorFactory\n+import org.apache.hadoop.hive.serde2.objectinspector.{ObjectInspector, ObjectInspectorFactory}\n+import org.apache.hadoop.hive.serde2.{AbstractSerDe, SerDeStats}\n+import org.apache.hadoop.io.Writable\n import org.apache.spark.sql.Row\n import org.apache.spark.sql.hive.test.TestHive\n import org.apache.spark.sql.hive.test.TestHive._\n+import org.apache.spark.util.Utils\n+\n+import scala.collection.JavaConversions._\n \n case class Fields(f1: Int, f2: Int, f3: Int, f4: Int, f5: Int)\n \n+// Case classes for the custom UDF's.\n+case class IntegerCaseClass(i: Int)\n+case class ListListIntCaseClass(lli: Seq[Tuple3[Int, Int, Int]])"
+  }],
+  "prId": 2621
+}, {
+  "comments": [{
+    "author": {
+      "login": "marmbrus"
+    },
+    "body": "Use `checkAnswer` from `QueryTest` to test queries.  It compares answers taking into account the ordering, gives side by side results when they differ, and prints better exceptions.\n\n``` scala\ncheckAnswer(\n  sql(\"SELECT testUDFIntegerToString(i) FROM integerTable\"),\n  Seq(Row(1), Row(2)))\n```\n\nActually, mind fixing the one above too?  I let that slip in somehow.  Thanks :)\n",
+    "commit": "d7fdbbcac89fb3f4d085355f8bd0b2b3ca218a09",
+    "createdAt": "2014-10-05T03:15:07Z",
+    "diffHunk": "@@ -83,6 +86,82 @@ class HiveUdfSuite extends HiveComparisonTest {\n   test(\"SPARK-2693 udaf aggregates test\") {\n     assert(sql(\"SELECT percentile(key,1) FROM src\").first === sql(\"SELECT max(key) FROM src\").first)\n   }\n+\n+  test(\"UDFIntegerToString\") {\n+    val testData = TestHive.sparkContext.parallelize(\n+      IntegerCaseClass(1) :: IntegerCaseClass(2) :: Nil)\n+    testData.registerTempTable(\"integerTable\")\n+\n+    sql(s\"CREATE TEMPORARY FUNCTION testUDFIntegerToString AS '${classOf[UDFIntegerToString].getName}'\")\n+    assertResult(Array(Array(\"1\"), Array(\"2\"))) {\n+      sql(\"SELECT testUDFIntegerToString(i) FROM integerTable\").collect()\n+    }\n+    sql(\"DROP TEMPORARY FUNCTION IF EXISTS testUDFIntegerToString\")\n+\n+    TestHive.reset()\n+  }\n+\n+  test(\"UDFListListInt\") {\n+    val testData = TestHive.sparkContext.parallelize(\n+      ListListIntCaseClass(Nil) ::\n+      ListListIntCaseClass(Seq(new Tuple3(1, 2, 3))) ::\n+      ListListIntCaseClass(Seq(new Tuple3(4, 5, 6), new Tuple3(7, 8, 9))) :: Nil)\n+    testData.registerTempTable(\"listListIntTable\")\n+\n+    sql(s\"CREATE TEMPORARY FUNCTION testUDFListListInt AS '${classOf[UDFListListInt].getName}'\")\n+    assertResult(Array(Array(0), Array(2), Array(13))) {\n+      sql(\"SELECT testUDFListListInt(lli) FROM listListIntTable\").collect()\n+    }"
+  }],
+  "prId": 2621
+}]

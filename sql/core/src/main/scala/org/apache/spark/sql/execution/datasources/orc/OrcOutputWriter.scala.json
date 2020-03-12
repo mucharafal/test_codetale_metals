@@ -1,0 +1,41 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "Could we create a separate function for adding these metadata?",
+    "commit": "04457be5bc8e6023a9b9c2e71f9a123869465cbd",
+    "createdAt": "2018-11-09T23:41:51Z",
+    "diffHunk": "@@ -36,11 +41,17 @@ private[orc] class OrcOutputWriter(\n   private[this] val serializer = new OrcSerializer(dataSchema)\n \n   private val recordWriter = {\n-    new OrcOutputFormat[OrcStruct]() {\n+    val orcOutputFormat = new OrcOutputFormat[OrcStruct]() {\n       override def getDefaultWorkFile(context: TaskAttemptContext, extension: String): Path = {\n         new Path(path)\n       }\n-    }.getRecordWriter(context)\n+    }\n+    val filename = orcOutputFormat.getDefaultWorkFile(context, \".orc\")\n+    val options = OrcMapRedOutputFormat.buildOptions(context.getConfiguration)\n+    val writer = OrcFile.createWriter(filename, options)\n+    val recordWriter = new OrcMapreduceRecordWriter[OrcStruct](writer)\n+    writer.addUserMetadata(SPARK_VERSION_METADATA_KEY, UTF_8.encode(SPARK_VERSION_SHORT))"
+  }, {
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "Thank you for review, @gatorsmile . Sure. I'll refactor out the following line.\r\n```\r\nwriter.addUserMetadata(SPARK_VERSION_METADATA_KEY, UTF_8.encode(SPARK_VERSION_SHORT))\r\n```",
+    "commit": "04457be5bc8e6023a9b9c2e71f9a123869465cbd",
+    "createdAt": "2018-11-10T00:10:55Z",
+    "diffHunk": "@@ -36,11 +41,17 @@ private[orc] class OrcOutputWriter(\n   private[this] val serializer = new OrcSerializer(dataSchema)\n \n   private val recordWriter = {\n-    new OrcOutputFormat[OrcStruct]() {\n+    val orcOutputFormat = new OrcOutputFormat[OrcStruct]() {\n       override def getDefaultWorkFile(context: TaskAttemptContext, extension: String): Path = {\n         new Path(path)\n       }\n-    }.getRecordWriter(context)\n+    }\n+    val filename = orcOutputFormat.getDefaultWorkFile(context, \".orc\")\n+    val options = OrcMapRedOutputFormat.buildOptions(context.getConfiguration)\n+    val writer = OrcFile.createWriter(filename, options)\n+    val recordWriter = new OrcMapreduceRecordWriter[OrcStruct](writer)\n+    writer.addUserMetadata(SPARK_VERSION_METADATA_KEY, UTF_8.encode(SPARK_VERSION_SHORT))"
+  }],
+  "prId": 22932
+}, {
+  "comments": [{
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "This is basically copied from getRecordWriter",
+    "commit": "04457be5bc8e6023a9b9c2e71f9a123869465cbd",
+    "createdAt": "2018-11-10T06:35:44Z",
+    "diffHunk": "@@ -36,11 +37,17 @@ private[orc] class OrcOutputWriter(\n   private[this] val serializer = new OrcSerializer(dataSchema)\n \n   private val recordWriter = {\n-    new OrcOutputFormat[OrcStruct]() {\n+    val orcOutputFormat = new OrcOutputFormat[OrcStruct]() {\n       override def getDefaultWorkFile(context: TaskAttemptContext, extension: String): Path = {\n         new Path(path)\n       }\n-    }.getRecordWriter(context)\n+    }\n+    val filename = orcOutputFormat.getDefaultWorkFile(context, \".orc\")\n+    val options = OrcMapRedOutputFormat.buildOptions(context.getConfiguration)\n+    val writer = OrcFile.createWriter(filename, options)\n+    val recordWriter = new OrcMapreduceRecordWriter[OrcStruct](writer)",
+    "line": 26
+  }, {
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "Right. To avoid reflection, this was the only way.",
+    "commit": "04457be5bc8e6023a9b9c2e71f9a123869465cbd",
+    "createdAt": "2018-11-10T06:46:26Z",
+    "diffHunk": "@@ -36,11 +37,17 @@ private[orc] class OrcOutputWriter(\n   private[this] val serializer = new OrcSerializer(dataSchema)\n \n   private val recordWriter = {\n-    new OrcOutputFormat[OrcStruct]() {\n+    val orcOutputFormat = new OrcOutputFormat[OrcStruct]() {\n       override def getDefaultWorkFile(context: TaskAttemptContext, extension: String): Path = {\n         new Path(path)\n       }\n-    }.getRecordWriter(context)\n+    }\n+    val filename = orcOutputFormat.getDefaultWorkFile(context, \".orc\")\n+    val options = OrcMapRedOutputFormat.buildOptions(context.getConfiguration)\n+    val writer = OrcFile.createWriter(filename, options)\n+    val recordWriter = new OrcMapreduceRecordWriter[OrcStruct](writer)",
+    "line": 26
+  }],
+  "prId": 22932
+}]

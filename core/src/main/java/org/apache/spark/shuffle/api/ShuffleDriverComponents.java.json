@@ -1,0 +1,135 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "squito"
+    },
+    "body": "do we really want default no-op implementations for these methods?  I think every implementation should have something real for these methods -- I'd rather force them to think about this method.",
+    "commit": "0534e0243dd420b158cfb9e72ee44df1ae9cf16f",
+    "createdAt": "2019-09-26T15:09:51Z",
+    "diffHunk": "@@ -0,0 +1,57 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.shuffle.api;\n+\n+import org.apache.spark.annotation.Private;\n+\n+import java.io.IOException;\n+import java.util.Map;\n+\n+/**\n+ * :: Private ::\n+ * An interface for building shuffle support modules for the Driver.\n+ */\n+@Private\n+public interface ShuffleDriverComponents {\n+\n+  /**\n+   * Called once in the driver to bootstrap this module that is specific\n+   * to this application.\n+   *\n+   * @return additional SparkConf settings necessary for initializing the executors.\n+   */\n+  Map<String, String> initializeApplication();\n+\n+  /**\n+   * Called once at the end of the Spark application to clean up any existing shuffle state.\n+   */\n+  default void cleanupApplication() throws IOException {}"
+  }],
+  "prId": 25823
+}, {
+  "comments": [{
+    "author": {
+      "login": "squito"
+    },
+    "body": "I don't think the docs here and for the interface are great, though I'm also struggling to come up with something better.  I think we need to give a better explanation of what this class is for -- more like what is in the jira \"this can used for creating tables in the shuffle storage database, or registering / unregistering against file servers.\"\r\n\r\nAlso this `initializeApplication()` method should say a bit more about the purpose of the return value.  Eg., some conf which needs to be passed to the executors, but cannot be set statically as a cluster config (eg. something like a host:port the executor components should connect back to?).\r\n\r\nWhat do you think of passing in SparkEnv explicitly?  With so much stuff getting initialized in the driver, its hard to know what you can count on being available when this is called.  And seems helpful to make it explicit, rather than expecting developers to just know they can call `SparkEnv.get`",
+    "commit": "0534e0243dd420b158cfb9e72ee44df1ae9cf16f",
+    "createdAt": "2019-09-26T15:42:08Z",
+    "diffHunk": "@@ -0,0 +1,57 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.shuffle.api;\n+\n+import org.apache.spark.annotation.Private;\n+\n+import java.io.IOException;\n+import java.util.Map;\n+\n+/**\n+ * :: Private ::\n+ * An interface for building shuffle support modules for the Driver.\n+ */\n+@Private\n+public interface ShuffleDriverComponents {\n+\n+  /**\n+   * Called once in the driver to bootstrap this module that is specific\n+   * to this application.\n+   *\n+   * @return additional SparkConf settings necessary for initializing the executors."
+  }, {
+    "author": {
+      "login": "yifeih"
+    },
+    "body": "I'm not sure `SparkEnv` is necessary. I looked at our Async implementation, and we only use `SparkEnv` to get the rpc endpoint for communications between the executor and driver, which doesn't seem like something that's necessary for most implementations.\r\n\r\nI'll update the docs though",
+    "commit": "0534e0243dd420b158cfb9e72ee44df1ae9cf16f",
+    "createdAt": "2019-10-01T00:06:06Z",
+    "diffHunk": "@@ -0,0 +1,57 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.shuffle.api;\n+\n+import org.apache.spark.annotation.Private;\n+\n+import java.io.IOException;\n+import java.util.Map;\n+\n+/**\n+ * :: Private ::\n+ * An interface for building shuffle support modules for the Driver.\n+ */\n+@Private\n+public interface ShuffleDriverComponents {\n+\n+  /**\n+   * Called once in the driver to bootstrap this module that is specific\n+   * to this application.\n+   *\n+   * @return additional SparkConf settings necessary for initializing the executors."
+  }],
+  "prId": 25823
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Wrong import ordering.",
+    "commit": "0534e0243dd420b158cfb9e72ee44df1ae9cf16f",
+    "createdAt": "2019-09-26T15:47:57Z",
+    "diffHunk": "@@ -0,0 +1,57 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.shuffle.api;\n+\n+import org.apache.spark.annotation.Private;"
+  }],
+  "prId": 25823
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "\"the executor components\"",
+    "commit": "0534e0243dd420b158cfb9e72ee44df1ae9cf16f",
+    "createdAt": "2019-09-26T15:48:30Z",
+    "diffHunk": "@@ -0,0 +1,57 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.shuffle.api;\n+\n+import org.apache.spark.annotation.Private;\n+\n+import java.io.IOException;\n+import java.util.Map;\n+\n+/**\n+ * :: Private ::\n+ * An interface for building shuffle support modules for the Driver.\n+ */\n+@Private\n+public interface ShuffleDriverComponents {\n+\n+  /**\n+   * Called once in the driver to bootstrap this module that is specific\n+   * to this application.\n+   *\n+   * @return additional SparkConf settings necessary for initializing the executors."
+  }],
+  "prId": 25823
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "It would be good to clarify at which point of initialization this happens. I assume it's pretty early, so before things like submitting the app to the cluster manager have happened. ",
+    "commit": "0534e0243dd420b158cfb9e72ee44df1ae9cf16f",
+    "createdAt": "2019-09-26T15:49:36Z",
+    "diffHunk": "@@ -0,0 +1,57 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.shuffle.api;\n+\n+import org.apache.spark.annotation.Private;\n+\n+import java.io.IOException;\n+import java.util.Map;\n+\n+/**\n+ * :: Private ::\n+ * An interface for building shuffle support modules for the Driver.\n+ */\n+@Private\n+public interface ShuffleDriverComponents {\n+\n+  /**\n+   * Called once in the driver to bootstrap this module that is specific"
+  }],
+  "prId": 25823
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Any reason not to have a default implementation like the other methods?",
+    "commit": "0534e0243dd420b158cfb9e72ee44df1ae9cf16f",
+    "createdAt": "2019-09-26T15:50:48Z",
+    "diffHunk": "@@ -0,0 +1,57 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.shuffle.api;\n+\n+import org.apache.spark.annotation.Private;\n+\n+import java.io.IOException;\n+import java.util.Map;\n+\n+/**\n+ * :: Private ::\n+ * An interface for building shuffle support modules for the Driver.\n+ */\n+@Private\n+public interface ShuffleDriverComponents {\n+\n+  /**\n+   * Called once in the driver to bootstrap this module that is specific\n+   * to this application.\n+   *\n+   * @return additional SparkConf settings necessary for initializing the executors.\n+   */\n+  Map<String, String> initializeApplication();",
+    "line": 43
+  }, {
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "(BTW this is the opposite of Imran's comment; I kinda prefer his take.)",
+    "commit": "0534e0243dd420b158cfb9e72ee44df1ae9cf16f",
+    "createdAt": "2019-09-26T17:37:58Z",
+    "diffHunk": "@@ -0,0 +1,57 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.shuffle.api;\n+\n+import org.apache.spark.annotation.Private;\n+\n+import java.io.IOException;\n+import java.util.Map;\n+\n+/**\n+ * :: Private ::\n+ * An interface for building shuffle support modules for the Driver.\n+ */\n+@Private\n+public interface ShuffleDriverComponents {\n+\n+  /**\n+   * Called once in the driver to bootstrap this module that is specific\n+   * to this application.\n+   *\n+   * @return additional SparkConf settings necessary for initializing the executors.\n+   */\n+  Map<String, String> initializeApplication();",
+    "line": 43
+  }, {
+    "author": {
+      "login": "yifeih"
+    },
+    "body": "No particular reason, although I do feel like `initializeApplication()` and `cleanupApplication()` should go hand in hand",
+    "commit": "0534e0243dd420b158cfb9e72ee44df1ae9cf16f",
+    "createdAt": "2019-10-01T22:03:52Z",
+    "diffHunk": "@@ -0,0 +1,57 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.shuffle.api;\n+\n+import org.apache.spark.annotation.Private;\n+\n+import java.io.IOException;\n+import java.util.Map;\n+\n+/**\n+ * :: Private ::\n+ * An interface for building shuffle support modules for the Driver.\n+ */\n+@Private\n+public interface ShuffleDriverComponents {\n+\n+  /**\n+   * Called once in the driver to bootstrap this module that is specific\n+   * to this application.\n+   *\n+   * @return additional SparkConf settings necessary for initializing the executors.\n+   */\n+  Map<String, String> initializeApplication();",
+    "line": 43
+  }],
+  "prId": 25823
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Add `@param`.",
+    "commit": "0534e0243dd420b158cfb9e72ee44df1ae9cf16f",
+    "createdAt": "2019-09-26T15:51:32Z",
+    "diffHunk": "@@ -0,0 +1,57 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.shuffle.api;\n+\n+import org.apache.spark.annotation.Private;\n+\n+import java.io.IOException;\n+import java.util.Map;\n+\n+/**\n+ * :: Private ::\n+ * An interface for building shuffle support modules for the Driver.\n+ */\n+@Private\n+public interface ShuffleDriverComponents {\n+\n+  /**\n+   * Called once in the driver to bootstrap this module that is specific\n+   * to this application.\n+   *\n+   * @return additional SparkConf settings necessary for initializing the executors.\n+   */\n+  Map<String, String> initializeApplication();\n+\n+  /**\n+   * Called once at the end of the Spark application to clean up any existing shuffle state.\n+   */\n+  default void cleanupApplication() throws IOException {}\n+\n+  /**\n+   * Called once per shuffle id when the shuffle id is first generated for a shuffle stage.\n+   */\n+  default void registerShuffle(int shuffleId) throws IOException {}"
+  }],
+  "prId": 25823
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "For this and other methods, I'm not sure the `throws` is helping much. The Spark code calling this needs to handle arbitrary exceptions from this code anyway. So maybe `throws Exception` (so that Scala code can throw anything and not cause an `UndeclaredThrowableException`) or not throw anything (and require implementations to use runtime exceptions).",
+    "commit": "0534e0243dd420b158cfb9e72ee44df1ae9cf16f",
+    "createdAt": "2019-09-26T15:53:28Z",
+    "diffHunk": "@@ -0,0 +1,57 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.shuffle.api;\n+\n+import org.apache.spark.annotation.Private;\n+\n+import java.io.IOException;\n+import java.util.Map;\n+\n+/**\n+ * :: Private ::\n+ * An interface for building shuffle support modules for the Driver.\n+ */\n+@Private\n+public interface ShuffleDriverComponents {\n+\n+  /**\n+   * Called once in the driver to bootstrap this module that is specific\n+   * to this application.\n+   *\n+   * @return additional SparkConf settings necessary for initializing the executors.\n+   */\n+  Map<String, String> initializeApplication();\n+\n+  /**\n+   * Called once at the end of the Spark application to clean up any existing shuffle state.\n+   */\n+  default void cleanupApplication() throws IOException {}"
+  }, {
+    "author": {
+      "login": "yifeih"
+    },
+    "body": "Ok yup, I think that makes sense. Runtime exceptions seem reasonable: if the users know they will throw and handle exceptions, then they should try/catch, otherwise, it should cause an error that should halt execution",
+    "commit": "0534e0243dd420b158cfb9e72ee44df1ae9cf16f",
+    "createdAt": "2019-10-01T22:07:26Z",
+    "diffHunk": "@@ -0,0 +1,57 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.shuffle.api;\n+\n+import org.apache.spark.annotation.Private;\n+\n+import java.io.IOException;\n+import java.util.Map;\n+\n+/**\n+ * :: Private ::\n+ * An interface for building shuffle support modules for the Driver.\n+ */\n+@Private\n+public interface ShuffleDriverComponents {\n+\n+  /**\n+   * Called once in the driver to bootstrap this module that is specific\n+   * to this application.\n+   *\n+   * @return additional SparkConf settings necessary for initializing the executors.\n+   */\n+  Map<String, String> initializeApplication();\n+\n+  /**\n+   * Called once at the end of the Spark application to clean up any existing shuffle state.\n+   */\n+  default void cleanupApplication() throws IOException {}"
+  }],
+  "prId": 25823
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "\"given shuffle.\"",
+    "commit": "0534e0243dd420b158cfb9e72ee44df1ae9cf16f",
+    "createdAt": "2019-09-26T15:58:09Z",
+    "diffHunk": "@@ -0,0 +1,57 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.shuffle.api;\n+\n+import org.apache.spark.annotation.Private;\n+\n+import java.io.IOException;\n+import java.util.Map;\n+\n+/**\n+ * :: Private ::\n+ * An interface for building shuffle support modules for the Driver.\n+ */\n+@Private\n+public interface ShuffleDriverComponents {\n+\n+  /**\n+   * Called once in the driver to bootstrap this module that is specific\n+   * to this application.\n+   *\n+   * @return additional SparkConf settings necessary for initializing the executors.\n+   */\n+  Map<String, String> initializeApplication();\n+\n+  /**\n+   * Called once at the end of the Spark application to clean up any existing shuffle state.\n+   */\n+  default void cleanupApplication() throws IOException {}\n+\n+  /**\n+   * Called once per shuffle id when the shuffle id is first generated for a shuffle stage.\n+   */\n+  default void registerShuffle(int shuffleId) throws IOException {}\n+\n+  /**\n+   * Removes shuffle data associated with the given shuffle Id."
+  }],
+  "prId": 25823
+}]

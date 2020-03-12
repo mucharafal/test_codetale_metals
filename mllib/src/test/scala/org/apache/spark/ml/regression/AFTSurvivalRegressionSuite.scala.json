@@ -1,0 +1,67 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "It is better to put setters before fit to make the estimator and the model it produces consistent.\n",
+    "commit": "417c8cb5aabb23cf80f40d83bb66832e354eae16",
+    "createdAt": "2015-09-22T18:38:09Z",
+    "diffHunk": "@@ -60,12 +60,14 @@ class AFTSurvivalRegressionSuite extends SparkFunSuite with MLlibTestSparkContex\n     assert(aftr.getMaxIter === 100)\n     assert(aftr.getTol === 1E-6)\n     val model = aftr.fit(datasetUnivariate)\n+      .setQuantileProbabilities(Array(0.1, 0.8))"
+  }],
+  "prId": 8836
+}, {
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "This could go to estimator as well, unless we want to test changing `quantilesCol` after fitting.\n",
+    "commit": "417c8cb5aabb23cf80f40d83bb66832e354eae16",
+    "createdAt": "2015-09-22T18:38:12Z",
+    "diffHunk": "@@ -167,10 +169,18 @@ class AFTSurvivalRegressionSuite extends SparkFunSuite with MLlibTestSparkContex\n     model.setQuantileProbabilities(quantileProbabilities)\n     assert(model.predictQuantiles(features) ~== quantilePredictR relTol 1E-3)\n \n-    model.transform(datasetUnivariate).select(\"features\", \"prediction\").collect().foreach {\n-      case Row(features: DenseVector, prediction1: Double) =>\n-        val prediction2 = math.exp(BLAS.dot(model.coefficients, features) + model.intercept)\n+    model.setQuantilesCol(\"quantiles\")"
+  }],
+  "prId": 8836
+}, {
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "I'm not sure whether this block is useful or not. We already verified that `model.predict` and `model.predictQuantiles` work correctly. So here we only need to verify the output values are indeed `prediction` and `quantiles`. So we could use `model.predict` and `model.predictQuantiles` here::\n\n``` scala\nmodel.transform(datasetUnivariate).select(\"features\", \"prediction\", \"quantiles\")\n  .collect().foreach {\n    case Row(features: Vector, prediction: Double, quantiles: Vector) =>\n      assert(prediction ~== model.predict(features) relTol 1E-5)\n      assert(quantiles ~== model.predictQuantiles(features) relTol 1E-5)\n  }\n```\n\nAlso note the indentation.\n",
+    "commit": "417c8cb5aabb23cf80f40d83bb66832e354eae16",
+    "createdAt": "2015-09-22T18:38:13Z",
+    "diffHunk": "@@ -167,10 +169,18 @@ class AFTSurvivalRegressionSuite extends SparkFunSuite with MLlibTestSparkContex\n     model.setQuantileProbabilities(quantileProbabilities)\n     assert(model.predictQuantiles(features) ~== quantilePredictR relTol 1E-3)\n \n-    model.transform(datasetUnivariate).select(\"features\", \"prediction\").collect().foreach {\n-      case Row(features: DenseVector, prediction1: Double) =>\n-        val prediction2 = math.exp(BLAS.dot(model.coefficients, features) + model.intercept)\n+    model.setQuantilesCol(\"quantiles\")\n+    model.transform(datasetUnivariate).select(\"features\", \"prediction\", \"quantiles\")\n+      .collect().foreach {\n+      case Row(features: DenseVector, prediction1: Double, predictionQuantiles1: Vector) =>\n+        val lambda = math.exp(BLAS.dot(model.coefficients, features) + model.intercept)"
+  }],
+  "prId": 8836
+}, {
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "Ditto.\n",
+    "commit": "417c8cb5aabb23cf80f40d83bb66832e354eae16",
+    "createdAt": "2015-09-22T18:38:21Z",
+    "diffHunk": "@@ -235,10 +245,18 @@ class AFTSurvivalRegressionSuite extends SparkFunSuite with MLlibTestSparkContex\n     model.setQuantileProbabilities(quantileProbabilities)\n     assert(model.predictQuantiles(features) ~== quantilePredictR relTol 1E-3)\n \n-    model.transform(datasetMultivariate).select(\"features\", \"prediction\").collect().foreach {\n-      case Row(features: DenseVector, prediction1: Double) =>\n-        val prediction2 = math.exp(BLAS.dot(model.coefficients, features) + model.intercept)\n+    model.setQuantilesCol(\"quantiles\")\n+    model.transform(datasetMultivariate).select(\"features\", \"prediction\", \"quantiles\")\n+      .collect().foreach {\n+      case Row(features: DenseVector, prediction1: Double, predictionQuantiles1: Vector) =>\n+        val lambda = math.exp(BLAS.dot(model.coefficients, features) + model.intercept)"
+  }],
+  "prId": 8836
+}, {
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "Ditto.\n",
+    "commit": "417c8cb5aabb23cf80f40d83bb66832e354eae16",
+    "createdAt": "2015-09-22T18:38:29Z",
+    "diffHunk": "@@ -302,7 +320,44 @@ class AFTSurvivalRegressionSuite extends SparkFunSuite with MLlibTestSparkContex\n     model.setQuantileProbabilities(quantileProbabilities)\n     assert(model.predictQuantiles(features) ~== quantilePredictR relTol 1E-3)\n \n-    model.transform(datasetMultivariate).select(\"features\", \"prediction\").collect().foreach {\n+    model.setQuantilesCol(\"quantiles\")\n+    model.transform(datasetMultivariate).select(\"features\", \"prediction\", \"quantiles\")\n+      .collect().foreach {\n+      case Row(features: DenseVector, prediction1: Double, predictionQuantiles1: Vector) =>\n+        val lambda = math.exp(BLAS.dot(model.coefficients, features) + model.intercept)"
+  }],
+  "prId": 8836
+}, {
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "We need to update this test after we put a default value for `quantileProbabilities` and update its validator.\n",
+    "commit": "417c8cb5aabb23cf80f40d83bb66832e354eae16",
+    "createdAt": "2015-09-22T18:39:34Z",
+    "diffHunk": "@@ -302,7 +320,44 @@ class AFTSurvivalRegressionSuite extends SparkFunSuite with MLlibTestSparkContex\n     model.setQuantileProbabilities(quantileProbabilities)\n     assert(model.predictQuantiles(features) ~== quantilePredictR relTol 1E-3)\n \n-    model.transform(datasetMultivariate).select(\"features\", \"prediction\").collect().foreach {\n+    model.setQuantilesCol(\"quantiles\")\n+    model.transform(datasetMultivariate).select(\"features\", \"prediction\", \"quantiles\")\n+      .collect().foreach {\n+      case Row(features: DenseVector, prediction1: Double, predictionQuantiles1: Vector) =>\n+        val lambda = math.exp(BLAS.dot(model.coefficients, features) + model.intercept)\n+        val k = 1 / model.scale\n+        val prediction2 = lambda\n+        val predictionQuantiles2 = Vectors.dense(model.getQuantileProbabilities.map {\n+          q => lambda * math.exp(math.log(-math.log(1 - q)) / k)\n+        })\n+        assert(prediction1 ~== prediction2 relTol 1E-5)\n+        assert(predictionQuantiles1 ~== predictionQuantiles2 relTol 1E-5)\n+    }\n+  }\n+\n+  test(\"aft survival regression w/o quantiles column\") {\n+    val trainer = new AFTSurvivalRegression\n+\n+    val features = Vectors.dense(6.559282795753792)\n+    val quantileProbabilities = Array(0.1, 0.5, 0.9)\n+    val quantilePredict = Vectors.dense(0.1879174, 2.6801195, 14.5779394)\n+\n+    val model = trainer.fit(datasetUnivariate)\n+\n+    intercept[IllegalArgumentException] {"
+  }],
+  "prId": 8836
+}]

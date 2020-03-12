@@ -1,0 +1,20 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "I feel it's more reasonable to forbid data source to return null offsets, and use `latestOffset != startOffset` at the streaming execution side to indicate if there is a new batch available. But I'll leave it to followup PR.\r\n\r\ncc @jose-torres ",
+    "commit": "51cda76897353344427aaa666e29be408263eeb1",
+    "createdAt": "2018-08-06T17:50:23Z",
+    "diffHunk": "@@ -122,24 +119,22 @@ case class MemoryStream[A : Encoder](id: Int, sqlContext: SQLContext)\n \n   override def toString: String = s\"MemoryStream[${Utils.truncatedString(output, \",\")}]\"\n \n-  override def setOffsetRange(start: Optional[OffsetV2], end: Optional[OffsetV2]): Unit = {\n-    synchronized {\n-      startOffset = start.orElse(LongOffset(-1)).asInstanceOf[LongOffset]\n-      endOffset = end.orElse(currentOffset).asInstanceOf[LongOffset]\n-    }\n-  }\n-\n   override def deserializeOffset(json: String): OffsetV2 = LongOffset(json.toLong)\n \n-  override def getStartOffset: OffsetV2 = synchronized {\n-    if (startOffset.offset == -1) null else startOffset\n+  override def initialOffset: OffsetV2 = LongOffset(-1)\n+\n+  override def latestOffset(start: OffsetV2): OffsetV2 = {\n+    if (currentOffset.offset == -1) null else currentOffset"
+  }, {
+    "author": {
+      "login": "jose-torres"
+    },
+    "body": "Yes, I agree. The V1 API allowed null because it didn't require sources to implement a \"this is the beginning of the stream, read everything\" offset, but that was a mistake which we correctly remedied by adding the initialOffset field in the interface.\r\n\r\nA followup PR makes sense, because there's some stream execution logic that can be greatly simplified when all sources have a real initial offset.",
+    "commit": "51cda76897353344427aaa666e29be408263eeb1",
+    "createdAt": "2018-08-06T17:57:05Z",
+    "diffHunk": "@@ -122,24 +119,22 @@ case class MemoryStream[A : Encoder](id: Int, sqlContext: SQLContext)\n \n   override def toString: String = s\"MemoryStream[${Utils.truncatedString(output, \",\")}]\"\n \n-  override def setOffsetRange(start: Optional[OffsetV2], end: Optional[OffsetV2]): Unit = {\n-    synchronized {\n-      startOffset = start.orElse(LongOffset(-1)).asInstanceOf[LongOffset]\n-      endOffset = end.orElse(currentOffset).asInstanceOf[LongOffset]\n-    }\n-  }\n-\n   override def deserializeOffset(json: String): OffsetV2 = LongOffset(json.toLong)\n \n-  override def getStartOffset: OffsetV2 = synchronized {\n-    if (startOffset.offset == -1) null else startOffset\n+  override def initialOffset: OffsetV2 = LongOffset(-1)\n+\n+  override def latestOffset(start: OffsetV2): OffsetV2 = {\n+    if (currentOffset.offset == -1) null else currentOffset"
+  }],
+  "prId": 22009
+}]

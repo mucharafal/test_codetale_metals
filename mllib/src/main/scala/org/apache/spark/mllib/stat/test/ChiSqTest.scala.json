@@ -1,0 +1,63 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "squito"
+    },
+    "body": "`slice` is going to make a copy, and then `zip` will make another one.  If the goal is to improve performance, I think it makes the most sense to iterate over the range you want directly:\n\n``` scala\nval arr = features.toArray\n(startCol until endCol).map { col =>\n  val feaure = arr(col)\n  allDistinctFeatures(col) += feature\n  (col, feature, label)\n}\n```\n\nor even go a step further and pre-allocate the result array, to avoid all the copying from dynamically growing it.\n\nalso `toArray` is going to  be horrible on sparse vectors -- it might make more sense to use `toBreeze`, which won't create so much wasted space (though still suboptimal looping).  Better would be special handling.  But that is independent from the main issue here.\n",
+    "commit": "a709f49a751aa07ccbefdd6a44a5c1afa4b57f35",
+    "createdAt": "2015-12-04T17:33:47Z",
+    "diffHunk": "@@ -109,9 +109,10 @@ private[stat] object ChiSqTest extends Logging {\n           }\n           i += 1\n           distinctLabels += label\n-          features.toArray.view.zipWithIndex.slice(startCol, endCol).map { case (feature, col) =>\n-            allDistinctFeatures(col) += feature\n-            (col, feature, label)\n+          features.toArray.slice(startCol, endCol).zip(startCol until endCol).map {"
+  }, {
+    "author": {
+      "login": "hhbyyh"
+    },
+    "body": "Thanks @squito for the great suggestion. I would wait for a while to see if there're other comments. \n",
+    "commit": "a709f49a751aa07ccbefdd6a44a5c1afa4b57f35",
+    "createdAt": "2015-12-05T00:34:18Z",
+    "diffHunk": "@@ -109,9 +109,10 @@ private[stat] object ChiSqTest extends Logging {\n           }\n           i += 1\n           distinctLabels += label\n-          features.toArray.view.zipWithIndex.slice(startCol, endCol).map { case (feature, col) =>\n-            allDistinctFeatures(col) += feature\n-            (col, feature, label)\n+          features.toArray.slice(startCol, endCol).zip(startCol until endCol).map {"
+  }],
+  "prId": 10146
+}, {
+  "comments": [{
+    "author": {
+      "login": "thunterdb"
+    },
+    "body": "ah yes, good catch about the view that builds incrementally a copy of the feature vectors.\n\nLet's also remove the `featureArray`, we can call directly `val feature = features(col)`\n",
+    "commit": "a709f49a751aa07ccbefdd6a44a5c1afa4b57f35",
+    "createdAt": "2016-01-05T01:49:55Z",
+    "diffHunk": "@@ -109,7 +109,9 @@ private[stat] object ChiSqTest extends Logging {\n           }\n           i += 1\n           distinctLabels += label\n-          features.toArray.view.zipWithIndex.slice(startCol, endCol).map { case (feature, col) =>\n+          val featureArray = features.toArray\n+          (startCol until endCol).map { col =>\n+            val feature = featureArray(col)"
+  }, {
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "+1 since that could avoid a copy\n",
+    "commit": "a709f49a751aa07ccbefdd6a44a5c1afa4b57f35",
+    "createdAt": "2016-01-08T20:42:48Z",
+    "diffHunk": "@@ -109,7 +109,9 @@ private[stat] object ChiSqTest extends Logging {\n           }\n           i += 1\n           distinctLabels += label\n-          features.toArray.view.zipWithIndex.slice(startCol, endCol).map { case (feature, col) =>\n+          val featureArray = features.toArray\n+          (startCol until endCol).map { col =>\n+            val feature = featureArray(col)"
+  }, {
+    "author": {
+      "login": "hhbyyh"
+    },
+    "body": "@thunterdb @jkbradley Thanks for the comment. Please correct if I'm wrong. For sparse vector, I'm afraid `features(col)` will not be efficient given the current implementation of `SparseVector`.\n`def apply(i: Int): Double = toBreeze(i)`\n",
+    "commit": "a709f49a751aa07ccbefdd6a44a5c1afa4b57f35",
+    "createdAt": "2016-01-11T08:50:11Z",
+    "diffHunk": "@@ -109,7 +109,9 @@ private[stat] object ChiSqTest extends Logging {\n           }\n           i += 1\n           distinctLabels += label\n-          features.toArray.view.zipWithIndex.slice(startCol, endCol).map { case (feature, col) =>\n+          val featureArray = features.toArray\n+          (startCol until endCol).map { col =>\n+            val feature = featureArray(col)"
+  }, {
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "Converting to Breeze should be an O(1) operation, using a reference copy, not a deep copy.  Breeze uses binary search on the indices, so it should be fairly efficient.  I think it's better than converting to a dense array.\n",
+    "commit": "a709f49a751aa07ccbefdd6a44a5c1afa4b57f35",
+    "createdAt": "2016-01-11T23:00:10Z",
+    "diffHunk": "@@ -109,7 +109,9 @@ private[stat] object ChiSqTest extends Logging {\n           }\n           i += 1\n           distinctLabels += label\n-          features.toArray.view.zipWithIndex.slice(startCol, endCol).map { case (feature, col) =>\n+          val featureArray = features.toArray\n+          (startCol until endCol).map { col =>\n+            val feature = featureArray(col)"
+  }, {
+    "author": {
+      "login": "hhbyyh"
+    },
+    "body": "@jkbradley I changed it to invoking toBreeze directly. I ran some test on local.\n\n```\n    val sv = new SparseVector(100000, Array(1), Array(2.5))\n    var t = 0.0\n\n    {\n      val ts = System.nanoTime()\n      val arr = sv.toArray\n      for(i <- 0 to 10000){\n        t = arr(i)\n      }\n      println(System.nanoTime() - ts)\n    }\n\n    {\n      val ts = System.nanoTime()\n      for(i <- 0 to 10000){\n        t = sv(i)\n      }\n      println(System.nanoTime() - ts)\n    }\n\n    {\n      val ts = System.nanoTime()\n      val brz = sv.toBreeze\n      for(i <- 0 to 10000){\n        t = brz(i)\n      }\n      println(System.nanoTime() - ts)\n    }\n```\n\ngives \n3405342\n520367839\n4870954\n\nLet me know how do you think of it.\n",
+    "commit": "a709f49a751aa07ccbefdd6a44a5c1afa4b57f35",
+    "createdAt": "2016-01-12T02:14:06Z",
+    "diffHunk": "@@ -109,7 +109,9 @@ private[stat] object ChiSqTest extends Logging {\n           }\n           i += 1\n           distinctLabels += label\n-          features.toArray.view.zipWithIndex.slice(startCol, endCol).map { case (feature, col) =>\n+          val featureArray = features.toArray\n+          (startCol until endCol).map { col =>\n+            val feature = featureArray(col)"
+  }],
+  "prId": 10146
+}]

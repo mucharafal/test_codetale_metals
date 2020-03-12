@@ -1,0 +1,100 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "I'm not sure if this is always true, need some experts to confirm.\n",
+    "commit": "47e0e393c907ffa54ac23c9902f5db00dcbca147",
+    "createdAt": "2016-02-27T09:42:18Z",
+    "diffHunk": "@@ -39,4 +41,35 @@ object OuterScopes {\n   def addOuterScope(outer: AnyRef): Unit = {\n     outerScopes.putIfAbsent(outer.getClass.getName, outer)\n   }\n+\n+  def getOuterScope(innerCls: Class[_]): AnyRef = {\n+    assert(innerCls.isMemberClass)\n+    val outerCls = innerCls.getDeclaringClass.getName\n+    val outer = outerScopes.get(outerCls)\n+    if (outer == null) {\n+      outerCls match {\n+        case REPLClass(line) =>\n+          val loader = Utils.getContextOrSparkClassLoader\n+          def loadCls(clsName: String): Class[_] = Class.forName(clsName, true, loader)\n+\n+          val cls1 = loadCls(line + \"$read$\")\n+          val obj1 = cls1.getField(\"MODULE$\").get(null)\n+\n+          val obj2 = cls1.getMethod(\"INSTANCE\").invoke(obj1)\n+          val cls2 = loadCls(line + \"$read\")\n+\n+          val obj3 = cls2.getMethod(\"$iw\").invoke(obj2)\n+          val cls3 = loadCls(line + \"$read$$iw\")\n+\n+          cls3.getMethod(\"$iw\").invoke(obj3)\n+\n+        case _ => null\n+      }\n+    } else {\n+      outer\n+    }\n+  }\n+\n+  // The format of REPL generated wrapper class's name, e.g. `$line12.$read$$iw$$iw`"
+  }, {
+    "author": {
+      "login": "liancheng"
+    },
+    "body": "I believe @ScrapCodes is the expert here.\n",
+    "commit": "47e0e393c907ffa54ac23c9902f5db00dcbca147",
+    "createdAt": "2016-02-27T15:17:06Z",
+    "diffHunk": "@@ -39,4 +41,35 @@ object OuterScopes {\n   def addOuterScope(outer: AnyRef): Unit = {\n     outerScopes.putIfAbsent(outer.getClass.getName, outer)\n   }\n+\n+  def getOuterScope(innerCls: Class[_]): AnyRef = {\n+    assert(innerCls.isMemberClass)\n+    val outerCls = innerCls.getDeclaringClass.getName\n+    val outer = outerScopes.get(outerCls)\n+    if (outer == null) {\n+      outerCls match {\n+        case REPLClass(line) =>\n+          val loader = Utils.getContextOrSparkClassLoader\n+          def loadCls(clsName: String): Class[_] = Class.forName(clsName, true, loader)\n+\n+          val cls1 = loadCls(line + \"$read$\")\n+          val obj1 = cls1.getField(\"MODULE$\").get(null)\n+\n+          val obj2 = cls1.getMethod(\"INSTANCE\").invoke(obj1)\n+          val cls2 = loadCls(line + \"$read\")\n+\n+          val obj3 = cls2.getMethod(\"$iw\").invoke(obj2)\n+          val cls3 = loadCls(line + \"$read$$iw\")\n+\n+          cls3.getMethod(\"$iw\").invoke(obj3)\n+\n+        case _ => null\n+      }\n+    } else {\n+      outer\n+    }\n+  }\n+\n+  // The format of REPL generated wrapper class's name, e.g. `$line12.$read$$iw$$iw`"
+  }, {
+    "author": {
+      "login": "ScrapCodes"
+    },
+    "body": "AFAIK this is going to be okay, and very less likely to change I suppose. I have not tested your change. \nThis is an interesting patch, I will spend more time looking at it.\n",
+    "commit": "47e0e393c907ffa54ac23c9902f5db00dcbca147",
+    "createdAt": "2016-02-29T12:12:01Z",
+    "diffHunk": "@@ -39,4 +41,35 @@ object OuterScopes {\n   def addOuterScope(outer: AnyRef): Unit = {\n     outerScopes.putIfAbsent(outer.getClass.getName, outer)\n   }\n+\n+  def getOuterScope(innerCls: Class[_]): AnyRef = {\n+    assert(innerCls.isMemberClass)\n+    val outerCls = innerCls.getDeclaringClass.getName\n+    val outer = outerScopes.get(outerCls)\n+    if (outer == null) {\n+      outerCls match {\n+        case REPLClass(line) =>\n+          val loader = Utils.getContextOrSparkClassLoader\n+          def loadCls(clsName: String): Class[_] = Class.forName(clsName, true, loader)\n+\n+          val cls1 = loadCls(line + \"$read$\")\n+          val obj1 = cls1.getField(\"MODULE$\").get(null)\n+\n+          val obj2 = cls1.getMethod(\"INSTANCE\").invoke(obj1)\n+          val cls2 = loadCls(line + \"$read\")\n+\n+          val obj3 = cls2.getMethod(\"$iw\").invoke(obj2)\n+          val cls3 = loadCls(line + \"$read$$iw\")\n+\n+          cls3.getMethod(\"$iw\").invoke(obj3)\n+\n+        case _ => null\n+      }\n+    } else {\n+      outer\n+    }\n+  }\n+\n+  // The format of REPL generated wrapper class's name, e.g. `$line12.$read$$iw$$iw`"
+  }, {
+    "author": {
+      "login": "ScrapCodes"
+    },
+    "body": "Ping @som-snytt and @retronym, Am I correct about the assumption that these wrappers are not likely to change very frequently ?\n",
+    "commit": "47e0e393c907ffa54ac23c9902f5db00dcbca147",
+    "createdAt": "2016-03-01T11:40:15Z",
+    "diffHunk": "@@ -39,4 +41,35 @@ object OuterScopes {\n   def addOuterScope(outer: AnyRef): Unit = {\n     outerScopes.putIfAbsent(outer.getClass.getName, outer)\n   }\n+\n+  def getOuterScope(innerCls: Class[_]): AnyRef = {\n+    assert(innerCls.isMemberClass)\n+    val outerCls = innerCls.getDeclaringClass.getName\n+    val outer = outerScopes.get(outerCls)\n+    if (outer == null) {\n+      outerCls match {\n+        case REPLClass(line) =>\n+          val loader = Utils.getContextOrSparkClassLoader\n+          def loadCls(clsName: String): Class[_] = Class.forName(clsName, true, loader)\n+\n+          val cls1 = loadCls(line + \"$read$\")\n+          val obj1 = cls1.getField(\"MODULE$\").get(null)\n+\n+          val obj2 = cls1.getMethod(\"INSTANCE\").invoke(obj1)\n+          val cls2 = loadCls(line + \"$read\")\n+\n+          val obj3 = cls2.getMethod(\"$iw\").invoke(obj2)\n+          val cls3 = loadCls(line + \"$read$$iw\")\n+\n+          cls3.getMethod(\"$iw\").invoke(obj3)\n+\n+        case _ => null\n+      }\n+    } else {\n+      outer\n+    }\n+  }\n+\n+  // The format of REPL generated wrapper class's name, e.g. `$line12.$read$$iw$$iw`"
+  }, {
+    "author": {
+      "login": "retronym"
+    },
+    "body": "The assumption is incorrect. Additional nested `iw` names are needed to typecheck when previous lines include imports.\n\n```\n⚡ (export X='getClass.getName.mkString(\"\\u200B\")'; printf \"$X\\n$X\\nval foo = 0\\nimport foo._\\n$X\\n\" | scala -Yrepl-class-based)\nWelcome to Scala 2.11.8 (Java HotSpot(TM) 64-Bit Server VM, Java 1.8.0_71).\nType in expressions for evaluation. Or try :help.\n\nscala> getClass.getName.mkString(\"\")\nres0: String = $line3.$read$$iw$$iw\n\nscala> getClass.getName.mkString(\"\")\nres1: String = $line4.$read$$iw$$iw\n\nscala> val foo = 0\nfoo: Int = 0\n\nscala> import foo._\nimport foo._\n\nscala> getClass.getName.mkString(\"\")\nres2: String = $line10.$read$$iw$$iw$$iw$$iw\n\nscala> :quit\n```\n\nRe running this with `-Xprint-parser` helps see the structure.\n\nNote that the REPL strips `$iw.` from output. I've inserted zero-width spaces into the strings to be able to see them.\n\nYou can disable this feature programmatically:\n\n```\nscala> $intp.isettings.unwrapStrings = false\n$intp.isettings.unwrapStrings: Boolean = false\n\nscala> getClass.getName\nres2: String = $line7.$read$$iw$$iw$\n```\n",
+    "commit": "47e0e393c907ffa54ac23c9902f5db00dcbca147",
+    "createdAt": "2016-03-01T12:00:00Z",
+    "diffHunk": "@@ -39,4 +41,35 @@ object OuterScopes {\n   def addOuterScope(outer: AnyRef): Unit = {\n     outerScopes.putIfAbsent(outer.getClass.getName, outer)\n   }\n+\n+  def getOuterScope(innerCls: Class[_]): AnyRef = {\n+    assert(innerCls.isMemberClass)\n+    val outerCls = innerCls.getDeclaringClass.getName\n+    val outer = outerScopes.get(outerCls)\n+    if (outer == null) {\n+      outerCls match {\n+        case REPLClass(line) =>\n+          val loader = Utils.getContextOrSparkClassLoader\n+          def loadCls(clsName: String): Class[_] = Class.forName(clsName, true, loader)\n+\n+          val cls1 = loadCls(line + \"$read$\")\n+          val obj1 = cls1.getField(\"MODULE$\").get(null)\n+\n+          val obj2 = cls1.getMethod(\"INSTANCE\").invoke(obj1)\n+          val cls2 = loadCls(line + \"$read\")\n+\n+          val obj3 = cls2.getMethod(\"$iw\").invoke(obj2)\n+          val cls3 = loadCls(line + \"$read$$iw\")\n+\n+          cls3.getMethod(\"$iw\").invoke(obj3)\n+\n+        case _ => null\n+      }\n+    } else {\n+      outer\n+    }\n+  }\n+\n+  // The format of REPL generated wrapper class's name, e.g. `$line12.$read$$iw$$iw`"
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "If there are more than 2 nested `$iw` classes, can I call `$iw` method multiple times  to get the singleton of the inner-most `$iw` class? e.g. `obj` is the singleton of `$line3.$read` class, can I use `obj.$iw().$iw().$iw().$iw()` to get the singleton of inner most `$iw` class?\n",
+    "commit": "47e0e393c907ffa54ac23c9902f5db00dcbca147",
+    "createdAt": "2016-03-01T14:08:41Z",
+    "diffHunk": "@@ -39,4 +41,35 @@ object OuterScopes {\n   def addOuterScope(outer: AnyRef): Unit = {\n     outerScopes.putIfAbsent(outer.getClass.getName, outer)\n   }\n+\n+  def getOuterScope(innerCls: Class[_]): AnyRef = {\n+    assert(innerCls.isMemberClass)\n+    val outerCls = innerCls.getDeclaringClass.getName\n+    val outer = outerScopes.get(outerCls)\n+    if (outer == null) {\n+      outerCls match {\n+        case REPLClass(line) =>\n+          val loader = Utils.getContextOrSparkClassLoader\n+          def loadCls(clsName: String): Class[_] = Class.forName(clsName, true, loader)\n+\n+          val cls1 = loadCls(line + \"$read$\")\n+          val obj1 = cls1.getField(\"MODULE$\").get(null)\n+\n+          val obj2 = cls1.getMethod(\"INSTANCE\").invoke(obj1)\n+          val cls2 = loadCls(line + \"$read\")\n+\n+          val obj3 = cls2.getMethod(\"$iw\").invoke(obj2)\n+          val cls3 = loadCls(line + \"$read$$iw\")\n+\n+          cls3.getMethod(\"$iw\").invoke(obj3)\n+\n+        case _ => null\n+      }\n+    } else {\n+      outer\n+    }\n+  }\n+\n+  // The format of REPL generated wrapper class's name, e.g. `$line12.$read$$iw$$iw`"
+  }, {
+    "author": {
+      "login": "retronym"
+    },
+    "body": "Yes, that's exactly right. Look at the generate code in the `$eval` object (again, by running with `-Xprint:parser`)\n\n``` scala\npackage $line10 {\n  class $read extends Serializable {\n    def <init>() = {\n      super.<init>();\n      ()\n    };\n    class $iw extends Serializable {\n      def <init>() = {\n        super.<init>();\n        ()\n      };\n      val $line5$read = $line5.$read.INSTANCE;\n      import $line5$read.$iw.$iw.foo;\n      class $iw extends Serializable {\n        def <init>() = {\n          super.<init>();\n          ()\n        };\n        import foo._;\n        class $iw extends Serializable {\n          def <init>() = {\n            super.<init>();\n            ()\n          };\n          class $iw extends Serializable {\n            def <init>() = {\n              super.<init>();\n              ()\n            };\n            val i = 42;\n            val res2 = getClass.getName.mkString(\"\")\n          };\n          val $iw = new $iw()\n        };\n        val $iw = new $iw()\n      };\n      val $iw = new $iw()\n    };\n    val $iw = new $iw()\n  };\n  object $read extends scala.AnyRef {\n    def <init>() = {\n      super.<init>();\n      ()\n    };\n    val INSTANCE = new $read()\n  }\n}\npackage $line10 {\n  object $eval extends scala.AnyRef {\n    def <init>() = {\n      super.<init>();\n      ()\n    };\n    lazy val $result = $line10.$read.INSTANCE.$iw.$iw.$iw.$iw.res2;\n    lazy val $print: String = {\n      $line10.$read.INSTANCE.$iw.$iw.$iw.$iw;\n      \"\".$plus(\"i: Int = \").$plus(scala.runtime.ScalaRunTime.replStringOf($line10.$read.INSTANCE.$iw.$iw.$iw.$iw.i, 1000)).$plus(\"res2: String = \").$plus(scala.runtime.ScalaRunTime.replStringOf($line10.$read.INSTANCE.$iw.$iw.$iw.$iw.res2, 1000))\n    }\n  }\n}\n```\n",
+    "commit": "47e0e393c907ffa54ac23c9902f5db00dcbca147",
+    "createdAt": "2016-03-01T22:27:17Z",
+    "diffHunk": "@@ -39,4 +41,35 @@ object OuterScopes {\n   def addOuterScope(outer: AnyRef): Unit = {\n     outerScopes.putIfAbsent(outer.getClass.getName, outer)\n   }\n+\n+  def getOuterScope(innerCls: Class[_]): AnyRef = {\n+    assert(innerCls.isMemberClass)\n+    val outerCls = innerCls.getDeclaringClass.getName\n+    val outer = outerScopes.get(outerCls)\n+    if (outer == null) {\n+      outerCls match {\n+        case REPLClass(line) =>\n+          val loader = Utils.getContextOrSparkClassLoader\n+          def loadCls(clsName: String): Class[_] = Class.forName(clsName, true, loader)\n+\n+          val cls1 = loadCls(line + \"$read$\")\n+          val obj1 = cls1.getField(\"MODULE$\").get(null)\n+\n+          val obj2 = cls1.getMethod(\"INSTANCE\").invoke(obj1)\n+          val cls2 = loadCls(line + \"$read\")\n+\n+          val obj3 = cls2.getMethod(\"$iw\").invoke(obj2)\n+          val cls3 = loadCls(line + \"$read$$iw\")\n+\n+          cls3.getMethod(\"$iw\").invoke(obj3)\n+\n+        case _ => null\n+      }\n+    } else {\n+      outer\n+    }\n+  }\n+\n+  // The format of REPL generated wrapper class's name, e.g. `$line12.$read$$iw$$iw`"
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "Thanks for your explanation!\n",
+    "commit": "47e0e393c907ffa54ac23c9902f5db00dcbca147",
+    "createdAt": "2016-03-02T02:48:08Z",
+    "diffHunk": "@@ -39,4 +41,35 @@ object OuterScopes {\n   def addOuterScope(outer: AnyRef): Unit = {\n     outerScopes.putIfAbsent(outer.getClass.getName, outer)\n   }\n+\n+  def getOuterScope(innerCls: Class[_]): AnyRef = {\n+    assert(innerCls.isMemberClass)\n+    val outerCls = innerCls.getDeclaringClass.getName\n+    val outer = outerScopes.get(outerCls)\n+    if (outer == null) {\n+      outerCls match {\n+        case REPLClass(line) =>\n+          val loader = Utils.getContextOrSparkClassLoader\n+          def loadCls(clsName: String): Class[_] = Class.forName(clsName, true, loader)\n+\n+          val cls1 = loadCls(line + \"$read$\")\n+          val obj1 = cls1.getField(\"MODULE$\").get(null)\n+\n+          val obj2 = cls1.getMethod(\"INSTANCE\").invoke(obj1)\n+          val cls2 = loadCls(line + \"$read\")\n+\n+          val obj3 = cls2.getMethod(\"$iw\").invoke(obj2)\n+          val cls3 = loadCls(line + \"$read$$iw\")\n+\n+          cls3.getMethod(\"$iw\").invoke(obj3)\n+\n+        case _ => null\n+      }\n+    } else {\n+      outer\n+    }\n+  }\n+\n+  // The format of REPL generated wrapper class's name, e.g. `$line12.$read$$iw$$iw`"
+  }],
+  "prId": 11410
+}, {
+  "comments": [{
+    "author": {
+      "login": "liancheng"
+    },
+    "body": "Let's add a comment here to explain the REPL use case.\n",
+    "commit": "47e0e393c907ffa54ac23c9902f5db00dcbca147",
+    "createdAt": "2016-02-27T15:15:41Z",
+    "diffHunk": "@@ -39,4 +41,31 @@ object OuterScopes {\n   def addOuterScope(outer: AnyRef): Unit = {\n     outerScopes.putIfAbsent(outer.getClass.getName, outer)\n   }\n+\n+  def getOuterScope(innerCls: Class[_]): AnyRef = {\n+    assert(innerCls.isMemberClass)\n+    val outerCls = innerCls.getDeclaringClass.getName\n+    val outer = outerScopes.get(outerCls)\n+    if (outer == null) {\n+      outerCls match {\n+        case REPLClass(line) =>\n+          val cls1 = Utils.classForName(line + \"$read$\")"
+  }],
+  "prId": 11410
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "hi @retronym , now I loop until there is no `$iw` method, is this looks good to you?\n",
+    "commit": "47e0e393c907ffa54ac23c9902f5db00dcbca147",
+    "createdAt": "2016-03-11T02:10:58Z",
+    "diffHunk": "@@ -39,4 +41,47 @@ object OuterScopes {\n   def addOuterScope(outer: AnyRef): Unit = {\n     outerScopes.putIfAbsent(outer.getClass.getName, outer)\n   }\n+\n+  def getOuterScope(innerCls: Class[_]): AnyRef = {\n+    assert(innerCls.isMemberClass)\n+    val outerClassName = innerCls.getDeclaringClass.getName\n+    val outer = outerScopes.get(outerClassName)\n+    if (outer == null) {\n+      outerClassName match {\n+        // If the outer class is generated by REPL, users don't need to register it as it has\n+        // only one instance and there is a way to retrieve it: get the `$read` object, call the\n+        // `INSTANCE()` method to get the single instance of class `$read`. Then call `$iw()`\n+        // method multiply times to get the single instance of the inner most `$iw` class.\n+        case REPLClass(baseClassName) =>\n+          val objClass = Utils.classForName(baseClassName + \"$\")\n+          val objInstance = objClass.getField(\"MODULE$\").get(null)\n+          val baseInstance = objClass.getMethod(\"INSTANCE\").invoke(objInstance)\n+          val baseClass = Utils.classForName(baseClassName)\n+\n+          var getter = iwGetter(baseClass)\n+          var obj = baseInstance\n+          while (getter != null) {\n+            obj = getter.invoke(obj)\n+            getter = iwGetter(getter.getReturnType)\n+          }\n+",
+    "line": 45
+  }, {
+    "author": {
+      "login": "retronym"
+    },
+    "body": "Yes, this looks cleaner to me.\n",
+    "commit": "47e0e393c907ffa54ac23c9902f5db00dcbca147",
+    "createdAt": "2016-03-11T03:27:26Z",
+    "diffHunk": "@@ -39,4 +41,47 @@ object OuterScopes {\n   def addOuterScope(outer: AnyRef): Unit = {\n     outerScopes.putIfAbsent(outer.getClass.getName, outer)\n   }\n+\n+  def getOuterScope(innerCls: Class[_]): AnyRef = {\n+    assert(innerCls.isMemberClass)\n+    val outerClassName = innerCls.getDeclaringClass.getName\n+    val outer = outerScopes.get(outerClassName)\n+    if (outer == null) {\n+      outerClassName match {\n+        // If the outer class is generated by REPL, users don't need to register it as it has\n+        // only one instance and there is a way to retrieve it: get the `$read` object, call the\n+        // `INSTANCE()` method to get the single instance of class `$read`. Then call `$iw()`\n+        // method multiply times to get the single instance of the inner most `$iw` class.\n+        case REPLClass(baseClassName) =>\n+          val objClass = Utils.classForName(baseClassName + \"$\")\n+          val objInstance = objClass.getField(\"MODULE$\").get(null)\n+          val baseInstance = objClass.getMethod(\"INSTANCE\").invoke(objInstance)\n+          val baseClass = Utils.classForName(baseClassName)\n+\n+          var getter = iwGetter(baseClass)\n+          var obj = baseInstance\n+          while (getter != null) {\n+            obj = getter.invoke(obj)\n+            getter = iwGetter(getter.getReturnType)\n+          }\n+",
+    "line": 45
+  }],
+  "prId": 11410
+}]

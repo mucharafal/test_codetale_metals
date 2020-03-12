@@ -1,0 +1,224 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "tgravescs"
+    },
+    "body": "doing the same check here as line 46 above, don't need both.\n",
+    "commit": "10513ec4a1cee2de26104945dc2eae54efeed9d2",
+    "createdAt": "2016-09-08T13:29:02Z",
+    "diffHunk": "@@ -29,26 +31,63 @@ import org.apache.spark.util.{ThreadUtils, Utils}\n  *\n  * See `LauncherServer` for an explanation of how launcher communication works.\n  */\n-private[spark] abstract class LauncherBackend {\n+private[spark] abstract class LauncherBackend extends Logging {\n \n   private var clientThread: Thread = _\n   private var connection: BackendConnection = _\n   private var lastState: SparkAppHandle.State = _\n+  private var stopFlag: Boolean = false\n   @volatile private var _isConnected = false\n \n   def connect(): Unit = {\n     val port = sys.env.get(LauncherProtocol.ENV_LAUNCHER_PORT).map(_.toInt)\n     val secret = sys.env.get(LauncherProtocol.ENV_LAUNCHER_SECRET)\n+    val stopFlag = sys.env.get(LauncherProtocol.ENV_LAUNCHER_STOP_FLAG).map(_.toBoolean)\n     if (port != None && secret != None) {\n-      val s = new Socket(InetAddress.getLoopbackAddress(), port.get)\n+      if(stopFlag != None) {\n+        connect(port.get, secret.get, stopFlag.get)\n+      } else {\n+        connect(port.get, secret.get)\n+      }\n+    }\n+  }\n+\n+  def connect(port: Int, secret: String): Unit = {\n+    if (port != None && secret != None) {"
+  }],
+  "prId": 15009
+}, {
+  "comments": [{
+    "author": {
+      "login": "tgravescs"
+    },
+    "body": "can't we just set this.stopFlag here and have one connect method since that is all this one is doing?\n",
+    "commit": "10513ec4a1cee2de26104945dc2eae54efeed9d2",
+    "createdAt": "2016-09-08T13:31:16Z",
+    "diffHunk": "@@ -29,26 +31,63 @@ import org.apache.spark.util.{ThreadUtils, Utils}\n  *\n  * See `LauncherServer` for an explanation of how launcher communication works.\n  */\n-private[spark] abstract class LauncherBackend {\n+private[spark] abstract class LauncherBackend extends Logging {\n \n   private var clientThread: Thread = _\n   private var connection: BackendConnection = _\n   private var lastState: SparkAppHandle.State = _\n+  private var stopFlag: Boolean = false\n   @volatile private var _isConnected = false\n \n   def connect(): Unit = {\n     val port = sys.env.get(LauncherProtocol.ENV_LAUNCHER_PORT).map(_.toInt)\n     val secret = sys.env.get(LauncherProtocol.ENV_LAUNCHER_SECRET)\n+    val stopFlag = sys.env.get(LauncherProtocol.ENV_LAUNCHER_STOP_FLAG).map(_.toBoolean)\n     if (port != None && secret != None) {\n-      val s = new Socket(InetAddress.getLoopbackAddress(), port.get)\n+      if(stopFlag != None) {\n+        connect(port.get, secret.get, stopFlag.get)"
+  }, {
+    "author": {
+      "login": "tgravescs"
+    },
+    "body": "ignore this I didn't see it being called from Client\n",
+    "commit": "10513ec4a1cee2de26104945dc2eae54efeed9d2",
+    "createdAt": "2016-09-08T14:36:23Z",
+    "diffHunk": "@@ -29,26 +31,63 @@ import org.apache.spark.util.{ThreadUtils, Utils}\n  *\n  * See `LauncherServer` for an explanation of how launcher communication works.\n  */\n-private[spark] abstract class LauncherBackend {\n+private[spark] abstract class LauncherBackend extends Logging {\n \n   private var clientThread: Thread = _\n   private var connection: BackendConnection = _\n   private var lastState: SparkAppHandle.State = _\n+  private var stopFlag: Boolean = false\n   @volatile private var _isConnected = false\n \n   def connect(): Unit = {\n     val port = sys.env.get(LauncherProtocol.ENV_LAUNCHER_PORT).map(_.toInt)\n     val secret = sys.env.get(LauncherProtocol.ENV_LAUNCHER_SECRET)\n+    val stopFlag = sys.env.get(LauncherProtocol.ENV_LAUNCHER_STOP_FLAG).map(_.toBoolean)\n     if (port != None && secret != None) {\n-      val s = new Socket(InetAddress.getLoopbackAddress(), port.get)\n+      if(stopFlag != None) {\n+        connect(port.get, secret.get, stopFlag.get)"
+  }],
+  "prId": 15009
+}, {
+  "comments": [{
+    "author": {
+      "login": "tgravescs"
+    },
+    "body": "space after if before (\n",
+    "commit": "10513ec4a1cee2de26104945dc2eae54efeed9d2",
+    "createdAt": "2016-09-08T13:32:15Z",
+    "diffHunk": "@@ -29,26 +31,63 @@ import org.apache.spark.util.{ThreadUtils, Utils}\n  *\n  * See `LauncherServer` for an explanation of how launcher communication works.\n  */\n-private[spark] abstract class LauncherBackend {\n+private[spark] abstract class LauncherBackend extends Logging {\n \n   private var clientThread: Thread = _\n   private var connection: BackendConnection = _\n   private var lastState: SparkAppHandle.State = _\n+  private var stopFlag: Boolean = false\n   @volatile private var _isConnected = false\n \n   def connect(): Unit = {\n     val port = sys.env.get(LauncherProtocol.ENV_LAUNCHER_PORT).map(_.toInt)\n     val secret = sys.env.get(LauncherProtocol.ENV_LAUNCHER_SECRET)\n+    val stopFlag = sys.env.get(LauncherProtocol.ENV_LAUNCHER_STOP_FLAG).map(_.toBoolean)\n     if (port != None && secret != None) {\n-      val s = new Socket(InetAddress.getLoopbackAddress(), port.get)\n+      if(stopFlag != None) {\n+        connect(port.get, secret.get, stopFlag.get)\n+      } else {\n+        connect(port.get, secret.get)\n+      }\n+    }\n+  }\n+\n+  def connect(port: Int, secret: String): Unit = {\n+    if (port != None && secret != None) {\n+      val s = new Socket(InetAddress.getLoopbackAddress(), port)\n       connection = new BackendConnection(s)\n-      connection.send(new Hello(secret.get, SPARK_VERSION))\n+      connection.send(new Hello(secret, SPARK_VERSION))\n       clientThread = LauncherBackend.threadFactory.newThread(connection)\n       clientThread.start()\n       _isConnected = true\n+      if(stopFlag) {"
+  }],
+  "prId": 15009
+}, {
+  "comments": [{
+    "author": {
+      "login": "tgravescs"
+    },
+    "body": "space after if\n",
+    "commit": "10513ec4a1cee2de26104945dc2eae54efeed9d2",
+    "createdAt": "2016-09-08T13:32:38Z",
+    "diffHunk": "@@ -29,26 +31,63 @@ import org.apache.spark.util.{ThreadUtils, Utils}\n  *\n  * See `LauncherServer` for an explanation of how launcher communication works.\n  */\n-private[spark] abstract class LauncherBackend {\n+private[spark] abstract class LauncherBackend extends Logging {\n \n   private var clientThread: Thread = _\n   private var connection: BackendConnection = _\n   private var lastState: SparkAppHandle.State = _\n+  private var stopFlag: Boolean = false\n   @volatile private var _isConnected = false\n \n   def connect(): Unit = {\n     val port = sys.env.get(LauncherProtocol.ENV_LAUNCHER_PORT).map(_.toInt)\n     val secret = sys.env.get(LauncherProtocol.ENV_LAUNCHER_SECRET)\n+    val stopFlag = sys.env.get(LauncherProtocol.ENV_LAUNCHER_STOP_FLAG).map(_.toBoolean)\n     if (port != None && secret != None) {\n-      val s = new Socket(InetAddress.getLoopbackAddress(), port.get)\n+      if(stopFlag != None) {\n+        connect(port.get, secret.get, stopFlag.get)\n+      } else {\n+        connect(port.get, secret.get)\n+      }\n+    }\n+  }\n+\n+  def connect(port: Int, secret: String): Unit = {\n+    if (port != None && secret != None) {\n+      val s = new Socket(InetAddress.getLoopbackAddress(), port)\n       connection = new BackendConnection(s)\n-      connection.send(new Hello(secret.get, SPARK_VERSION))\n+      connection.send(new Hello(secret, SPARK_VERSION))\n       clientThread = LauncherBackend.threadFactory.newThread(connection)\n       clientThread.start()\n       _isConnected = true\n+      if(stopFlag) {\n+        val shutdownHook: Runnable = new Runnable() {\n+          def run {\n+            logInfo(\"LauncherBackend shutdown hook invoked..\")\n+            try {\n+              if(_isConnected && stopFlag) {"
+  }],
+  "prId": 15009
+}, {
+  "comments": [{
+    "author": {
+      "login": "tgravescs"
+    },
+    "body": "this should probably be a logError.  \n",
+    "commit": "10513ec4a1cee2de26104945dc2eae54efeed9d2",
+    "createdAt": "2016-09-08T13:35:42Z",
+    "diffHunk": "@@ -29,26 +31,63 @@ import org.apache.spark.util.{ThreadUtils, Utils}\n  *\n  * See `LauncherServer` for an explanation of how launcher communication works.\n  */\n-private[spark] abstract class LauncherBackend {\n+private[spark] abstract class LauncherBackend extends Logging {\n \n   private var clientThread: Thread = _\n   private var connection: BackendConnection = _\n   private var lastState: SparkAppHandle.State = _\n+  private var stopFlag: Boolean = false\n   @volatile private var _isConnected = false\n \n   def connect(): Unit = {\n     val port = sys.env.get(LauncherProtocol.ENV_LAUNCHER_PORT).map(_.toInt)\n     val secret = sys.env.get(LauncherProtocol.ENV_LAUNCHER_SECRET)\n+    val stopFlag = sys.env.get(LauncherProtocol.ENV_LAUNCHER_STOP_FLAG).map(_.toBoolean)\n     if (port != None && secret != None) {\n-      val s = new Socket(InetAddress.getLoopbackAddress(), port.get)\n+      if(stopFlag != None) {\n+        connect(port.get, secret.get, stopFlag.get)\n+      } else {\n+        connect(port.get, secret.get)\n+      }\n+    }\n+  }\n+\n+  def connect(port: Int, secret: String): Unit = {\n+    if (port != None && secret != None) {\n+      val s = new Socket(InetAddress.getLoopbackAddress(), port)\n       connection = new BackendConnection(s)\n-      connection.send(new Hello(secret.get, SPARK_VERSION))\n+      connection.send(new Hello(secret, SPARK_VERSION))\n       clientThread = LauncherBackend.threadFactory.newThread(connection)\n       clientThread.start()\n       _isConnected = true\n+      if(stopFlag) {\n+        val shutdownHook: Runnable = new Runnable() {\n+          def run {\n+            logInfo(\"LauncherBackend shutdown hook invoked..\")\n+            try {\n+              if(_isConnected && stopFlag) {\n+                onStopRequest()\n+              }\n+            }\n+            catch {\n+              case anotherIOE: IOException => {\n+                logInfo(\"Error while running LauncherBackend shutdownHook...\", anotherIOE)"
+  }, {
+    "author": {
+      "login": "kishorvpatil"
+    },
+    "body": "fixed\n",
+    "commit": "10513ec4a1cee2de26104945dc2eae54efeed9d2",
+    "createdAt": "2016-09-08T18:50:16Z",
+    "diffHunk": "@@ -29,26 +31,63 @@ import org.apache.spark.util.{ThreadUtils, Utils}\n  *\n  * See `LauncherServer` for an explanation of how launcher communication works.\n  */\n-private[spark] abstract class LauncherBackend {\n+private[spark] abstract class LauncherBackend extends Logging {\n \n   private var clientThread: Thread = _\n   private var connection: BackendConnection = _\n   private var lastState: SparkAppHandle.State = _\n+  private var stopFlag: Boolean = false\n   @volatile private var _isConnected = false\n \n   def connect(): Unit = {\n     val port = sys.env.get(LauncherProtocol.ENV_LAUNCHER_PORT).map(_.toInt)\n     val secret = sys.env.get(LauncherProtocol.ENV_LAUNCHER_SECRET)\n+    val stopFlag = sys.env.get(LauncherProtocol.ENV_LAUNCHER_STOP_FLAG).map(_.toBoolean)\n     if (port != None && secret != None) {\n-      val s = new Socket(InetAddress.getLoopbackAddress(), port.get)\n+      if(stopFlag != None) {\n+        connect(port.get, secret.get, stopFlag.get)\n+      } else {\n+        connect(port.get, secret.get)\n+      }\n+    }\n+  }\n+\n+  def connect(port: Int, secret: String): Unit = {\n+    if (port != None && secret != None) {\n+      val s = new Socket(InetAddress.getLoopbackAddress(), port)\n       connection = new BackendConnection(s)\n-      connection.send(new Hello(secret.get, SPARK_VERSION))\n+      connection.send(new Hello(secret, SPARK_VERSION))\n       clientThread = LauncherBackend.threadFactory.newThread(connection)\n       clientThread.start()\n       _isConnected = true\n+      if(stopFlag) {\n+        val shutdownHook: Runnable = new Runnable() {\n+          def run {\n+            logInfo(\"LauncherBackend shutdown hook invoked..\")\n+            try {\n+              if(_isConnected && stopFlag) {\n+                onStopRequest()\n+              }\n+            }\n+            catch {\n+              case anotherIOE: IOException => {\n+                logInfo(\"Error while running LauncherBackend shutdownHook...\", anotherIOE)"
+  }],
+  "prId": 15009
+}, {
+  "comments": [{
+    "author": {
+      "login": "tgravescs"
+    },
+    "body": "so when does this happen?  We are in code that the connection isn't null and we are changing the state but we aren't connected (ie close() has been called)?\n",
+    "commit": "10513ec4a1cee2de26104945dc2eae54efeed9d2",
+    "createdAt": "2016-09-08T13:49:39Z",
+    "diffHunk": "@@ -71,6 +110,9 @@ private[spark] abstract class LauncherBackend {\n     if (connection != null && lastState != state) {\n       connection.send(new SetState(state))\n       lastState = state\n+      if(!_isConnected && stopFlag) {"
+  }, {
+    "author": {
+      "login": "kishorvpatil"
+    },
+    "body": "This code is invoked, when childProcess is launched with `LauncherServer` going down. test case scenario 1 - `startApplication` with request to `stopIfInterrupted`\n",
+    "commit": "10513ec4a1cee2de26104945dc2eae54efeed9d2",
+    "createdAt": "2016-09-08T17:22:58Z",
+    "diffHunk": "@@ -71,6 +110,9 @@ private[spark] abstract class LauncherBackend {\n     if (connection != null && lastState != state) {\n       connection.send(new SetState(state))\n       lastState = state\n+      if(!_isConnected && stopFlag) {"
+  }, {
+    "author": {
+      "login": "tgravescs"
+    },
+    "body": "ok perhaps we can move this into the close() call in the BackendConnection then so we don't have to do if on every setState.\n",
+    "commit": "10513ec4a1cee2de26104945dc2eae54efeed9d2",
+    "createdAt": "2016-09-08T18:16:13Z",
+    "diffHunk": "@@ -71,6 +110,9 @@ private[spark] abstract class LauncherBackend {\n     if (connection != null && lastState != state) {\n       connection.send(new SetState(state))\n       lastState = state\n+      if(!_isConnected && stopFlag) {"
+  }],
+  "prId": 15009
+}, {
+  "comments": [{
+    "author": {
+      "login": "tgravescs"
+    },
+    "body": "do we still need this if its being done in close() now?\n",
+    "commit": "10513ec4a1cee2de26104945dc2eae54efeed9d2",
+    "createdAt": "2016-09-12T13:58:12Z",
+    "diffHunk": "@@ -71,6 +104,9 @@ private[spark] abstract class LauncherBackend {\n     if (connection != null && lastState != state) {\n       connection.send(new SetState(state))\n       lastState = state\n+      if (!_isConnected && stopFlag) {"
+  }],
+  "prId": 15009
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "nit: type is not necessary. Also, not a big fan of the name of this variable, it should be more descriptive. Like `stopOnShutdown`.\n",
+    "commit": "10513ec4a1cee2de26104945dc2eae54efeed9d2",
+    "createdAt": "2016-10-24T21:18:05Z",
+    "diffHunk": "@@ -17,38 +17,71 @@\n \n package org.apache.spark.launcher\n \n+import java.io.IOException\n import java.net.{InetAddress, Socket}\n \n import org.apache.spark.SPARK_VERSION\n+import org.apache.spark.internal.Logging\n import org.apache.spark.launcher.LauncherProtocol._\n-import org.apache.spark.util.{ThreadUtils, Utils}\n+import org.apache.spark.util.{ShutdownHookManager, ThreadUtils, Utils}\n \n /**\n  * A class that can be used to talk to a launcher server. Users should extend this class to\n  * provide implementation for the abstract methods.\n  *\n  * See `LauncherServer` for an explanation of how launcher communication works.\n  */\n-private[spark] abstract class LauncherBackend {\n+private[spark] abstract class LauncherBackend extends Logging {\n \n   private var clientThread: Thread = _\n   private var connection: BackendConnection = _\n   private var lastState: SparkAppHandle.State = _\n+  private var stopFlag: Boolean = false"
+  }],
+  "prId": 15009
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "This method (but not the code!) seems redundant. If you had just `connect(port: Int, secret: String, stopFlag: Boolean)` then you probably wouldn't need the `stopFlag` field in the first place.\n",
+    "commit": "10513ec4a1cee2de26104945dc2eae54efeed9d2",
+    "createdAt": "2016-10-24T21:21:28Z",
+    "diffHunk": "@@ -17,38 +17,71 @@\n \n package org.apache.spark.launcher\n \n+import java.io.IOException\n import java.net.{InetAddress, Socket}\n \n import org.apache.spark.SPARK_VERSION\n+import org.apache.spark.internal.Logging\n import org.apache.spark.launcher.LauncherProtocol._\n-import org.apache.spark.util.{ThreadUtils, Utils}\n+import org.apache.spark.util.{ShutdownHookManager, ThreadUtils, Utils}\n \n /**\n  * A class that can be used to talk to a launcher server. Users should extend this class to\n  * provide implementation for the abstract methods.\n  *\n  * See `LauncherServer` for an explanation of how launcher communication works.\n  */\n-private[spark] abstract class LauncherBackend {\n+private[spark] abstract class LauncherBackend extends Logging {\n \n   private var clientThread: Thread = _\n   private var connection: BackendConnection = _\n   private var lastState: SparkAppHandle.State = _\n+  private var stopFlag: Boolean = false\n   @volatile private var _isConnected = false\n \n   def connect(): Unit = {\n     val port = sys.env.get(LauncherProtocol.ENV_LAUNCHER_PORT).map(_.toInt)\n     val secret = sys.env.get(LauncherProtocol.ENV_LAUNCHER_SECRET)\n+    val stopFlag = sys.env.get(LauncherProtocol.ENV_LAUNCHER_STOP_FLAG).map(_.toBoolean)\n     if (port != None && secret != None) {\n-      val s = new Socket(InetAddress.getLoopbackAddress(), port.get)\n-      connection = new BackendConnection(s)\n-      connection.send(new Hello(secret.get, SPARK_VERSION))\n-      clientThread = LauncherBackend.threadFactory.newThread(connection)\n-      clientThread.start()\n-      _isConnected = true\n+      if (stopFlag != None) {\n+        connect(port.get, secret.get, stopFlag.get)\n+      } else {\n+        connect(port.get, secret.get)\n+      }\n+    }\n+  }\n+\n+  def connect(port: Int, secret: String): Unit = {"
+  }],
+  "prId": 15009
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Instead of the `if` you could just have `connect(port, secret, stop.getOrElse(false))`\n",
+    "commit": "10513ec4a1cee2de26104945dc2eae54efeed9d2",
+    "createdAt": "2016-10-24T21:22:13Z",
+    "diffHunk": "@@ -17,38 +17,71 @@\n \n package org.apache.spark.launcher\n \n+import java.io.IOException\n import java.net.{InetAddress, Socket}\n \n import org.apache.spark.SPARK_VERSION\n+import org.apache.spark.internal.Logging\n import org.apache.spark.launcher.LauncherProtocol._\n-import org.apache.spark.util.{ThreadUtils, Utils}\n+import org.apache.spark.util.{ShutdownHookManager, ThreadUtils, Utils}\n \n /**\n  * A class that can be used to talk to a launcher server. Users should extend this class to\n  * provide implementation for the abstract methods.\n  *\n  * See `LauncherServer` for an explanation of how launcher communication works.\n  */\n-private[spark] abstract class LauncherBackend {\n+private[spark] abstract class LauncherBackend extends Logging {\n \n   private var clientThread: Thread = _\n   private var connection: BackendConnection = _\n   private var lastState: SparkAppHandle.State = _\n+  private var stopFlag: Boolean = false\n   @volatile private var _isConnected = false\n \n   def connect(): Unit = {\n     val port = sys.env.get(LauncherProtocol.ENV_LAUNCHER_PORT).map(_.toInt)\n     val secret = sys.env.get(LauncherProtocol.ENV_LAUNCHER_SECRET)\n+    val stopFlag = sys.env.get(LauncherProtocol.ENV_LAUNCHER_STOP_FLAG).map(_.toBoolean)\n     if (port != None && secret != None) {\n-      val s = new Socket(InetAddress.getLoopbackAddress(), port.get)\n-      connection = new BackendConnection(s)\n-      connection.send(new Hello(secret.get, SPARK_VERSION))\n-      clientThread = LauncherBackend.threadFactory.newThread(connection)\n-      clientThread.start()\n-      _isConnected = true\n+      if (stopFlag != None) {\n+        connect(port.get, secret.get, stopFlag.get)"
+  }],
+  "prId": 15009
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "This seems to be overloading the meaning of `stopFlag`. Does it mean \"stop the app when the launcher goes down\", or \"stop the app when the launcher is closed\"? This code is implementing the latter, while the earlier shutdown hook is implementing the former. I don't think the latter is desired in the API; there is already an explicit API for that.\n",
+    "commit": "10513ec4a1cee2de26104945dc2eae54efeed9d2",
+    "createdAt": "2016-10-24T21:24:50Z",
+    "diffHunk": "@@ -110,12 +146,14 @@ private[spark] abstract class LauncherBackend {\n     override def close(): Unit = {\n       try {\n         super.close()\n+        if (stopFlag) {"
+  }],
+  "prId": 15009
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "You haven't addressed my previous feedback here: https://github.com/apache/spark/pull/15009#discussion_r84786490\n",
+    "commit": "10513ec4a1cee2de26104945dc2eae54efeed9d2",
+    "createdAt": "2016-11-10T19:18:07Z",
+    "diffHunk": "@@ -17,38 +17,67 @@\n \n package org.apache.spark.launcher\n \n+import java.io.IOException\n import java.net.{InetAddress, Socket}\n \n import org.apache.spark.SPARK_VERSION\n+import org.apache.spark.internal.Logging\n import org.apache.spark.launcher.LauncherProtocol._\n-import org.apache.spark.util.{ThreadUtils, Utils}\n+import org.apache.spark.util.{ShutdownHookManager, ThreadUtils, Utils}\n \n /**\n  * A class that can be used to talk to a launcher server. Users should extend this class to\n  * provide implementation for the abstract methods.\n  *\n  * See `LauncherServer` for an explanation of how launcher communication works.\n  */\n-private[spark] abstract class LauncherBackend {\n+private[spark] abstract class LauncherBackend extends Logging {\n \n   private var clientThread: Thread = _\n   private var connection: BackendConnection = _\n   private var lastState: SparkAppHandle.State = _\n+  private var stopOnShutdown: Boolean = false\n   @volatile private var _isConnected = false\n \n   def connect(): Unit = {\n     val port = sys.env.get(LauncherProtocol.ENV_LAUNCHER_PORT).map(_.toInt)\n     val secret = sys.env.get(LauncherProtocol.ENV_LAUNCHER_SECRET)\n+    val stopFlag = sys.env.get(LauncherProtocol.ENV_LAUNCHER_STOP_FLAG).map(_.toBoolean)\n     if (port != None && secret != None) {\n-      val s = new Socket(InetAddress.getLoopbackAddress(), port.get)\n-      connection = new BackendConnection(s)\n-      connection.send(new Hello(secret.get, SPARK_VERSION))\n-      clientThread = LauncherBackend.threadFactory.newThread(connection)\n-      clientThread.start()\n-      _isConnected = true\n+      connect(port.get, secret.get, stopFlag.getOrElse(false))\n     }\n   }\n \n+  def connect(port: Int, secret: String): Unit = {\n+    val s = new Socket(InetAddress.getLoopbackAddress(), port)\n+    connection = new BackendConnection(s)\n+    connection.send(new Hello(secret, SPARK_VERSION))\n+    clientThread = LauncherBackend.threadFactory.newThread(connection)\n+    clientThread.start()\n+    _isConnected = true\n+    if (stopOnShutdown) {\n+      logDebug(\"Adding shutdown hook\") // force eager creation of logger\n+      var _shutdownHookRef = ShutdownHookManager.addShutdownHook(\n+        ShutdownHookManager.SPARK_CONTEXT_SHUTDOWN_PRIORITY) { () =>\n+        logInfo(\"Invoking onStopRequest() from shutdown hook\")\n+        try {\n+          if (_isConnected && stopOnShutdown) {\n+            onStopRequest()\n+          }\n+        }\n+        catch {\n+          case anotherIOE: IOException =>\n+            logError(\"Error while running LauncherBackend shutdownHook...\", anotherIOE)\n+        }\n+      }\n+    }\n+  }\n+\n+  def connect(port: Int, secret: String, stopFlag: Boolean): Unit = {"
+  }, {
+    "author": {
+      "login": "kishorvpatil"
+    },
+    "body": "This addressed now.",
+    "commit": "10513ec4a1cee2de26104945dc2eae54efeed9d2",
+    "createdAt": "2017-02-07T15:41:31Z",
+    "diffHunk": "@@ -17,38 +17,67 @@\n \n package org.apache.spark.launcher\n \n+import java.io.IOException\n import java.net.{InetAddress, Socket}\n \n import org.apache.spark.SPARK_VERSION\n+import org.apache.spark.internal.Logging\n import org.apache.spark.launcher.LauncherProtocol._\n-import org.apache.spark.util.{ThreadUtils, Utils}\n+import org.apache.spark.util.{ShutdownHookManager, ThreadUtils, Utils}\n \n /**\n  * A class that can be used to talk to a launcher server. Users should extend this class to\n  * provide implementation for the abstract methods.\n  *\n  * See `LauncherServer` for an explanation of how launcher communication works.\n  */\n-private[spark] abstract class LauncherBackend {\n+private[spark] abstract class LauncherBackend extends Logging {\n \n   private var clientThread: Thread = _\n   private var connection: BackendConnection = _\n   private var lastState: SparkAppHandle.State = _\n+  private var stopOnShutdown: Boolean = false\n   @volatile private var _isConnected = false\n \n   def connect(): Unit = {\n     val port = sys.env.get(LauncherProtocol.ENV_LAUNCHER_PORT).map(_.toInt)\n     val secret = sys.env.get(LauncherProtocol.ENV_LAUNCHER_SECRET)\n+    val stopFlag = sys.env.get(LauncherProtocol.ENV_LAUNCHER_STOP_FLAG).map(_.toBoolean)\n     if (port != None && secret != None) {\n-      val s = new Socket(InetAddress.getLoopbackAddress(), port.get)\n-      connection = new BackendConnection(s)\n-      connection.send(new Hello(secret.get, SPARK_VERSION))\n-      clientThread = LauncherBackend.threadFactory.newThread(connection)\n-      clientThread.start()\n-      _isConnected = true\n+      connect(port.get, secret.get, stopFlag.getOrElse(false))\n     }\n   }\n \n+  def connect(port: Int, secret: String): Unit = {\n+    val s = new Socket(InetAddress.getLoopbackAddress(), port)\n+    connection = new BackendConnection(s)\n+    connection.send(new Hello(secret, SPARK_VERSION))\n+    clientThread = LauncherBackend.threadFactory.newThread(connection)\n+    clientThread.start()\n+    _isConnected = true\n+    if (stopOnShutdown) {\n+      logDebug(\"Adding shutdown hook\") // force eager creation of logger\n+      var _shutdownHookRef = ShutdownHookManager.addShutdownHook(\n+        ShutdownHookManager.SPARK_CONTEXT_SHUTDOWN_PRIORITY) { () =>\n+        logInfo(\"Invoking onStopRequest() from shutdown hook\")\n+        try {\n+          if (_isConnected && stopOnShutdown) {\n+            onStopRequest()\n+          }\n+        }\n+        catch {\n+          case anotherIOE: IOException =>\n+            logError(\"Error while running LauncherBackend shutdownHook...\", anotherIOE)\n+        }\n+      }\n+    }\n+  }\n+\n+  def connect(port: Int, secret: String, stopFlag: Boolean): Unit = {"
+  }, {
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "You haven't addressed it, one way or another. You don't need all these `connect()` methods. You need only two: one without any parameters, and one with all three. The variant with two parameters is not needed.",
+    "commit": "10513ec4a1cee2de26104945dc2eae54efeed9d2",
+    "createdAt": "2017-02-14T00:37:31Z",
+    "diffHunk": "@@ -17,38 +17,67 @@\n \n package org.apache.spark.launcher\n \n+import java.io.IOException\n import java.net.{InetAddress, Socket}\n \n import org.apache.spark.SPARK_VERSION\n+import org.apache.spark.internal.Logging\n import org.apache.spark.launcher.LauncherProtocol._\n-import org.apache.spark.util.{ThreadUtils, Utils}\n+import org.apache.spark.util.{ShutdownHookManager, ThreadUtils, Utils}\n \n /**\n  * A class that can be used to talk to a launcher server. Users should extend this class to\n  * provide implementation for the abstract methods.\n  *\n  * See `LauncherServer` for an explanation of how launcher communication works.\n  */\n-private[spark] abstract class LauncherBackend {\n+private[spark] abstract class LauncherBackend extends Logging {\n \n   private var clientThread: Thread = _\n   private var connection: BackendConnection = _\n   private var lastState: SparkAppHandle.State = _\n+  private var stopOnShutdown: Boolean = false\n   @volatile private var _isConnected = false\n \n   def connect(): Unit = {\n     val port = sys.env.get(LauncherProtocol.ENV_LAUNCHER_PORT).map(_.toInt)\n     val secret = sys.env.get(LauncherProtocol.ENV_LAUNCHER_SECRET)\n+    val stopFlag = sys.env.get(LauncherProtocol.ENV_LAUNCHER_STOP_FLAG).map(_.toBoolean)\n     if (port != None && secret != None) {\n-      val s = new Socket(InetAddress.getLoopbackAddress(), port.get)\n-      connection = new BackendConnection(s)\n-      connection.send(new Hello(secret.get, SPARK_VERSION))\n-      clientThread = LauncherBackend.threadFactory.newThread(connection)\n-      clientThread.start()\n-      _isConnected = true\n+      connect(port.get, secret.get, stopFlag.getOrElse(false))\n     }\n   }\n \n+  def connect(port: Int, secret: String): Unit = {\n+    val s = new Socket(InetAddress.getLoopbackAddress(), port)\n+    connection = new BackendConnection(s)\n+    connection.send(new Hello(secret, SPARK_VERSION))\n+    clientThread = LauncherBackend.threadFactory.newThread(connection)\n+    clientThread.start()\n+    _isConnected = true\n+    if (stopOnShutdown) {\n+      logDebug(\"Adding shutdown hook\") // force eager creation of logger\n+      var _shutdownHookRef = ShutdownHookManager.addShutdownHook(\n+        ShutdownHookManager.SPARK_CONTEXT_SHUTDOWN_PRIORITY) { () =>\n+        logInfo(\"Invoking onStopRequest() from shutdown hook\")\n+        try {\n+          if (_isConnected && stopOnShutdown) {\n+            onStopRequest()\n+          }\n+        }\n+        catch {\n+          case anotherIOE: IOException =>\n+            logError(\"Error while running LauncherBackend shutdownHook...\", anotherIOE)\n+        }\n+      }\n+    }\n+  }\n+\n+  def connect(port: Int, secret: String, stopFlag: Boolean): Unit = {"
+  }],
+  "prId": 15009
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "You haven't addressed my previous comment here: https://github.com/apache/spark/pull/15009#discussion_r84787094\n\nIf the backend is not connected to the launcher, it may mean the launcher has explicitly disconnected from it. So the launcher explicitly wants the app to keep running when the connection is closed. This seems to be breaking that.\n\nCan you clarify what you're trying to achieve here? It feels to me like you want the launcher to stop the application when the launcher's JVM exits. And that means handling this in the launcher code, not here.\n",
+    "commit": "10513ec4a1cee2de26104945dc2eae54efeed9d2",
+    "createdAt": "2016-11-10T19:21:58Z",
+    "diffHunk": "@@ -71,6 +100,9 @@ private[spark] abstract class LauncherBackend {\n     if (connection != null && lastState != state) {\n       connection.send(new SetState(state))\n       lastState = state\n+      if (!_isConnected && stopOnShutdown) {"
+  }, {
+    "author": {
+      "login": "kishorvpatil"
+    },
+    "body": "The `LauncherBackend` is supposed to run within `Spark App` JVM.  The `connection` is `LauncherConnection` used to report back Spark Job status to User App.  So, if this connection is lost - the User App requesting/waiting for the job completion is no longer available.  So User app is not available shutdown flag would decide whether to kill the Spark job or not.",
+    "commit": "10513ec4a1cee2de26104945dc2eae54efeed9d2",
+    "createdAt": "2017-02-07T15:35:21Z",
+    "diffHunk": "@@ -71,6 +100,9 @@ private[spark] abstract class LauncherBackend {\n     if (connection != null && lastState != state) {\n       connection.send(new SetState(state))\n       lastState = state\n+      if (!_isConnected && stopOnShutdown) {"
+  }, {
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "What happens with code like this:\r\n\r\n```\r\nval handle = new SparkLauncher().blahBlahBlah().launchAsThread(true).startApplication()\r\n// do something, like wait for app to be running\r\nhandle.disconnect()\r\n```\r\n\r\n`_isConnected` will be false, and in that situation you do not want any call to `close()` here to shut down the running app, since that's not what the user asked for.\r\n\r\n",
+    "commit": "10513ec4a1cee2de26104945dc2eae54efeed9d2",
+    "createdAt": "2017-02-14T00:43:53Z",
+    "diffHunk": "@@ -71,6 +100,9 @@ private[spark] abstract class LauncherBackend {\n     if (connection != null && lastState != state) {\n       connection.send(new SetState(state))\n       lastState = state\n+      if (!_isConnected && stopOnShutdown) {"
+  }, {
+    "author": {
+      "login": "tgravescs"
+    },
+    "body": "why do we need this check at all here vs just relying on the close() call?  _isConnected only becomes false after calling that which should do the fireStopRequest(), am I missing a case?  If it wasn't connected at all on startup the connection != null case wouldn't pass",
+    "commit": "10513ec4a1cee2de26104945dc2eae54efeed9d2",
+    "createdAt": "2017-02-14T17:25:08Z",
+    "diffHunk": "@@ -71,6 +100,9 @@ private[spark] abstract class LauncherBackend {\n     if (connection != null && lastState != state) {\n       connection.send(new SetState(state))\n       lastState = state\n+      if (!_isConnected && stopOnShutdown) {"
+  }, {
+    "author": {
+      "login": "tgravescs"
+    },
+    "body": "on the other issue of disconnect() I would think that if we just document that behavior its fine.\r\n\r\nI hadn't noticed before that the disconnect java docs state \"Disconnects the handle from the application, without stopping it.\"",
+    "commit": "10513ec4a1cee2de26104945dc2eae54efeed9d2",
+    "createdAt": "2017-02-14T17:42:06Z",
+    "diffHunk": "@@ -71,6 +100,9 @@ private[spark] abstract class LauncherBackend {\n     if (connection != null && lastState != state) {\n       connection.send(new SetState(state))\n       lastState = state\n+      if (!_isConnected && stopOnShutdown) {"
+  }],
+  "prId": 15009
+}]

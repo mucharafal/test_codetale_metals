@@ -1,0 +1,12 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "wangyum"
+    },
+    "body": "Hive 2.x([HIVE-12302](https://issues.apache.org/jira/browse/HIVE-12302)):\r\n```scala\r\nimport org.apache.hadoop.hive.ql.exec.SerializationUtilities\r\nval kryo = SerializationUtilities.borrowKryo()\r\ntry {\r\n  SerializationUtilities.deserializeObjectByKryo(kryo, is, clazz).asInstanceOf[UDFType]\r\n} finally {\r\n  SerializationUtilities.releaseKryo(kryo)\r\n}\r\n```\r\nHive 1.x:\r\n```scala\r\nimport org.apache.hadoop.hive.ql.exec.Utilities\r\nUtilities.deserializeObjectByKryo(Utilities.runtimeSerializationKryo.get(), is, clazz)\r\n  .asInstanceOf[UDFType]\r\n```",
+    "commit": "073c88347cf25e21dcf607fb85f636a37b99f7ba",
+    "createdAt": "2019-03-27T11:49:43Z",
+    "diffHunk": "@@ -146,34 +145,60 @@ private[hive] object HiveShim {\n       case _ => false\n     }\n \n-    @transient\n-    def deserializeObjectByKryo[T: ClassTag](\n-        kryo: Kryo,\n-        in: InputStream,\n-        clazz: Class[_]): T = {\n-      val inp = new Input(in)\n-      val t: T = kryo.readObject(inp, clazz).asInstanceOf[T]\n-      inp.close()\n-      t\n-    }\n+    private lazy val serUtilClass =\n+      Utils.classForName(\"org.apache.hadoop.hive.ql.exec.SerializationUtilities\")\n+    private lazy val utilClass = Utils.classForName(\"org.apache.hadoop.hive.ql.exec.Utilities\")\n+    private val deserializeMethodName = \"deserializeObjectByKryo\"\n+    private val serializeMethodName = \"serializeObjectByKryo\"\n \n-    @transient\n-    def serializeObjectByKryo(\n-        kryo: Kryo,\n-        plan: Object,\n-        out: OutputStream) {\n-      val output: Output = new Output(out)\n-      kryo.writeObject(output, plan)\n-      output.close()\n+    private def findMethod(klass: Class[_], name: String, args: Class[_]*): Method = {\n+      val method = klass.getDeclaredMethod(name, args: _*)\n+      method.setAccessible(true)\n+      method\n     }\n \n     def deserializePlan[UDFType](is: java.io.InputStream, clazz: Class[_]): UDFType = {\n-      deserializeObjectByKryo(Utilities.runtimeSerializationKryo.get(), is, clazz)\n-        .asInstanceOf[UDFType]\n+      if (HiveUtils.isHive2) {"
+  }],
+  "prId": 23788
+}]

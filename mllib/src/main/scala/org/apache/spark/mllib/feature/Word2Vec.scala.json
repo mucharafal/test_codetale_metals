@@ -1,0 +1,190 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "This is executing on the driver, so it should not use broadcast variables.  Use `vocab`  Could be shorter to do:\n\n```\nval wordArray = vocab.map(_.word)\n```\n",
+    "commit": "e308913423c4c6019b21bcb05630268bc381fa1a",
+    "createdAt": "2015-06-01T18:34:24Z",
+    "diffHunk": "@@ -400,17 +400,13 @@ class Word2Vec extends Serializable with Logging {\n     }\n     newSentences.unpersist()\n     \n-    val word2VecMap = mutable.HashMap.empty[String, Array[Float]]\n+    val wordArray = new Array[String](vocabSize)\n     var i = 0\n     while (i < vocabSize) {\n-      val word = bcVocab.value(i).word\n-      val vector = new Array[Float](vectorSize)\n-      Array.copy(syn0Global, i * vectorSize, vector, 0, vectorSize)\n-      word2VecMap += word -> vector\n+      wordArray(i) = bcVocab.value(i).word"
+  }, {
+    "author": {
+      "login": "MechCoder"
+    },
+    "body": "Hmm. I just followed the convention used before.\n",
+    "commit": "e308913423c4c6019b21bcb05630268bc381fa1a",
+    "createdAt": "2015-06-02T15:12:21Z",
+    "diffHunk": "@@ -400,17 +400,13 @@ class Word2Vec extends Serializable with Logging {\n     }\n     newSentences.unpersist()\n     \n-    val word2VecMap = mutable.HashMap.empty[String, Array[Float]]\n+    val wordArray = new Array[String](vocabSize)\n     var i = 0\n     while (i < vocabSize) {\n-      val word = bcVocab.value(i).word\n-      val vector = new Array[Float](vectorSize)\n-      Array.copy(syn0Global, i * vectorSize, vector, 0, vectorSize)\n-      word2VecMap += word -> vector\n+      wordArray(i) = bcVocab.value(i).word"
+  }],
+  "prId": 5748
+}, {
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "Make this and wordVectors private vals\n",
+    "commit": "e308913423c4c6019b21bcb05630268bc381fa1a",
+    "createdAt": "2015-06-01T18:34:25Z",
+    "diffHunk": "@@ -426,38 +422,40 @@ class Word2Vec extends Serializable with Logging {\n /**\n  * :: Experimental ::\n  * Word2Vec model\n+ *\n+ * @param wordIndex: Maps each word to an index, which can retrieve the corresponding\n+ *                   vector from wordVectors (see below).\n+ * @param wordVectors: Array of length numWords * vectorSize, vector corresponding\n+ *                     to the word mapped with index i can be retrieved by the slice\n+ *                     (i * vectorSize, i * vectorSize + vectorSize)       \n  */\n @Experimental\n class Word2VecModel private[mllib] (\n-    model: Map[String, Array[Float]]) extends Serializable with Saveable {\n-\n-  // wordList: Ordered list of words obtained from model.\n-  private val wordList: Array[String] = model.keys.toArray\n+    wordIndex: Map[String, Int],"
+  }],
+  "prId": 5748
+}, {
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "This should sort by `wordIndex._2` to make sure the order matches wordVectors\n",
+    "commit": "e308913423c4c6019b21bcb05630268bc381fa1a",
+    "createdAt": "2015-06-01T18:34:26Z",
+    "diffHunk": "@@ -426,38 +422,40 @@ class Word2Vec extends Serializable with Logging {\n /**\n  * :: Experimental ::\n  * Word2Vec model\n+ *\n+ * @param wordIndex: Maps each word to an index, which can retrieve the corresponding\n+ *                   vector from wordVectors (see below).\n+ * @param wordVectors: Array of length numWords * vectorSize, vector corresponding\n+ *                     to the word mapped with index i can be retrieved by the slice\n+ *                     (i * vectorSize, i * vectorSize + vectorSize)       \n  */\n @Experimental\n class Word2VecModel private[mllib] (\n-    model: Map[String, Array[Float]]) extends Serializable with Saveable {\n-\n-  // wordList: Ordered list of words obtained from model.\n-  private val wordList: Array[String] = model.keys.toArray\n+    wordIndex: Map[String, Int],\n+    wordVectors: Array[Float]) extends Serializable with Saveable {\n \n-  // wordIndex: Maps each word to an index, which can retrieve the corresponding\n-  //            vector from wordVectors (see below).\n-  private val wordIndex: Map[String, Int] = wordList.zip(0 until model.size).toMap\n-\n-  // vectorSize: Dimension of each word's vector.\n-  private val vectorSize = model.head._2.size\n   private val numWords = wordIndex.size\n+  // vectorSize: Dimension of each word's vector.\n+  private val vectorSize = wordVectors.length / numWords\n+\n+  // wordList: Ordered list of words obtained from wordIndex.\n+  private val wordList: Array[String] = wordIndex.keys.toArray"
+  }, {
+    "author": {
+      "login": "MechCoder"
+    },
+    "body": "I hope all this sorting does not cause regressions :P\n",
+    "commit": "e308913423c4c6019b21bcb05630268bc381fa1a",
+    "createdAt": "2015-06-02T15:49:04Z",
+    "diffHunk": "@@ -426,38 +422,40 @@ class Word2Vec extends Serializable with Logging {\n /**\n  * :: Experimental ::\n  * Word2Vec model\n+ *\n+ * @param wordIndex: Maps each word to an index, which can retrieve the corresponding\n+ *                   vector from wordVectors (see below).\n+ * @param wordVectors: Array of length numWords * vectorSize, vector corresponding\n+ *                     to the word mapped with index i can be retrieved by the slice\n+ *                     (i * vectorSize, i * vectorSize + vectorSize)       \n  */\n @Experimental\n class Word2VecModel private[mllib] (\n-    model: Map[String, Array[Float]]) extends Serializable with Saveable {\n-\n-  // wordList: Ordered list of words obtained from model.\n-  private val wordList: Array[String] = model.keys.toArray\n+    wordIndex: Map[String, Int],\n+    wordVectors: Array[Float]) extends Serializable with Saveable {\n \n-  // wordIndex: Maps each word to an index, which can retrieve the corresponding\n-  //            vector from wordVectors (see below).\n-  private val wordIndex: Map[String, Int] = wordList.zip(0 until model.size).toMap\n-\n-  // vectorSize: Dimension of each word's vector.\n-  private val vectorSize = model.head._2.size\n   private val numWords = wordIndex.size\n+  // vectorSize: Dimension of each word's vector.\n+  private val vectorSize = wordVectors.length / numWords\n+\n+  // wordList: Ordered list of words obtained from wordIndex.\n+  private val wordList: Array[String] = wordIndex.keys.toArray"
+  }],
+  "prId": 5748
+}, {
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "Is this used anywhere?  If the idea is to make it public, I say we go ahead and make it public.\n",
+    "commit": "e308913423c4c6019b21bcb05630268bc381fa1a",
+    "createdAt": "2015-06-01T18:34:28Z",
+    "diffHunk": "@@ -426,38 +422,40 @@ class Word2Vec extends Serializable with Logging {\n /**\n  * :: Experimental ::\n  * Word2Vec model\n+ *\n+ * @param wordIndex: Maps each word to an index, which can retrieve the corresponding\n+ *                   vector from wordVectors (see below).\n+ * @param wordVectors: Array of length numWords * vectorSize, vector corresponding\n+ *                     to the word mapped with index i can be retrieved by the slice\n+ *                     (i * vectorSize, i * vectorSize + vectorSize)       \n  */\n @Experimental\n class Word2VecModel private[mllib] (\n-    model: Map[String, Array[Float]]) extends Serializable with Saveable {\n-\n-  // wordList: Ordered list of words obtained from model.\n-  private val wordList: Array[String] = model.keys.toArray\n+    wordIndex: Map[String, Int],\n+    wordVectors: Array[Float]) extends Serializable with Saveable {\n \n-  // wordIndex: Maps each word to an index, which can retrieve the corresponding\n-  //            vector from wordVectors (see below).\n-  private val wordIndex: Map[String, Int] = wordList.zip(0 until model.size).toMap\n-\n-  // vectorSize: Dimension of each word's vector.\n-  private val vectorSize = model.head._2.size\n   private val numWords = wordIndex.size\n+  // vectorSize: Dimension of each word's vector.\n+  private val vectorSize = wordVectors.length / numWords\n+\n+  // wordList: Ordered list of words obtained from wordIndex.\n+  private val wordList: Array[String] = wordIndex.keys.toArray\n \n-  // wordVectors: Array of length numWords * vectorSize, vector corresponding to the word\n-  //              mapped with index i can be retrieved by the slice\n-  //              (ind * vectorSize, ind * vectorSize + vectorSize)\n   // wordVecNorms: Array of length numWords, each value being the Euclidean norm\n   //               of the wordVector.\n-  private val (wordVectors: Array[Float], wordVecNorms: Array[Double]) = {\n-    val wordVectors = new Array[Float](vectorSize * numWords)\n+  private val wordVecNorms: Array[Double] = {\n     val wordVecNorms = new Array[Double](numWords)\n     var i = 0\n     while (i < numWords) {\n-      val vec = model.get(wordList(i)).get\n-      Array.copy(vec, 0, wordVectors, i * vectorSize, vectorSize)\n+      val vec = wordVectors.slice(i * vectorSize, i * vectorSize + vectorSize)\n       wordVecNorms(i) = blas.snrm2(vectorSize, vec, 1)\n       i += 1\n     }\n-    (wordVectors, wordVecNorms)\n+    wordVecNorms\n+  }\n+\n+  private[mllib] def this(model: Map[String, Array[Float]]) = {"
+  }],
+  "prId": 5748
+}, {
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "Is there a JIRA for this?  If so, can you please note the JIRA number here?\n",
+    "commit": "e308913423c4c6019b21bcb05630268bc381fa1a",
+    "createdAt": "2015-06-01T18:34:29Z",
+    "diffHunk": "@@ -508,7 +507,7 @@ class Word2VecModel private[mllib] (\n    */\n   def findSynonyms(vector: Vector, num: Int): Array[(String, Double)] = {\n     require(num > 0, \"Number of similar words should > 0\")\n-\n+    // TODO: optimize top-k",
+    "line": 99
+  }, {
+    "author": {
+      "login": "MechCoder"
+    },
+    "body": "https://github.com/apache/spark/pull/5467#discussion_r29032366\n",
+    "commit": "e308913423c4c6019b21bcb05630268bc381fa1a",
+    "createdAt": "2015-06-02T15:49:29Z",
+    "diffHunk": "@@ -508,7 +507,7 @@ class Word2VecModel private[mllib] (\n    */\n   def findSynonyms(vector: Vector, num: Int): Array[(String, Double)] = {\n     require(num > 0, \"Number of similar words should > 0\")\n-\n+    // TODO: optimize top-k",
+    "line": 99
+  }, {
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "I see.  Can you please make a JIRA and add its number to the comment here?\n",
+    "commit": "e308913423c4c6019b21bcb05630268bc381fa1a",
+    "createdAt": "2015-07-24T02:49:56Z",
+    "diffHunk": "@@ -508,7 +507,7 @@ class Word2VecModel private[mllib] (\n    */\n   def findSynonyms(vector: Vector, num: Int): Array[(String, Double)] = {\n     require(num > 0, \"Number of similar words should > 0\")\n-\n+    // TODO: optimize top-k",
+    "line": 99
+  }],
+  "prId": 5748
+}, {
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "Check for empty Map, and throw error if empty\n",
+    "commit": "e308913423c4c6019b21bcb05630268bc381fa1a",
+    "createdAt": "2015-06-01T18:34:30Z",
+    "diffHunk": "@@ -545,6 +544,23 @@ class Word2VecModel private[mllib] (\n @Experimental\n object Word2VecModel extends Loader[Word2VecModel] {\n \n+  private def buildWordIndex(model: Map[String, Array[Float]]) = {\n+    model.keys.zipWithIndex.toMap\n+  }\n+\n+  private def buildWordVectors(model: Map[String, Array[Float]]) = {\n+    val (vectorSize, numWords) = (model.head._2.size, model.size)"
+  }],
+  "prId": 5748
+}, {
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "This doc for wordIndex and wordVectors can go in the class Scala doc and use `@param`.\n",
+    "commit": "e308913423c4c6019b21bcb05630268bc381fa1a",
+    "createdAt": "2015-07-24T02:49:53Z",
+    "diffHunk": "@@ -431,36 +422,41 @@ class Word2Vec extends Serializable with Logging {\n  * Word2Vec model\n  */\n @Experimental\n-class Word2VecModel private[spark] (\n-    model: Map[String, Array[Float]]) extends Serializable with Saveable {\n-\n-  // wordList: Ordered list of words obtained from model.\n-  private val wordList: Array[String] = model.keys.toArray\n+class Word2VecModel private[mllib] (\n+    private val wordIndex: Map[String, Int],\n+    private val wordVectors: Array[Float]) extends Serializable with Saveable {\n \n   // wordIndex: Maps each word to an index, which can retrieve the corresponding\n   //            vector from wordVectors (see below).\n-  private val wordIndex: Map[String, Int] = wordList.zip(0 until model.size).toMap\n+  // wordVectors: Array of length numWords * vectorSize, vector corresponding"
+  }, {
+    "author": {
+      "login": "MechCoder"
+    },
+    "body": "But this is not meant to be public at any point of time. Is that okay?\n",
+    "commit": "e308913423c4c6019b21bcb05630268bc381fa1a",
+    "createdAt": "2015-07-24T16:09:12Z",
+    "diffHunk": "@@ -431,36 +422,41 @@ class Word2Vec extends Serializable with Logging {\n  * Word2Vec model\n  */\n @Experimental\n-class Word2VecModel private[spark] (\n-    model: Map[String, Array[Float]]) extends Serializable with Saveable {\n-\n-  // wordList: Ordered list of words obtained from model.\n-  private val wordList: Array[String] = model.keys.toArray\n+class Word2VecModel private[mllib] (\n+    private val wordIndex: Map[String, Int],\n+    private val wordVectors: Array[Float]) extends Serializable with Saveable {\n \n   // wordIndex: Maps each word to an index, which can retrieve the corresponding\n   //            vector from wordVectors (see below).\n-  private val wordIndex: Map[String, Int] = wordList.zip(0 until model.size).toMap\n+  // wordVectors: Array of length numWords * vectorSize, vector corresponding"
+  }, {
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "Good question.  Do you know if it shows up in the API docs, even though it's private?  (I'll check, but it may take a little while since I need to compile them.)\n",
+    "commit": "e308913423c4c6019b21bcb05630268bc381fa1a",
+    "createdAt": "2015-07-24T17:27:07Z",
+    "diffHunk": "@@ -431,36 +422,41 @@ class Word2Vec extends Serializable with Logging {\n  * Word2Vec model\n  */\n @Experimental\n-class Word2VecModel private[spark] (\n-    model: Map[String, Array[Float]]) extends Serializable with Saveable {\n-\n-  // wordList: Ordered list of words obtained from model.\n-  private val wordList: Array[String] = model.keys.toArray\n+class Word2VecModel private[mllib] (\n+    private val wordIndex: Map[String, Int],\n+    private val wordVectors: Array[Float]) extends Serializable with Saveable {\n \n   // wordIndex: Maps each word to an index, which can retrieve the corresponding\n   //            vector from wordVectors (see below).\n-  private val wordIndex: Map[String, Int] = wordList.zip(0 until model.size).toMap\n+  // wordVectors: Array of length numWords * vectorSize, vector corresponding"
+  }],
+  "prId": 5748
+}, {
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "Does this work if you call `wordVectors.view.slice(...)` instead?  I think \"view\" will tell Scala not to physically create a copy of the slice.\n",
+    "commit": "e308913423c4c6019b21bcb05630268bc381fa1a",
+    "createdAt": "2015-07-24T02:49:55Z",
+    "diffHunk": "@@ -484,8 +480,9 @@ class Word2VecModel private[spark] (\n    * @return vector representation of word\n    */\n   def transform(word: String): Vector = {\n-    model.get(word) match {\n-      case Some(vec) =>\n+    wordIndex.get(word) match {\n+      case Some(ind) =>\n+        val vec = wordVectors.slice(ind * vectorSize, ind * vectorSize + vectorSize)",
+    "line": 90
+  }, {
+    "author": {
+      "login": "MechCoder"
+    },
+    "body": "Are you sure? I think a copy of the slice will be produced anyway. It seems if it is a collection.view then it does not produce a copy of collection.\n\nRef: (http://stackoverflow.com/a/6799739/1170730)\n",
+    "commit": "e308913423c4c6019b21bcb05630268bc381fa1a",
+    "createdAt": "2015-07-24T16:29:44Z",
+    "diffHunk": "@@ -484,8 +480,9 @@ class Word2VecModel private[spark] (\n    * @return vector representation of word\n    */\n   def transform(word: String): Vector = {\n-    model.get(word) match {\n-      case Some(vec) =>\n+    wordIndex.get(word) match {\n+      case Some(ind) =>\n+        val vec = wordVectors.slice(ind * vectorSize, ind * vectorSize + vectorSize)",
+    "line": 90
+  }, {
+    "author": {
+      "login": "MechCoder"
+    },
+    "body": "It gives me a compilation error (because Vectors.dense accepts just an Array), so that also works in favor of not changing it :p \n",
+    "commit": "e308913423c4c6019b21bcb05630268bc381fa1a",
+    "createdAt": "2015-07-24T16:48:02Z",
+    "diffHunk": "@@ -484,8 +480,9 @@ class Word2VecModel private[spark] (\n    * @return vector representation of word\n    */\n   def transform(word: String): Vector = {\n-    model.get(word) match {\n-      case Some(vec) =>\n+    wordIndex.get(word) match {\n+      case Some(ind) =>\n+        val vec = wordVectors.slice(ind * vectorSize, ind * vectorSize + vectorSize)",
+    "line": 90
+  }, {
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "You're right, for this one, we have to make a copy anyways.\n",
+    "commit": "e308913423c4c6019b21bcb05630268bc381fa1a",
+    "createdAt": "2015-07-24T17:28:48Z",
+    "diffHunk": "@@ -484,8 +480,9 @@ class Word2VecModel private[spark] (\n    * @return vector representation of word\n    */\n   def transform(word: String): Vector = {\n-    model.get(word) match {\n-      case Some(vec) =>\n+    wordIndex.get(word) match {\n+      case Some(ind) =>\n+        val vec = wordVectors.slice(ind * vectorSize, ind * vectorSize + vectorSize)",
+    "line": 90
+  }],
+  "prId": 5748
+}, {
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "nit: Use `model.nonEmpty`\n",
+    "commit": "e308913423c4c6019b21bcb05630268bc381fa1a",
+    "createdAt": "2015-07-24T02:49:59Z",
+    "diffHunk": "@@ -548,6 +545,24 @@ class Word2VecModel private[spark] (\n @Experimental\n object Word2VecModel extends Loader[Word2VecModel] {\n \n+  private def buildWordIndex(model: Map[String, Array[Float]]): Map[String, Int] = {\n+    model.keys.zipWithIndex.toMap\n+  }\n+\n+  private def buildWordVectors(model: Map[String, Array[Float]]): Array[Float] = {\n+    require(!model.isEmpty, \"Word2VecMap should be non-empty\")"
+  }],
+  "prId": 5748
+}, {
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "style: Use `model(wordList(i))` rather than \"get\"\n",
+    "commit": "e308913423c4c6019b21bcb05630268bc381fa1a",
+    "createdAt": "2015-07-24T02:50:00Z",
+    "diffHunk": "@@ -548,6 +545,24 @@ class Word2VecModel private[spark] (\n @Experimental\n object Word2VecModel extends Loader[Word2VecModel] {\n \n+  private def buildWordIndex(model: Map[String, Array[Float]]): Map[String, Int] = {\n+    model.keys.zipWithIndex.toMap\n+  }\n+\n+  private def buildWordVectors(model: Map[String, Array[Float]]): Array[Float] = {\n+    require(!model.isEmpty, \"Word2VecMap should be non-empty\")\n+    val (vectorSize, numWords) = (model.head._2.size, model.size)\n+    val wordList = model.keys.toArray\n+    val wordVectors = new Array[Float](vectorSize * numWords)\n+    var i = 0\n+    while (i < numWords) {\n+      val vec = model.get(wordList(i)).get"
+  }],
+  "prId": 5748
+}]

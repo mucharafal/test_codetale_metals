@@ -1,0 +1,40 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "In order to maintain binary compatibility, I could rewrite this to be a `lazy val` that returns a `ListBuffer` formed from the \"real\" `accumulables` which can remain private. I might go ahead and do that just to avoid any chance of incompatibility-related problems, although I don't anticipate this being an issue in practice.\n",
+    "commit": "96621633534e84eb8e9a33c4e7afbec62b776430",
+    "createdAt": "2016-11-03T20:27:18Z",
+    "diffHunk": "@@ -54,7 +52,7 @@ class TaskInfo(\n    * accumulable to be updated multiple times in a single task or for two accumulables with the\n    * same name but different IDs to exist in a task.\n    */\n-  val accumulables = ListBuffer[AccumulableInfo]()",
+    "line": 13
+  }],
+  "prId": 15743
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Isn't a `def` here the right thing? Otherwise, if `_accumulables` changes after this lazy val is evaluated, things will get out of sync.\n\nOr given how the semantics here now are getting pretty weird, maybe changing it to an immutable list and just breaking compatibility would be better. Then you can just return `_accumulables`.\n",
+    "commit": "96621633534e84eb8e9a33c4e7afbec62b776430",
+    "createdAt": "2016-11-04T18:09:17Z",
+    "diffHunk": "@@ -54,7 +54,12 @@ class TaskInfo(\n    * accumulable to be updated multiple times in a single task or for two accumulables with the\n    * same name but different IDs to exist in a task.\n    */\n-  val accumulables = ListBuffer[AccumulableInfo]()\n+  lazy val accumulables: ListBuffer[AccumulableInfo] = ListBuffer(_accumulables: _*)"
+  }, {
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "Meh, kind of a toss-up. My original patch broke compatibility and I did this in 4c867f10ff5d8d80c7e8d44b4702785c0a017b64 to restore binary compatibility, but it risks changing semantics. I think I'll just revert 4c867f10ff5d8d80c7e8d44b4702785c0a017b64 and add the minor compatibility break to a lesser-used `@DeveloperAPI`.\n",
+    "commit": "96621633534e84eb8e9a33c4e7afbec62b776430",
+    "createdAt": "2016-11-04T18:18:15Z",
+    "diffHunk": "@@ -54,7 +54,12 @@ class TaskInfo(\n    * accumulable to be updated multiple times in a single task or for two accumulables with the\n    * same name but different IDs to exist in a task.\n    */\n-  val accumulables = ListBuffer[AccumulableInfo]()\n+  lazy val accumulables: ListBuffer[AccumulableInfo] = ListBuffer(_accumulables: _*)"
+  }, {
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "Actually, though, if we're going to expose a public API for this at all then I think it should be read-only. Let me go ahead and refactor this to expose a read-only `Seq`.\n",
+    "commit": "96621633534e84eb8e9a33c4e7afbec62b776430",
+    "createdAt": "2016-11-04T19:00:17Z",
+    "diffHunk": "@@ -54,7 +54,12 @@ class TaskInfo(\n    * accumulable to be updated multiple times in a single task or for two accumulables with the\n    * same name but different IDs to exist in a task.\n    */\n-  val accumulables = ListBuffer[AccumulableInfo]()\n+  lazy val accumulables: ListBuffer[AccumulableInfo] = ListBuffer(_accumulables: _*)"
+  }],
+  "prId": 15743
+}]

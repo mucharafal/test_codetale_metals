@@ -1,0 +1,63 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "These are the older Kafka APIs right? this may all be correct, just making sure these are the classes that are needed in a Kafka 0.10 test?",
+    "commit": "e3ae84523621405d2f2b55ec92cb79921aaba961",
+    "createdAt": "2018-02-20T23:12:21Z",
+    "diffHunk": "@@ -22,12 +22,17 @@ import java.{ util => ju }\n import scala.collection.JavaConverters._\n import scala.util.Random\n \n+import kafka.common.TopicAndPartition",
+    "line": 9
+  }, {
+    "author": {
+      "login": "koeninger"
+    },
+    "body": "Right, LogCleaner hadn't yet been moved to the new apis, added a comment to that effect.\r\nThink we're ok here because it's just being used to mock up a compacted topic, not in the actual dstream api.",
+    "commit": "e3ae84523621405d2f2b55ec92cb79921aaba961",
+    "createdAt": "2018-02-21T05:08:11Z",
+    "diffHunk": "@@ -22,12 +22,17 @@ import java.{ util => ju }\n import scala.collection.JavaConverters._\n import scala.util.Random\n \n+import kafka.common.TopicAndPartition",
+    "line": 9
+  }],
+  "prId": 20572
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Import `File`, other `java.*` classes? maybe I'm missing a name conflict.",
+    "commit": "e3ae84523621405d2f2b55ec92cb79921aaba961",
+    "createdAt": "2018-02-23T15:18:38Z",
+    "diffHunk": "@@ -64,6 +69,41 @@ class KafkaRDDSuite extends SparkFunSuite with BeforeAndAfterAll {\n \n   private val preferredHosts = LocationStrategies.PreferConsistent\n \n+  private def compactLogs(topic: String, partition: Int, messages: Array[(String, String)]) {\n+    val mockTime = new MockTime()\n+    // LogCleaner in 0.10 version of Kafka is still expecting the old TopicAndPartition api\n+    val logs = new Pool[TopicAndPartition, Log]()\n+    val logDir = kafkaTestUtils.brokerLogDir\n+    val dir = new java.io.File(logDir, topic + \"-\" + partition)"
+  }],
+  "prId": 20572
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Unindent one level?",
+    "commit": "e3ae84523621405d2f2b55ec92cb79921aaba961",
+    "createdAt": "2018-02-23T15:24:04Z",
+    "diffHunk": "@@ -64,6 +69,41 @@ class KafkaRDDSuite extends SparkFunSuite with BeforeAndAfterAll {\n \n   private val preferredHosts = LocationStrategies.PreferConsistent\n \n+  private def compactLogs(topic: String, partition: Int, messages: Array[(String, String)]) {\n+    val mockTime = new MockTime()\n+    // LogCleaner in 0.10 version of Kafka is still expecting the old TopicAndPartition api\n+    val logs = new Pool[TopicAndPartition, Log]()\n+    val logDir = kafkaTestUtils.brokerLogDir\n+    val dir = new java.io.File(logDir, topic + \"-\" + partition)\n+    dir.mkdirs()\n+    val logProps = new ju.Properties()\n+    logProps.put(LogConfig.CleanupPolicyProp, LogConfig.Compact)\n+    logProps.put(LogConfig.MinCleanableDirtyRatioProp, 0.1f: java.lang.Float)\n+    val log = new Log(\n+      dir,\n+      LogConfig(logProps),\n+      0L,\n+      mockTime.scheduler,\n+      mockTime\n+    )\n+    messages.foreach { case (k, v) =>\n+        val msg = new ByteBufferMessageSet("
+  }],
+  "prId": 20572
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Do you have to 'cast' this to a Java Float object to get it to compile?\r\n`java.lang.Float.valueOf(0.1f)` works too I guess, but equally weird. OK if it's required.",
+    "commit": "e3ae84523621405d2f2b55ec92cb79921aaba961",
+    "createdAt": "2018-02-23T15:25:30Z",
+    "diffHunk": "@@ -64,6 +69,41 @@ class KafkaRDDSuite extends SparkFunSuite with BeforeAndAfterAll {\n \n   private val preferredHosts = LocationStrategies.PreferConsistent\n \n+  private def compactLogs(topic: String, partition: Int, messages: Array[(String, String)]) {\n+    val mockTime = new MockTime()\n+    // LogCleaner in 0.10 version of Kafka is still expecting the old TopicAndPartition api\n+    val logs = new Pool[TopicAndPartition, Log]()\n+    val logDir = kafkaTestUtils.brokerLogDir\n+    val dir = new java.io.File(logDir, topic + \"-\" + partition)\n+    dir.mkdirs()\n+    val logProps = new ju.Properties()\n+    logProps.put(LogConfig.CleanupPolicyProp, LogConfig.Compact)\n+    logProps.put(LogConfig.MinCleanableDirtyRatioProp, 0.1f: java.lang.Float)"
+  }, {
+    "author": {
+      "login": "koeninger"
+    },
+    "body": "Yeah, it's necessary, otherwise it gets treated as AnyRef.  Changed to Float.valueOf FWIW",
+    "commit": "e3ae84523621405d2f2b55ec92cb79921aaba961",
+    "createdAt": "2018-02-27T02:26:36Z",
+    "diffHunk": "@@ -64,6 +69,41 @@ class KafkaRDDSuite extends SparkFunSuite with BeforeAndAfterAll {\n \n   private val preferredHosts = LocationStrategies.PreferConsistent\n \n+  private def compactLogs(topic: String, partition: Int, messages: Array[(String, String)]) {\n+    val mockTime = new MockTime()\n+    // LogCleaner in 0.10 version of Kafka is still expecting the old TopicAndPartition api\n+    val logs = new Pool[TopicAndPartition, Log]()\n+    val logDir = kafkaTestUtils.brokerLogDir\n+    val dir = new java.io.File(logDir, topic + \"-\" + partition)\n+    dir.mkdirs()\n+    val logProps = new ju.Properties()\n+    logProps.put(LogConfig.CleanupPolicyProp, LogConfig.Compact)\n+    logProps.put(LogConfig.MinCleanableDirtyRatioProp, 0.1f: java.lang.Float)"
+  }],
+  "prId": 20572
+}]

@@ -1,0 +1,74 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "hvanhovell"
+    },
+    "body": "I think it is better to open up the signature of the `OpenHashMap` and use `Ordered` or `AnyRef` as its key type.",
+    "commit": "88f4f47bae435f8cebe6d3e0ad31b3a77516014b",
+    "createdAt": "2017-02-22T15:32:16Z",
+    "diffHunk": "@@ -138,7 +138,8 @@ case class Percentile(\n   override def update(\n       buffer: OpenHashMap[Number, Long],\n       input: InternalRow): OpenHashMap[Number, Long] = {\n-    val key = child.eval(input).asInstanceOf[Number]\n+    val scalaValue = CatalystTypeConverters.convertToScala(child.eval(input), child.dataType)"
+  }, {
+    "author": {
+      "login": "maropu"
+    },
+    "body": "okay, I'll fix that way. Thanks!",
+    "commit": "88f4f47bae435f8cebe6d3e0ad31b3a77516014b",
+    "createdAt": "2017-02-22T15:40:21Z",
+    "diffHunk": "@@ -138,7 +138,8 @@ case class Percentile(\n   override def update(\n       buffer: OpenHashMap[Number, Long],\n       input: InternalRow): OpenHashMap[Number, Long] = {\n-    val key = child.eval(input).asInstanceOf[Number]\n+    val scalaValue = CatalystTypeConverters.convertToScala(child.eval(input), child.dataType)"
+  }, {
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "Should we create a converter and re-use it with `createToScalaConverter(...)` rather than type-dispatching every time maybe?",
+    "commit": "88f4f47bae435f8cebe6d3e0ad31b3a77516014b",
+    "createdAt": "2017-02-22T16:34:10Z",
+    "diffHunk": "@@ -138,7 +138,8 @@ case class Percentile(\n   override def update(\n       buffer: OpenHashMap[Number, Long],\n       input: InternalRow): OpenHashMap[Number, Long] = {\n-    val key = child.eval(input).asInstanceOf[Number]\n+    val scalaValue = CatalystTypeConverters.convertToScala(child.eval(input), child.dataType)"
+  }, {
+    "author": {
+      "login": "maropu"
+    },
+    "body": "I'm not 100% sure though, it seems the cost of converting `Decimal` to `BigDecimal` every-time is some higher than that of using catalyst values as it is.",
+    "commit": "88f4f47bae435f8cebe6d3e0ad31b3a77516014b",
+    "createdAt": "2017-02-22T17:08:17Z",
+    "diffHunk": "@@ -138,7 +138,8 @@ case class Percentile(\n   override def update(\n       buffer: OpenHashMap[Number, Long],\n       input: InternalRow): OpenHashMap[Number, Long] = {\n-    val key = child.eval(input).asInstanceOf[Number]\n+    val scalaValue = CatalystTypeConverters.convertToScala(child.eval(input), child.dataType)"
+  }],
+  "prId": 17028
+}, {
+  "comments": [{
+    "author": {
+      "login": "hvanhovell"
+    },
+    "body": "`frqValue` is guaranteed to return a integral value. So this is not needed. We could also force it to be a Long, that would make this even simpler.",
+    "commit": "88f4f47bae435f8cebe6d3e0ad31b3a77516014b",
+    "createdAt": "2017-02-23T09:38:32Z",
+    "diffHunk": "@@ -130,20 +130,30 @@ case class Percentile(\n     }\n   }\n \n-  override def createAggregationBuffer(): OpenHashMap[Number, Long] = {\n+  private def toLongValue(d: Any): Long = d match {\n+    case d: Decimal => d.toLong\n+    case n: Number => n.longValue\n+  }\n+\n+  private def toDoubleValue(d: Any): Double = d match {\n+    case d: Decimal => d.toDouble\n+    case n: Number => n.doubleValue\n+  }\n+\n+  override def createAggregationBuffer(): OpenHashMap[AnyRef, Long] = {\n     // Initialize new counts map instance here.\n-    new OpenHashMap[Number, Long]()\n+    new OpenHashMap[AnyRef, Long]()\n   }\n \n   override def update(\n-      buffer: OpenHashMap[Number, Long],\n-      input: InternalRow): OpenHashMap[Number, Long] = {\n-    val key = child.eval(input).asInstanceOf[Number]\n+      buffer: OpenHashMap[AnyRef, Long],\n+      input: InternalRow): OpenHashMap[AnyRef, Long] = {\n+    val key = child.eval(input).asInstanceOf[AnyRef]\n     val frqValue = frequencyExpression.eval(input)\n \n     // Null values are ignored in counts map.\n     if (key != null && frqValue != null) {\n-      val frqLong = frqValue.asInstanceOf[Number].longValue()\n+      val frqLong = toLongValue(frqValue)"
+  }, {
+    "author": {
+      "login": "maropu"
+    },
+    "body": "I'll revert this part.",
+    "commit": "88f4f47bae435f8cebe6d3e0ad31b3a77516014b",
+    "createdAt": "2017-02-23T09:46:29Z",
+    "diffHunk": "@@ -130,20 +130,30 @@ case class Percentile(\n     }\n   }\n \n-  override def createAggregationBuffer(): OpenHashMap[Number, Long] = {\n+  private def toLongValue(d: Any): Long = d match {\n+    case d: Decimal => d.toLong\n+    case n: Number => n.longValue\n+  }\n+\n+  private def toDoubleValue(d: Any): Double = d match {\n+    case d: Decimal => d.toDouble\n+    case n: Number => n.doubleValue\n+  }\n+\n+  override def createAggregationBuffer(): OpenHashMap[AnyRef, Long] = {\n     // Initialize new counts map instance here.\n-    new OpenHashMap[Number, Long]()\n+    new OpenHashMap[AnyRef, Long]()\n   }\n \n   override def update(\n-      buffer: OpenHashMap[Number, Long],\n-      input: InternalRow): OpenHashMap[Number, Long] = {\n-    val key = child.eval(input).asInstanceOf[Number]\n+      buffer: OpenHashMap[AnyRef, Long],\n+      input: InternalRow): OpenHashMap[AnyRef, Long] = {\n+    val key = child.eval(input).asInstanceOf[AnyRef]\n     val frqValue = frequencyExpression.eval(input)\n \n     // Null values are ignored in counts map.\n     if (key != null && frqValue != null) {\n-      val frqLong = frqValue.asInstanceOf[Number].longValue()\n+      val frqLong = toLongValue(frqValue)"
+  }],
+  "prId": 17028
+}, {
+  "comments": [{
+    "author": {
+      "login": "hvanhovell"
+    },
+    "body": "NIT: Just change the cast in the old code.",
+    "commit": "88f4f47bae435f8cebe6d3e0ad31b3a77516014b",
+    "createdAt": "2017-02-23T09:40:47Z",
+    "diffHunk": "@@ -274,7 +283,8 @@ case class Percentile(\n         val row = new UnsafeRow(2)\n         row.pointTo(bs, sizeOfNextRow)\n         // Insert the pairs into counts map.\n-        val key = row.get(0, child.dataType).asInstanceOf[Number]\n+        val catalystValue = row.get(0, child.dataType)"
+  }, {
+    "author": {
+      "login": "maropu"
+    },
+    "body": "oh..., I'll fix",
+    "commit": "88f4f47bae435f8cebe6d3e0ad31b3a77516014b",
+    "createdAt": "2017-02-23T09:42:38Z",
+    "diffHunk": "@@ -274,7 +283,8 @@ case class Percentile(\n         val row = new UnsafeRow(2)\n         row.pointTo(bs, sizeOfNextRow)\n         // Insert the pairs into counts map.\n-        val key = row.get(0, child.dataType).asInstanceOf[Number]\n+        val catalystValue = row.get(0, child.dataType)"
+  }],
+  "prId": 17028
+}]

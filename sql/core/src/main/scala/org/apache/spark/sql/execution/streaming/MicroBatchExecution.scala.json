@@ -1,0 +1,61 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "HeartSaVioR"
+    },
+    "body": "We can even leverage `newBatchesPlan` and remove this: this effort is to ensure going through the same path with further transformation when extracting schema.",
+    "commit": "687c3e40063eeda156fe666544722d08a385f9e3",
+    "createdAt": "2019-01-22T08:23:16Z",
+    "diffHunk": "@@ -508,12 +508,21 @@ class MicroBatchExecution(\n           cd.dataType, cd.timeZoneId)\n     }\n \n+    // Pre-resolve new attributes to ensure all attributes are resolved before\n+    // accessing schema of logical plan. Note that it only leverages the information\n+    // of attributes, so we don't need to concern about the value of literals.\n+\n+    val newAttrPlanPreResolvedForSchema = newAttributePlan transformAllExpressions {",
+    "line": 8
+  }, {
+    "author": {
+      "login": "gaborgsomogyi"
+    },
+    "body": "I'm fine with this.",
+    "commit": "687c3e40063eeda156fe666544722d08a385f9e3",
+    "createdAt": "2019-01-22T09:53:00Z",
+    "diffHunk": "@@ -508,12 +508,21 @@ class MicroBatchExecution(\n           cd.dataType, cd.timeZoneId)\n     }\n \n+    // Pre-resolve new attributes to ensure all attributes are resolved before\n+    // accessing schema of logical plan. Note that it only leverages the information\n+    // of attributes, so we don't need to concern about the value of literals.\n+\n+    val newAttrPlanPreResolvedForSchema = newAttributePlan transformAllExpressions {",
+    "line": 8
+  }, {
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "@HeartSaVioR . I prefer to leverage the existing lines (501 ~ 509) as you said like the following. I assume that the following is what you mean. Eventually, it's two line changes (excluding comments). WDYT?\r\n```scala\r\n    // Rewire the plan to use the new attributes that were returned by the source.\r\n    val newAttributePlan = newBatchesPlan transformAllExpressions {\r\n      case ct: CurrentTimestamp =>\r\n        CurrentBatchTimestamp(offsetSeqMetadata.batchTimestampMs,\r\n-          ct.dataType)\r\n+          ct.dataType).toLiteral\r\n      case cd: CurrentDate =>\r\n        CurrentBatchTimestamp(offsetSeqMetadata.batchTimestampMs,\r\n-          cd.dataType, cd.timeZoneId)\r\n+          cd.dataType, cd.timeZoneId).toLiteral\r\n    }\r\n```",
+    "commit": "687c3e40063eeda156fe666544722d08a385f9e3",
+    "createdAt": "2019-01-23T18:59:50Z",
+    "diffHunk": "@@ -508,12 +508,21 @@ class MicroBatchExecution(\n           cd.dataType, cd.timeZoneId)\n     }\n \n+    // Pre-resolve new attributes to ensure all attributes are resolved before\n+    // accessing schema of logical plan. Note that it only leverages the information\n+    // of attributes, so we don't need to concern about the value of literals.\n+\n+    val newAttrPlanPreResolvedForSchema = newAttributePlan transformAllExpressions {",
+    "line": 8
+  }, {
+    "author": {
+      "login": "HeartSaVioR"
+    },
+    "body": "@dongjoon-hyun \r\nActually I meant we pass `newBatchesPlan` instead of `newAttributePlan` only for extracting schema since we actually guess the name and data type will not be changed from IncrementalExecution. But IMHO I feel safer pre-transforming it.\r\n\r\nTransforming CurrentBatchTimestamp to Literal not in IncrementalExecution breaks the intention what CurrentBatchTimestamp javadoc describes. Please note that I used transformed plan only for extracting schema and the actual plan is not changed.",
+    "commit": "687c3e40063eeda156fe666544722d08a385f9e3",
+    "createdAt": "2019-01-23T21:45:05Z",
+    "diffHunk": "@@ -508,12 +508,21 @@ class MicroBatchExecution(\n           cd.dataType, cd.timeZoneId)\n     }\n \n+    // Pre-resolve new attributes to ensure all attributes are resolved before\n+    // accessing schema of logical plan. Note that it only leverages the information\n+    // of attributes, so we don't need to concern about the value of literals.\n+\n+    val newAttrPlanPreResolvedForSchema = newAttributePlan transformAllExpressions {",
+    "line": 8
+  }, {
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "+1",
+    "commit": "687c3e40063eeda156fe666544722d08a385f9e3",
+    "createdAt": "2019-01-25T19:05:05Z",
+    "diffHunk": "@@ -508,12 +508,21 @@ class MicroBatchExecution(\n           cd.dataType, cd.timeZoneId)\n     }\n \n+    // Pre-resolve new attributes to ensure all attributes are resolved before\n+    // accessing schema of logical plan. Note that it only leverages the information\n+    // of attributes, so we don't need to concern about the value of literals.\n+\n+    val newAttrPlanPreResolvedForSchema = newAttributePlan transformAllExpressions {",
+    "line": 8
+  }],
+  "prId": 23609
+}, {
+  "comments": [{
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "The root cause is `CurrentBatchTimestamp` is `TimeZoneAwareExpression` which is unresolved without TimeZoneId. ",
+    "commit": "687c3e40063eeda156fe666544722d08a385f9e3",
+    "createdAt": "2019-01-26T07:17:21Z",
+    "diffHunk": "@@ -508,12 +508,20 @@ class MicroBatchExecution(\n           cd.dataType, cd.timeZoneId)\n     }",
+    "line": 2
+  }],
+  "prId": 23609
+}]

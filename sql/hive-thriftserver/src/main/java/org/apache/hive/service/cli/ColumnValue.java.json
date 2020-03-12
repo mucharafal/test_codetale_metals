@@ -1,0 +1,50 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "SongYadong"
+    },
+    "body": "nit: the indent can be improved :)",
+    "commit": "c701a7165507be906cf3cf82bbee9aadcbdb197f",
+    "createdAt": "2019-02-27T06:23:44Z",
+    "diffHunk": "@@ -207,6 +207,14 @@ public static TColumnValue toTColumnValue(Type type, Object value) {\n     }\n   }\n \n+  private static TColumnValue getDecimalType(Object value) {\n+    Object decV = value;\n+      if (value instanceof BigDecimal) {\n+        decV = HiveDecimal.create((BigDecimal)decV);"
+  }, {
+    "author": {
+      "login": "sujith71955"
+    },
+    "body": "fixed. thanks :)",
+    "commit": "c701a7165507be906cf3cf82bbee9aadcbdb197f",
+    "createdAt": "2019-02-27T17:51:05Z",
+    "diffHunk": "@@ -207,6 +207,14 @@ public static TColumnValue toTColumnValue(Type type, Object value) {\n     }\n   }\n \n+  private static TColumnValue getDecimalType(Object value) {\n+    Object decV = value;\n+      if (value instanceof BigDecimal) {\n+        decV = HiveDecimal.create((BigDecimal)decV);"
+  }],
+  "prId": 23899
+}, {
+  "comments": [{
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "Sorry for late response, @sujith71955 . But, this PR is difficult to validate.\r\n\r\nBTW, Hive seems to choose a different path; [here](https://github.com/apache/hive/blob/master/service/src/java/org/apache/hive/service/cli/ColumnValue.java#L210-L211) and [here](https://github.com/apache/hive/blob/master/service/src/java/org/apache/hive/service/cli/ColumnValue.java#L151-L158)\r\n```java\r\n    case DECIMAL_TYPE:\r\n      return stringValue((HiveDecimal)value, typeDescriptor);\r\n```\r\n\r\n```java\r\n  private static TColumnValue stringValue(HiveDecimal value, TypeDescriptor typeDescriptor) {\r\n    TStringValue tStrValue = new TStringValue();\r\n    if (value != null) {\r\n      int scale = typeDescriptor.getDecimalDigits();\r\n      tStrValue.setValue(value.toFormatString(scale));\r\n    }\r\n    return TColumnValue.stringVal(tStrValue);\r\n  }\r\n```\r\n\r\nSince this PR reports a bug with `Hive ODBC Client`, I'm wondering if Hive works correctly with Hive ODBC Driver with the above code? If then, isn't it more natural to follow the upstream?",
+    "commit": "c701a7165507be906cf3cf82bbee9aadcbdb197f",
+    "createdAt": "2019-04-21T18:47:15Z",
+    "diffHunk": "@@ -193,7 +193,7 @@ public static TColumnValue toTColumnValue(Type type, Object value) {\n     case INTERVAL_DAY_TIME_TYPE:\n       return stringValue((HiveIntervalDayTime) value);\n     case DECIMAL_TYPE:\n-      return stringValue(((HiveDecimal)value));"
+  }, {
+    "author": {
+      "login": "sujith71955"
+    },
+    "body": " i will explore more based on your comment and update you guys.Thanks for your valuable suggestion.",
+    "commit": "c701a7165507be906cf3cf82bbee9aadcbdb197f",
+    "createdAt": "2019-04-22T18:47:05Z",
+    "diffHunk": "@@ -193,7 +193,7 @@ public static TColumnValue toTColumnValue(Type type, Object value) {\n     case INTERVAL_DAY_TIME_TYPE:\n       return stringValue((HiveIntervalDayTime) value);\n     case DECIMAL_TYPE:\n-      return stringValue(((HiveDecimal)value));"
+  }],
+  "prId": 23899
+}, {
+  "comments": [{
+    "author": {
+      "login": "wangyum"
+    },
+    "body": "The reason is your client protocol version is lower than `HIVE_CLI_SERVICE_PROTOCOL_V6`:\r\nhttps://github.com/apache/spark/blob/02c33694c8254f69cb36c71c0876194dccdbc014/sql/hive-thriftserver/v1.2.1/src/main/java/org/apache/hive/service/cli/RowSetFactory.java#L28-L40\r\n\r\nThe fix is correct, but I'd like make it more clear:\r\n```diff\r\n+++ b/sql/hive-thriftserver/v1.2.1/src/main/java/org/apache/hive/service/cli/ColumnValue.java\r\n@@ -23,7 +23,6 @@ import java.sql.Date;\r\n import java.sql.Timestamp;\r\n \r\n import org.apache.hadoop.hive.common.type.HiveChar;\r\n-import org.apache.hadoop.hive.common.type.HiveDecimal;\r\n import org.apache.hadoop.hive.common.type.HiveIntervalDayTime;\r\n import org.apache.hadoop.hive.common.type.HiveIntervalYearMonth;\r\n import org.apache.hadoop.hive.common.type.HiveVarchar;\r\n@@ -139,11 +138,10 @@ public class ColumnValue {\r\n     return TColumnValue.stringVal(tStringValue);\r\n   }\r\n \r\n-  private static TColumnValue stringValue(HiveDecimal value, TypeDescriptor typeDescriptor) {\r\n+  private static TColumnValue stringValue(BigDecimal value, TypeDescriptor typeDescriptor) {\r\n     TStringValue tStrValue = new TStringValue();\r\n     if (value != null) {\r\n-      int scale = typeDescriptor.getDecimalDigits();\r\n-      tStrValue.setValue(value.toFormatString(scale));\r\n+      tStrValue.setValue(value.toPlainString());\r\n     }\r\n     return TColumnValue.stringVal(tStrValue);\r\n   }\r\n@@ -197,7 +195,7 @@ public class ColumnValue {\r\n     case INTERVAL_DAY_TIME_TYPE:\r\n       return stringValue((HiveIntervalDayTime) value);\r\n     case DECIMAL_TYPE:\r\n-      return stringValue((HiveDecimal)value, typeDescriptor);\r\n+      return stringValue((BigDecimal)value, typeDescriptor);\r\n     case BINARY_TYPE:\r\n       return stringValue((String)value);\r\n     case ARRAY_TYPE:\r\n```\r\n\r\nWe can verify it by https://github.com/apache/spark/pull/25228",
+    "commit": "c701a7165507be906cf3cf82bbee9aadcbdb197f",
+    "createdAt": "2019-07-22T11:38:42Z",
+    "diffHunk": "@@ -193,7 +193,7 @@ public static TColumnValue toTColumnValue(Type type, Object value) {\n     case INTERVAL_DAY_TIME_TYPE:\n       return stringValue((HiveIntervalDayTime) value);\n     case DECIMAL_TYPE:\n-      return stringValue(((HiveDecimal)value));\n+      return getDecimalType(value);"
+  }],
+  "prId": 23899
+}]

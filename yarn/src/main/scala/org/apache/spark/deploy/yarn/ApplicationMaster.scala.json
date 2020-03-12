@@ -1,0 +1,31 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "tgravescs"
+    },
+    "body": "You can't do this.  There are various reasons these can happen and if any of them are retryable by yarn you are now preventing that from happening by unregistering.  The kill may cause these but other things could to. The EXIT_EXCEPTION_USER_CLASS is any throwable from the user code, the EXIT_EARLY is unknown and thus would want to retry.\n\nI'm fine with adding something in if we know it was kill, but I think thats hard here because yarn doesn't tell us.  Ideally we have a spark command to kill nicely and then we can do the cleanup ourselves.\n\nThe client should try to clean this up if it sees its killed, assuming its still running.\n",
+    "commit": "8a1fe82705cd8c5273b051705bdeb1b11168eb9c",
+    "createdAt": "2016-09-01T15:56:08Z",
+    "diffHunk": "@@ -222,7 +222,9 @@ private[spark] class ApplicationMaster(\n \n         if (!unregistered) {\n           // we only want to unregister if we don't want the RM to retry\n-          if (finalStatus == FinalApplicationStatus.SUCCEEDED || isLastAttempt) {\n+          if (finalStatus == FinalApplicationStatus.SUCCEEDED ||\n+            exitCode == ApplicationMaster.EXIT_EARLY ||\n+            exitCode == ApplicationMaster.EXIT_EXCEPTION_USER_CLASS || isLastAttempt) {",
+    "line": 7
+  }, {
+    "author": {
+      "login": "Devian-ua"
+    },
+    "body": "@tgravescs \nWhat about  `SignalUtils.scala`\n`log.error(\"RECEIVED SIGNAL \" + sig)`\nwhen we kill the app using yarn kill we get this:\n_ERROR ApplicationMaster: RECEIVED SIGNAL 15: SIGTERM_\ncan we use it to trigger cleanup?\n",
+    "commit": "8a1fe82705cd8c5273b051705bdeb1b11168eb9c",
+    "createdAt": "2016-09-01T16:13:53Z",
+    "diffHunk": "@@ -222,7 +222,9 @@ private[spark] class ApplicationMaster(\n \n         if (!unregistered) {\n           // we only want to unregister if we don't want the RM to retry\n-          if (finalStatus == FinalApplicationStatus.SUCCEEDED || isLastAttempt) {\n+          if (finalStatus == FinalApplicationStatus.SUCCEEDED ||\n+            exitCode == ApplicationMaster.EXIT_EARLY ||\n+            exitCode == ApplicationMaster.EXIT_EXCEPTION_USER_CLASS || isLastAttempt) {",
+    "line": 7
+  }, {
+    "author": {
+      "login": "tgravescs"
+    },
+    "body": "Unfortunately I don't think you can use that either.  yarn has preemption and overcommit that can kill the AM and this case it uses SIGTERM or SIGKILL. In these cases we want the AM to rerun again.\n",
+    "commit": "8a1fe82705cd8c5273b051705bdeb1b11168eb9c",
+    "createdAt": "2016-09-01T16:24:02Z",
+    "diffHunk": "@@ -222,7 +222,9 @@ private[spark] class ApplicationMaster(\n \n         if (!unregistered) {\n           // we only want to unregister if we don't want the RM to retry\n-          if (finalStatus == FinalApplicationStatus.SUCCEEDED || isLastAttempt) {\n+          if (finalStatus == FinalApplicationStatus.SUCCEEDED ||\n+            exitCode == ApplicationMaster.EXIT_EARLY ||\n+            exitCode == ApplicationMaster.EXIT_EXCEPTION_USER_CLASS || isLastAttempt) {",
+    "line": 7
+  }],
+  "prId": 14916
+}]

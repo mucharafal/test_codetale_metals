@@ -1,0 +1,28 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Yeah I see where this is going but I think this doesn't totally eliminate the problem. `key - minKey` could still overflow such that the `int` is positive and even `>= minKey`. It seems like we need to test the keys against each other as longs, and only then covert to an `int` to index into the array?\n",
+    "commit": "24169acaeef7e53a1ed09bd4fd972c2a0b0f5866",
+    "createdAt": "2016-08-02T19:50:48Z",
+    "diffHunk": "@@ -459,8 +459,8 @@ private[execution] final class LongToUnsafeRowMap(val mm: TaskMemoryManager, cap\n    */\n   def getValue(key: Long, resultRow: UnsafeRow): UnsafeRow = {\n     if (isDense) {\n-      val idx = (key - minKey).toInt\n-      if (idx >= 0 && key <= maxKey && array(idx) > 0) {\n+      val idx = (key - minKey).toInt  // could overflow\n+      if (key >= minKey && key <= maxKey && array(idx) > 0) {"
+  }, {
+    "author": {
+      "login": "davies"
+    },
+    "body": "I think having both key >= minKey and key <= maxKey could make sure that there is no overflow (because we already make sure that the range between minKey and maxKey is smaller than Int.MaxValue), then we can safely use `(key - minKey).toInt`\n",
+    "commit": "24169acaeef7e53a1ed09bd4fd972c2a0b0f5866",
+    "createdAt": "2016-08-02T20:31:02Z",
+    "diffHunk": "@@ -459,8 +459,8 @@ private[execution] final class LongToUnsafeRowMap(val mm: TaskMemoryManager, cap\n    */\n   def getValue(key: Long, resultRow: UnsafeRow): UnsafeRow = {\n     if (isDense) {\n-      val idx = (key - minKey).toInt\n-      if (idx >= 0 && key <= maxKey && array(idx) > 0) {\n+      val idx = (key - minKey).toInt  // could overflow\n+      if (key >= minKey && key <= maxKey && array(idx) > 0) {"
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Ah yeah OK this should be OK. I might suggest the following as a little simpler, but whatever:\n\n```\nif (key >= minKey && key <= maxKey) {\n  val value = array((key - minKey).toInt)\n  if (value > 0) {\n    return getRow(value, resultRow)\n  }\n}\n```\n\n?\n",
+    "commit": "24169acaeef7e53a1ed09bd4fd972c2a0b0f5866",
+    "createdAt": "2016-08-02T23:04:02Z",
+    "diffHunk": "@@ -459,8 +459,8 @@ private[execution] final class LongToUnsafeRowMap(val mm: TaskMemoryManager, cap\n    */\n   def getValue(key: Long, resultRow: UnsafeRow): UnsafeRow = {\n     if (isDense) {\n-      val idx = (key - minKey).toInt\n-      if (idx >= 0 && key <= maxKey && array(idx) > 0) {\n+      val idx = (key - minKey).toInt  // could overflow\n+      if (key >= minKey && key <= maxKey && array(idx) > 0) {"
+  }],
+  "prId": 14464
+}]

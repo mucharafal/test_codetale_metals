@@ -1,0 +1,88 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Nit: use a `case` expression to avoid the `._1`, `._2`. It'll be more readable",
+    "commit": "7d6654ed0b03afe6af623a909d6ed2f1bc85ac8d",
+    "createdAt": "2018-12-14T14:48:54Z",
+    "diffHunk": "@@ -115,7 +122,10 @@ private[spark] object DecisionTreeMetadata extends Logging {\n     }\n     require(numFeatures > 0, s\"DecisionTree requires number of features > 0, \" +\n       s\"but was given an empty features vector\")\n-    val numExamples = input.count()\n+    val (numExamples, weightSum) = input.aggregate((0L, 0.0))(",
+    "line": 61
+  }, {
+    "author": {
+      "login": "imatiach-msft"
+    },
+    "body": "good idea, done!",
+    "commit": "7d6654ed0b03afe6af623a909d6ed2f1bc85ac8d",
+    "createdAt": "2018-12-19T04:43:14Z",
+    "diffHunk": "@@ -115,7 +122,10 @@ private[spark] object DecisionTreeMetadata extends Logging {\n     }\n     require(numFeatures > 0, s\"DecisionTree requires number of features > 0, \" +\n       s\"but was given an empty features vector\")\n-    val numExamples = input.count()\n+    val (numExamples, weightSum) = input.aggregate((0L, 0.0))(",
+    "line": 61
+  }],
+  "prId": 21632
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "I think the match statement is redundant? just `((count, weight), instance) => ...`? I forget whether there's some scala reason that won't work but you're just providing a function with this arg anyway",
+    "commit": "7d6654ed0b03afe6af623a909d6ed2f1bc85ac8d",
+    "createdAt": "2018-12-21T14:34:04Z",
+    "diffHunk": "@@ -115,7 +122,14 @@ private[spark] object DecisionTreeMetadata extends Logging {\n     }\n     require(numFeatures > 0, s\"DecisionTree requires number of features > 0, \" +\n       s\"but was given an empty features vector\")\n-    val numExamples = input.count()\n+    val (numExamples, weightSum) = input.aggregate((0L, 0.0))(\n+      (acc, x) => (acc, x) match {"
+  }, {
+    "author": {
+      "login": "imatiach-msft"
+    },
+    "body": "hmm, that didn't seem to work, but I've updated in a slightly different way, hope it's clearer",
+    "commit": "7d6654ed0b03afe6af623a909d6ed2f1bc85ac8d",
+    "createdAt": "2019-01-07T05:32:12Z",
+    "diffHunk": "@@ -115,7 +122,14 @@ private[spark] object DecisionTreeMetadata extends Logging {\n     }\n     require(numFeatures > 0, s\"DecisionTree requires number of features > 0, \" +\n       s\"but was given an empty features vector\")\n-    val numExamples = input.count()\n+    val (numExamples, weightSum) = input.aggregate((0L, 0.0))(\n+      (acc, x) => (acc, x) match {"
+  }, {
+    "author": {
+      "login": "imatiach-msft"
+    },
+    "body": "marking as resolved (please reopen if new update has issues)",
+    "commit": "7d6654ed0b03afe6af623a909d6ed2f1bc85ac8d",
+    "createdAt": "2019-01-09T17:33:29Z",
+    "diffHunk": "@@ -115,7 +122,14 @@ private[spark] object DecisionTreeMetadata extends Logging {\n     }\n     require(numFeatures > 0, s\"DecisionTree requires number of features > 0, \" +\n       s\"but was given an empty features vector\")\n-    val numExamples = input.count()\n+    val (numExamples, weightSum) = input.aggregate((0L, 0.0))(\n+      (acc, x) => (acc, x) match {"
+  }],
+  "prId": 21632
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "This can be taken further: `((count, weight), instance) =>`",
+    "commit": "7d6654ed0b03afe6af623a909d6ed2f1bc85ac8d",
+    "createdAt": "2019-01-14T16:29:36Z",
+    "diffHunk": "@@ -115,7 +122,11 @@ private[spark] object DecisionTreeMetadata extends Logging {\n     }\n     require(numFeatures > 0, s\"DecisionTree requires number of features > 0, \" +\n       s\"but was given an empty features vector\")\n-    val numExamples = input.count()\n+    val (numExamples, weightSum) = input.aggregate((0L, 0.0))(\n+      seqOp = (cw, instance) => (cw._1 + 1L, cw._2 + instance.weight),",
+    "line": 62
+  }, {
+    "author": {
+      "login": "imatiach-msft"
+    },
+    "body": "I got an error when I tried this:\r\n[error] /home/ilya/ilmat-spark/mllib/src/main/scala/org/apache/spark/ml/tree/impl/DecisionTreeMetadata.scala:126: not a legal formal parameter.\r\n[error] Note: Tuples cannot be directly destructured in method or function parameters.\r\n[error]       Either create a single parameter accepting the Tuple2,\r\n[error]       or consider a pattern matching anonymous function: `{ case (count, weight) => ... }\r\n[error]       seqOp = ((count, weight), instance) => (count + 1L, weight + instance.weight),\r\n[error]                ^\r\n[error] /home/ilya/ilmat-spark/mllib/src/main/scala/org/apache/spark/ml/tree/impl/DecisionTreeMetadata.scala:127: not a legal formal parameter.\r\n[error] Note: Tuples cannot be directly destructured in method or function parameters.\r\n[error]       Either create a single parameter accepting the Tuple2,\r\n[error]       or consider a pattern matching anonymous function: `{ case (count1, weight1) => ... }\r\n[error]       combOp = ((count1, weight1), (count2, weight2)) => (count1 + count2, weight1 + weight2)\r\n[error]                 ^\r\n[error] two errors found\r\n[error] Compile failed at Jan 15, 2019 12:02:10 AM [0.617s]\r\n",
+    "commit": "7d6654ed0b03afe6af623a909d6ed2f1bc85ac8d",
+    "createdAt": "2019-01-15T05:12:42Z",
+    "diffHunk": "@@ -115,7 +122,11 @@ private[spark] object DecisionTreeMetadata extends Logging {\n     }\n     require(numFeatures > 0, s\"DecisionTree requires number of features > 0, \" +\n       s\"but was given an empty features vector\")\n-    val numExamples = input.count()\n+    val (numExamples, weightSum) = input.aggregate((0L, 0.0))(\n+      seqOp = (cw, instance) => (cw._1 + 1L, cw._2 + instance.weight),",
+    "line": 62
+  }, {
+    "author": {
+      "login": "imatiach-msft"
+    },
+    "body": "the code I used was:\r\n    val (numExamples, weightSum) = input.aggregate((0L, 0.0))(\r\n      seqOp = ((count, weight), instance) => (count + 1L, weight + instance.weight),\r\n      combOp = ((count1, weight1), (count2, weight2)) => (count1 + count2, weight1 + weight2)\r\n    )\r\nIt looks like the tuple can't be recognized with pattern matching",
+    "commit": "7d6654ed0b03afe6af623a909d6ed2f1bc85ac8d",
+    "createdAt": "2019-01-15T05:14:36Z",
+    "diffHunk": "@@ -115,7 +122,11 @@ private[spark] object DecisionTreeMetadata extends Logging {\n     }\n     require(numFeatures > 0, s\"DecisionTree requires number of features > 0, \" +\n       s\"but was given an empty features vector\")\n-    val numExamples = input.count()\n+    val (numExamples, weightSum) = input.aggregate((0L, 0.0))(\n+      seqOp = (cw, instance) => (cw._1 + 1L, cw._2 + instance.weight),",
+    "line": 62
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Ah, OK, I should have known that.",
+    "commit": "7d6654ed0b03afe6af623a909d6ed2f1bc85ac8d",
+    "createdAt": "2019-01-15T19:37:34Z",
+    "diffHunk": "@@ -115,7 +122,11 @@ private[spark] object DecisionTreeMetadata extends Logging {\n     }\n     require(numFeatures > 0, s\"DecisionTree requires number of features > 0, \" +\n       s\"but was given an empty features vector\")\n-    val numExamples = input.count()\n+    val (numExamples, weightSum) = input.aggregate((0L, 0.0))(\n+      seqOp = (cw, instance) => (cw._1 + 1L, cw._2 + instance.weight),",
+    "line": 62
+  }],
+  "prId": 21632
+}]

@@ -1,0 +1,58 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "I feel like we can get rid of the nesting of the try here by assigning input to the result of the inner try {} you added. If it succeeds, then it opens a second try block that ensure the (non-null) input stream is closed.\n",
+    "commit": "fa8c3bebf31a03686972c5e09ea5b7703c9e81fe",
+    "createdAt": "2016-07-26T19:08:28Z",
+    "diffHunk": "@@ -340,13 +341,15 @@ private[state] class HDFSBackedStateStoreProvider(\n \n   private def updateFromDeltaFile(version: Long, map: MapType): Unit = {\n     val fileToRead = deltaFile(version)\n-    if (!fs.exists(fileToRead)) {\n-      throw new IllegalStateException(\n-        s\"Error reading delta file $fileToRead of $this: $fileToRead does not exist\")\n-    }\n     var input: DataInputStream = null\n     try {\n-      input = decompressStream(fs.open(fileToRead))\n+      try {"
+  }, {
+    "author": {
+      "login": "steveloughran"
+    },
+    "body": "OK, i've serialized that. But I think it should work to just unify the try/catch and the try/finally; all other FS open problems were being handled by the original try/finally clause.\n",
+    "commit": "fa8c3bebf31a03686972c5e09ea5b7703c9e81fe",
+    "createdAt": "2016-07-27T14:43:21Z",
+    "diffHunk": "@@ -340,13 +341,15 @@ private[state] class HDFSBackedStateStoreProvider(\n \n   private def updateFromDeltaFile(version: Long, map: MapType): Unit = {\n     val fileToRead = deltaFile(version)\n-    if (!fs.exists(fileToRead)) {\n-      throw new IllegalStateException(\n-        s\"Error reading delta file $fileToRead of $this: $fileToRead does not exist\")\n-    }\n     var input: DataInputStream = null\n     try {\n-      input = decompressStream(fs.open(fileToRead))\n+      try {"
+  }],
+  "prId": 14371
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Following the pattern, shouldn't the logic be inverted here?\n- try to mkdir\n- if it fails, re-throw with an informative message\n",
+    "commit": "fa8c3bebf31a03686972c5e09ea5b7703c9e81fe",
+    "createdAt": "2016-08-05T21:54:22Z",
+    "diffHunk": "@@ -278,14 +278,15 @@ private[state] class HDFSBackedStateStoreProvider(\n \n   /** Initialize the store provider */\n   private def initialize(): Unit = {\n-    if (!fs.exists(baseDir)) {\n-      fs.mkdirs(baseDir)\n-    } else {\n-      if (!fs.isDirectory(baseDir)) {\n+    try {\n+      if (!fs.getFileStatus(baseDir).isDirectory()) {"
+  }, {
+    "author": {
+      "login": "steveloughran"
+    },
+    "body": "good point.\n\nLooking at the mkdirs tests {{org.apache.hadoop.fs.contract.AbstractContractMkdirTest}}; the return value indicates whether a directory was created (true) or an existing directory was left alone (false). Other problems (dest is a file, parent path element is a file) are required to raise an IOE or subclass, something that is tested for. All that's needed is to do the mkdirs and not worry about the result at all.\n",
+    "commit": "fa8c3bebf31a03686972c5e09ea5b7703c9e81fe",
+    "createdAt": "2016-08-17T12:44:25Z",
+    "diffHunk": "@@ -278,14 +278,15 @@ private[state] class HDFSBackedStateStoreProvider(\n \n   /** Initialize the store provider */\n   private def initialize(): Unit = {\n-    if (!fs.exists(baseDir)) {\n-      fs.mkdirs(baseDir)\n-    } else {\n-      if (!fs.isDirectory(baseDir)) {\n+    try {\n+      if (!fs.getFileStatus(baseDir).isDirectory()) {"
+  }],
+  "prId": 14371
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "`return` unnecessary\n",
+    "commit": "fa8c3bebf31a03686972c5e09ea5b7703c9e81fe",
+    "createdAt": "2016-08-05T21:55:12Z",
+    "diffHunk": "@@ -443,6 +445,9 @@ private[state] class HDFSBackedStateStoreProvider(\n       }\n       logInfo(s\"Read snapshot file for version $version of $this from $fileToRead\")\n       Some(map)\n+    } catch {\n+      case _: FileNotFoundException =>\n+        return None"
+  }, {
+    "author": {
+      "login": "steveloughran"
+    },
+    "body": "fixed\n",
+    "commit": "fa8c3bebf31a03686972c5e09ea5b7703c9e81fe",
+    "createdAt": "2016-08-17T12:46:13Z",
+    "diffHunk": "@@ -443,6 +445,9 @@ private[state] class HDFSBackedStateStoreProvider(\n       }\n       logInfo(s\"Read snapshot file for version $version of $this from $fileToRead\")\n       Some(map)\n+    } catch {\n+      case _: FileNotFoundException =>\n+        return None"
+  }],
+  "prId": 14371
+}]

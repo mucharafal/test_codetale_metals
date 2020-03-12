@@ -1,0 +1,31 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "yhuai"
+    },
+    "body": "@JoshRosen I made this change to workaround ChainedBufferOutputStream's unsupported `write(b: Int)`.\n",
+    "commit": "4d2f4fc4ba46c72ffb67f2b2c7536956ec85e60a",
+    "createdAt": "2015-08-05T07:17:32Z",
+    "diffHunk": "@@ -58,11 +58,26 @@ private class UnsafeRowSerializerInstance(numFields: Int) extends SerializerInst\n    */\n   override def serializeStream(out: OutputStream): SerializationStream = new SerializationStream {\n     private[this] var writeBuffer: Array[Byte] = new Array[Byte](4096)\n+    // When `out` is backed by ChainedBufferOutputStream, we will get an\n+    // UnsupportedOperationException when we call dOut.writeInt because it internally calls\n+    // ChainedBufferOutputStream's write(b: Int), which is not supported.\n+    // To workaround this issue, we create an array for sorting the int value.\n+    // To reproduce the problem, use dOut.writeInt(row.getSizeInBytes) and\n+    // run SparkSqlSerializer2SortMergeShuffleSuite.\n+    private[this] var intBuffer: Array[Byte] = new Array[Byte](4)\n     private[this] val dOut: DataOutputStream = new DataOutputStream(out)\n \n     override def writeValue[T: ClassTag](value: T): SerializationStream = {\n       val row = value.asInstanceOf[UnsafeRow]\n-      dOut.writeInt(row.getSizeInBytes)\n+      val size = row.getSizeInBytes\n+      // This part is based on DataOutputStream's writeInt.\n+      // It is for dOut.writeInt(row.getSizeInBytes).\n+      intBuffer(0) = ((size >>> 24) & 0xFF).toByte\n+      intBuffer(1) = ((size >>> 16) & 0xFF).toByte\n+      intBuffer(2) = ((size >>> 8) & 0xFF).toByte\n+      intBuffer(3) = ((size >>> 0) & 0xFF).toByte\n+      dOut.write(intBuffer, 0, 4)",
+    "line": 32
+  }, {
+    "author": {
+      "login": "yhuai"
+    },
+    "body": "Also, we need to double check if we need to wrap input stream with a buffered input stream when we read data back.\n",
+    "commit": "4d2f4fc4ba46c72ffb67f2b2c7536956ec85e60a",
+    "createdAt": "2015-08-06T05:19:05Z",
+    "diffHunk": "@@ -58,11 +58,26 @@ private class UnsafeRowSerializerInstance(numFields: Int) extends SerializerInst\n    */\n   override def serializeStream(out: OutputStream): SerializationStream = new SerializationStream {\n     private[this] var writeBuffer: Array[Byte] = new Array[Byte](4096)\n+    // When `out` is backed by ChainedBufferOutputStream, we will get an\n+    // UnsupportedOperationException when we call dOut.writeInt because it internally calls\n+    // ChainedBufferOutputStream's write(b: Int), which is not supported.\n+    // To workaround this issue, we create an array for sorting the int value.\n+    // To reproduce the problem, use dOut.writeInt(row.getSizeInBytes) and\n+    // run SparkSqlSerializer2SortMergeShuffleSuite.\n+    private[this] var intBuffer: Array[Byte] = new Array[Byte](4)\n     private[this] val dOut: DataOutputStream = new DataOutputStream(out)\n \n     override def writeValue[T: ClassTag](value: T): SerializationStream = {\n       val row = value.asInstanceOf[UnsafeRow]\n-      dOut.writeInt(row.getSizeInBytes)\n+      val size = row.getSizeInBytes\n+      // This part is based on DataOutputStream's writeInt.\n+      // It is for dOut.writeInt(row.getSizeInBytes).\n+      intBuffer(0) = ((size >>> 24) & 0xFF).toByte\n+      intBuffer(1) = ((size >>> 16) & 0xFF).toByte\n+      intBuffer(2) = ((size >>> 8) & 0xFF).toByte\n+      intBuffer(3) = ((size >>> 0) & 0xFF).toByte\n+      dOut.write(intBuffer, 0, 4)",
+    "line": 32
+  }, {
+    "author": {
+      "login": "rxin"
+    },
+    "body": "cc @JoshRosen do you think this is fine? seems inefficient to me but maybe there is no better way\n",
+    "commit": "4d2f4fc4ba46c72ffb67f2b2c7536956ec85e60a",
+    "createdAt": "2015-08-06T06:01:27Z",
+    "diffHunk": "@@ -58,11 +58,26 @@ private class UnsafeRowSerializerInstance(numFields: Int) extends SerializerInst\n    */\n   override def serializeStream(out: OutputStream): SerializationStream = new SerializationStream {\n     private[this] var writeBuffer: Array[Byte] = new Array[Byte](4096)\n+    // When `out` is backed by ChainedBufferOutputStream, we will get an\n+    // UnsupportedOperationException when we call dOut.writeInt because it internally calls\n+    // ChainedBufferOutputStream's write(b: Int), which is not supported.\n+    // To workaround this issue, we create an array for sorting the int value.\n+    // To reproduce the problem, use dOut.writeInt(row.getSizeInBytes) and\n+    // run SparkSqlSerializer2SortMergeShuffleSuite.\n+    private[this] var intBuffer: Array[Byte] = new Array[Byte](4)\n     private[this] val dOut: DataOutputStream = new DataOutputStream(out)\n \n     override def writeValue[T: ClassTag](value: T): SerializationStream = {\n       val row = value.asInstanceOf[UnsafeRow]\n-      dOut.writeInt(row.getSizeInBytes)\n+      val size = row.getSizeInBytes\n+      // This part is based on DataOutputStream's writeInt.\n+      // It is for dOut.writeInt(row.getSizeInBytes).\n+      intBuffer(0) = ((size >>> 24) & 0xFF).toByte\n+      intBuffer(1) = ((size >>> 16) & 0xFF).toByte\n+      intBuffer(2) = ((size >>> 8) & 0xFF).toByte\n+      intBuffer(3) = ((size >>> 0) & 0xFF).toByte\n+      dOut.write(intBuffer, 0, 4)",
+    "line": 32
+  }],
+  "prId": 7954
+}]

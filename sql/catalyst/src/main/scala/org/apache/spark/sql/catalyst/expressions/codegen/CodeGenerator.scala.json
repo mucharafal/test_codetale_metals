@@ -1,0 +1,93 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "ash211"
+    },
+    "body": "I'd suggest dropping the string concatenation with `\\n` here -- it requires an additional copy of the code to be held in-memory and for errors where the code is too long, this causes unnecessary additional pressure on the heap",
+    "commit": "a795db225dbdf71efd3cceca906244644e70c218",
+    "createdAt": "2017-07-17T20:40:08Z",
+    "diffHunk": "@@ -1037,24 +1037,22 @@ object CodeGenerator extends Logging {\n     ))\n     evaluator.setExtendedClass(classOf[GeneratedClass])\n \n-    lazy val formatted = CodeFormatter.format(code)\n-\n     logDebug({\n       // Only add extra debugging info to byte code when we are going to print the source code.\n       evaluator.setDebuggingInformation(true, true, false)\n-      s\"\\n$formatted\"\n+      s\"\\n${CodeFormatter.format(code)}\"",
+    "line": 18
+  }, {
+    "author": {
+      "login": "pjfanning"
+    },
+    "body": "@ash211 the logging will be less user friendly without the \\n and this is debug logging - I am working on an enhancement to the CodeFormatter class for the info level logging discussed earlier with @marmbrus that would allow a max number of lines to be specified ",
+    "commit": "a795db225dbdf71efd3cceca906244644e70c218",
+    "createdAt": "2017-07-17T20:51:40Z",
+    "diffHunk": "@@ -1037,24 +1037,22 @@ object CodeGenerator extends Logging {\n     ))\n     evaluator.setExtendedClass(classOf[GeneratedClass])\n \n-    lazy val formatted = CodeFormatter.format(code)\n-\n     logDebug({\n       // Only add extra debugging info to byte code when we are going to print the source code.\n       evaluator.setDebuggingInformation(true, true, false)\n-      s\"\\n$formatted\"\n+      s\"\\n${CodeFormatter.format(code)}\"",
+    "line": 18
+  }],
+  "prId": 18658
+}, {
+  "comments": [{
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "`1000` -> `maxLines = 1000`",
+    "commit": "a795db225dbdf71efd3cceca906244644e70c218",
+    "createdAt": "2017-07-21T02:59:26Z",
+    "diffHunk": "@@ -1037,25 +1037,25 @@ object CodeGenerator extends Logging {\n     ))\n     evaluator.setExtendedClass(classOf[GeneratedClass])\n \n-    lazy val formatted = CodeFormatter.format(code)\n-\n     logDebug({\n       // Only add extra debugging info to byte code when we are going to print the source code.\n       evaluator.setDebuggingInformation(true, true, false)\n-      s\"\\n$formatted\"\n+      s\"\\n${CodeFormatter.format(code)}\"\n     })\n \n     try {\n       evaluator.cook(\"generated.java\", code.body)\n       recordCompilationStats(evaluator)\n     } catch {\n       case e: JaninoRuntimeException =>\n-        val msg = s\"failed to compile: $e\\n$formatted\"\n+        val msg = s\"failed to compile: $e\"\n         logError(msg, e)\n+        logInfo(s\"\\n${CodeFormatter.format(code, 1000)}\")"
+  }],
+  "prId": 18658
+}, {
+  "comments": [{
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "The same here",
+    "commit": "a795db225dbdf71efd3cceca906244644e70c218",
+    "createdAt": "2017-07-21T02:59:41Z",
+    "diffHunk": "@@ -1037,25 +1037,25 @@ object CodeGenerator extends Logging {\n     ))\n     evaluator.setExtendedClass(classOf[GeneratedClass])\n \n-    lazy val formatted = CodeFormatter.format(code)\n-\n     logDebug({\n       // Only add extra debugging info to byte code when we are going to print the source code.\n       evaluator.setDebuggingInformation(true, true, false)\n-      s\"\\n$formatted\"\n+      s\"\\n${CodeFormatter.format(code)}\"\n     })\n \n     try {\n       evaluator.cook(\"generated.java\", code.body)\n       recordCompilationStats(evaluator)\n     } catch {\n       case e: JaninoRuntimeException =>\n-        val msg = s\"failed to compile: $e\\n$formatted\"\n+        val msg = s\"failed to compile: $e\"\n         logError(msg, e)\n+        logInfo(s\"\\n${CodeFormatter.format(code, 1000)}\")\n         throw new JaninoRuntimeException(msg, e)\n       case e: CompileException =>\n-        val msg = s\"failed to compile: $e\\n$formatted\"\n+        val msg = s\"failed to compile: $e\"\n         logError(msg, e)\n+        logInfo(s\"\\n${CodeFormatter.format(code, 1000)}\")"
+  }],
+  "prId": 18658
+}, {
+  "comments": [{
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "My only concern whether we should add an internal SQLConf for this hard-coded value. ",
+    "commit": "a795db225dbdf71efd3cceca906244644e70c218",
+    "createdAt": "2017-07-22T22:19:32Z",
+    "diffHunk": "@@ -1037,25 +1037,25 @@ object CodeGenerator extends Logging {\n     ))\n     evaluator.setExtendedClass(classOf[GeneratedClass])\n \n-    lazy val formatted = CodeFormatter.format(code)\n-\n     logDebug({\n       // Only add extra debugging info to byte code when we are going to print the source code.\n       evaluator.setDebuggingInformation(true, true, false)\n-      s\"\\n$formatted\"\n+      s\"\\n${CodeFormatter.format(code)}\"\n     })\n \n     try {\n       evaluator.cook(\"generated.java\", code.body)\n       recordCompilationStats(evaluator)\n     } catch {\n       case e: JaninoRuntimeException =>\n-        val msg = s\"failed to compile: $e\\n$formatted\"\n+        val msg = s\"failed to compile: $e\"\n         logError(msg, e)\n+        logInfo(s\"\\n${CodeFormatter.format(code, maxLines = 1000)}\")"
+  }, {
+    "author": {
+      "login": "pjfanning"
+    },
+    "body": "@gatorsmile I can add a config item to org.apache.spark.sql.internal.SQLConf.scala if you think this is appropriate.\r\nMaybe something like:\r\n```\r\n  val CODEGEN_LOGGING_MAX_LINES = buildConf(\"spark.sql.codegen.logging.maxLines\")\r\n    .internal()\r\n    .doc(\"The maximum number of codegen lines to log when errors occur.\")\r\n    .intConf\r\n    .createWithDefault(1000)\r\n```\r\n",
+    "commit": "a795db225dbdf71efd3cceca906244644e70c218",
+    "createdAt": "2017-07-22T22:56:46Z",
+    "diffHunk": "@@ -1037,25 +1037,25 @@ object CodeGenerator extends Logging {\n     ))\n     evaluator.setExtendedClass(classOf[GeneratedClass])\n \n-    lazy val formatted = CodeFormatter.format(code)\n-\n     logDebug({\n       // Only add extra debugging info to byte code when we are going to print the source code.\n       evaluator.setDebuggingInformation(true, true, false)\n-      s\"\\n$formatted\"\n+      s\"\\n${CodeFormatter.format(code)}\"\n     })\n \n     try {\n       evaluator.cook(\"generated.java\", code.body)\n       recordCompilationStats(evaluator)\n     } catch {\n       case e: JaninoRuntimeException =>\n-        val msg = s\"failed to compile: $e\\n$formatted\"\n+        val msg = s\"failed to compile: $e\"\n         logError(msg, e)\n+        logInfo(s\"\\n${CodeFormatter.format(code, maxLines = 1000)}\")"
+  }, {
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "Looks fine to me",
+    "commit": "a795db225dbdf71efd3cceca906244644e70c218",
+    "createdAt": "2017-07-22T23:08:38Z",
+    "diffHunk": "@@ -1037,25 +1037,25 @@ object CodeGenerator extends Logging {\n     ))\n     evaluator.setExtendedClass(classOf[GeneratedClass])\n \n-    lazy val formatted = CodeFormatter.format(code)\n-\n     logDebug({\n       // Only add extra debugging info to byte code when we are going to print the source code.\n       evaluator.setDebuggingInformation(true, true, false)\n-      s\"\\n$formatted\"\n+      s\"\\n${CodeFormatter.format(code)}\"\n     })\n \n     try {\n       evaluator.cook(\"generated.java\", code.body)\n       recordCompilationStats(evaluator)\n     } catch {\n       case e: JaninoRuntimeException =>\n-        val msg = s\"failed to compile: $e\\n$formatted\"\n+        val msg = s\"failed to compile: $e\"\n         logError(msg, e)\n+        logInfo(s\"\\n${CodeFormatter.format(code, maxLines = 1000)}\")"
+  }],
+  "prId": 18658
+}, {
+  "comments": [{
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "-> `SQLConf.get.loggingMaxLinesForCodegen`",
+    "commit": "a795db225dbdf71efd3cceca906244644e70c218",
+    "createdAt": "2017-07-23T05:12:25Z",
+    "diffHunk": "@@ -1037,25 +1038,27 @@ object CodeGenerator extends Logging {\n     ))\n     evaluator.setExtendedClass(classOf[GeneratedClass])\n \n-    lazy val formatted = CodeFormatter.format(code)\n-\n     logDebug({\n       // Only add extra debugging info to byte code when we are going to print the source code.\n       evaluator.setDebuggingInformation(true, true, false)\n-      s\"\\n$formatted\"\n+      s\"\\n${CodeFormatter.format(code)}\"\n     })\n \n     try {\n       evaluator.cook(\"generated.java\", code.body)\n       recordCompilationStats(evaluator)\n     } catch {\n       case e: JaninoRuntimeException =>\n-        val msg = s\"failed to compile: $e\\n$formatted\"\n+        val msg = s\"failed to compile: $e\"\n         logError(msg, e)\n+        val maxLines = new SQLConf().loggingMaxLinesForCodegen"
+  }],
+  "prId": 18658
+}, {
+  "comments": [{
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "-> `SQLConf.get.loggingMaxLinesForCodegen`",
+    "commit": "a795db225dbdf71efd3cceca906244644e70c218",
+    "createdAt": "2017-07-23T05:12:47Z",
+    "diffHunk": "@@ -1037,25 +1038,27 @@ object CodeGenerator extends Logging {\n     ))\n     evaluator.setExtendedClass(classOf[GeneratedClass])\n \n-    lazy val formatted = CodeFormatter.format(code)\n-\n     logDebug({\n       // Only add extra debugging info to byte code when we are going to print the source code.\n       evaluator.setDebuggingInformation(true, true, false)\n-      s\"\\n$formatted\"\n+      s\"\\n${CodeFormatter.format(code)}\"\n     })\n \n     try {\n       evaluator.cook(\"generated.java\", code.body)\n       recordCompilationStats(evaluator)\n     } catch {\n       case e: JaninoRuntimeException =>\n-        val msg = s\"failed to compile: $e\\n$formatted\"\n+        val msg = s\"failed to compile: $e\"\n         logError(msg, e)\n+        val maxLines = new SQLConf().loggingMaxLinesForCodegen\n+        logInfo(s\"\\n${CodeFormatter.format(code, maxLines)}\")\n         throw new JaninoRuntimeException(msg, e)\n       case e: CompileException =>\n-        val msg = s\"failed to compile: $e\\n$formatted\"\n+        val msg = s\"failed to compile: $e\"\n         logError(msg, e)\n+        val maxLines = new SQLConf().loggingMaxLinesForCodegen"
+  }],
+  "prId": 18658
+}]

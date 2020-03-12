@@ -1,0 +1,374 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "squito"
+    },
+    "body": "unrelated to this change, right?  if you think its important open another jira / pr.\n",
+    "commit": "59db4af635fd53e2723d187b60dee6856af74df4",
+    "createdAt": "2016-10-13T17:51:57Z",
+    "diffHunk": "@@ -42,18 +60,43 @@ private[spark] case class AccumulatorMetadata(\n  * `OUT` should be a type that can be read atomically (e.g., Int, Long), or thread-safely\n  * (e.g., synchronized collections) because it will be read from other threads.\n  */\n-abstract class AccumulatorV2[IN, OUT] extends Serializable {\n+abstract class AccumulatorV2[@specialized(Int, Long, Double) IN, OUT] extends Serializable {"
+  }, {
+    "author": {
+      "login": "holdenk"
+    },
+    "body": "So actually related - the other changes I had to do meant that boxing/unboxing for these types ocured if we didn't have the specialized annotation (and as presently done it does not).\n",
+    "commit": "59db4af635fd53e2723d187b60dee6856af74df4",
+    "createdAt": "2016-10-16T18:52:30Z",
+    "diffHunk": "@@ -42,18 +60,43 @@ private[spark] case class AccumulatorMetadata(\n  * `OUT` should be a type that can be read atomically (e.g., Int, Long), or thread-safely\n  * (e.g., synchronized collections) because it will be read from other threads.\n  */\n-abstract class AccumulatorV2[IN, OUT] extends Serializable {\n+abstract class AccumulatorV2[@specialized(Int, Long, Double) IN, OUT] extends Serializable {"
+  }, {
+    "author": {
+      "login": "squito"
+    },
+    "body": "hmm, it doesn't look this way to me.  If I look at the compiled code for AccumulatorV2 in the spark2 binaries, there are no specialized methods.  It looks like boxing does happen.\n\nI do see test failures in `AccumulatorV2Suite` without this change, but looks like that can be fixed by just tweaking the specialized versions of these functions that are manually defined in `DoubleAccumulator` and `LongAccumulator`, eg.\n\n``` scala\n  /**\n   * Adds v to the accumulator, i.e. increment sum by v and count by 1.\n   * @since 2.1.0\n   */\n  def add(v: Double): Unit = {\n    if (metadata != null && metadata.dataProperty) {\n      dataPropertyAdd(v: jl.Double)\n    } else {\n      addImpl(v)\n    }\n  }\n```\n",
+    "commit": "59db4af635fd53e2723d187b60dee6856af74df4",
+    "createdAt": "2016-11-03T16:14:07Z",
+    "diffHunk": "@@ -42,18 +60,43 @@ private[spark] case class AccumulatorMetadata(\n  * `OUT` should be a type that can be read atomically (e.g., Int, Long), or thread-safely\n  * (e.g., synchronized collections) because it will be read from other threads.\n  */\n-abstract class AccumulatorV2[IN, OUT] extends Serializable {\n+abstract class AccumulatorV2[@specialized(Int, Long, Double) IN, OUT] extends Serializable {"
+  }, {
+    "author": {
+      "login": "holdenk"
+    },
+    "body": "So we could do that, but would the specialized annotation maybe easier to maintain?\n",
+    "commit": "59db4af635fd53e2723d187b60dee6856af74df4",
+    "createdAt": "2016-11-03T22:57:33Z",
+    "diffHunk": "@@ -42,18 +60,43 @@ private[spark] case class AccumulatorMetadata(\n  * `OUT` should be a type that can be read atomically (e.g., Int, Long), or thread-safely\n  * (e.g., synchronized collections) because it will be read from other threads.\n  */\n-abstract class AccumulatorV2[IN, OUT] extends Serializable {\n+abstract class AccumulatorV2[@specialized(Int, Long, Double) IN, OUT] extends Serializable {"
+  }, {
+    "author": {
+      "login": "holdenk"
+    },
+    "body": "same thing as last one (github posted my response in seperate thread attempting to repost so it shows up correctly):\nSo we could do that, but would the specialized annotation maybe easier to maintain?\n",
+    "commit": "59db4af635fd53e2723d187b60dee6856af74df4",
+    "createdAt": "2016-11-03T23:14:29Z",
+    "diffHunk": "@@ -42,18 +60,43 @@ private[spark] case class AccumulatorMetadata(\n  * `OUT` should be a type that can be read atomically (e.g., Int, Long), or thread-safely\n  * (e.g., synchronized collections) because it will be read from other threads.\n  */\n-abstract class AccumulatorV2[IN, OUT] extends Serializable {\n+abstract class AccumulatorV2[@specialized(Int, Long, Double) IN, OUT] extends Serializable {"
+  }],
+  "prId": 11105
+}, {
+  "comments": [{
+    "author": {
+      "login": "squito"
+    },
+    "body": "why is this needed?\n\nI see tests fail w/out it, but don't understand why old handling in `readObject` aren't working here\n",
+    "commit": "59db4af635fd53e2723d187b60dee6856af74df4",
+    "createdAt": "2016-10-13T18:18:58Z",
+    "diffHunk": "@@ -136,15 +179,76 @@ abstract class AccumulatorV2[IN, OUT] extends Serializable {\n   def reset(): Unit\n \n   /**\n+   * Takes the inputs and accumulates. e.g. it can be a simple `+=` for counter accumulator.\n+   * Developers should extend addImpl to customize the adding functionality.\n+   */\n+  final def add(v: IN): Unit = {\n+    if (metadata != null && metadata.dataProperty) {\n+      dataPropertyAdd(v)\n+    } else {\n+      addImpl(v)\n+    }\n+  }\n+\n+  private def dataPropertyAdd(v: IN): Unit = {\n+    // Add first for localValue & AccumulatorInfo\n+    addImpl(v)\n+    if (metadata != null && metadata.dataProperty) {\n+      val updateInfo = TaskContext.get().getRDDPartitionInfo()\n+      val base = pending.getOrElse(updateInfo, copyAndReset())\n+      base.atDriverSide = false"
+  }, {
+    "author": {
+      "login": "holdenk"
+    },
+    "body": "So the problem is that we are constructing new instances of the underlying accumulator for new partitions, which by default has `atDriverSide` set to true so we need to set it to false because we are not at the driver side. I'll add a comment for this as well :)\n",
+    "commit": "59db4af635fd53e2723d187b60dee6856af74df4",
+    "createdAt": "2016-10-17T17:15:59Z",
+    "diffHunk": "@@ -136,15 +179,76 @@ abstract class AccumulatorV2[IN, OUT] extends Serializable {\n   def reset(): Unit\n \n   /**\n+   * Takes the inputs and accumulates. e.g. it can be a simple `+=` for counter accumulator.\n+   * Developers should extend addImpl to customize the adding functionality.\n+   */\n+  final def add(v: IN): Unit = {\n+    if (metadata != null && metadata.dataProperty) {\n+      dataPropertyAdd(v)\n+    } else {\n+      addImpl(v)\n+    }\n+  }\n+\n+  private def dataPropertyAdd(v: IN): Unit = {\n+    // Add first for localValue & AccumulatorInfo\n+    addImpl(v)\n+    if (metadata != null && metadata.dataProperty) {\n+      val updateInfo = TaskContext.get().getRDDPartitionInfo()\n+      val base = pending.getOrElse(updateInfo, copyAndReset())\n+      base.atDriverSide = false"
+  }],
+  "prId": 11105
+}, {
+  "comments": [{
+    "author": {
+      "login": "squito"
+    },
+    "body": "fix indentation\n",
+    "commit": "59db4af635fd53e2723d187b60dee6856af74df4",
+    "createdAt": "2016-10-13T18:25:04Z",
+    "diffHunk": "@@ -136,15 +179,76 @@ abstract class AccumulatorV2[IN, OUT] extends Serializable {\n   def reset(): Unit\n \n   /**\n+   * Takes the inputs and accumulates. e.g. it can be a simple `+=` for counter accumulator.\n+   * Developers should extend addImpl to customize the adding functionality.\n+   */\n+  final def add(v: IN): Unit = {\n+    if (metadata != null && metadata.dataProperty) {\n+      dataPropertyAdd(v)\n+    } else {\n+      addImpl(v)\n+    }\n+  }\n+\n+  private def dataPropertyAdd(v: IN): Unit = {\n+    // Add first for localValue & AccumulatorInfo\n+    addImpl(v)\n+    if (metadata != null && metadata.dataProperty) {\n+      val updateInfo = TaskContext.get().getRDDPartitionInfo()\n+      val base = pending.getOrElse(updateInfo, copyAndReset())\n+      base.atDriverSide = false\n+      base.addImpl(v)\n+      pending(updateInfo) = base\n+    }\n+  }\n+\n+  /**\n+   * Mark a specific rdd/shuffle/partition as completely processed. This is a noop for\n+   * non-data property accumuables.\n+   */\n+  private[spark] def markFullyProcessed(rddId: Int, shuffleWriteId: Int, partitionId: Int): Unit = {\n+    if (metadata.dataProperty) {\n+      completed += ((rddId, shuffleWriteId, partitionId))\n+    }\n+  }\n+\n+  /**\n+   * Takes the inputs and accumulates. e.g. it can be a simple `+=` for counter accumulator.\n+   * Developers should extend addImpl to customize the adding functionality.\n    * Takes the inputs and accumulates.\n    */\n-  def add(v: IN): Unit\n+  protected[spark] def addImpl(v: IN)\n \n   /**\n    * Merges another same-type accumulator into this one and update its state, i.e. this should be\n-   * merge-in-place.\n+   * merge-in-place. Developers should extend mergeImpl to customize the merge functionality.\n    */\n-  def merge(other: AccumulatorV2[IN, OUT]): Unit\n+  final private[spark] lazy val merge: (AccumulatorV2[IN, OUT] => Unit) = {\n+    // Handle data property accumulators\n+    if (metadata != null && metadata.dataProperty) {\n+      dataPropertyMerge _\n+    } else {\n+      mergeImpl _\n+    }\n+  }\n+\n+  final private[spark] def dataPropertyMerge(other: AccumulatorV2[IN, OUT]) = {\n+        val term = other.pending.filter{case (k, v) => other.completed.contains(k)}"
+  }],
+  "prId": 11105
+}, {
+  "comments": [{
+    "author": {
+      "login": "squito"
+    },
+    "body": "why is this important?\n",
+    "commit": "59db4af635fd53e2723d187b60dee6856af74df4",
+    "createdAt": "2016-10-13T18:41:38Z",
+    "diffHunk": "@@ -136,15 +179,76 @@ abstract class AccumulatorV2[IN, OUT] extends Serializable {\n   def reset(): Unit\n \n   /**\n+   * Takes the inputs and accumulates. e.g. it can be a simple `+=` for counter accumulator.\n+   * Developers should extend addImpl to customize the adding functionality.\n+   */\n+  final def add(v: IN): Unit = {\n+    if (metadata != null && metadata.dataProperty) {\n+      dataPropertyAdd(v)\n+    } else {\n+      addImpl(v)\n+    }\n+  }\n+\n+  private def dataPropertyAdd(v: IN): Unit = {\n+    // Add first for localValue & AccumulatorInfo"
+  }, {
+    "author": {
+      "login": "holdenk"
+    },
+    "body": "If we want the user to be able to access the current accumulated value from their process worker side then we need to perform a \"normal\" add as well as the data property add. Also if we don't have a merge step (e.g. only one accumulator) this might make a difference (although I _think_ this won't be the case anymore with the refactor that happened I haven't tested it).\n",
+    "commit": "59db4af635fd53e2723d187b60dee6856af74df4",
+    "createdAt": "2016-10-17T17:14:19Z",
+    "diffHunk": "@@ -136,15 +179,76 @@ abstract class AccumulatorV2[IN, OUT] extends Serializable {\n   def reset(): Unit\n \n   /**\n+   * Takes the inputs and accumulates. e.g. it can be a simple `+=` for counter accumulator.\n+   * Developers should extend addImpl to customize the adding functionality.\n+   */\n+  final def add(v: IN): Unit = {\n+    if (metadata != null && metadata.dataProperty) {\n+      dataPropertyAdd(v)\n+    } else {\n+      addImpl(v)\n+    }\n+  }\n+\n+  private def dataPropertyAdd(v: IN): Unit = {\n+    // Add first for localValue & AccumulatorInfo"
+  }, {
+    "author": {
+      "login": "squito"
+    },
+    "body": "sorry I wasn't clear -- I meant why is \"first\" important.  But i guess first isn't actually important, you're saying that _both_ are needed.  Can you update the comment to reflect that?\n",
+    "commit": "59db4af635fd53e2723d187b60dee6856af74df4",
+    "createdAt": "2016-10-20T21:34:53Z",
+    "diffHunk": "@@ -136,15 +179,76 @@ abstract class AccumulatorV2[IN, OUT] extends Serializable {\n   def reset(): Unit\n \n   /**\n+   * Takes the inputs and accumulates. e.g. it can be a simple `+=` for counter accumulator.\n+   * Developers should extend addImpl to customize the adding functionality.\n+   */\n+  final def add(v: IN): Unit = {\n+    if (metadata != null && metadata.dataProperty) {\n+      dataPropertyAdd(v)\n+    } else {\n+      addImpl(v)\n+    }\n+  }\n+\n+  private def dataPropertyAdd(v: IN): Unit = {\n+    // Add first for localValue & AccumulatorInfo"
+  }],
+  "prId": 11105
+}, {
+  "comments": [{
+    "author": {
+      "login": "squito"
+    },
+    "body": "I find the logic around `pending`, `completed` and `processed` really confusing.  I'm still thinking this through -- before making concrete suggestions I want to check my understanding.\n\n`completed` should always only reflect the update from one task.  It should only be set on the executor.  At first I was going to say it shouldn't be a set, it should just be one value -- but of course one task can get updates from multiple rdds.  It will differ from the keyset of `pending` b/c pending can include updates from partitions that aren't completed (eg. those `take` and `coalesce` cases).\n\n`processed` is only used on the driver.  Since it has global knowledge, it can use this determine whether each update is a repeat or not.\n\nI think the comment whether updates should be sent back to the driver is incorrect -- it looks to me like the updates are always sent back to the driver, and the driver makes all of its determinations.\n\nseems like `merge` (and thus `dataPropertyMerge`) is only called on the driver.  I'm trying to figure out whether or not it matters.  It seems like it would do something weird if it were called on the executor.  maybe we should add an `assert(isAtDriver)`.\n",
+    "commit": "59db4af635fd53e2723d187b60dee6856af74df4",
+    "createdAt": "2016-10-13T18:57:31Z",
+    "diffHunk": "@@ -42,18 +60,43 @@ private[spark] case class AccumulatorMetadata(\n  * `OUT` should be a type that can be read atomically (e.g., Int, Long), or thread-safely\n  * (e.g., synchronized collections) because it will be read from other threads.\n  */\n-abstract class AccumulatorV2[IN, OUT] extends Serializable {\n+abstract class AccumulatorV2[@specialized(Int, Long, Double) IN, OUT] extends Serializable {\n   private[spark] var metadata: AccumulatorMetadata = _\n-  private[this] var atDriverSide = true\n+  private[spark] var atDriverSide = true\n+\n+  /**\n+   * The following values are used for data property [[AccumulatorV2]]s.\n+   * Data property [[AccumulatorV2]]s have only-once semantics. These semantics are implemented\n+   * by keeping track of which RDD id, shuffle id, and partition id the current function is\n+   * processing in. If a partition is fully processed the results for that partition/shuffle/rdd\n+   * combination are sent back to the driver. The driver keeps track of which rdd/shuffle/partitions\n+   * already have been applied, and only combines values into value_ if the rdd/shuffle/partition\n+   * has not already been aggregated on the driver program\n+   */\n+  // For data property accumulators pending and processed updates.\n+  // Pending and processed are keyed by (rdd id, shuffle id, partition id)\n+  private[spark] lazy val pending =\n+    new mutable.HashMap[(Int, Int, Int), AccumulatorV2[IN, OUT]]()\n+  // Completed contains the set of (rdd id, shuffle id, partition id) that have been\n+  // fully processed on the worker side. This is used to determine if the updates should\n+  // be sent back to the driver for a particular rdd/shuffle/partition combination.\n+  private[spark] lazy val completed = new mutable.HashSet[(Int, Int, Int)]()\n+  // Processed is keyed by (rdd id, shuffle id) and the value is a bitset containing all partitions\n+  // for the given key which have been merged into the value. This is used on the driver.\n+  @transient private[spark] lazy val processed = new mutable.HashMap[(Int, Int), mutable.BitSet]()"
+  }],
+  "prId": 11105
+}, {
+  "comments": [{
+    "author": {
+      "login": "squito"
+    },
+    "body": "this comment is kinda pointless -- pretty obvious that is what the `if` is doing.  What is really needed is an explanation of _why_ -- maybe that belongs as a doc comment on `dataPropertyMerge`.\n",
+    "commit": "59db4af635fd53e2723d187b60dee6856af74df4",
+    "createdAt": "2016-10-13T18:58:19Z",
+    "diffHunk": "@@ -136,15 +179,76 @@ abstract class AccumulatorV2[IN, OUT] extends Serializable {\n   def reset(): Unit\n \n   /**\n+   * Takes the inputs and accumulates. e.g. it can be a simple `+=` for counter accumulator.\n+   * Developers should extend addImpl to customize the adding functionality.\n+   */\n+  final def add(v: IN): Unit = {\n+    if (metadata != null && metadata.dataProperty) {\n+      dataPropertyAdd(v)\n+    } else {\n+      addImpl(v)\n+    }\n+  }\n+\n+  private def dataPropertyAdd(v: IN): Unit = {\n+    // Add first for localValue & AccumulatorInfo\n+    addImpl(v)\n+    if (metadata != null && metadata.dataProperty) {\n+      val updateInfo = TaskContext.get().getRDDPartitionInfo()\n+      val base = pending.getOrElse(updateInfo, copyAndReset())\n+      base.atDriverSide = false\n+      base.addImpl(v)\n+      pending(updateInfo) = base\n+    }\n+  }\n+\n+  /**\n+   * Mark a specific rdd/shuffle/partition as completely processed. This is a noop for\n+   * non-data property accumuables.\n+   */\n+  private[spark] def markFullyProcessed(rddId: Int, shuffleWriteId: Int, partitionId: Int): Unit = {\n+    if (metadata.dataProperty) {\n+      completed += ((rddId, shuffleWriteId, partitionId))\n+    }\n+  }\n+\n+  /**\n+   * Takes the inputs and accumulates. e.g. it can be a simple `+=` for counter accumulator.\n+   * Developers should extend addImpl to customize the adding functionality.\n    * Takes the inputs and accumulates.\n    */\n-  def add(v: IN): Unit\n+  protected[spark] def addImpl(v: IN)\n \n   /**\n    * Merges another same-type accumulator into this one and update its state, i.e. this should be\n-   * merge-in-place.\n+   * merge-in-place. Developers should extend mergeImpl to customize the merge functionality.\n    */\n-  def merge(other: AccumulatorV2[IN, OUT]): Unit\n+  final private[spark] lazy val merge: (AccumulatorV2[IN, OUT] => Unit) = {\n+    // Handle data property accumulators"
+  }],
+  "prId": 11105
+}, {
+  "comments": [{
+    "author": {
+      "login": "squito"
+    },
+    "body": "unused\n",
+    "commit": "59db4af635fd53e2723d187b60dee6856af74df4",
+    "createdAt": "2016-11-03T16:24:10Z",
+    "diffHunk": "@@ -22,17 +22,36 @@ import java.io.ObjectInputStream\n import java.util.{ArrayList, Collections}\n import java.util.concurrent.ConcurrentHashMap\n import java.util.concurrent.atomic.AtomicLong\n+import javax.annotation.concurrent.GuardedBy"
+  }],
+  "prId": 11105
+}, {
+  "comments": [{
+    "author": {
+      "login": "squito"
+    },
+    "body": "see my comment earlier about `@specialized`\n",
+    "commit": "59db4af635fd53e2723d187b60dee6856af74df4",
+    "createdAt": "2016-11-03T16:26:03Z",
+    "diffHunk": "@@ -306,18 +428,19 @@ class LongAccumulator extends AccumulatorV2[jl.Long, jl.Long] {\n \n   /**\n    * Adds v to the accumulator, i.e. increment sum by v and count by 1.\n-   * @since 2.0.0\n+   * Added for simplicity with adding non java Longs.\n+   * @since 2.1.0\n    */\n-  override def add(v: jl.Long): Unit = {\n-    _sum += v\n-    _count += 1\n+  def add(v: Long): Unit = {"
+  }, {
+    "author": {
+      "login": "holdenk"
+    },
+    "body": "So we could do that, but it seems like maybe having the specialized is better than copying that code? I don't have super strong feelings about this but just something to consider.\n",
+    "commit": "59db4af635fd53e2723d187b60dee6856af74df4",
+    "createdAt": "2016-11-03T22:52:35Z",
+    "diffHunk": "@@ -306,18 +428,19 @@ class LongAccumulator extends AccumulatorV2[jl.Long, jl.Long] {\n \n   /**\n    * Adds v to the accumulator, i.e. increment sum by v and count by 1.\n-   * @since 2.0.0\n+   * Added for simplicity with adding non java Longs.\n+   * @since 2.1.0\n    */\n-  override def add(v: jl.Long): Unit = {\n-    _sum += v\n-    _count += 1\n+  def add(v: Long): Unit = {"
+  }, {
+    "author": {
+      "login": "squito"
+    },
+    "body": "yeah I don't love the copied code either.  The thing is, `@specialized` has bigger ramfications -- the actual classes that get used (eg. that you see in stack traces) are different,  tricker to access the right class from java, there are a ton of generated classes when there is multiple inheritance (not relevant here at the moment, but perhaps in the future).  I think having copied code is the lesser of two evils.\n",
+    "commit": "59db4af635fd53e2723d187b60dee6856af74df4",
+    "createdAt": "2016-11-04T03:13:41Z",
+    "diffHunk": "@@ -306,18 +428,19 @@ class LongAccumulator extends AccumulatorV2[jl.Long, jl.Long] {\n \n   /**\n    * Adds v to the accumulator, i.e. increment sum by v and count by 1.\n-   * @since 2.0.0\n+   * Added for simplicity with adding non java Longs.\n+   * @since 2.1.0\n    */\n-  override def add(v: jl.Long): Unit = {\n-    _sum += v\n-    _count += 1\n+  def add(v: Long): Unit = {"
+  }, {
+    "author": {
+      "login": "holdenk"
+    },
+    "body": "ok.\n",
+    "commit": "59db4af635fd53e2723d187b60dee6856af74df4",
+    "createdAt": "2016-11-04T06:06:18Z",
+    "diffHunk": "@@ -306,18 +428,19 @@ class LongAccumulator extends AccumulatorV2[jl.Long, jl.Long] {\n \n   /**\n    * Adds v to the accumulator, i.e. increment sum by v and count by 1.\n-   * @since 2.0.0\n+   * Added for simplicity with adding non java Longs.\n+   * @since 2.1.0\n    */\n-  override def add(v: jl.Long): Unit = {\n-    _sum += v\n-    _count += 1\n+  def add(v: Long): Unit = {"
+  }],
+  "prId": 11105
+}, {
+  "comments": [{
+    "author": {
+      "login": "squito"
+    },
+    "body": "see comment on `@specialized`\n",
+    "commit": "59db4af635fd53e2723d187b60dee6856af74df4",
+    "createdAt": "2016-11-03T16:26:18Z",
+    "diffHunk": "@@ -383,16 +506,7 @@ class DoubleAccumulator extends AccumulatorV2[jl.Double, jl.Double] {\n    * Adds v to the accumulator, i.e. increment sum by v and count by 1.\n    * @since 2.0.0\n    */\n-  override def add(v: jl.Double): Unit = {\n-    _sum += v\n-    _count += 1\n-  }\n-\n-  /**\n-   * Adds v to the accumulator, i.e. increment sum by v and count by 1.\n-   * @since 2.0.0\n-   */\n-  def add(v: Double): Unit = {"
+  }],
+  "prId": 11105
+}, {
+  "comments": [{
+    "author": {
+      "login": "squito"
+    },
+    "body": "oh crap.  you are going to hate me ... making this `final` is going to break binary compatibility.\n\nis there any other alternative? I will keep thinking but I can't come up with anything.\n",
+    "commit": "59db4af635fd53e2723d187b60dee6856af74df4",
+    "createdAt": "2016-11-04T04:01:46Z",
+    "diffHunk": "@@ -136,15 +181,92 @@ abstract class AccumulatorV2[IN, OUT] extends Serializable {\n   def reset(): Unit\n \n   /**\n+   * Takes the inputs and accumulates. e.g. it can be a simple `+=` for counter accumulator.\n+   * Developers should extend addImpl to customize the adding functionality.\n+   */\n+  final def add(v: IN): Unit = {"
+  }, {
+    "author": {
+      "login": "squito"
+    },
+    "body": "ok maybe another subclass of `AccumulatorV2`? sucks that we woudn't get data property goodness in all accumulators automatically, though\n",
+    "commit": "59db4af635fd53e2723d187b60dee6856af74df4",
+    "createdAt": "2016-11-04T04:10:20Z",
+    "diffHunk": "@@ -136,15 +181,92 @@ abstract class AccumulatorV2[IN, OUT] extends Serializable {\n   def reset(): Unit\n \n   /**\n+   * Takes the inputs and accumulates. e.g. it can be a simple `+=` for counter accumulator.\n+   * Developers should extend addImpl to customize the adding functionality.\n+   */\n+  final def add(v: IN): Unit = {"
+  }, {
+    "author": {
+      "login": "holdenk"
+    },
+    "body": "Yah there isn't a way to do this for everyone without breaking binary compatibility. Given that the AccumulatorV2 API was added in Spark2.0 though my only argument is that I don't expect anyone would be using this yet (given the current usability of accumulators) and maybe it would be ok if we mention it in the release notes?\n\nBut if you think the best path forward is subclassing that makes sense too.\n",
+    "commit": "59db4af635fd53e2723d187b60dee6856af74df4",
+    "createdAt": "2016-11-04T05:17:06Z",
+    "diffHunk": "@@ -136,15 +181,92 @@ abstract class AccumulatorV2[IN, OUT] extends Serializable {\n   def reset(): Unit\n \n   /**\n+   * Takes the inputs and accumulates. e.g. it can be a simple `+=` for counter accumulator.\n+   * Developers should extend addImpl to customize the adding functionality.\n+   */\n+  final def add(v: IN): Unit = {"
+  }, {
+    "author": {
+      "login": "squito"
+    },
+    "body": "yeah, accumulatorv2 is not marked experimental or anything, so we really can't break binary compatability\n",
+    "commit": "59db4af635fd53e2723d187b60dee6856af74df4",
+    "createdAt": "2016-11-04T05:39:06Z",
+    "diffHunk": "@@ -136,15 +181,92 @@ abstract class AccumulatorV2[IN, OUT] extends Serializable {\n   def reset(): Unit\n \n   /**\n+   * Takes the inputs and accumulates. e.g. it can be a simple `+=` for counter accumulator.\n+   * Developers should extend addImpl to customize the adding functionality.\n+   */\n+  final def add(v: IN): Unit = {"
+  }, {
+    "author": {
+      "login": "holdenk"
+    },
+    "body": "drat :( Do we want to do AccumulatorV3 and deprecate AccumulatorV2's constructor?\n",
+    "commit": "59db4af635fd53e2723d187b60dee6856af74df4",
+    "createdAt": "2016-11-04T06:11:58Z",
+    "diffHunk": "@@ -136,15 +181,92 @@ abstract class AccumulatorV2[IN, OUT] extends Serializable {\n   def reset(): Unit\n \n   /**\n+   * Takes the inputs and accumulates. e.g. it can be a simple `+=` for counter accumulator.\n+   * Developers should extend addImpl to customize the adding functionality.\n+   */\n+  final def add(v: IN): Unit = {"
+  }, {
+    "author": {
+      "login": "holdenk"
+    },
+    "body": "Or maybe just DataAccumulator since V1 - V2 was a big change and this really isn't all that big of a change.\n",
+    "commit": "59db4af635fd53e2723d187b60dee6856af74df4",
+    "createdAt": "2016-11-04T06:22:20Z",
+    "diffHunk": "@@ -136,15 +181,92 @@ abstract class AccumulatorV2[IN, OUT] extends Serializable {\n   def reset(): Unit\n \n   /**\n+   * Takes the inputs and accumulates. e.g. it can be a simple `+=` for counter accumulator.\n+   * Developers should extend addImpl to customize the adding functionality.\n+   */\n+  final def add(v: IN): Unit = {"
+  }],
+  "prId": 11105
+}, {
+  "comments": [{
+    "author": {
+      "login": "squito"
+    },
+    "body": "I had a comment here earlier to check my understanding of this -- github is being really weird with these comments so I'm going to repost:\n\n---\n\nI find the logic around pending, completed and processed really confusing. I'm still thinking this through -- before making concrete suggestions I want to check my understanding.\n\ncompleted should always only reflect the update from one task. It should only be set on the executor. At first I was going to say it shouldn't be a set, it should just be one value -- but of course one task can get updates from multiple rdds. It will differ from the keyset of pending b/c pending can include updates from partitions that aren't completed (eg. those take and coalesce cases).\n\n`processed` is only used on the driver. Since it has global knowledge, it can use this determine whether each update is a repeat or not. (now this is `rddProcessed` and `shuffleProcessed`.)\n\nI think the comment \"If a partition is fully processed the results for that partition/shuffle/rdd combination are sent back to the driver\" is incorrect -- it looks to me like the updates are always sent back to the driver, and the driver always makes the call on whether or not to merge.\n\nseems like merge (and thus dataPropertyMerge) is only called on the driver. I'm trying to figure out whether or not it matters. It seems like it would do something weird if it were called on the executor. maybe we should add an assert(isAtDriver).\n\n---\n\nAssuming that is correct, I'd suggest some renamings:\n\n`completed` to `completedTaskOutputsForOneTask`\nand include a comment that its keyset differs from `pending` b/c some of the updates in pending may be from incomplete partition processing.\n\n`pending` to `pendingAccumulatorUpdatesFromOneTask`\nand have the comment mention that this tracks updates all accumulator updates from one task, but some of them may be ignored if the output they represent isn't fully computed, eg. an rdd.take() leads to incomplete partition processing.\n",
+    "commit": "59db4af635fd53e2723d187b60dee6856af74df4",
+    "createdAt": "2016-11-04T04:03:22Z",
+    "diffHunk": "@@ -42,18 +60,45 @@ private[spark] case class AccumulatorMetadata(\n  * `OUT` should be a type that can be read atomically (e.g., Int, Long), or thread-safely\n  * (e.g., synchronized collections) because it will be read from other threads.\n  */\n-abstract class AccumulatorV2[IN, OUT] extends Serializable {\n+abstract class AccumulatorV2[@specialized(Int, Long, Double) IN, OUT] extends Serializable {\n   private[spark] var metadata: AccumulatorMetadata = _\n-  private[this] var atDriverSide = true\n+  private[spark] var atDriverSide = true\n+\n+  /**\n+   * The following values are used for data property [[AccumulatorV2]]s.\n+   * Data property [[AccumulatorV2]]s have only-once semantics. These semantics are implemented\n+   * by keeping track of which RDD id, shuffle id, and partition id the current function is\n+   * processing in. If a partition is fully processed the results for that partition/shuffle/rdd\n+   * combination are sent back to the driver. The driver keeps track of which rdd/shuffle/partitions\n+   * already have been applied, and only combines values into value_ if the rdd/shuffle/partition\n+   * has not already been aggregated on the driver program\n+   */\n+  // For data property accumulators pending and processed updates.\n+  // Pending and processed are keyed by (rdd id, shuffle id, partition id)\n+  private[spark] lazy val pending =\n+    new mutable.HashMap[TaskOutputId, AccumulatorV2[IN, OUT]]()\n+  // Completed contains the set of (rdd id, shuffle id, partition id) that have been\n+  // fully processed on the worker side. This is used to determine if the updates should\n+  // be merged on the driver for a particular rdd/shuffle/partition combination.\n+  private[spark] lazy val completed = new mutable.HashSet[TaskOutputId]()\n+  // rddProcessed is keyed by rdd id and the value is a bitset containing all partitions\n+  // for the given key which have been merged into the value. This is used on the driver.\n+  @transient private[spark] lazy val rddProcessed = new mutable.HashMap[Int, mutable.BitSet]()\n+  // shuffleProcessed is the same as rddProcessed except keyed by shuffle id.\n+  @transient private[spark] lazy val shuffleProcessed = new mutable.HashMap[Int, mutable.BitSet]()",
+    "line": 144
+  }, {
+    "author": {
+      "login": "holdenk"
+    },
+    "body": "That understanding seems correct, indeed the merge function now asserts that it is at driver side (from the last time this comment was posted).\n\nAs an aside I don't know what GitHub is doing/changing with the review features but it seems to be really weird on this PR for some reason.\n",
+    "commit": "59db4af635fd53e2723d187b60dee6856af74df4",
+    "createdAt": "2016-11-04T05:21:23Z",
+    "diffHunk": "@@ -42,18 +60,45 @@ private[spark] case class AccumulatorMetadata(\n  * `OUT` should be a type that can be read atomically (e.g., Int, Long), or thread-safely\n  * (e.g., synchronized collections) because it will be read from other threads.\n  */\n-abstract class AccumulatorV2[IN, OUT] extends Serializable {\n+abstract class AccumulatorV2[@specialized(Int, Long, Double) IN, OUT] extends Serializable {\n   private[spark] var metadata: AccumulatorMetadata = _\n-  private[this] var atDriverSide = true\n+  private[spark] var atDriverSide = true\n+\n+  /**\n+   * The following values are used for data property [[AccumulatorV2]]s.\n+   * Data property [[AccumulatorV2]]s have only-once semantics. These semantics are implemented\n+   * by keeping track of which RDD id, shuffle id, and partition id the current function is\n+   * processing in. If a partition is fully processed the results for that partition/shuffle/rdd\n+   * combination are sent back to the driver. The driver keeps track of which rdd/shuffle/partitions\n+   * already have been applied, and only combines values into value_ if the rdd/shuffle/partition\n+   * has not already been aggregated on the driver program\n+   */\n+  // For data property accumulators pending and processed updates.\n+  // Pending and processed are keyed by (rdd id, shuffle id, partition id)\n+  private[spark] lazy val pending =\n+    new mutable.HashMap[TaskOutputId, AccumulatorV2[IN, OUT]]()\n+  // Completed contains the set of (rdd id, shuffle id, partition id) that have been\n+  // fully processed on the worker side. This is used to determine if the updates should\n+  // be merged on the driver for a particular rdd/shuffle/partition combination.\n+  private[spark] lazy val completed = new mutable.HashSet[TaskOutputId]()\n+  // rddProcessed is keyed by rdd id and the value is a bitset containing all partitions\n+  // for the given key which have been merged into the value. This is used on the driver.\n+  @transient private[spark] lazy val rddProcessed = new mutable.HashMap[Int, mutable.BitSet]()\n+  // shuffleProcessed is the same as rddProcessed except keyed by shuffle id.\n+  @transient private[spark] lazy val shuffleProcessed = new mutable.HashMap[Int, mutable.BitSet]()",
+    "line": 144
+  }, {
+    "author": {
+      "login": "holdenk"
+    },
+    "body": "`completedTaskOutputsForOneTask` & `pendingAccumulatorUpdatesFromOneTask` seem like really long variable names - how about `completedOutputsForTask` and `pendingAccumulatorUpdatesForTask`?\n",
+    "commit": "59db4af635fd53e2723d187b60dee6856af74df4",
+    "createdAt": "2016-11-04T05:25:25Z",
+    "diffHunk": "@@ -42,18 +60,45 @@ private[spark] case class AccumulatorMetadata(\n  * `OUT` should be a type that can be read atomically (e.g., Int, Long), or thread-safely\n  * (e.g., synchronized collections) because it will be read from other threads.\n  */\n-abstract class AccumulatorV2[IN, OUT] extends Serializable {\n+abstract class AccumulatorV2[@specialized(Int, Long, Double) IN, OUT] extends Serializable {\n   private[spark] var metadata: AccumulatorMetadata = _\n-  private[this] var atDriverSide = true\n+  private[spark] var atDriverSide = true\n+\n+  /**\n+   * The following values are used for data property [[AccumulatorV2]]s.\n+   * Data property [[AccumulatorV2]]s have only-once semantics. These semantics are implemented\n+   * by keeping track of which RDD id, shuffle id, and partition id the current function is\n+   * processing in. If a partition is fully processed the results for that partition/shuffle/rdd\n+   * combination are sent back to the driver. The driver keeps track of which rdd/shuffle/partitions\n+   * already have been applied, and only combines values into value_ if the rdd/shuffle/partition\n+   * has not already been aggregated on the driver program\n+   */\n+  // For data property accumulators pending and processed updates.\n+  // Pending and processed are keyed by (rdd id, shuffle id, partition id)\n+  private[spark] lazy val pending =\n+    new mutable.HashMap[TaskOutputId, AccumulatorV2[IN, OUT]]()\n+  // Completed contains the set of (rdd id, shuffle id, partition id) that have been\n+  // fully processed on the worker side. This is used to determine if the updates should\n+  // be merged on the driver for a particular rdd/shuffle/partition combination.\n+  private[spark] lazy val completed = new mutable.HashSet[TaskOutputId]()\n+  // rddProcessed is keyed by rdd id and the value is a bitset containing all partitions\n+  // for the given key which have been merged into the value. This is used on the driver.\n+  @transient private[spark] lazy val rddProcessed = new mutable.HashMap[Int, mutable.BitSet]()\n+  // shuffleProcessed is the same as rddProcessed except keyed by shuffle id.\n+  @transient private[spark] lazy val shuffleProcessed = new mutable.HashMap[Int, mutable.BitSet]()",
+    "line": 144
+  }, {
+    "author": {
+      "login": "squito"
+    },
+    "body": "sure thats fine too.  still pretty long, but better :)\n",
+    "commit": "59db4af635fd53e2723d187b60dee6856af74df4",
+    "createdAt": "2016-11-04T05:38:17Z",
+    "diffHunk": "@@ -42,18 +60,45 @@ private[spark] case class AccumulatorMetadata(\n  * `OUT` should be a type that can be read atomically (e.g., Int, Long), or thread-safely\n  * (e.g., synchronized collections) because it will be read from other threads.\n  */\n-abstract class AccumulatorV2[IN, OUT] extends Serializable {\n+abstract class AccumulatorV2[@specialized(Int, Long, Double) IN, OUT] extends Serializable {\n   private[spark] var metadata: AccumulatorMetadata = _\n-  private[this] var atDriverSide = true\n+  private[spark] var atDriverSide = true\n+\n+  /**\n+   * The following values are used for data property [[AccumulatorV2]]s.\n+   * Data property [[AccumulatorV2]]s have only-once semantics. These semantics are implemented\n+   * by keeping track of which RDD id, shuffle id, and partition id the current function is\n+   * processing in. If a partition is fully processed the results for that partition/shuffle/rdd\n+   * combination are sent back to the driver. The driver keeps track of which rdd/shuffle/partitions\n+   * already have been applied, and only combines values into value_ if the rdd/shuffle/partition\n+   * has not already been aggregated on the driver program\n+   */\n+  // For data property accumulators pending and processed updates.\n+  // Pending and processed are keyed by (rdd id, shuffle id, partition id)\n+  private[spark] lazy val pending =\n+    new mutable.HashMap[TaskOutputId, AccumulatorV2[IN, OUT]]()\n+  // Completed contains the set of (rdd id, shuffle id, partition id) that have been\n+  // fully processed on the worker side. This is used to determine if the updates should\n+  // be merged on the driver for a particular rdd/shuffle/partition combination.\n+  private[spark] lazy val completed = new mutable.HashSet[TaskOutputId]()\n+  // rddProcessed is keyed by rdd id and the value is a bitset containing all partitions\n+  // for the given key which have been merged into the value. This is used on the driver.\n+  @transient private[spark] lazy val rddProcessed = new mutable.HashMap[Int, mutable.BitSet]()\n+  // shuffleProcessed is the same as rddProcessed except keyed by shuffle id.\n+  @transient private[spark] lazy val shuffleProcessed = new mutable.HashMap[Int, mutable.BitSet]()",
+    "line": 144
+  }],
+  "prId": 11105
+}, {
+  "comments": [{
+    "author": {
+      "login": "squito"
+    },
+    "body": "Maybe add something like \"see [[TaskOutputId]] for an explanation of why this is important for data property accumulators\"?  I worry the purpose of this may seem a little mysterious on its own ... figure we should at least point to the more complete description.\n",
+    "commit": "59db4af635fd53e2723d187b60dee6856af74df4",
+    "createdAt": "2016-11-04T04:08:17Z",
+    "diffHunk": "@@ -136,15 +181,92 @@ abstract class AccumulatorV2[IN, OUT] extends Serializable {\n   def reset(): Unit\n \n   /**\n+   * Takes the inputs and accumulates. e.g. it can be a simple `+=` for counter accumulator.\n+   * Developers should extend addImpl to customize the adding functionality.\n+   */\n+  final def add(v: IN): Unit = {\n+    if (metadata != null && metadata.dataProperty) {\n+      dataPropertyAdd(v)\n+    } else {\n+      addImpl(v)\n+    }\n+  }\n+\n+  private def dataPropertyAdd(v: IN): Unit = {\n+    // To allow the user to be able to access the current accumulated value from their process\n+    // worker side then we need to perform a \"normal\" add as well as the data property add.\n+    addImpl(v)\n+    // Add to the pending updates for data property\n+    val updateInfo = TaskContext.get().getRDDPartitionInfo()\n+    val base = pending.getOrElse(updateInfo, copyAndReset())\n+    // Since we may have constructed a new accumulator, set atDriverSide to false as the default\n+    // new accumulators will have atDriverSide equal to true.\n+    base.atDriverSide = false\n+    base.addImpl(v)\n+    pending(updateInfo) = base\n+  }\n+\n+  /**\n+   * Mark a specific rdd/shuffle/partition as completely processed. This is a noop for\n+   * non-data property accumuables."
+  }],
+  "prId": 11105
+}, {
+  "comments": [{
+    "author": {
+      "login": "squito"
+    },
+    "body": "rename `base` to `mergedAccumulatorForOneTaskOutput` (or something like that?  I just find `base` way to generic.)\n",
+    "commit": "59db4af635fd53e2723d187b60dee6856af74df4",
+    "createdAt": "2016-11-04T04:11:43Z",
+    "diffHunk": "@@ -136,15 +181,92 @@ abstract class AccumulatorV2[IN, OUT] extends Serializable {\n   def reset(): Unit\n \n   /**\n+   * Takes the inputs and accumulates. e.g. it can be a simple `+=` for counter accumulator.\n+   * Developers should extend addImpl to customize the adding functionality.\n+   */\n+  final def add(v: IN): Unit = {\n+    if (metadata != null && metadata.dataProperty) {\n+      dataPropertyAdd(v)\n+    } else {\n+      addImpl(v)\n+    }\n+  }\n+\n+  private def dataPropertyAdd(v: IN): Unit = {\n+    // To allow the user to be able to access the current accumulated value from their process\n+    // worker side then we need to perform a \"normal\" add as well as the data property add.\n+    addImpl(v)\n+    // Add to the pending updates for data property\n+    val updateInfo = TaskContext.get().getRDDPartitionInfo()\n+    val base = pending.getOrElse(updateInfo, copyAndReset())"
+  }],
+  "prId": 11105
+}, {
+  "comments": [{
+    "author": {
+      "login": "squito"
+    },
+    "body": "the idea is that if you use an accumulator in a foreach, you get the same behavior whether you use a data-property accumulator or not, right?  that makes sense.  before this last change, would data-property accumulators just get totally ignored in a foreach?\n",
+    "commit": "59db4af635fd53e2723d187b60dee6856af74df4",
+    "createdAt": "2016-11-04T04:13:12Z",
+    "diffHunk": "@@ -136,15 +181,92 @@ abstract class AccumulatorV2[IN, OUT] extends Serializable {\n   def reset(): Unit\n \n   /**\n+   * Takes the inputs and accumulates. e.g. it can be a simple `+=` for counter accumulator.\n+   * Developers should extend addImpl to customize the adding functionality.\n+   */\n+  final def add(v: IN): Unit = {\n+    if (metadata != null && metadata.dataProperty) {\n+      dataPropertyAdd(v)\n+    } else {\n+      addImpl(v)\n+    }\n+  }\n+\n+  private def dataPropertyAdd(v: IN): Unit = {\n+    // To allow the user to be able to access the current accumulated value from their process\n+    // worker side then we need to perform a \"normal\" add as well as the data property add.\n+    addImpl(v)\n+    // Add to the pending updates for data property\n+    val updateInfo = TaskContext.get().getRDDPartitionInfo()\n+    val base = pending.getOrElse(updateInfo, copyAndReset())\n+    // Since we may have constructed a new accumulator, set atDriverSide to false as the default\n+    // new accumulators will have atDriverSide equal to true.\n+    base.atDriverSide = false\n+    base.addImpl(v)\n+    pending(updateInfo) = base\n+  }\n+\n+  /**\n+   * Mark a specific rdd/shuffle/partition as completely processed. This is a noop for\n+   * non-data property accumuables.\n+   */\n+  private[spark] def markFullyProcessed(taskOutputId: TaskOutputId): Unit = {\n+    if (metadata.dataProperty) {\n+      completed += taskOutputId\n+    }\n+  }\n+\n+  /**\n+   * Takes the inputs and accumulates. e.g. it can be a simple `+=` for counter accumulator.\n+   * Developers should extend addImpl to customize the adding functionality.\n    * Takes the inputs and accumulates.\n    */\n-  def add(v: IN): Unit\n+  protected[spark] def addImpl(v: IN)\n+\n+  /**\n+   * Merges another same-type accumulator into this one and update its state, i.e. this should be\n+   * merge-in-place. Developers should extend mergeImpl to customize the merge functionality.\n+   */\n+  final private[spark] lazy val merge: (AccumulatorV2[IN, OUT] => Unit) = {\n+    assert(isAtDriverSide)\n+    // Handle data property accumulators\n+    if (metadata != null && metadata.dataProperty) {\n+      dataPropertyMerge _\n+    } else {\n+      mergeImpl _\n+    }\n+  }\n+\n+  final private[spark] def dataPropertyMerge(other: AccumulatorV2[IN, OUT]) = {\n+    // Apply all foreach partitions regardless - they can only be fully evaluated\n+    val unprocessed = other.pending.filter{\n+      case (ForeachOutputId(), v) => mergeImpl(v); false"
+  }, {
+    "author": {
+      "login": "holdenk"
+    },
+    "body": "Yes they would.\n",
+    "commit": "59db4af635fd53e2723d187b60dee6856af74df4",
+    "createdAt": "2016-11-04T05:38:08Z",
+    "diffHunk": "@@ -136,15 +181,92 @@ abstract class AccumulatorV2[IN, OUT] extends Serializable {\n   def reset(): Unit\n \n   /**\n+   * Takes the inputs and accumulates. e.g. it can be a simple `+=` for counter accumulator.\n+   * Developers should extend addImpl to customize the adding functionality.\n+   */\n+  final def add(v: IN): Unit = {\n+    if (metadata != null && metadata.dataProperty) {\n+      dataPropertyAdd(v)\n+    } else {\n+      addImpl(v)\n+    }\n+  }\n+\n+  private def dataPropertyAdd(v: IN): Unit = {\n+    // To allow the user to be able to access the current accumulated value from their process\n+    // worker side then we need to perform a \"normal\" add as well as the data property add.\n+    addImpl(v)\n+    // Add to the pending updates for data property\n+    val updateInfo = TaskContext.get().getRDDPartitionInfo()\n+    val base = pending.getOrElse(updateInfo, copyAndReset())\n+    // Since we may have constructed a new accumulator, set atDriverSide to false as the default\n+    // new accumulators will have atDriverSide equal to true.\n+    base.atDriverSide = false\n+    base.addImpl(v)\n+    pending(updateInfo) = base\n+  }\n+\n+  /**\n+   * Mark a specific rdd/shuffle/partition as completely processed. This is a noop for\n+   * non-data property accumuables.\n+   */\n+  private[spark] def markFullyProcessed(taskOutputId: TaskOutputId): Unit = {\n+    if (metadata.dataProperty) {\n+      completed += taskOutputId\n+    }\n+  }\n+\n+  /**\n+   * Takes the inputs and accumulates. e.g. it can be a simple `+=` for counter accumulator.\n+   * Developers should extend addImpl to customize the adding functionality.\n    * Takes the inputs and accumulates.\n    */\n-  def add(v: IN): Unit\n+  protected[spark] def addImpl(v: IN)\n+\n+  /**\n+   * Merges another same-type accumulator into this one and update its state, i.e. this should be\n+   * merge-in-place. Developers should extend mergeImpl to customize the merge functionality.\n+   */\n+  final private[spark] lazy val merge: (AccumulatorV2[IN, OUT] => Unit) = {\n+    assert(isAtDriverSide)\n+    // Handle data property accumulators\n+    if (metadata != null && metadata.dataProperty) {\n+      dataPropertyMerge _\n+    } else {\n+      mergeImpl _\n+    }\n+  }\n+\n+  final private[spark] def dataPropertyMerge(other: AccumulatorV2[IN, OUT]) = {\n+    // Apply all foreach partitions regardless - they can only be fully evaluated\n+    val unprocessed = other.pending.filter{\n+      case (ForeachOutputId(), v) => mergeImpl(v); false"
+  }],
+  "prId": 11105
+}, {
+  "comments": [{
+    "author": {
+      "login": "squito"
+    },
+    "body": "style nit: spaces around `{` (a couple other places in this method too)\n",
+    "commit": "59db4af635fd53e2723d187b60dee6856af74df4",
+    "createdAt": "2016-11-04T04:21:21Z",
+    "diffHunk": "@@ -136,15 +181,92 @@ abstract class AccumulatorV2[IN, OUT] extends Serializable {\n   def reset(): Unit\n \n   /**\n+   * Takes the inputs and accumulates. e.g. it can be a simple `+=` for counter accumulator.\n+   * Developers should extend addImpl to customize the adding functionality.\n+   */\n+  final def add(v: IN): Unit = {\n+    if (metadata != null && metadata.dataProperty) {\n+      dataPropertyAdd(v)\n+    } else {\n+      addImpl(v)\n+    }\n+  }\n+\n+  private def dataPropertyAdd(v: IN): Unit = {\n+    // To allow the user to be able to access the current accumulated value from their process\n+    // worker side then we need to perform a \"normal\" add as well as the data property add.\n+    addImpl(v)\n+    // Add to the pending updates for data property\n+    val updateInfo = TaskContext.get().getRDDPartitionInfo()\n+    val base = pending.getOrElse(updateInfo, copyAndReset())\n+    // Since we may have constructed a new accumulator, set atDriverSide to false as the default\n+    // new accumulators will have atDriverSide equal to true.\n+    base.atDriverSide = false\n+    base.addImpl(v)\n+    pending(updateInfo) = base\n+  }\n+\n+  /**\n+   * Mark a specific rdd/shuffle/partition as completely processed. This is a noop for\n+   * non-data property accumuables.\n+   */\n+  private[spark] def markFullyProcessed(taskOutputId: TaskOutputId): Unit = {\n+    if (metadata.dataProperty) {\n+      completed += taskOutputId\n+    }\n+  }\n+\n+  /**\n+   * Takes the inputs and accumulates. e.g. it can be a simple `+=` for counter accumulator.\n+   * Developers should extend addImpl to customize the adding functionality.\n    * Takes the inputs and accumulates.\n    */\n-  def add(v: IN): Unit\n+  protected[spark] def addImpl(v: IN)\n+\n+  /**\n+   * Merges another same-type accumulator into this one and update its state, i.e. this should be\n+   * merge-in-place. Developers should extend mergeImpl to customize the merge functionality.\n+   */\n+  final private[spark] lazy val merge: (AccumulatorV2[IN, OUT] => Unit) = {\n+    assert(isAtDriverSide)\n+    // Handle data property accumulators\n+    if (metadata != null && metadata.dataProperty) {\n+      dataPropertyMerge _\n+    } else {\n+      mergeImpl _\n+    }\n+  }\n+\n+  final private[spark] def dataPropertyMerge(other: AccumulatorV2[IN, OUT]) = {\n+    // Apply all foreach partitions regardless - they can only be fully evaluated\n+    val unprocessed = other.pending.filter{"
+  }],
+  "prId": 11105
+}, {
+  "comments": [{
+    "author": {
+      "login": "squito"
+    },
+    "body": "rename `term` to `accumUpdatesFromUnmergedTaskOutputs`, and include a comment like \"Only take updates for task outputs we haven't seen before.  So if this task computed two rdds, but one of them had been computed previously, only take the accumulator updates from the other one.\"\n\nobvious to you by now but its the most important part so worth spelling it out :)\n",
+    "commit": "59db4af635fd53e2723d187b60dee6856af74df4",
+    "createdAt": "2016-11-04T04:27:27Z",
+    "diffHunk": "@@ -136,15 +181,92 @@ abstract class AccumulatorV2[IN, OUT] extends Serializable {\n   def reset(): Unit\n \n   /**\n+   * Takes the inputs and accumulates. e.g. it can be a simple `+=` for counter accumulator.\n+   * Developers should extend addImpl to customize the adding functionality.\n+   */\n+  final def add(v: IN): Unit = {\n+    if (metadata != null && metadata.dataProperty) {\n+      dataPropertyAdd(v)\n+    } else {\n+      addImpl(v)\n+    }\n+  }\n+\n+  private def dataPropertyAdd(v: IN): Unit = {\n+    // To allow the user to be able to access the current accumulated value from their process\n+    // worker side then we need to perform a \"normal\" add as well as the data property add.\n+    addImpl(v)\n+    // Add to the pending updates for data property\n+    val updateInfo = TaskContext.get().getRDDPartitionInfo()\n+    val base = pending.getOrElse(updateInfo, copyAndReset())\n+    // Since we may have constructed a new accumulator, set atDriverSide to false as the default\n+    // new accumulators will have atDriverSide equal to true.\n+    base.atDriverSide = false\n+    base.addImpl(v)\n+    pending(updateInfo) = base\n+  }\n+\n+  /**\n+   * Mark a specific rdd/shuffle/partition as completely processed. This is a noop for\n+   * non-data property accumuables.\n+   */\n+  private[spark] def markFullyProcessed(taskOutputId: TaskOutputId): Unit = {\n+    if (metadata.dataProperty) {\n+      completed += taskOutputId\n+    }\n+  }\n+\n+  /**\n+   * Takes the inputs and accumulates. e.g. it can be a simple `+=` for counter accumulator.\n+   * Developers should extend addImpl to customize the adding functionality.\n    * Takes the inputs and accumulates.\n    */\n-  def add(v: IN): Unit\n+  protected[spark] def addImpl(v: IN)\n+\n+  /**\n+   * Merges another same-type accumulator into this one and update its state, i.e. this should be\n+   * merge-in-place. Developers should extend mergeImpl to customize the merge functionality.\n+   */\n+  final private[spark] lazy val merge: (AccumulatorV2[IN, OUT] => Unit) = {\n+    assert(isAtDriverSide)\n+    // Handle data property accumulators\n+    if (metadata != null && metadata.dataProperty) {\n+      dataPropertyMerge _\n+    } else {\n+      mergeImpl _\n+    }\n+  }\n+\n+  final private[spark] def dataPropertyMerge(other: AccumulatorV2[IN, OUT]) = {\n+    // Apply all foreach partitions regardless - they can only be fully evaluated\n+    val unprocessed = other.pending.filter{\n+      case (ForeachOutputId(), v) => mergeImpl(v); false\n+      case _ => true\n+    }\n+    val term = unprocessed.filter{case (k, v) => other.completed.contains(k)}"
+  }],
+  "prId": 11105
+}, {
+  "comments": [{
+    "author": {
+      "login": "squito"
+    },
+    "body": "indentation is off\n",
+    "commit": "59db4af635fd53e2723d187b60dee6856af74df4",
+    "createdAt": "2016-11-04T04:30:17Z",
+    "diffHunk": "@@ -136,15 +181,92 @@ abstract class AccumulatorV2[IN, OUT] extends Serializable {\n   def reset(): Unit\n \n   /**\n+   * Takes the inputs and accumulates. e.g. it can be a simple `+=` for counter accumulator.\n+   * Developers should extend addImpl to customize the adding functionality.\n+   */\n+  final def add(v: IN): Unit = {\n+    if (metadata != null && metadata.dataProperty) {\n+      dataPropertyAdd(v)\n+    } else {\n+      addImpl(v)\n+    }\n+  }\n+\n+  private def dataPropertyAdd(v: IN): Unit = {\n+    // To allow the user to be able to access the current accumulated value from their process\n+    // worker side then we need to perform a \"normal\" add as well as the data property add.\n+    addImpl(v)\n+    // Add to the pending updates for data property\n+    val updateInfo = TaskContext.get().getRDDPartitionInfo()\n+    val base = pending.getOrElse(updateInfo, copyAndReset())\n+    // Since we may have constructed a new accumulator, set atDriverSide to false as the default\n+    // new accumulators will have atDriverSide equal to true.\n+    base.atDriverSide = false\n+    base.addImpl(v)\n+    pending(updateInfo) = base\n+  }\n+\n+  /**\n+   * Mark a specific rdd/shuffle/partition as completely processed. This is a noop for\n+   * non-data property accumuables.\n+   */\n+  private[spark] def markFullyProcessed(taskOutputId: TaskOutputId): Unit = {\n+    if (metadata.dataProperty) {\n+      completed += taskOutputId\n+    }\n+  }\n+\n+  /**\n+   * Takes the inputs and accumulates. e.g. it can be a simple `+=` for counter accumulator.\n+   * Developers should extend addImpl to customize the adding functionality.\n    * Takes the inputs and accumulates.\n    */\n-  def add(v: IN): Unit\n+  protected[spark] def addImpl(v: IN)\n+\n+  /**\n+   * Merges another same-type accumulator into this one and update its state, i.e. this should be\n+   * merge-in-place. Developers should extend mergeImpl to customize the merge functionality.\n+   */\n+  final private[spark] lazy val merge: (AccumulatorV2[IN, OUT] => Unit) = {\n+    assert(isAtDriverSide)\n+    // Handle data property accumulators\n+    if (metadata != null && metadata.dataProperty) {\n+      dataPropertyMerge _\n+    } else {\n+      mergeImpl _\n+    }\n+  }\n+\n+  final private[spark] def dataPropertyMerge(other: AccumulatorV2[IN, OUT]) = {\n+    // Apply all foreach partitions regardless - they can only be fully evaluated\n+    val unprocessed = other.pending.filter{\n+      case (ForeachOutputId(), v) => mergeImpl(v); false\n+      case _ => true\n+    }\n+    val term = unprocessed.filter{case (k, v) => other.completed.contains(k)}\n+    term.flatMap {\n+      case (RDDOutputId(rddId, splitId), v) =>\n+        Some((rddProcessed, rddId, splitId, v))\n+      case (ShuffleMapOutputId(shuffleWriteId, splitId), v) =>\n+        Some((shuffleProcessed, shuffleWriteId, splitId, v))\n+      case _ => // We won't ever hit this case but avoid compiler warnings\n+        None\n+    }.foreach {\n+      case (processed, id, splitId, v) =>"
+  }],
+  "prId": 11105
+}, {
+  "comments": [{
+    "author": {
+      "login": "squito"
+    },
+    "body": "its worth noting there is an asymmetry here that you might not expect from a `merge` method -- `this` has to be the accumulator that was created originally on the driver (so you access the right `rddProcessed` and `shuffleProcessed`), and `other` has to be the one from the task update (so you access the right `other.pending` and `other.completed`.\n",
+    "commit": "59db4af635fd53e2723d187b60dee6856af74df4",
+    "createdAt": "2016-11-04T04:38:20Z",
+    "diffHunk": "@@ -136,15 +181,92 @@ abstract class AccumulatorV2[IN, OUT] extends Serializable {\n   def reset(): Unit\n \n   /**\n+   * Takes the inputs and accumulates. e.g. it can be a simple `+=` for counter accumulator.\n+   * Developers should extend addImpl to customize the adding functionality.\n+   */\n+  final def add(v: IN): Unit = {\n+    if (metadata != null && metadata.dataProperty) {\n+      dataPropertyAdd(v)\n+    } else {\n+      addImpl(v)\n+    }\n+  }\n+\n+  private def dataPropertyAdd(v: IN): Unit = {\n+    // To allow the user to be able to access the current accumulated value from their process\n+    // worker side then we need to perform a \"normal\" add as well as the data property add.\n+    addImpl(v)\n+    // Add to the pending updates for data property\n+    val updateInfo = TaskContext.get().getRDDPartitionInfo()\n+    val base = pending.getOrElse(updateInfo, copyAndReset())\n+    // Since we may have constructed a new accumulator, set atDriverSide to false as the default\n+    // new accumulators will have atDriverSide equal to true.\n+    base.atDriverSide = false\n+    base.addImpl(v)\n+    pending(updateInfo) = base\n+  }\n+\n+  /**\n+   * Mark a specific rdd/shuffle/partition as completely processed. This is a noop for\n+   * non-data property accumuables.\n+   */\n+  private[spark] def markFullyProcessed(taskOutputId: TaskOutputId): Unit = {\n+    if (metadata.dataProperty) {\n+      completed += taskOutputId\n+    }\n+  }\n+\n+  /**\n+   * Takes the inputs and accumulates. e.g. it can be a simple `+=` for counter accumulator.\n+   * Developers should extend addImpl to customize the adding functionality.\n    * Takes the inputs and accumulates.\n    */\n-  def add(v: IN): Unit\n+  protected[spark] def addImpl(v: IN)\n+\n+  /**\n+   * Merges another same-type accumulator into this one and update its state, i.e. this should be\n+   * merge-in-place. Developers should extend mergeImpl to customize the merge functionality.\n+   */\n+  final private[spark] lazy val merge: (AccumulatorV2[IN, OUT] => Unit) = {\n+    assert(isAtDriverSide)\n+    // Handle data property accumulators\n+    if (metadata != null && metadata.dataProperty) {\n+      dataPropertyMerge _\n+    } else {\n+      mergeImpl _\n+    }\n+  }\n+\n+  final private[spark] def dataPropertyMerge(other: AccumulatorV2[IN, OUT]) = {"
+  }],
+  "prId": 11105
+}, {
+  "comments": [{
+    "author": {
+      "login": "squito"
+    },
+    "body": "this methods feels more complicated than it needs to be -- what do you think of this version?  there is a small amount of duplication but I think its easier to follow:\n\n``` scala\n  final private[spark] def dataPropertyMerge(other: AccumulatorV2[IN, OUT]) = {\n    def mergeAccumUpdateAndMarkOutputAsProcessed(\n      partitionsAlreadyMerged: mutable.BitSet,\n      outputId: TaskOutputId,\n      accumUpdate: AccumulatorV2[IN, OUT]\n    ): Unit = {\n      // we don't merge in accumulator updates from an incomplete accumulator update, eg. a take()\n      // which only partially reads an rdd partition\n      if (other.completed.contains(outputId)) {\n        // has this partition been processed before?\n        if (!partitionsAlreadyMerged.contains(outputId.partition)) {\n          partitionsAlreadyMerged += outputId.partition\n          mergeImpl(accumUpdate)\n        }\n      }\n    }\n    other.pending.foreach {\n      // Apply all foreach partitions regardless - they can only be fully evaluated\n      case (ForeachOutputId, accumUpdate) =>\n        mergeImpl(accumUpdate)\n      // For RDDs & shuffles, apply the accumulator updates as long as the output is complete\n      // and its the first time we're seeing it (just slightly different bookkeeping between\n      // RDDs and shuffles).\n      case (rddOutput: RDDOutputId, accumUpdate) =>\n        val processed = rddProcessed.getOrElseUpdate(rddOutput.rddId, new mutable.BitSet())\n        mergeAccumUpdateAndMarkOutputAsProcessed(processed, rddOutput, accumUpdate)\n      case (shuffleOutput: ShuffleMapOutputId, accumUpdate) =>\n        val processed = rddProcessed.getOrElseUpdate(shuffleOutput.shuffleId, new mutable.BitSet())\n        mergeAccumUpdateAndMarkOutputAsProcessed(processed, shuffleOutput, accumUpdate)\n    }\n  }\n```\n\n(I added `def partitionId: Int` to `TaskOutputId`)\n",
+    "commit": "59db4af635fd53e2723d187b60dee6856af74df4",
+    "createdAt": "2016-11-04T04:59:21Z",
+    "diffHunk": "@@ -136,15 +181,92 @@ abstract class AccumulatorV2[IN, OUT] extends Serializable {\n   def reset(): Unit\n \n   /**\n+   * Takes the inputs and accumulates. e.g. it can be a simple `+=` for counter accumulator.\n+   * Developers should extend addImpl to customize the adding functionality.\n+   */\n+  final def add(v: IN): Unit = {\n+    if (metadata != null && metadata.dataProperty) {\n+      dataPropertyAdd(v)\n+    } else {\n+      addImpl(v)\n+    }\n+  }\n+\n+  private def dataPropertyAdd(v: IN): Unit = {\n+    // To allow the user to be able to access the current accumulated value from their process\n+    // worker side then we need to perform a \"normal\" add as well as the data property add.\n+    addImpl(v)\n+    // Add to the pending updates for data property\n+    val updateInfo = TaskContext.get().getRDDPartitionInfo()\n+    val base = pending.getOrElse(updateInfo, copyAndReset())\n+    // Since we may have constructed a new accumulator, set atDriverSide to false as the default\n+    // new accumulators will have atDriverSide equal to true.\n+    base.atDriverSide = false\n+    base.addImpl(v)\n+    pending(updateInfo) = base\n+  }\n+\n+  /**\n+   * Mark a specific rdd/shuffle/partition as completely processed. This is a noop for\n+   * non-data property accumuables.\n+   */\n+  private[spark] def markFullyProcessed(taskOutputId: TaskOutputId): Unit = {\n+    if (metadata.dataProperty) {\n+      completed += taskOutputId\n+    }\n+  }\n+\n+  /**\n+   * Takes the inputs and accumulates. e.g. it can be a simple `+=` for counter accumulator.\n+   * Developers should extend addImpl to customize the adding functionality.\n    * Takes the inputs and accumulates.\n    */\n-  def add(v: IN): Unit\n+  protected[spark] def addImpl(v: IN)\n+\n+  /**\n+   * Merges another same-type accumulator into this one and update its state, i.e. this should be\n+   * merge-in-place. Developers should extend mergeImpl to customize the merge functionality.\n+   */\n+  final private[spark] lazy val merge: (AccumulatorV2[IN, OUT] => Unit) = {\n+    assert(isAtDriverSide)\n+    // Handle data property accumulators\n+    if (metadata != null && metadata.dataProperty) {\n+      dataPropertyMerge _\n+    } else {\n+      mergeImpl _\n+    }\n+  }\n+\n+  final private[spark] def dataPropertyMerge(other: AccumulatorV2[IN, OUT]) = {\n+    // Apply all foreach partitions regardless - they can only be fully evaluated\n+    val unprocessed = other.pending.filter{\n+      case (ForeachOutputId(), v) => mergeImpl(v); false\n+      case _ => true\n+    }\n+    val term = unprocessed.filter{case (k, v) => other.completed.contains(k)}\n+    term.flatMap {\n+      case (RDDOutputId(rddId, splitId), v) =>\n+        Some((rddProcessed, rddId, splitId, v))\n+      case (ShuffleMapOutputId(shuffleWriteId, splitId), v) =>\n+        Some((shuffleProcessed, shuffleWriteId, splitId, v))\n+      case _ => // We won't ever hit this case but avoid compiler warnings\n+        None\n+    }.foreach {\n+      case (processed, id, splitId, v) =>\n+      val splits = processed.getOrElseUpdate(id, new mutable.BitSet())\n+      if (!splits.contains(splitId)) {\n+        splits += splitId\n+        mergeImpl(v)\n+      }\n+    }"
+  }, {
+    "author": {
+      "login": "holdenk"
+    },
+    "body": "I've rewritten this a little bit, let me know what you think of the rewrite of the proposal.\n",
+    "commit": "59db4af635fd53e2723d187b60dee6856af74df4",
+    "createdAt": "2016-11-04T06:04:04Z",
+    "diffHunk": "@@ -136,15 +181,92 @@ abstract class AccumulatorV2[IN, OUT] extends Serializable {\n   def reset(): Unit\n \n   /**\n+   * Takes the inputs and accumulates. e.g. it can be a simple `+=` for counter accumulator.\n+   * Developers should extend addImpl to customize the adding functionality.\n+   */\n+  final def add(v: IN): Unit = {\n+    if (metadata != null && metadata.dataProperty) {\n+      dataPropertyAdd(v)\n+    } else {\n+      addImpl(v)\n+    }\n+  }\n+\n+  private def dataPropertyAdd(v: IN): Unit = {\n+    // To allow the user to be able to access the current accumulated value from their process\n+    // worker side then we need to perform a \"normal\" add as well as the data property add.\n+    addImpl(v)\n+    // Add to the pending updates for data property\n+    val updateInfo = TaskContext.get().getRDDPartitionInfo()\n+    val base = pending.getOrElse(updateInfo, copyAndReset())\n+    // Since we may have constructed a new accumulator, set atDriverSide to false as the default\n+    // new accumulators will have atDriverSide equal to true.\n+    base.atDriverSide = false\n+    base.addImpl(v)\n+    pending(updateInfo) = base\n+  }\n+\n+  /**\n+   * Mark a specific rdd/shuffle/partition as completely processed. This is a noop for\n+   * non-data property accumuables.\n+   */\n+  private[spark] def markFullyProcessed(taskOutputId: TaskOutputId): Unit = {\n+    if (metadata.dataProperty) {\n+      completed += taskOutputId\n+    }\n+  }\n+\n+  /**\n+   * Takes the inputs and accumulates. e.g. it can be a simple `+=` for counter accumulator.\n+   * Developers should extend addImpl to customize the adding functionality.\n    * Takes the inputs and accumulates.\n    */\n-  def add(v: IN): Unit\n+  protected[spark] def addImpl(v: IN)\n+\n+  /**\n+   * Merges another same-type accumulator into this one and update its state, i.e. this should be\n+   * merge-in-place. Developers should extend mergeImpl to customize the merge functionality.\n+   */\n+  final private[spark] lazy val merge: (AccumulatorV2[IN, OUT] => Unit) = {\n+    assert(isAtDriverSide)\n+    // Handle data property accumulators\n+    if (metadata != null && metadata.dataProperty) {\n+      dataPropertyMerge _\n+    } else {\n+      mergeImpl _\n+    }\n+  }\n+\n+  final private[spark] def dataPropertyMerge(other: AccumulatorV2[IN, OUT]) = {\n+    // Apply all foreach partitions regardless - they can only be fully evaluated\n+    val unprocessed = other.pending.filter{\n+      case (ForeachOutputId(), v) => mergeImpl(v); false\n+      case _ => true\n+    }\n+    val term = unprocessed.filter{case (k, v) => other.completed.contains(k)}\n+    term.flatMap {\n+      case (RDDOutputId(rddId, splitId), v) =>\n+        Some((rddProcessed, rddId, splitId, v))\n+      case (ShuffleMapOutputId(shuffleWriteId, splitId), v) =>\n+        Some((shuffleProcessed, shuffleWriteId, splitId, v))\n+      case _ => // We won't ever hit this case but avoid compiler warnings\n+        None\n+    }.foreach {\n+      case (processed, id, splitId, v) =>\n+      val splits = processed.getOrElseUpdate(id, new mutable.BitSet())\n+      if (!splits.contains(splitId)) {\n+        splits += splitId\n+        mergeImpl(v)\n+      }\n+    }"
+  }],
+  "prId": 11105
+}]

@@ -1,0 +1,103 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "holdenk"
+    },
+    "body": "This seems like it might be kind of a confusing way to communicate that the user doesn't have scipy installed\n",
+    "commit": "5a919b606c0c09d65224d0cec4fd76ea9a4f73e0",
+    "createdAt": "2016-11-03T23:57:05Z",
+    "diffHunk": "@@ -705,6 +705,22 @@ def __eq__(self, other):\n             return Vectors._equals(self.indices, self.values, list(xrange(len(other))), other.array)\n         return False\n \n+    def __getattr__(self, item):\n+        def wrapper(*args, **kwargs):\n+            if _have_scip:\n+                csr = scipy.sparse.csr_matrix((\\\n+                                               np.append(self.values, 0),\\\n+                                               np.append(self.indices, self.size-1),\\\n+                                               [0, len(self.values)]))\n+                func = getattr(csr, item)\n+                result = func(*args, **kwargs)\n+                if isinstance(result, scipy.sparse.csr.csr_matrix):\n+                    return SparseVector(result.shape[1],result.indices,result.data)\n+                return result\n+            else:\n+                raise AttributeError(\"'{0}' object has no attribute '{1}'.\".format(self.__class__, item))"
+  }],
+  "prId": 15496
+}, {
+  "comments": [{
+    "author": {
+      "login": "holdenk"
+    },
+    "body": "Do we need the `\\`s?\n",
+    "commit": "5a919b606c0c09d65224d0cec4fd76ea9a4f73e0",
+    "createdAt": "2016-11-03T23:57:28Z",
+    "diffHunk": "@@ -705,6 +705,22 @@ def __eq__(self, other):\n             return Vectors._equals(self.indices, self.values, list(xrange(len(other))), other.array)\n         return False\n \n+    def __getattr__(self, item):\n+        def wrapper(*args, **kwargs):\n+            if _have_scip:\n+                csr = scipy.sparse.csr_matrix((\\"
+  }],
+  "prId": 15496
+}, {
+  "comments": [{
+    "author": {
+      "login": "holdenk"
+    },
+    "body": "This error message would probably be better of just saying SciPy not installed since its on the else branch of `if _have_scipy` unless I'm missing something?",
+    "commit": "5a919b606c0c09d65224d0cec4fd76ea9a4f73e0",
+    "createdAt": "2016-11-24T09:53:24Z",
+    "diffHunk": "@@ -705,6 +705,22 @@ def __eq__(self, other):\n             return Vectors._equals(self.indices, self.values, list(xrange(len(other))), other.array)\n         return False\n \n+    def __getattr__(self, item):\n+        def wrapper(*args, **kwargs):\n+            if _have_scipy:\n+                csr = scipy.sparse.csr_matrix((np.append(self.values, 0),\n+                                               np.append(self.indices, self.size-1),\n+                                               [0, len(self.values)]))\n+                func = getattr(csr, item)\n+                result = func(*args, **kwargs)\n+                if isinstance(result, scipy.sparse.csr.csr_matrix):\n+                    return SparseVector(result.shape[1],result.indices,result.data)\n+                return result\n+            else:\n+                raise AttributeError(\n+                    \"'{0}' object has no attribute '{1}' or SciPy not installed.\".format(self.__class__, item))"
+  }, {
+    "author": {
+      "login": "itg-abby"
+    },
+    "body": "There are 3 cases that can occur to call __getattr__ and get an error:\r\n1) Calling a SciPy function while not having SciPy installed.\r\n2) Calling a function that is not in SparseVector or SciPy, when SciPy is installed- SciPy provides the attribute error on its own.\r\n3) Calling a function that is not in SparseVector or SciPy, without SciPy installed.\r\n\r\nThe message is accounting for cases 1 & 3. \r\nIf User tries to call a function which does not exist in SparseVector or SciPy, while not having SciPy installed, they are warned that it might not exist at all as well as told they have to install SciPy as a possible solution.",
+    "commit": "5a919b606c0c09d65224d0cec4fd76ea9a4f73e0",
+    "createdAt": "2016-11-27T20:07:09Z",
+    "diffHunk": "@@ -705,6 +705,22 @@ def __eq__(self, other):\n             return Vectors._equals(self.indices, self.values, list(xrange(len(other))), other.array)\n         return False\n \n+    def __getattr__(self, item):\n+        def wrapper(*args, **kwargs):\n+            if _have_scipy:\n+                csr = scipy.sparse.csr_matrix((np.append(self.values, 0),\n+                                               np.append(self.indices, self.size-1),\n+                                               [0, len(self.values)]))\n+                func = getattr(csr, item)\n+                result = func(*args, **kwargs)\n+                if isinstance(result, scipy.sparse.csr.csr_matrix):\n+                    return SparseVector(result.shape[1],result.indices,result.data)\n+                return result\n+            else:\n+                raise AttributeError(\n+                    \"'{0}' object has no attribute '{1}' or SciPy not installed.\".format(self.__class__, item))"
+  }, {
+    "author": {
+      "login": "holdenk"
+    },
+    "body": "Ok so maybe we can improve the error message to something like \"'{0}' object has no attribute '{1}' and SciPy is not installed to proxy request to SparseVector\" (or similar).\r\n\r\nBecause saying its X or Y is confusing since this error message only happens in the event SciPy is not installed.\r\n\r\nWhat do you think?",
+    "commit": "5a919b606c0c09d65224d0cec4fd76ea9a4f73e0",
+    "createdAt": "2016-11-29T23:35:05Z",
+    "diffHunk": "@@ -705,6 +705,22 @@ def __eq__(self, other):\n             return Vectors._equals(self.indices, self.values, list(xrange(len(other))), other.array)\n         return False\n \n+    def __getattr__(self, item):\n+        def wrapper(*args, **kwargs):\n+            if _have_scipy:\n+                csr = scipy.sparse.csr_matrix((np.append(self.values, 0),\n+                                               np.append(self.indices, self.size-1),\n+                                               [0, len(self.values)]))\n+                func = getattr(csr, item)\n+                result = func(*args, **kwargs)\n+                if isinstance(result, scipy.sparse.csr.csr_matrix):\n+                    return SparseVector(result.shape[1],result.indices,result.data)\n+                return result\n+            else:\n+                raise AttributeError(\n+                    \"'{0}' object has no attribute '{1}' or SciPy not installed.\".format(self.__class__, item))"
+  }, {
+    "author": {
+      "login": "itg-abby"
+    },
+    "body": "That sounds great, I'll add it in right now.",
+    "commit": "5a919b606c0c09d65224d0cec4fd76ea9a4f73e0",
+    "createdAt": "2016-11-30T20:32:51Z",
+    "diffHunk": "@@ -705,6 +705,22 @@ def __eq__(self, other):\n             return Vectors._equals(self.indices, self.values, list(xrange(len(other))), other.array)\n         return False\n \n+    def __getattr__(self, item):\n+        def wrapper(*args, **kwargs):\n+            if _have_scipy:\n+                csr = scipy.sparse.csr_matrix((np.append(self.values, 0),\n+                                               np.append(self.indices, self.size-1),\n+                                               [0, len(self.values)]))\n+                func = getattr(csr, item)\n+                result = func(*args, **kwargs)\n+                if isinstance(result, scipy.sparse.csr.csr_matrix):\n+                    return SparseVector(result.shape[1],result.indices,result.data)\n+                return result\n+            else:\n+                raise AttributeError(\n+                    \"'{0}' object has no attribute '{1}' or SciPy not installed.\".format(self.__class__, item))"
+  }],
+  "prId": 15496
+}, {
+  "comments": [{
+    "author": {
+      "login": "holdenk"
+    },
+    "body": "Super minor nit, but using named parameters might make this a bit easier when skimming the code (same for mllin)",
+    "commit": "5a919b606c0c09d65224d0cec4fd76ea9a4f73e0",
+    "createdAt": "2016-12-19T20:26:50Z",
+    "diffHunk": "@@ -705,6 +705,23 @@ def __eq__(self, other):\n             return Vectors._equals(self.indices, self.values, list(xrange(len(other))), other.array)\n         return False\n \n+    def __getattr__(self, item):\n+        def wrapper(*args, **kwargs):\n+            if _have_scipy:\n+                csr = scipy.sparse.csr_matrix((np.append(self.values, 0),"
+  }],
+  "prId": 15496
+}, {
+  "comments": [{
+    "author": {
+      "login": "holdenk"
+    },
+    "body": "Would be good to have a comment here explaining its purpose.",
+    "commit": "5a919b606c0c09d65224d0cec4fd76ea9a4f73e0",
+    "createdAt": "2016-12-19T20:35:16Z",
+    "diffHunk": "@@ -705,6 +705,23 @@ def __eq__(self, other):\n             return Vectors._equals(self.indices, self.values, list(xrange(len(other))), other.array)\n         return False\n \n+    def __getattr__(self, item):\n+        def wrapper(*args, **kwargs):",
+    "line": 14
+  }],
+  "prId": 15496
+}, {
+  "comments": [{
+    "author": {
+      "login": "holdenk"
+    },
+    "body": "More concretely thouhh, why are we padding the data/values with a 0?",
+    "commit": "5a919b606c0c09d65224d0cec4fd76ea9a4f73e0",
+    "createdAt": "2016-12-19T20:49:50Z",
+    "diffHunk": "@@ -705,6 +705,23 @@ def __eq__(self, other):\n             return Vectors._equals(self.indices, self.values, list(xrange(len(other))), other.array)\n         return False\n \n+    def __getattr__(self, item):\n+        def wrapper(*args, **kwargs):\n+            if _have_scipy:\n+                csr = scipy.sparse.csr_matrix((np.append(self.values, 0),"
+  }],
+  "prId": 15496
+}, {
+  "comments": [{
+    "author": {
+      "login": "holdenk"
+    },
+    "body": "So this \"works\", in that it's skipped by the indexptrs range we supply bellow - but it makes the code confusing to read so why do we need it and maybe we could add a comment explaining why?",
+    "commit": "5a919b606c0c09d65224d0cec4fd76ea9a4f73e0",
+    "createdAt": "2016-12-19T20:51:37Z",
+    "diffHunk": "@@ -705,6 +705,23 @@ def __eq__(self, other):\n             return Vectors._equals(self.indices, self.values, list(xrange(len(other))), other.array)\n         return False\n \n+    def __getattr__(self, item):\n+        def wrapper(*args, **kwargs):\n+            if _have_scipy:\n+                csr = scipy.sparse.csr_matrix((np.append(self.values, 0),\n+                                               np.append(self.indices, self.size-1),"
+  }],
+  "prId": 15496
+}]

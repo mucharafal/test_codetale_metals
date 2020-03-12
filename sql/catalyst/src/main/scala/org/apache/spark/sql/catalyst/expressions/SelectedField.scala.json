@@ -1,0 +1,50 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "maropu"
+    },
+    "body": "`sys.error`?",
+    "commit": "6e5b57e8373e4b2ffec25ac1afcb1855abede09a",
+    "createdAt": "2019-03-22T11:47:14Z",
+    "diffHunk": "@@ -97,6 +97,19 @@ object SelectedField {\n         val MapType(keyType, _, valueContainsNull) = child.dataType\n         val opt = dataTypeOpt.map(dt => MapType(keyType, dt, valueContainsNull))\n         selectField(child, opt)\n+      case MapKeys(child) =>\n+        val MapType(_, valueType, valueContainsNull) = child.dataType\n+        // MapKeys does not select a field from a struct (i.e. prune the struct) so it can't be\n+        // the top-level extractor. However it can be part of an extractor chain.\n+        val newKeyType = dataTypeOpt match {\n+          case None => None\n+          case Some(ArrayType(dataType, _)) => Some(dataType)\n+          case Some(x) =>\n+            // This should not happen.\n+            throw new AnalysisException(s\"DataType '$x' is not supported by MapKeys.\")",
+    "line": 23
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "I followed above usage of `AnalysisException` in `SelectedField`.",
+    "commit": "6e5b57e8373e4b2ffec25ac1afcb1855abede09a",
+    "createdAt": "2019-03-22T12:04:10Z",
+    "diffHunk": "@@ -97,6 +97,19 @@ object SelectedField {\n         val MapType(keyType, _, valueContainsNull) = child.dataType\n         val opt = dataTypeOpt.map(dt => MapType(keyType, dt, valueContainsNull))\n         selectField(child, opt)\n+      case MapKeys(child) =>\n+        val MapType(_, valueType, valueContainsNull) = child.dataType\n+        // MapKeys does not select a field from a struct (i.e. prune the struct) so it can't be\n+        // the top-level extractor. However it can be part of an extractor chain.\n+        val newKeyType = dataTypeOpt match {\n+          case None => None\n+          case Some(ArrayType(dataType, _)) => Some(dataType)\n+          case Some(x) =>\n+            // This should not happen.\n+            throw new AnalysisException(s\"DataType '$x' is not supported by MapKeys.\")",
+    "line": 23
+  }, {
+    "author": {
+      "login": "maropu"
+    },
+    "body": "Ah, I see. It seems we have no consistent rule for this...",
+    "commit": "6e5b57e8373e4b2ffec25ac1afcb1855abede09a",
+    "createdAt": "2019-03-22T12:14:23Z",
+    "diffHunk": "@@ -97,6 +97,19 @@ object SelectedField {\n         val MapType(keyType, _, valueContainsNull) = child.dataType\n         val opt = dataTypeOpt.map(dt => MapType(keyType, dt, valueContainsNull))\n         selectField(child, opt)\n+      case MapKeys(child) =>\n+        val MapType(_, valueType, valueContainsNull) = child.dataType\n+        // MapKeys does not select a field from a struct (i.e. prune the struct) so it can't be\n+        // the top-level extractor. However it can be part of an extractor chain.\n+        val newKeyType = dataTypeOpt match {\n+          case None => None\n+          case Some(ArrayType(dataType, _)) => Some(dataType)\n+          case Some(x) =>\n+            // This should not happen.\n+            throw new AnalysisException(s\"DataType '$x' is not supported by MapKeys.\")",
+    "line": 23
+  }],
+  "prId": 24179
+}, {
+  "comments": [{
+    "author": {
+      "login": "maropu"
+    },
+    "body": "nit: like this?\r\n```\r\n      case MapKeys(child) =>\r\n        val MapType(_, valueType, valueContainsNull) = child.dataType\r\n        // MapKeys does not select a field from a struct (i.e. prune the struct) so it can't be\r\n        // the top-level extractor. However it can be part of an extractor chain.\r\n        val opt = dataTypeOpt.map {\r\n          case ArrayType(dataType, _) => MapType(dataType, valueType, valueContainsNull)\r\n          case x =>\r\n            // This should not happen.\r\n            throw new AnalysisException(s\"DataType '$x' is not supported by MapKeys.\")\r\n        }\r\n        selectField(child, opt)\r\n```",
+    "commit": "6e5b57e8373e4b2ffec25ac1afcb1855abede09a",
+    "createdAt": "2019-03-22T11:56:24Z",
+    "diffHunk": "@@ -97,6 +97,19 @@ object SelectedField {\n         val MapType(keyType, _, valueContainsNull) = child.dataType\n         val opt = dataTypeOpt.map(dt => MapType(keyType, dt, valueContainsNull))\n         selectField(child, opt)\n+      case MapKeys(child) =>\n+        val MapType(_, valueType, valueContainsNull) = child.dataType\n+        // MapKeys does not select a field from a struct (i.e. prune the struct) so it can't be\n+        // the top-level extractor. However it can be part of an extractor chain.\n+        val newKeyType = dataTypeOpt match {\n+          case None => None\n+          case Some(ArrayType(dataType, _)) => Some(dataType)\n+          case Some(x) =>\n+            // This should not happen.\n+            throw new AnalysisException(s\"DataType '$x' is not supported by MapKeys.\")\n+        }\n+        val opt = dataTypeOpt.map(dt => MapType(newKeyType.get, valueType, valueContainsNull))"
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "sure.",
+    "commit": "6e5b57e8373e4b2ffec25ac1afcb1855abede09a",
+    "createdAt": "2019-03-22T12:05:43Z",
+    "diffHunk": "@@ -97,6 +97,19 @@ object SelectedField {\n         val MapType(keyType, _, valueContainsNull) = child.dataType\n         val opt = dataTypeOpt.map(dt => MapType(keyType, dt, valueContainsNull))\n         selectField(child, opt)\n+      case MapKeys(child) =>\n+        val MapType(_, valueType, valueContainsNull) = child.dataType\n+        // MapKeys does not select a field from a struct (i.e. prune the struct) so it can't be\n+        // the top-level extractor. However it can be part of an extractor chain.\n+        val newKeyType = dataTypeOpt match {\n+          case None => None\n+          case Some(ArrayType(dataType, _)) => Some(dataType)\n+          case Some(x) =>\n+            // This should not happen.\n+            throw new AnalysisException(s\"DataType '$x' is not supported by MapKeys.\")\n+        }\n+        val opt = dataTypeOpt.map(dt => MapType(newKeyType.get, valueType, valueContainsNull))"
+  }],
+  "prId": 24179
+}]

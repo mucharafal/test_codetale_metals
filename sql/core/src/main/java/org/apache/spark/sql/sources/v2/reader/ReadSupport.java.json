@@ -1,0 +1,53 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "gengliangwang"
+    },
+    "body": "How about changing this API to return a `ScanConfigBuilder`? ",
+    "commit": "51cda76897353344427aaa666e29be408263eeb1",
+    "createdAt": "2018-08-07T08:00:55Z",
+    "diffHunk": "@@ -0,0 +1,61 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.sources.v2.reader;\n+\n+import org.apache.spark.annotation.InterfaceStability;\n+import org.apache.spark.sql.types.StructType;\n+\n+/**\n+ * The base interface for all the batch and streaming read supports. Data sources should implement\n+ * concrete read support interfaces like {@link BatchReadSupport}.\n+ */\n+@InterfaceStability.Evolving\n+public interface ReadSupport {\n+\n+  /**\n+   * Returns the full schema of this data source, which is usually the physical schema of the\n+   * underlying storage. This full schema should not be affected by column pruning or other\n+   * optimizations.\n+   *\n+   * If this method fails (by throwing an exception), the action will fail and no Spark job will be\n+   * submitted.\n+   */\n+  StructType fullSchema();"
+  }],
+  "prId": 22009
+}, {
+  "comments": [{
+    "author": {
+      "login": "rdblue"
+    },
+    "body": "Minor: Adding 's' after a link isn't good Javadoc style.\r\n\r\nFor cases like this, it is better to use the singular for both classes to communicate the expectation that each `InputPartition` produces a single `PartitionReader`.\r\n\r\nFor cases where you don't need to communicate a one-to-one relationship, you can use `{@link InputPartition partitions}` to change the link text.",
+    "commit": "51cda76897353344427aaa666e29be408263eeb1",
+    "createdAt": "2018-08-07T18:45:35Z",
+    "diffHunk": "@@ -0,0 +1,61 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.sources.v2.reader;\n+\n+import org.apache.spark.annotation.InterfaceStability;\n+import org.apache.spark.sql.types.StructType;\n+\n+/**\n+ * The base interface for all the batch and streaming read supports. Data sources should implement\n+ * concrete read support interfaces like {@link BatchReadSupport}.\n+ */\n+@InterfaceStability.Evolving\n+public interface ReadSupport {\n+\n+  /**\n+   * Returns the full schema of this data source, which is usually the physical schema of the\n+   * underlying storage. This full schema should not be affected by column pruning or other\n+   * optimizations.\n+   *\n+   * If this method fails (by throwing an exception), the action will fail and no Spark job will be\n+   * submitted.\n+   */\n+  StructType fullSchema();\n+\n+  /**\n+   * Returns a list of {@link InputPartition}s. Each {@link InputPartition} represents a data split\n+   * that can be processed by one Spark task. The number of input partitions returned here is the\n+   * same as the number of RDD partitions this scan outputs.\n+   *\n+   * Note that, this may not be a full scan if the data source supports optimization like filter\n+   * push-down. Implementations should check the input {@link ScanConfig} and adjust the resulting\n+   * {@link InputPartition}s.\n+   *\n+   * If this method fails (by throwing an exception), the action will fail and no Spark job will be\n+   * submitted.\n+   */\n+  InputPartition[] planInputPartitions(ScanConfig config);\n+\n+  /**\n+   * Returns a factory to produce {@link PartitionReader}s for {@link InputPartition}s."
+  }],
+  "prId": 22009
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "This is needed for both batch and streaming.\r\n\r\nFor streaming source, it must have a consistent schema across epochs. So the `fullSchema` should be defined in `ReadSupport` not `ScanConfig`. Each epoch may have different `readSchema` though, assuming different epochs can apply column pruning differently.\r\n\r\nFor batch, Spark needs the data source to report schema before any optimization happens, at that time the `ScanConfig` is not created yet.",
+    "commit": "51cda76897353344427aaa666e29be408263eeb1",
+    "createdAt": "2018-08-09T05:19:21Z",
+    "diffHunk": "@@ -0,0 +1,53 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.sources.v2.reader;\n+\n+import org.apache.spark.annotation.InterfaceStability;\n+import org.apache.spark.sql.types.StructType;\n+\n+/**\n+ * The base interface for all the batch and streaming read supports. Data sources should implement\n+ * concrete read support interfaces like {@link BatchReadSupport}.\n+ */\n+@InterfaceStability.Evolving\n+public interface ReadSupport {\n+\n+  /**\n+   * Returns the full schema of this data source, which is usually the physical schema of the\n+   * underlying storage. This full schema should not be affected by column pruning or other\n+   * optimizations.\n+   *\n+   * If this method fails (by throwing an exception), the action will fail and no Spark job will be\n+   * submitted.\n+   */\n+  StructType fullSchema();"
+  }],
+  "prId": 22009
+}, {
+  "comments": [{
+    "author": {
+      "login": "rdblue"
+    },
+    "body": "Why remove this here? Isn't it an accurate statement?",
+    "commit": "51cda76897353344427aaa666e29be408263eeb1",
+    "createdAt": "2018-08-14T15:29:16Z",
+    "diffHunk": "@@ -45,9 +45,6 @@\n    * Note that, this may not be a full scan if the data source supports optimization like filter\n    * push-down. Implementations should check the input {@link ScanConfig} and adjust the resulting\n    * {@link InputPartition input partitions}.\n-   *\n-   * If this method fails (by throwing an exception), the action will fail and no Spark job will be\n-   * submitted."
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "to address https://github.com/apache/spark/pull/22009#discussion_r208983568 , I moved this statement to the classdoc instead of each method.",
+    "commit": "51cda76897353344427aaa666e29be408263eeb1",
+    "createdAt": "2018-08-15T02:00:54Z",
+    "diffHunk": "@@ -45,9 +45,6 @@\n    * Note that, this may not be a full scan if the data source supports optimization like filter\n    * push-down. Implementations should check the input {@link ScanConfig} and adjust the resulting\n    * {@link InputPartition input partitions}.\n-   *\n-   * If this method fails (by throwing an exception), the action will fail and no Spark job will be\n-   * submitted."
+  }],
+  "prId": 22009
+}]

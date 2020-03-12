@@ -1,0 +1,22 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "squito"
+    },
+    "body": "I think now that you're using the duration across stage attempts for speculation, you don't need to change this test anymore -- but I also don't feel strongly that we really need to keep the old test either.",
+    "commit": "b148c6f119be4b0a5da0c2600add506cd930a647",
+    "createdAt": "2019-04-19T02:25:54Z",
+    "diffHunk": "@@ -1386,39 +1386,17 @@ class TaskSetManagerSuite extends SparkFunSuite with LocalSparkContext with Logg\n     val dagScheduler = new FakeDAGScheduler(sc, sched)\n     sched.setDAGScheduler(dagScheduler)\n \n-    val taskSet1 = FakeTask.createTaskSet(10)\n-    val accumUpdatesByTask: Array[Seq[AccumulatorV2[_, _]]] = taskSet1.tasks.map { task =>\n-      task.metrics.internalAccums\n-    }\n+    val taskSet = FakeTask.createTaskSet(10)\n \n-    sched.submitTasks(taskSet1)\n+    sched.submitTasks(taskSet)\n     sched.resourceOffers(\n-      (0 until 10).map { idx => WorkerOffer(s\"exec-$idx\", s\"host-$idx\", 1) })\n-\n-    val taskSetManager1 = sched.taskSetManagerForAttempt(0, 0).get\n-\n-    // fail fetch\n-    taskSetManager1.handleFailedTask(\n-      taskSetManager1.taskAttempts.head.head.taskId, TaskState.FAILED,\n-      FetchFailed(null, 0, 0, 0, \"fetch failed\"))\n-\n-    assert(taskSetManager1.isZombie)\n-    assert(taskSetManager1.runningTasks === 9)\n-\n-    val taskSet2 = FakeTask.createTaskSet(10, stageAttemptId = 1)\n-    sched.submitTasks(taskSet2)\n-    sched.resourceOffers(\n-      (11 until 20).map { idx => WorkerOffer(s\"exec-$idx\", s\"host-$idx\", 1) })\n-\n-    // Complete the 2 tasks and leave 8 task in running\n-    for (id <- Set(0, 1)) {\n-      taskSetManager1.handleSuccessfulTask(id, createTaskResult(id, accumUpdatesByTask(id)))\n-      assert(sched.endedTasks(id) === Success)\n-    }",
+    "line": 43
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "This test case creates 2 TSM, then complete the task of one TSM, and expect it to mark the corresponding task of the other TSM to completed.\r\n\r\nThis is not true anymore, as we need to go through DAGScheduler to let it happen, but this test suite uses a fake DAGScheduler. To simplify the code, I just create one TSM, and then call `markPartitionCompleted` directly.",
+    "commit": "b148c6f119be4b0a5da0c2600add506cd930a647",
+    "createdAt": "2019-04-19T05:50:10Z",
+    "diffHunk": "@@ -1386,39 +1386,17 @@ class TaskSetManagerSuite extends SparkFunSuite with LocalSparkContext with Logg\n     val dagScheduler = new FakeDAGScheduler(sc, sched)\n     sched.setDAGScheduler(dagScheduler)\n \n-    val taskSet1 = FakeTask.createTaskSet(10)\n-    val accumUpdatesByTask: Array[Seq[AccumulatorV2[_, _]]] = taskSet1.tasks.map { task =>\n-      task.metrics.internalAccums\n-    }\n+    val taskSet = FakeTask.createTaskSet(10)\n \n-    sched.submitTasks(taskSet1)\n+    sched.submitTasks(taskSet)\n     sched.resourceOffers(\n-      (0 until 10).map { idx => WorkerOffer(s\"exec-$idx\", s\"host-$idx\", 1) })\n-\n-    val taskSetManager1 = sched.taskSetManagerForAttempt(0, 0).get\n-\n-    // fail fetch\n-    taskSetManager1.handleFailedTask(\n-      taskSetManager1.taskAttempts.head.head.taskId, TaskState.FAILED,\n-      FetchFailed(null, 0, 0, 0, \"fetch failed\"))\n-\n-    assert(taskSetManager1.isZombie)\n-    assert(taskSetManager1.runningTasks === 9)\n-\n-    val taskSet2 = FakeTask.createTaskSet(10, stageAttemptId = 1)\n-    sched.submitTasks(taskSet2)\n-    sched.resourceOffers(\n-      (11 until 20).map { idx => WorkerOffer(s\"exec-$idx\", s\"host-$idx\", 1) })\n-\n-    // Complete the 2 tasks and leave 8 task in running\n-    for (id <- Set(0, 1)) {\n-      taskSetManager1.handleSuccessfulTask(id, createTaskResult(id, accumUpdatesByTask(id)))\n-      assert(sched.endedTasks(id) === Success)\n-    }",
+    "line": 43
+  }],
+  "prId": 24375
+}]

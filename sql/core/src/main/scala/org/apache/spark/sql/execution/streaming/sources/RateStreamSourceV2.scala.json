@@ -1,0 +1,74 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "tdas"
+    },
+    "body": "nit: put this in a `{ ... }`",
+    "commit": "5f0a6e271bec953c79b2298190cb848129f5b84e",
+    "createdAt": "2018-01-03T03:12:09Z",
+    "diffHunk": "@@ -32,16 +32,17 @@ import org.apache.spark.sql.sources.v2.DataSourceV2Options\n import org.apache.spark.sql.sources.v2.reader._\n import org.apache.spark.sql.sources.v2.streaming.reader.{MicroBatchReader, Offset}\n import org.apache.spark.sql.types.{LongType, StructField, StructType, TimestampType}\n-import org.apache.spark.util.SystemClock\n+import org.apache.spark.util.{ManualClock, SystemClock}\n \n class RateStreamV2Reader(options: DataSourceV2Options)\n   extends MicroBatchReader {\n   implicit val defaultFormats: DefaultFormats = DefaultFormats\n \n-  val clock = new SystemClock\n+  val clock = if (options.get(\"useManualClock\").orElse(\"false\").toBoolean) new ManualClock"
+  }, {
+    "author": {
+      "login": "tdas"
+    },
+    "body": "also mention that manualClock is only used for testing so that someone looking at the source does not confuse this to be a publicly visible feature.",
+    "commit": "5f0a6e271bec953c79b2298190cb848129f5b84e",
+    "createdAt": "2018-01-03T06:21:52Z",
+    "diffHunk": "@@ -32,16 +32,17 @@ import org.apache.spark.sql.sources.v2.DataSourceV2Options\n import org.apache.spark.sql.sources.v2.reader._\n import org.apache.spark.sql.sources.v2.streaming.reader.{MicroBatchReader, Offset}\n import org.apache.spark.sql.types.{LongType, StructField, StructType, TimestampType}\n-import org.apache.spark.util.SystemClock\n+import org.apache.spark.util.{ManualClock, SystemClock}\n \n class RateStreamV2Reader(options: DataSourceV2Options)\n   extends MicroBatchReader {\n   implicit val defaultFormats: DefaultFormats = DefaultFormats\n \n-  val clock = new SystemClock\n+  val clock = if (options.get(\"useManualClock\").orElse(\"false\").toBoolean) new ManualClock"
+  }],
+  "prId": 20097
+}, {
+  "comments": [{
+    "author": {
+      "login": "tdas"
+    },
+    "body": "why this change?",
+    "commit": "5f0a6e271bec953c79b2298190cb848129f5b84e",
+    "createdAt": "2018-01-03T03:12:24Z",
+    "diffHunk": "@@ -32,16 +32,17 @@ import org.apache.spark.sql.sources.v2.DataSourceV2Options\n import org.apache.spark.sql.sources.v2.reader._\n import org.apache.spark.sql.sources.v2.streaming.reader.{MicroBatchReader, Offset}\n import org.apache.spark.sql.types.{LongType, StructField, StructType, TimestampType}\n-import org.apache.spark.util.SystemClock\n+import org.apache.spark.util.{ManualClock, SystemClock}\n \n class RateStreamV2Reader(options: DataSourceV2Options)\n   extends MicroBatchReader {\n   implicit val defaultFormats: DefaultFormats = DefaultFormats\n \n-  val clock = new SystemClock\n+  val clock = if (options.get(\"useManualClock\").orElse(\"false\").toBoolean) new ManualClock\n+      else new SystemClock\n \n   private val numPartitions =\n-    options.get(RateStreamSourceV2.NUM_PARTITIONS).orElse(\"5\").toInt\n+    options.get(RateStreamSourceV2.NUM_PARTITIONS).orElse(\"1\").toInt"
+  }],
+  "prId": 20097
+}, {
+  "comments": [{
+    "author": {
+      "login": "tdas"
+    },
+    "body": "why this change?",
+    "commit": "5f0a6e271bec953c79b2298190cb848129f5b84e",
+    "createdAt": "2018-01-03T03:12:42Z",
+    "diffHunk": "@@ -111,7 +112,7 @@ class RateStreamV2Reader(options: DataSourceV2Options)\n \n       val packedRows = mutable.ListBuffer[(Long, Long)]()\n       var outVal = startVal + numPartitions\n-      var outTimeMs = startTimeMs + msPerPartitionBetweenRows\n+      var outTimeMs = startTimeMs",
+    "line": 48
+  }, {
+    "author": {
+      "login": "jose-torres"
+    },
+    "body": "The original behavior was an off-by-one error. With 1 partition and 1 row per second, for example, every row would come timestamped 1 second after it was actually generated.",
+    "commit": "5f0a6e271bec953c79b2298190cb848129f5b84e",
+    "createdAt": "2018-01-03T18:21:53Z",
+    "diffHunk": "@@ -111,7 +112,7 @@ class RateStreamV2Reader(options: DataSourceV2Options)\n \n       val packedRows = mutable.ListBuffer[(Long, Long)]()\n       var outVal = startVal + numPartitions\n-      var outTimeMs = startTimeMs + msPerPartitionBetweenRows\n+      var outTimeMs = startTimeMs",
+    "line": 48
+  }],
+  "prId": 20097
+}, {
+  "comments": [{
+    "author": {
+      "login": "tdas"
+    },
+    "body": "Can you rename this to MicroBatchRateStreamReader, to make it consistent with ContinuousRateStreamReader?\r\n",
+    "commit": "5f0a6e271bec953c79b2298190cb848129f5b84e",
+    "createdAt": "2018-01-03T23:58:03Z",
+    "diffHunk": "@@ -32,13 +32,17 @@ import org.apache.spark.sql.sources.v2.DataSourceV2Options\n import org.apache.spark.sql.sources.v2.reader._\n import org.apache.spark.sql.sources.v2.streaming.reader.{MicroBatchReader, Offset}\n import org.apache.spark.sql.types.{LongType, StructField, StructType, TimestampType}\n-import org.apache.spark.util.SystemClock\n+import org.apache.spark.util.{ManualClock, SystemClock}\n \n class RateStreamV2Reader(options: DataSourceV2Options)"
+  }],
+  "prId": 20097
+}, {
+  "comments": [{
+    "author": {
+      "login": "tdas"
+    },
+    "body": "As with the other kafka PR, can you rename these classes to start with \"RateStream\"? Only if it is not too much refactoring, otherwise we can clean this up later.",
+    "commit": "5f0a6e271bec953c79b2298190cb848129f5b84e",
+    "createdAt": "2018-01-05T21:12:32Z",
+    "diffHunk": "@@ -28,17 +28,38 @@ import org.json4s.jackson.Serialization\n import org.apache.spark.sql.Row\n import org.apache.spark.sql.catalyst.util.DateTimeUtils\n import org.apache.spark.sql.execution.streaming.{RateStreamOffset, ValueRunTimeMsPair}\n-import org.apache.spark.sql.sources.v2.DataSourceV2Options\n+import org.apache.spark.sql.sources.DataSourceRegister\n+import org.apache.spark.sql.sources.v2.{DataSourceV2, DataSourceV2Options}\n import org.apache.spark.sql.sources.v2.reader._\n+import org.apache.spark.sql.sources.v2.streaming.MicroBatchReadSupport\n import org.apache.spark.sql.sources.v2.streaming.reader.{MicroBatchReader, Offset}\n import org.apache.spark.sql.types.{LongType, StructField, StructType, TimestampType}\n-import org.apache.spark.util.SystemClock\n+import org.apache.spark.util.{ManualClock, SystemClock}\n \n-class RateStreamV2Reader(options: DataSourceV2Options)\n+/**\n+ * This is a temporary register as we build out v2 migration. Microbatch read support should\n+ * be implemented in the same register as v1.\n+ */\n+class RateSourceProviderV2 extends DataSourceV2 with MicroBatchReadSupport with DataSourceRegister {\n+  override def createMicroBatchReader(\n+      schema: Optional[StructType],\n+      checkpointLocation: String,\n+      options: DataSourceV2Options): MicroBatchReader = {\n+    new MicroBatchRateStreamReader(options)\n+  }\n+\n+  override def shortName(): String = \"ratev2\"\n+}\n+\n+class MicroBatchRateStreamReader(options: DataSourceV2Options)"
+  }],
+  "prId": 20097
+}]

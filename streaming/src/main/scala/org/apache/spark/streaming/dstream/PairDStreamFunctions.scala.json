@@ -1,0 +1,31 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "The existing method could call the new method rather than duplicate the logic. If the user supplies a function with Seq[V], Option[S] as args, that can be made into a function that also accepts and does nothing with Time.\n\nWhat's the use case for this though?\n",
+    "commit": "db54919e7b0d1d7ce864cdff34317c61bcf3c0c4",
+    "createdAt": "2014-09-04T08:44:56Z",
+    "diffHunk": "@@ -396,6 +396,26 @@ class PairDStreamFunctions[K, V](self: DStream[(K,V)])\n \n   /**\n    * Return a new \"state\" DStream where the state for each key is updated by applying\n+   * the given function on the previous state of the key and the new values of the key.\n+   * org.apache.spark.Partitioner is used to control the partitioning of each RDD.\n+   * @param updateFunc State update function. If `this` function returns None, then\n+   *                   corresponding state key-value pair will be eliminated.\n+   * @param partitioner Partitioner for controlling the partitioning of each RDD in the new\n+   *                    DStream.\n+   * @tparam S State type\n+   */\n+  def updateStateByKey[S: ClassTag](\n+      updateFunc: (Time, K, Seq[V], Option[S]) => Option[S],\n+      partitioner: Partitioner\n+    ): DStream[(K, S)] = {\n+    val newUpdateFunc = (time: Time, iterator: Iterator[(K, Seq[V], Option[S])]) => {",
+    "line": 26
+  }, {
+    "author": {
+      "login": "xiliu82"
+    },
+    "body": "I will check how I can clean it up a bit.\n\nOn a high level, our application process values differently for different key and timestamps.\n1) We have some ID in the key, and different ID will be treated differently. \n2) We need timestamp to decide if we are going to keep the state or drop it.\n",
+    "commit": "db54919e7b0d1d7ce864cdff34317c61bcf3c0c4",
+    "createdAt": "2014-09-04T18:44:07Z",
+    "diffHunk": "@@ -396,6 +396,26 @@ class PairDStreamFunctions[K, V](self: DStream[(K,V)])\n \n   /**\n    * Return a new \"state\" DStream where the state for each key is updated by applying\n+   * the given function on the previous state of the key and the new values of the key.\n+   * org.apache.spark.Partitioner is used to control the partitioning of each RDD.\n+   * @param updateFunc State update function. If `this` function returns None, then\n+   *                   corresponding state key-value pair will be eliminated.\n+   * @param partitioner Partitioner for controlling the partitioning of each RDD in the new\n+   *                    DStream.\n+   * @tparam S State type\n+   */\n+  def updateStateByKey[S: ClassTag](\n+      updateFunc: (Time, K, Seq[V], Option[S]) => Option[S],\n+      partitioner: Partitioner\n+    ): DStream[(K, S)] = {\n+    val newUpdateFunc = (time: Time, iterator: Iterator[(K, Seq[V], Option[S])]) => {",
+    "line": 26
+  }, {
+    "author": {
+      "login": "xiliu82"
+    },
+    "body": "Duplication is removed. \n",
+    "commit": "db54919e7b0d1d7ce864cdff34317c61bcf3c0c4",
+    "createdAt": "2014-09-04T22:34:56Z",
+    "diffHunk": "@@ -396,6 +396,26 @@ class PairDStreamFunctions[K, V](self: DStream[(K,V)])\n \n   /**\n    * Return a new \"state\" DStream where the state for each key is updated by applying\n+   * the given function on the previous state of the key and the new values of the key.\n+   * org.apache.spark.Partitioner is used to control the partitioning of each RDD.\n+   * @param updateFunc State update function. If `this` function returns None, then\n+   *                   corresponding state key-value pair will be eliminated.\n+   * @param partitioner Partitioner for controlling the partitioning of each RDD in the new\n+   *                    DStream.\n+   * @tparam S State type\n+   */\n+  def updateStateByKey[S: ClassTag](\n+      updateFunc: (Time, K, Seq[V], Option[S]) => Option[S],\n+      partitioner: Partitioner\n+    ): DStream[(K, S)] = {\n+    val newUpdateFunc = (time: Time, iterator: Iterator[(K, Seq[V], Option[S])]) => {",
+    "line": 26
+  }],
+  "prId": 2267
+}]

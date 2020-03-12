@@ -1,0 +1,203 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "This looks like a good change to me, especially since we already use this error-handling strategy in [SparkListenerBus](https://github.com/apache/spark/blob/master/core/src/main/scala/org/apache/spark/scheduler/SparkListenerBus.scala) (added in #759).\n",
+    "commit": "df7ee409bcc309fa3a969bdffadd1803315fbdf3",
+    "createdAt": "2014-12-16T21:09:42Z",
+    "diffHunk": "@@ -64,36 +69,32 @@ private[spark] class StreamingListenerBus() extends Logging {\n   }\n \n   def addListener(listener: StreamingListener) {\n-    listeners += listener\n+    listeners.add(listener)\n   }\n \n   def post(event: StreamingListenerEvent) {\n     val eventAdded = eventQueue.offer(event)\n-    if (!eventAdded && !queueFullErrorMessageLogged) {\n+    if (!eventAdded && queueFullErrorMessageLogged.compareAndSet(false, true)) {\n       logError(\"Dropping StreamingListenerEvent because no remaining room in event queue. \" +\n         \"This likely means one of the StreamingListeners is too slow and cannot keep up with the \" +\n         \"rate at which events are being started by the scheduler.\")\n-      queueFullErrorMessageLogged = true\n     }\n   }\n \n-  /**\n-   * Waits until there are no more events in the queue, or until the specified time has elapsed.\n-   * Used for testing only. Returns true if the queue has emptied and false is the specified time\n-   * elapsed before the queue emptied.\n-   */\n-  def waitUntilEmpty(timeoutMillis: Int): Boolean = {\n-    val finishTime = System.currentTimeMillis + timeoutMillis\n-    while (!eventQueue.isEmpty) {\n-      if (System.currentTimeMillis > finishTime) {\n-        return false\n+  def stop(): Unit = {\n+    // Should not call `post`, or `StreamingListenerShutdown` may be dropped.\n+    eventQueue.offer(StreamingListenerShutdown)\n+    listenerThread.join()\n+  }\n+\n+  private def foreachListener(f: StreamingListener => Unit): Unit = {"
+  }],
+  "prId": 3710
+}, {
+  "comments": [{
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "Why this change?\n\nIf this change is necessary, we should probably do the same thing in the SparkListenerBus trait: https://github.com/apache/spark/blame/master/core/src/main/scala/org/apache/spark/scheduler/SparkListenerBus.scala#L32\n",
+    "commit": "df7ee409bcc309fa3a969bdffadd1803315fbdf3",
+    "createdAt": "2014-12-16T21:10:33Z",
+    "diffHunk": "@@ -17,20 +17,25 @@\n \n package org.apache.spark.streaming.scheduler\n \n-import org.apache.spark.Logging\n-import scala.collection.mutable.{SynchronizedBuffer, ArrayBuffer}\n+import java.util.concurrent.atomic.AtomicBoolean\n import java.util.concurrent.LinkedBlockingQueue\n+import java.util.concurrent.CopyOnWriteArrayList\n+\n+import scala.collection.JavaConversions._\n+import scala.util.control.NonFatal\n+\n+import org.apache.spark.Logging\n+import org.apache.spark.util.Utils\n \n /** Asynchronously passes StreamingListenerEvents to registered StreamingListeners. */\n private[spark] class StreamingListenerBus() extends Logging {\n-  private val listeners = new ArrayBuffer[StreamingListener]()\n-    with SynchronizedBuffer[StreamingListener]\n+  private val listeners = new CopyOnWriteArrayList[StreamingListener]()"
+  }, {
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "No necessary. I just feel that eliminating a lock during handling events is better.\n",
+    "commit": "df7ee409bcc309fa3a969bdffadd1803315fbdf3",
+    "createdAt": "2014-12-17T01:32:19Z",
+    "diffHunk": "@@ -17,20 +17,25 @@\n \n package org.apache.spark.streaming.scheduler\n \n-import org.apache.spark.Logging\n-import scala.collection.mutable.{SynchronizedBuffer, ArrayBuffer}\n+import java.util.concurrent.atomic.AtomicBoolean\n import java.util.concurrent.LinkedBlockingQueue\n+import java.util.concurrent.CopyOnWriteArrayList\n+\n+import scala.collection.JavaConversions._\n+import scala.util.control.NonFatal\n+\n+import org.apache.spark.Logging\n+import org.apache.spark.util.Utils\n \n /** Asynchronously passes StreamingListenerEvents to registered StreamingListeners. */\n private[spark] class StreamingListenerBus() extends Logging {\n-  private val listeners = new ArrayBuffer[StreamingListener]()\n-    with SynchronizedBuffer[StreamingListener]\n+  private val listeners = new CopyOnWriteArrayList[StreamingListener]()"
+  }, {
+    "author": {
+      "login": "tdas"
+    },
+    "body": "There is a implicit conversion going on between Java's CopyOnWriteArrayList and Scala Iterable/Iterator every time foreach applied. I am not sure whether that conversion is efficient, or if it is copying everything from the underlying array. Might be better to use Java API's \"iterator\" and convert it to Scala iterator to apply foreach.\n",
+    "commit": "df7ee409bcc309fa3a969bdffadd1803315fbdf3",
+    "createdAt": "2014-12-24T03:21:53Z",
+    "diffHunk": "@@ -17,20 +17,25 @@\n \n package org.apache.spark.streaming.scheduler\n \n-import org.apache.spark.Logging\n-import scala.collection.mutable.{SynchronizedBuffer, ArrayBuffer}\n+import java.util.concurrent.atomic.AtomicBoolean\n import java.util.concurrent.LinkedBlockingQueue\n+import java.util.concurrent.CopyOnWriteArrayList\n+\n+import scala.collection.JavaConversions._\n+import scala.util.control.NonFatal\n+\n+import org.apache.spark.Logging\n+import org.apache.spark.util.Utils\n \n /** Asynchronously passes StreamingListenerEvents to registered StreamingListeners. */\n private[spark] class StreamingListenerBus() extends Logging {\n-  private val listeners = new ArrayBuffer[StreamingListener]()\n-    with SynchronizedBuffer[StreamingListener]\n+  private val listeners = new CopyOnWriteArrayList[StreamingListener]()"
+  }, {
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "Good catch\n",
+    "commit": "df7ee409bcc309fa3a969bdffadd1803315fbdf3",
+    "createdAt": "2014-12-24T03:35:14Z",
+    "diffHunk": "@@ -17,20 +17,25 @@\n \n package org.apache.spark.streaming.scheduler\n \n-import org.apache.spark.Logging\n-import scala.collection.mutable.{SynchronizedBuffer, ArrayBuffer}\n+import java.util.concurrent.atomic.AtomicBoolean\n import java.util.concurrent.LinkedBlockingQueue\n+import java.util.concurrent.CopyOnWriteArrayList\n+\n+import scala.collection.JavaConversions._\n+import scala.util.control.NonFatal\n+\n+import org.apache.spark.Logging\n+import org.apache.spark.util.Utils\n \n /** Asynchronously passes StreamingListenerEvents to registered StreamingListeners. */\n private[spark] class StreamingListenerBus() extends Logging {\n-  private val listeners = new ArrayBuffer[StreamingListener]()\n-    with SynchronizedBuffer[StreamingListener]\n+  private val listeners = new CopyOnWriteArrayList[StreamingListener]()"
+  }, {
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "Scala uses JIterableWrapper to wrapper a Java Iterable. It doesn't copy the data. However, using Java Iterator directly will avoid to create a JIterableWrapper every time. So I change to this way now.\n",
+    "commit": "df7ee409bcc309fa3a969bdffadd1803315fbdf3",
+    "createdAt": "2014-12-24T05:47:55Z",
+    "diffHunk": "@@ -17,20 +17,25 @@\n \n package org.apache.spark.streaming.scheduler\n \n-import org.apache.spark.Logging\n-import scala.collection.mutable.{SynchronizedBuffer, ArrayBuffer}\n+import java.util.concurrent.atomic.AtomicBoolean\n import java.util.concurrent.LinkedBlockingQueue\n+import java.util.concurrent.CopyOnWriteArrayList\n+\n+import scala.collection.JavaConversions._\n+import scala.util.control.NonFatal\n+\n+import org.apache.spark.Logging\n+import org.apache.spark.util.Utils\n \n /** Asynchronously passes StreamingListenerEvents to registered StreamingListeners. */\n private[spark] class StreamingListenerBus() extends Logging {\n-  private val listeners = new ArrayBuffer[StreamingListener]()\n-    with SynchronizedBuffer[StreamingListener]\n+  private val listeners = new CopyOnWriteArrayList[StreamingListener]()"
+  }, {
+    "author": {
+      "login": "tdas"
+    },
+    "body": "Would be good to add a comment here saying why you are using CopyOnWriteArrayList instead of something simpler. \n",
+    "commit": "df7ee409bcc309fa3a969bdffadd1803315fbdf3",
+    "createdAt": "2014-12-25T01:52:44Z",
+    "diffHunk": "@@ -17,20 +17,25 @@\n \n package org.apache.spark.streaming.scheduler\n \n-import org.apache.spark.Logging\n-import scala.collection.mutable.{SynchronizedBuffer, ArrayBuffer}\n+import java.util.concurrent.atomic.AtomicBoolean\n import java.util.concurrent.LinkedBlockingQueue\n+import java.util.concurrent.CopyOnWriteArrayList\n+\n+import scala.collection.JavaConversions._\n+import scala.util.control.NonFatal\n+\n+import org.apache.spark.Logging\n+import org.apache.spark.util.Utils\n \n /** Asynchronously passes StreamingListenerEvents to registered StreamingListeners. */\n private[spark] class StreamingListenerBus() extends Logging {\n-  private val listeners = new ArrayBuffer[StreamingListener]()\n-    with SynchronizedBuffer[StreamingListener]\n+  private val listeners = new CopyOnWriteArrayList[StreamingListener]()"
+  }],
+  "prId": 3710
+}, {
+  "comments": [{
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "This change seems fine to me, but we should probably apply the same fix to LiveListenerBus as well: https://github.com/apache/spark/blob/master/core/src/main/scala/org/apache/spark/scheduler/LiveListenerBus.scala#L38\n",
+    "commit": "df7ee409bcc309fa3a969bdffadd1803315fbdf3",
+    "createdAt": "2014-12-16T21:11:18Z",
+    "diffHunk": "@@ -17,20 +17,25 @@\n \n package org.apache.spark.streaming.scheduler\n \n-import org.apache.spark.Logging\n-import scala.collection.mutable.{SynchronizedBuffer, ArrayBuffer}\n+import java.util.concurrent.atomic.AtomicBoolean\n import java.util.concurrent.LinkedBlockingQueue\n+import java.util.concurrent.CopyOnWriteArrayList\n+\n+import scala.collection.JavaConversions._\n+import scala.util.control.NonFatal\n+\n+import org.apache.spark.Logging\n+import org.apache.spark.util.Utils\n \n /** Asynchronously passes StreamingListenerEvents to registered StreamingListeners. */\n private[spark] class StreamingListenerBus() extends Logging {\n-  private val listeners = new ArrayBuffer[StreamingListener]()\n-    with SynchronizedBuffer[StreamingListener]\n+  private val listeners = new CopyOnWriteArrayList[StreamingListener]()\n \n   /* Cap the capacity of the SparkListenerEvent queue so we get an explicit error (rather than\n    * an OOM exception) if it's perpetually being added to more quickly than it's being drained. */\n   private val EVENT_QUEUE_CAPACITY = 10000\n   private val eventQueue = new LinkedBlockingQueue[StreamingListenerEvent](EVENT_QUEUE_CAPACITY)\n-  private var queueFullErrorMessageLogged = false\n+  private val queueFullErrorMessageLogged = new AtomicBoolean(false)",
+    "line": 29
+  }],
+  "prId": 3710
+}, {
+  "comments": [{
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "We might also want to apply this change to Spark Core's `LiveListenerBus` so that they're in sync.\n",
+    "commit": "df7ee409bcc309fa3a969bdffadd1803315fbdf3",
+    "createdAt": "2014-12-22T22:15:24Z",
+    "diffHunk": "@@ -64,36 +69,32 @@ private[spark] class StreamingListenerBus() extends Logging {\n   }\n \n   def addListener(listener: StreamingListener) {\n-    listeners += listener\n+    listeners.add(listener)\n   }\n \n   def post(event: StreamingListenerEvent) {\n     val eventAdded = eventQueue.offer(event)\n-    if (!eventAdded && !queueFullErrorMessageLogged) {\n+    if (!eventAdded && queueFullErrorMessageLogged.compareAndSet(false, true)) {\n       logError(\"Dropping StreamingListenerEvent because no remaining room in event queue. \" +\n         \"This likely means one of the StreamingListeners is too slow and cannot keep up with the \" +\n         \"rate at which events are being started by the scheduler.\")\n-      queueFullErrorMessageLogged = true\n     }\n   }\n \n-  /**\n-   * Waits until there are no more events in the queue, or until the specified time has elapsed.\n-   * Used for testing only. Returns true if the queue has emptied and false is the specified time\n-   * elapsed before the queue emptied.\n-   */\n-  def waitUntilEmpty(timeoutMillis: Int): Boolean = {\n-    val finishTime = System.currentTimeMillis + timeoutMillis\n-    while (!eventQueue.isEmpty) {\n-      if (System.currentTimeMillis > finishTime) {\n-        return false\n+  def stop(): Unit = {\n+    // Should not call `post`, or `StreamingListenerShutdown` may be dropped."
+  }],
+  "prId": 3710
+}, {
+  "comments": [{
+    "author": {
+      "login": "tdas"
+    },
+    "body": "Nit: Can you add a comment mentioning why you used an iterator so that this does not regress in the future. This is quite subtle. \n",
+    "commit": "df7ee409bcc309fa3a969bdffadd1803315fbdf3",
+    "createdAt": "2014-12-24T21:07:06Z",
+    "diffHunk": "@@ -64,36 +71,40 @@ private[spark] class StreamingListenerBus() extends Logging {\n   }\n \n   def addListener(listener: StreamingListener) {\n-    listeners += listener\n+    listeners.add(listener)\n   }\n \n   def post(event: StreamingListenerEvent) {\n+    if (stopped) {\n+      // Drop further events to make `StreamingListenerShutdown` be delivered ASAP\n+      logError(\"StreamingListenerBus has been stopped! Drop \" + event)\n+      return\n+    }\n     val eventAdded = eventQueue.offer(event)\n-    if (!eventAdded && !queueFullErrorMessageLogged) {\n+    if (!eventAdded && queueFullErrorMessageLogged.compareAndSet(false, true)) {\n       logError(\"Dropping StreamingListenerEvent because no remaining room in event queue. \" +\n         \"This likely means one of the StreamingListeners is too slow and cannot keep up with the \" +\n         \"rate at which events are being started by the scheduler.\")\n-      queueFullErrorMessageLogged = true\n     }\n   }\n \n-  /**\n-   * Waits until there are no more events in the queue, or until the specified time has elapsed.\n-   * Used for testing only. Returns true if the queue has emptied and false is the specified time\n-   * elapsed before the queue emptied.\n-   */\n-  def waitUntilEmpty(timeoutMillis: Int): Boolean = {\n-    val finishTime = System.currentTimeMillis + timeoutMillis\n-    while (!eventQueue.isEmpty) {\n-      if (System.currentTimeMillis > finishTime) {\n-        return false\n+  def stop(): Unit = {\n+    stopped = true\n+    // Should not call `post`, or `StreamingListenerShutdown` may be dropped.\n+    eventQueue.put(StreamingListenerShutdown)\n+    listenerThread.join()\n+  }\n+\n+  private def foreachListener(f: StreamingListener => Unit): Unit = {\n+    val iter = listeners.iterator"
+  }, {
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "If this change is to avoid an implicit Java -> Scala collections conversion, why not replace the `JavaConversions` implicits with the more explicit `JavaConverters` instead, so that you have to manually write `.asJava` or `.asScala`?  That, in addition to a comment, would make it more obvious if we're re-introducing those conversions.\n",
+    "commit": "df7ee409bcc309fa3a969bdffadd1803315fbdf3",
+    "createdAt": "2014-12-24T21:09:17Z",
+    "diffHunk": "@@ -64,36 +71,40 @@ private[spark] class StreamingListenerBus() extends Logging {\n   }\n \n   def addListener(listener: StreamingListener) {\n-    listeners += listener\n+    listeners.add(listener)\n   }\n \n   def post(event: StreamingListenerEvent) {\n+    if (stopped) {\n+      // Drop further events to make `StreamingListenerShutdown` be delivered ASAP\n+      logError(\"StreamingListenerBus has been stopped! Drop \" + event)\n+      return\n+    }\n     val eventAdded = eventQueue.offer(event)\n-    if (!eventAdded && !queueFullErrorMessageLogged) {\n+    if (!eventAdded && queueFullErrorMessageLogged.compareAndSet(false, true)) {\n       logError(\"Dropping StreamingListenerEvent because no remaining room in event queue. \" +\n         \"This likely means one of the StreamingListeners is too slow and cannot keep up with the \" +\n         \"rate at which events are being started by the scheduler.\")\n-      queueFullErrorMessageLogged = true\n     }\n   }\n \n-  /**\n-   * Waits until there are no more events in the queue, or until the specified time has elapsed.\n-   * Used for testing only. Returns true if the queue has emptied and false is the specified time\n-   * elapsed before the queue emptied.\n-   */\n-  def waitUntilEmpty(timeoutMillis: Int): Boolean = {\n-    val finishTime = System.currentTimeMillis + timeoutMillis\n-    while (!eventQueue.isEmpty) {\n-      if (System.currentTimeMillis > finishTime) {\n-        return false\n+  def stop(): Unit = {\n+    stopped = true\n+    // Should not call `post`, or `StreamingListenerShutdown` may be dropped.\n+    eventQueue.put(StreamingListenerShutdown)\n+    listenerThread.join()\n+  }\n+\n+  private def foreachListener(f: StreamingListener => Unit): Unit = {\n+    val iter = listeners.iterator"
+  }, {
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "Added the comment and removed `JavaConversions`.\n",
+    "commit": "df7ee409bcc309fa3a969bdffadd1803315fbdf3",
+    "createdAt": "2014-12-25T02:16:42Z",
+    "diffHunk": "@@ -64,36 +71,40 @@ private[spark] class StreamingListenerBus() extends Logging {\n   }\n \n   def addListener(listener: StreamingListener) {\n-    listeners += listener\n+    listeners.add(listener)\n   }\n \n   def post(event: StreamingListenerEvent) {\n+    if (stopped) {\n+      // Drop further events to make `StreamingListenerShutdown` be delivered ASAP\n+      logError(\"StreamingListenerBus has been stopped! Drop \" + event)\n+      return\n+    }\n     val eventAdded = eventQueue.offer(event)\n-    if (!eventAdded && !queueFullErrorMessageLogged) {\n+    if (!eventAdded && queueFullErrorMessageLogged.compareAndSet(false, true)) {\n       logError(\"Dropping StreamingListenerEvent because no remaining room in event queue. \" +\n         \"This likely means one of the StreamingListeners is too slow and cannot keep up with the \" +\n         \"rate at which events are being started by the scheduler.\")\n-      queueFullErrorMessageLogged = true\n     }\n   }\n \n-  /**\n-   * Waits until there are no more events in the queue, or until the specified time has elapsed.\n-   * Used for testing only. Returns true if the queue has emptied and false is the specified time\n-   * elapsed before the queue emptied.\n-   */\n-  def waitUntilEmpty(timeoutMillis: Int): Boolean = {\n-    val finishTime = System.currentTimeMillis + timeoutMillis\n-    while (!eventQueue.isEmpty) {\n-      if (System.currentTimeMillis > finishTime) {\n-        return false\n+  def stop(): Unit = {\n+    stopped = true\n+    // Should not call `post`, or `StreamingListenerShutdown` may be dropped.\n+    eventQueue.put(StreamingListenerShutdown)\n+    listenerThread.join()\n+  }\n+\n+  private def foreachListener(f: StreamingListener => Unit): Unit = {\n+    val iter = listeners.iterator"
+  }],
+  "prId": 3710
+}, {
+  "comments": [{
+    "author": {
+      "login": "tdas"
+    },
+    "body": "Why is this `put` still there? Wouldnt this block / throw error if the queue is full?\n",
+    "commit": "df7ee409bcc309fa3a969bdffadd1803315fbdf3",
+    "createdAt": "2014-12-24T21:09:27Z",
+    "diffHunk": "@@ -64,36 +71,40 @@ private[spark] class StreamingListenerBus() extends Logging {\n   }\n \n   def addListener(listener: StreamingListener) {\n-    listeners += listener\n+    listeners.add(listener)\n   }\n \n   def post(event: StreamingListenerEvent) {\n+    if (stopped) {\n+      // Drop further events to make `StreamingListenerShutdown` be delivered ASAP\n+      logError(\"StreamingListenerBus has been stopped! Drop \" + event)\n+      return\n+    }\n     val eventAdded = eventQueue.offer(event)\n-    if (!eventAdded && !queueFullErrorMessageLogged) {\n+    if (!eventAdded && queueFullErrorMessageLogged.compareAndSet(false, true)) {\n       logError(\"Dropping StreamingListenerEvent because no remaining room in event queue. \" +\n         \"This likely means one of the StreamingListeners is too slow and cannot keep up with the \" +\n         \"rate at which events are being started by the scheduler.\")\n-      queueFullErrorMessageLogged = true\n     }\n   }\n \n-  /**\n-   * Waits until there are no more events in the queue, or until the specified time has elapsed.\n-   * Used for testing only. Returns true if the queue has emptied and false is the specified time\n-   * elapsed before the queue emptied.\n-   */\n-  def waitUntilEmpty(timeoutMillis: Int): Boolean = {\n-    val finishTime = System.currentTimeMillis + timeoutMillis\n-    while (!eventQueue.isEmpty) {\n-      if (System.currentTimeMillis > finishTime) {\n-        return false\n+  def stop(): Unit = {\n+    stopped = true\n+    // Should not call `post`, or `StreamingListenerShutdown` may be dropped.\n+    eventQueue.put(StreamingListenerShutdown)",
+    "line": 97
+  }, {
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "It will block the current thread if the queue is full. But since it will call `listenerThread.join()` later, the block is fine.\n",
+    "commit": "df7ee409bcc309fa3a969bdffadd1803315fbdf3",
+    "createdAt": "2014-12-25T01:50:33Z",
+    "diffHunk": "@@ -64,36 +71,40 @@ private[spark] class StreamingListenerBus() extends Logging {\n   }\n \n   def addListener(listener: StreamingListener) {\n-    listeners += listener\n+    listeners.add(listener)\n   }\n \n   def post(event: StreamingListenerEvent) {\n+    if (stopped) {\n+      // Drop further events to make `StreamingListenerShutdown` be delivered ASAP\n+      logError(\"StreamingListenerBus has been stopped! Drop \" + event)\n+      return\n+    }\n     val eventAdded = eventQueue.offer(event)\n-    if (!eventAdded && !queueFullErrorMessageLogged) {\n+    if (!eventAdded && queueFullErrorMessageLogged.compareAndSet(false, true)) {\n       logError(\"Dropping StreamingListenerEvent because no remaining room in event queue. \" +\n         \"This likely means one of the StreamingListeners is too slow and cannot keep up with the \" +\n         \"rate at which events are being started by the scheduler.\")\n-      queueFullErrorMessageLogged = true\n     }\n   }\n \n-  /**\n-   * Waits until there are no more events in the queue, or until the specified time has elapsed.\n-   * Used for testing only. Returns true if the queue has emptied and false is the specified time\n-   * elapsed before the queue emptied.\n-   */\n-  def waitUntilEmpty(timeoutMillis: Int): Boolean = {\n-    val finishTime = System.currentTimeMillis + timeoutMillis\n-    while (!eventQueue.isEmpty) {\n-      if (System.currentTimeMillis > finishTime) {\n-        return false\n+  def stop(): Unit = {\n+    stopped = true\n+    // Should not call `post`, or `StreamingListenerShutdown` may be dropped.\n+    eventQueue.put(StreamingListenerShutdown)",
+    "line": 97
+  }, {
+    "author": {
+      "login": "tdas"
+    },
+    "body": "I see, got it. This is a different approach from the LiveListenerBus. This is okay for this PR, but i would really like these to be merged in the later PR, by using a common trait. \n",
+    "commit": "df7ee409bcc309fa3a969bdffadd1803315fbdf3",
+    "createdAt": "2014-12-25T02:25:51Z",
+    "diffHunk": "@@ -64,36 +71,40 @@ private[spark] class StreamingListenerBus() extends Logging {\n   }\n \n   def addListener(listener: StreamingListener) {\n-    listeners += listener\n+    listeners.add(listener)\n   }\n \n   def post(event: StreamingListenerEvent) {\n+    if (stopped) {\n+      // Drop further events to make `StreamingListenerShutdown` be delivered ASAP\n+      logError(\"StreamingListenerBus has been stopped! Drop \" + event)\n+      return\n+    }\n     val eventAdded = eventQueue.offer(event)\n-    if (!eventAdded && !queueFullErrorMessageLogged) {\n+    if (!eventAdded && queueFullErrorMessageLogged.compareAndSet(false, true)) {\n       logError(\"Dropping StreamingListenerEvent because no remaining room in event queue. \" +\n         \"This likely means one of the StreamingListeners is too slow and cannot keep up with the \" +\n         \"rate at which events are being started by the scheduler.\")\n-      queueFullErrorMessageLogged = true\n     }\n   }\n \n-  /**\n-   * Waits until there are no more events in the queue, or until the specified time has elapsed.\n-   * Used for testing only. Returns true if the queue has emptied and false is the specified time\n-   * elapsed before the queue emptied.\n-   */\n-  def waitUntilEmpty(timeoutMillis: Int): Boolean = {\n-    val finishTime = System.currentTimeMillis + timeoutMillis\n-    while (!eventQueue.isEmpty) {\n-      if (System.currentTimeMillis > finishTime) {\n-        return false\n+  def stop(): Unit = {\n+    stopped = true\n+    // Should not call `post`, or `StreamingListenerShutdown` may be dropped.\n+    eventQueue.put(StreamingListenerShutdown)",
+    "line": 97
+  }, {
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "+1\n",
+    "commit": "df7ee409bcc309fa3a969bdffadd1803315fbdf3",
+    "createdAt": "2014-12-25T02:45:42Z",
+    "diffHunk": "@@ -64,36 +71,40 @@ private[spark] class StreamingListenerBus() extends Logging {\n   }\n \n   def addListener(listener: StreamingListener) {\n-    listeners += listener\n+    listeners.add(listener)\n   }\n \n   def post(event: StreamingListenerEvent) {\n+    if (stopped) {\n+      // Drop further events to make `StreamingListenerShutdown` be delivered ASAP\n+      logError(\"StreamingListenerBus has been stopped! Drop \" + event)\n+      return\n+    }\n     val eventAdded = eventQueue.offer(event)\n-    if (!eventAdded && !queueFullErrorMessageLogged) {\n+    if (!eventAdded && queueFullErrorMessageLogged.compareAndSet(false, true)) {\n       logError(\"Dropping StreamingListenerEvent because no remaining room in event queue. \" +\n         \"This likely means one of the StreamingListeners is too slow and cannot keep up with the \" +\n         \"rate at which events are being started by the scheduler.\")\n-      queueFullErrorMessageLogged = true\n     }\n   }\n \n-  /**\n-   * Waits until there are no more events in the queue, or until the specified time has elapsed.\n-   * Used for testing only. Returns true if the queue has emptied and false is the specified time\n-   * elapsed before the queue emptied.\n-   */\n-  def waitUntilEmpty(timeoutMillis: Int): Boolean = {\n-    val finishTime = System.currentTimeMillis + timeoutMillis\n-    while (!eventQueue.isEmpty) {\n-      if (System.currentTimeMillis > finishTime) {\n-        return false\n+  def stop(): Unit = {\n+    stopped = true\n+    // Should not call `post`, or `StreamingListenerShutdown` may be dropped.\n+    eventQueue.put(StreamingListenerShutdown)",
+    "line": 97
+  }, {
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "I would prefer this to make this bus use the new behavior in `LiveListenerBus` as well. It's a little confusing that this one keeps using a shutdown event and joins on the thread instead. I don't see a particular requirement in the `StreamingListenerBus` that prevents us from doing this.\n",
+    "commit": "df7ee409bcc309fa3a969bdffadd1803315fbdf3",
+    "createdAt": "2015-01-07T22:03:03Z",
+    "diffHunk": "@@ -64,36 +71,40 @@ private[spark] class StreamingListenerBus() extends Logging {\n   }\n \n   def addListener(listener: StreamingListener) {\n-    listeners += listener\n+    listeners.add(listener)\n   }\n \n   def post(event: StreamingListenerEvent) {\n+    if (stopped) {\n+      // Drop further events to make `StreamingListenerShutdown` be delivered ASAP\n+      logError(\"StreamingListenerBus has been stopped! Drop \" + event)\n+      return\n+    }\n     val eventAdded = eventQueue.offer(event)\n-    if (!eventAdded && !queueFullErrorMessageLogged) {\n+    if (!eventAdded && queueFullErrorMessageLogged.compareAndSet(false, true)) {\n       logError(\"Dropping StreamingListenerEvent because no remaining room in event queue. \" +\n         \"This likely means one of the StreamingListeners is too slow and cannot keep up with the \" +\n         \"rate at which events are being started by the scheduler.\")\n-      queueFullErrorMessageLogged = true\n     }\n   }\n \n-  /**\n-   * Waits until there are no more events in the queue, or until the specified time has elapsed.\n-   * Used for testing only. Returns true if the queue has emptied and false is the specified time\n-   * elapsed before the queue emptied.\n-   */\n-  def waitUntilEmpty(timeoutMillis: Int): Boolean = {\n-    val finishTime = System.currentTimeMillis + timeoutMillis\n-    while (!eventQueue.isEmpty) {\n-      if (System.currentTimeMillis > finishTime) {\n-        return false\n+  def stop(): Unit = {\n+    stopped = true\n+    // Should not call `post`, or `StreamingListenerShutdown` may be dropped.\n+    eventQueue.put(StreamingListenerShutdown)",
+    "line": 97
+  }],
+  "prId": 3710
+}, {
+  "comments": [{
+    "author": {
+      "login": "tdas"
+    },
+    "body": "This does not use `stopped` like the `LiveListenerBus`. I know that introducing `eventLock` and using `eventQueue.poll` instead of `eventQueue.take` like the LiveListenerBus is too much for this PR. But at least we can eliminate the bug related to `StreamingListenerShutdown` by using `stopped` instead of `StreamingListenerShutdown`.\n",
+    "commit": "df7ee409bcc309fa3a969bdffadd1803315fbdf3",
+    "createdAt": "2014-12-24T21:12:30Z",
+    "diffHunk": "@@ -39,18 +45,19 @@ private[spark] class StreamingListenerBus() extends Logging {\n         val event = eventQueue.take",
+    "line": 35
+  }, {
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "`eventQueue.take` will block until the queue is not empty. So if we don't use `eventQueue.poll` like `LiveListenerBus`, we still need to use `StreamingListenerShutdown`.\n",
+    "commit": "df7ee409bcc309fa3a969bdffadd1803315fbdf3",
+    "createdAt": "2014-12-25T02:06:22Z",
+    "diffHunk": "@@ -39,18 +45,19 @@ private[spark] class StreamingListenerBus() extends Logging {\n         val event = eventQueue.take",
+    "line": 35
+  }],
+  "prId": 3710
+}, {
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "is the use of copy on write here to speed up initialization, in the sense that events posted on start up will not be blocked as we add listeners? I may be missing something, but this speed up doesn't seem very significant to me.\n",
+    "commit": "df7ee409bcc309fa3a969bdffadd1803315fbdf3",
+    "createdAt": "2015-01-07T21:59:50Z",
+    "diffHunk": "@@ -17,20 +17,28 @@\n \n package org.apache.spark.streaming.scheduler\n \n+import java.util.concurrent.atomic.AtomicBoolean\n+import java.util.concurrent.{LinkedBlockingQueue, CopyOnWriteArrayList}\n+\n+import scala.util.control.NonFatal\n+\n import org.apache.spark.Logging\n-import scala.collection.mutable.{SynchronizedBuffer, ArrayBuffer}\n-import java.util.concurrent.LinkedBlockingQueue\n+import org.apache.spark.util.Utils\n \n /** Asynchronously passes StreamingListenerEvents to registered StreamingListeners. */\n private[spark] class StreamingListenerBus() extends Logging {\n-  private val listeners = new ArrayBuffer[StreamingListener]()\n-    with SynchronizedBuffer[StreamingListener]\n+  // `listeners` will be set up during the initialization of the whole system and the number of\n+  // listeners is small, so the copying cost of CopyOnWriteArrayList will be little. With the help\n+  // of CopyOnWriteArrayList, we can eliminate a lock during processing every event comparing to\n+  // SynchronizedBuffer.\n+  private val listeners = new CopyOnWriteArrayList[StreamingListener]()",
+    "line": 22
+  }, {
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "It's usually not safe to have a lock when posting events to outer listeners. I elimiated all locks during posting events to listeners in #4006    \n",
+    "commit": "df7ee409bcc309fa3a969bdffadd1803315fbdf3",
+    "createdAt": "2015-01-12T12:19:07Z",
+    "diffHunk": "@@ -17,20 +17,28 @@\n \n package org.apache.spark.streaming.scheduler\n \n+import java.util.concurrent.atomic.AtomicBoolean\n+import java.util.concurrent.{LinkedBlockingQueue, CopyOnWriteArrayList}\n+\n+import scala.util.control.NonFatal\n+\n import org.apache.spark.Logging\n-import scala.collection.mutable.{SynchronizedBuffer, ArrayBuffer}\n-import java.util.concurrent.LinkedBlockingQueue\n+import org.apache.spark.util.Utils\n \n /** Asynchronously passes StreamingListenerEvents to registered StreamingListeners. */\n private[spark] class StreamingListenerBus() extends Logging {\n-  private val listeners = new ArrayBuffer[StreamingListener]()\n-    with SynchronizedBuffer[StreamingListener]\n+  // `listeners` will be set up during the initialization of the whole system and the number of\n+  // listeners is small, so the copying cost of CopyOnWriteArrayList will be little. With the help\n+  // of CopyOnWriteArrayList, we can eliminate a lock during processing every event comparing to\n+  // SynchronizedBuffer.\n+  private val listeners = new CopyOnWriteArrayList[StreamingListener]()",
+    "line": 22
+  }],
+  "prId": 3710
+}]

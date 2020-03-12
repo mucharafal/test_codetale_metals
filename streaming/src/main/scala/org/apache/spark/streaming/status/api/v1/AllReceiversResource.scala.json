@@ -1,0 +1,25 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "This should fit in the previous line. Otherwise we tend to use the more verbose version with braces.",
+    "commit": "651dc679b865603be677ca9d30b975ce5c3c5df0",
+    "createdAt": "2016-12-05T22:33:14Z",
+    "diffHunk": "@@ -0,0 +1,80 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.streaming.status.api.v1\n+\n+import java.util.Date\n+import javax.ws.rs.{GET, Produces}\n+import javax.ws.rs.core.MediaType\n+\n+import org.apache.spark.streaming.status.api.v1.AllReceiversResource._\n+import org.apache.spark.streaming.ui.StreamingJobProgressListener\n+\n+@Produces(Array(MediaType.APPLICATION_JSON))\n+private[v1] class AllReceiversResource(listener: StreamingJobProgressListener) {\n+\n+  @GET\n+  def receiversList(): Seq[ReceiverInfo] = {\n+    receiverInfoList(listener).sortBy(_.streamId)\n+  }\n+}\n+\n+private[v1] object AllReceiversResource {\n+\n+  def receiverInfoList(listener: StreamingJobProgressListener): Seq[ReceiverInfo] = {\n+    listener.synchronized {\n+      listener.receivedRecordRateWithBatchTime.map { case (streamId, eventRates) =>\n+\n+        val receiverInfo = listener.receiverInfo(streamId)\n+        val streamName = receiverInfo.map(_.name).\n+          orElse(listener.streamName(streamId)).getOrElse(s\"Stream-$streamId\")\n+        val avgEventRate =\n+          if (eventRates.isEmpty) None\n+          else Some(eventRates.map(_._2).sum / eventRates.size)\n+\n+        val lastErrorInfo = receiverInfo match {\n+          case None => (None, None, None)\n+          case Some(info) =>\n+            val someTime =\n+              if (info.lastErrorTime >= 0) Some(new Date(info.lastErrorTime))\n+              else None",
+    "line": 54
+  }],
+  "prId": 16000
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "I prefer `val (time, message, error)` instead of using `blah._{1,2,3}`.",
+    "commit": "651dc679b865603be677ca9d30b975ce5c3c5df0",
+    "createdAt": "2016-12-05T22:35:04Z",
+    "diffHunk": "@@ -0,0 +1,80 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.streaming.status.api.v1\n+\n+import java.util.Date\n+import javax.ws.rs.{GET, Produces}\n+import javax.ws.rs.core.MediaType\n+\n+import org.apache.spark.streaming.status.api.v1.AllReceiversResource._\n+import org.apache.spark.streaming.ui.StreamingJobProgressListener\n+\n+@Produces(Array(MediaType.APPLICATION_JSON))\n+private[v1] class AllReceiversResource(listener: StreamingJobProgressListener) {\n+\n+  @GET\n+  def receiversList(): Seq[ReceiverInfo] = {\n+    receiverInfoList(listener).sortBy(_.streamId)\n+  }\n+}\n+\n+private[v1] object AllReceiversResource {\n+\n+  def receiverInfoList(listener: StreamingJobProgressListener): Seq[ReceiverInfo] = {\n+    listener.synchronized {\n+      listener.receivedRecordRateWithBatchTime.map { case (streamId, eventRates) =>\n+\n+        val receiverInfo = listener.receiverInfo(streamId)\n+        val streamName = receiverInfo.map(_.name).\n+          orElse(listener.streamName(streamId)).getOrElse(s\"Stream-$streamId\")\n+        val avgEventRate =\n+          if (eventRates.isEmpty) None\n+          else Some(eventRates.map(_._2).sum / eventRates.size)\n+\n+        val lastErrorInfo = receiverInfo match {",
+    "line": 49
+  }],
+  "prId": 16000
+}]

@@ -1,0 +1,80 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "pwendell"
+    },
+    "body": "What about calling this `MutableURLClassLoader`? What do you think? For some reason `Addable` just doesn't sound right to me.\n",
+    "commit": "cf0cac97d2125b2a58457bdbc6def69128e4355f",
+    "createdAt": "2014-03-25T04:39:33Z",
+    "diffHunk": "@@ -19,13 +19,56 @@ package org.apache.spark.executor\n \n import java.net.{URLClassLoader, URL}\n \n+import org.apache.spark.util.ParentClassLoader\n+\n /**\n  * The addURL method in URLClassLoader is protected. We subclass it to make this accessible.\n+ * We also make changes so user classes can come before the default classes.\n  */\n+\n+trait AddableURLClassLoader extends ClassLoader {"
+  }, {
+    "author": {
+      "login": "pwendell"
+    },
+    "body": "This should also be `private[spark]`\n",
+    "commit": "cf0cac97d2125b2a58457bdbc6def69128e4355f",
+    "createdAt": "2014-03-25T04:42:01Z",
+    "diffHunk": "@@ -19,13 +19,56 @@ package org.apache.spark.executor\n \n import java.net.{URLClassLoader, URL}\n \n+import org.apache.spark.util.ParentClassLoader\n+\n /**\n  * The addURL method in URLClassLoader is protected. We subclass it to make this accessible.\n+ * We also make changes so user classes can come before the default classes.\n  */\n+\n+trait AddableURLClassLoader extends ClassLoader {"
+  }, {
+    "author": {
+      "login": "holdenk"
+    },
+    "body": "Sounds reasonable.\n",
+    "commit": "cf0cac97d2125b2a58457bdbc6def69128e4355f",
+    "createdAt": "2014-03-25T04:42:20Z",
+    "diffHunk": "@@ -19,13 +19,56 @@ package org.apache.spark.executor\n \n import java.net.{URLClassLoader, URL}\n \n+import org.apache.spark.util.ParentClassLoader\n+\n /**\n  * The addURL method in URLClassLoader is protected. We subclass it to make this accessible.\n+ * We also make changes so user classes can come before the default classes.\n  */\n+\n+trait AddableURLClassLoader extends ClassLoader {"
+  }],
+  "prId": 217
+}, {
+  "comments": [{
+    "author": {
+      "login": "pwendell"
+    },
+    "body": "For getters like this scala style is to do `def getUrls: Array[URL]`\n",
+    "commit": "cf0cac97d2125b2a58457bdbc6def69128e4355f",
+    "createdAt": "2014-03-25T04:40:54Z",
+    "diffHunk": "@@ -19,13 +19,56 @@ package org.apache.spark.executor\n \n import java.net.{URLClassLoader, URL}\n \n+import org.apache.spark.util.ParentClassLoader\n+\n /**\n  * The addURL method in URLClassLoader is protected. We subclass it to make this accessible.\n+ * We also make changes so user classes can come before the default classes.\n  */\n+\n+trait AddableURLClassLoader extends ClassLoader {\n+  def addURL(url: URL)\n+  def getURLs(): Array[URL]"
+  }],
+  "prId": 217
+}, {
+  "comments": [{
+    "author": {
+      "login": "pwendell"
+    },
+    "body": "Why is this an `object` rather than a `val`? What are the semantics of an inner-object like this... is it static?\n\n```\n  val userClassLoader = new URLClassLoader(urls, null) {\n    override def addURL(url: URL) {\n      super.addURL(url)\n    }\n    override def findClass(name: String): Class[_] = { \n      super.findClass(name)\n    }\n  }\n```\n",
+    "commit": "cf0cac97d2125b2a58457bdbc6def69128e4355f",
+    "createdAt": "2014-03-25T04:47:36Z",
+    "diffHunk": "@@ -19,13 +19,56 @@ package org.apache.spark.executor\n \n import java.net.{URLClassLoader, URL}\n \n+import org.apache.spark.util.ParentClassLoader\n+\n /**\n  * The addURL method in URLClassLoader is protected. We subclass it to make this accessible.\n+ * We also make changes so user classes can come before the default classes.\n  */\n+\n+trait AddableURLClassLoader extends ClassLoader {\n+  def addURL(url: URL)\n+  def getURLs(): Array[URL]\n+}\n+\n+private[spark] class ChildExecutorURLClassLoader(urls: Array[URL], parent: ClassLoader)\n+  extends ClassLoader with AddableURLClassLoader {\n+\n+  object userClassLoader extends URLClassLoader(urls, null){"
+  }, {
+    "author": {
+      "login": "holdenk"
+    },
+    "body": "When I do it as a val rather than an object the methods aren't accessible. I made it a private object, does that help?\n",
+    "commit": "cf0cac97d2125b2a58457bdbc6def69128e4355f",
+    "createdAt": "2014-03-25T05:28:37Z",
+    "diffHunk": "@@ -19,13 +19,56 @@ package org.apache.spark.executor\n \n import java.net.{URLClassLoader, URL}\n \n+import org.apache.spark.util.ParentClassLoader\n+\n /**\n  * The addURL method in URLClassLoader is protected. We subclass it to make this accessible.\n+ * We also make changes so user classes can come before the default classes.\n  */\n+\n+trait AddableURLClassLoader extends ClassLoader {\n+  def addURL(url: URL)\n+  def getURLs(): Array[URL]\n+}\n+\n+private[spark] class ChildExecutorURLClassLoader(urls: Array[URL], parent: ClassLoader)\n+  extends ClassLoader with AddableURLClassLoader {\n+\n+  object userClassLoader extends URLClassLoader(urls, null){"
+  }],
+  "prId": 217
+}, {
+  "comments": [{
+    "author": {
+      "login": "pwendell"
+    },
+    "body": "private\n",
+    "commit": "cf0cac97d2125b2a58457bdbc6def69128e4355f",
+    "createdAt": "2014-03-25T04:51:34Z",
+    "diffHunk": "@@ -19,13 +19,56 @@ package org.apache.spark.executor\n \n import java.net.{URLClassLoader, URL}\n \n+import org.apache.spark.util.ParentClassLoader\n+\n /**\n  * The addURL method in URLClassLoader is protected. We subclass it to make this accessible.\n+ * We also make changes so user classes can come before the default classes.\n  */\n+\n+trait AddableURLClassLoader extends ClassLoader {\n+  def addURL(url: URL)\n+  def getURLs(): Array[URL]\n+}\n+\n+private[spark] class ChildExecutorURLClassLoader(urls: Array[URL], parent: ClassLoader)\n+  extends ClassLoader with AddableURLClassLoader {\n+\n+  object userClassLoader extends URLClassLoader(urls, null){\n+    override def addURL(url: URL) {\n+      super.addURL(url)\n+    }\n+    override def findClass(name: String): Class[_] = { \n+      super.findClass(name)\n+    }\n+  }\n+\n+  val parentClassLoader = new ParentClassLoader(parent)"
+  }],
+  "prId": 217
+}, {
+  "comments": [{
+    "author": {
+      "login": "pwendell"
+    },
+    "body": "I think it's sufficient to just say \"extends AddableURLClassLoader\"\n",
+    "commit": "cf0cac97d2125b2a58457bdbc6def69128e4355f",
+    "createdAt": "2014-03-25T04:59:35Z",
+    "diffHunk": "@@ -19,13 +19,56 @@ package org.apache.spark.executor\n \n import java.net.{URLClassLoader, URL}\n \n+import org.apache.spark.util.ParentClassLoader\n+\n /**\n  * The addURL method in URLClassLoader is protected. We subclass it to make this accessible.\n+ * We also make changes so user classes can come before the default classes.\n  */\n+\n+trait AddableURLClassLoader extends ClassLoader {\n+  def addURL(url: URL)\n+  def getURLs(): Array[URL]\n+}\n+\n+private[spark] class ChildExecutorURLClassLoader(urls: Array[URL], parent: ClassLoader)\n+  extends ClassLoader with AddableURLClassLoader {"
+  }],
+  "prId": 217
+}]

@@ -1,0 +1,166 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "lemire"
+    },
+    "body": "I'd recommend investigating whether adding `markedBlocks.runOptimize()` right before `markedBlocks.writeExternal` reduces the size of the serialized output. Make sure to use version 0.5 or better of RoaringBitmap as well.\n",
+    "commit": "0c4bcba8c9ae25f67f3ab02e94ce41103ffae3ec",
+    "createdAt": "2015-11-12T14:42:06Z",
+    "diffHunk": "@@ -154,15 +155,17 @@ private[spark] class HighlyCompressedMapStatus private (\n \n   override def writeExternal(out: ObjectOutput): Unit = Utils.tryOrIOException {\n     loc.writeExternal(out)\n-    emptyBlocks.writeExternal(out)\n+    markedBlocks.writeExternal(out)"
+  }, {
+    "author": {
+      "login": "squito"
+    },
+    "body": "given the immutability of them, this should be unnecessary, right?  We can just call it once when we construct it?  (I totally agree we need to call it at least once, but I think its more appropriate in the other spot.)\n",
+    "commit": "0c4bcba8c9ae25f67f3ab02e94ce41103ffae3ec",
+    "createdAt": "2015-11-12T22:49:56Z",
+    "diffHunk": "@@ -154,15 +155,17 @@ private[spark] class HighlyCompressedMapStatus private (\n \n   override def writeExternal(out: ObjectOutput): Unit = Utils.tryOrIOException {\n     loc.writeExternal(out)\n-    emptyBlocks.writeExternal(out)\n+    markedBlocks.writeExternal(out)"
+  }, {
+    "author": {
+      "login": "lemire"
+    },
+    "body": "Yes. Calling it once is fine. Of course.\n",
+    "commit": "0c4bcba8c9ae25f67f3ab02e94ce41103ffae3ec",
+    "createdAt": "2015-11-12T23:06:56Z",
+    "diffHunk": "@@ -154,15 +155,17 @@ private[spark] class HighlyCompressedMapStatus private (\n \n   override def writeExternal(out: ObjectOutput): Unit = Utils.tryOrIOException {\n     loc.writeExternal(out)\n-    emptyBlocks.writeExternal(out)\n+    markedBlocks.writeExternal(out)"
+  }, {
+    "author": {
+      "login": "yaooqinn"
+    },
+    "body": "@lemire \n\n``` scala\nval r = new RoaringBitmap\n    for (i <- 1 to 200000) {\n      if(i % 2 == 0)\n        r.add(i)\n    }\n    val size1 = r.getSizeInBytes\n    r.runOptimize()\n    r.trim()\n    val size2 = r.getSizeInBytes\n```\n\nis size1 bigger than size2?\n",
+    "commit": "0c4bcba8c9ae25f67f3ab02e94ce41103ffae3ec",
+    "createdAt": "2015-11-13T02:58:46Z",
+    "diffHunk": "@@ -154,15 +155,17 @@ private[spark] class HighlyCompressedMapStatus private (\n \n   override def writeExternal(out: ObjectOutput): Unit = Utils.tryOrIOException {\n     loc.writeExternal(out)\n-    emptyBlocks.writeExternal(out)\n+    markedBlocks.writeExternal(out)"
+  }, {
+    "author": {
+      "login": "lemire"
+    },
+    "body": "In this example, calling `runOptimize` should not change anything. However, if you try something like this:\n\n```\n    val r = new RoaringBitmap\n    for (i <- 1 to 200000) {\n      if(i % 200 != 0)\n        r.add(i)\n    }\n    val size1 = r.getSizeInBytes\n    r.runOptimize()\n    r.trim()\n    val size2 = r.getSizeInBytes\n```\n\n... you should get close to a 10x saving.\n",
+    "commit": "0c4bcba8c9ae25f67f3ab02e94ce41103ffae3ec",
+    "createdAt": "2015-11-13T03:31:04Z",
+    "diffHunk": "@@ -154,15 +155,17 @@ private[spark] class HighlyCompressedMapStatus private (\n \n   override def writeExternal(out: ObjectOutput): Unit = Utils.tryOrIOException {\n     loc.writeExternal(out)\n-    emptyBlocks.writeExternal(out)\n+    markedBlocks.writeExternal(out)"
+  }, {
+    "author": {
+      "login": "yaooqinn"
+    },
+    "body": "I see, thanks\n",
+    "commit": "0c4bcba8c9ae25f67f3ab02e94ce41103ffae3ec",
+    "createdAt": "2015-11-13T05:38:51Z",
+    "diffHunk": "@@ -154,15 +155,17 @@ private[spark] class HighlyCompressedMapStatus private (\n \n   override def writeExternal(out: ObjectOutput): Unit = Utils.tryOrIOException {\n     loc.writeExternal(out)\n-    emptyBlocks.writeExternal(out)\n+    markedBlocks.writeExternal(out)"
+  }, {
+    "author": {
+      "login": "yaooqinn"
+    },
+    "body": "if  we change `!=` to `==`, it will fail to optimize, right?\n",
+    "commit": "0c4bcba8c9ae25f67f3ab02e94ce41103ffae3ec",
+    "createdAt": "2015-11-13T08:30:46Z",
+    "diffHunk": "@@ -154,15 +155,17 @@ private[spark] class HighlyCompressedMapStatus private (\n \n   override def writeExternal(out: ObjectOutput): Unit = Utils.tryOrIOException {\n     loc.writeExternal(out)\n-    emptyBlocks.writeExternal(out)\n+    markedBlocks.writeExternal(out)"
+  }, {
+    "author": {
+      "login": "lemire"
+    },
+    "body": "If you make this change, runOptimize won't be needed.\n",
+    "commit": "0c4bcba8c9ae25f67f3ab02e94ce41103ffae3ec",
+    "createdAt": "2015-11-13T12:40:48Z",
+    "diffHunk": "@@ -154,15 +155,17 @@ private[spark] class HighlyCompressedMapStatus private (\n \n   override def writeExternal(out: ObjectOutput): Unit = Utils.tryOrIOException {\n     loc.writeExternal(out)\n-    emptyBlocks.writeExternal(out)\n+    markedBlocks.writeExternal(out)"
+  }],
+  "prId": 9661
+}, {
+  "comments": [{
+    "author": {
+      "login": "lemire"
+    },
+    "body": "This comment about compression is maybe generally slightly misleading. Even a BitSet can use a different amount of memory when you reverse the bits. Though some compression schemes (e.g., EWAH as used in Hive, see https://github.com/lemire/javaewah) are mostly symmetric with respect to bit flips, it is not the case with the RoaringBitmap library (though Lucene's Roaring implementation appears to be symmetric). I'd recommend either removing or qualifying this comment. (The comment is not wrong because it says \"should\".)\n",
+    "commit": "0c4bcba8c9ae25f67f3ab02e94ce41103ffae3ec",
+    "createdAt": "2015-11-12T14:52:25Z",
+    "diffHunk": "@@ -176,15 +179,17 @@ private[spark] object HighlyCompressedMapStatus {\n     // From a compression standpoint, it shouldn't matter whether we track empty or non-empty"
+  }, {
+    "author": {
+      "login": "squito"
+    },
+    "body": "ah I see, I think I hadn't realized this before -- so even after calling `runOptimize`, the memory usage may be different vs. flipped bits?\n\nIn any case, I agree, this comment needs to be modified -- along w/ the [comment at line 124](https://github.com/apache/spark/blob/branch-1.5/core/src/main/scala/org/apache/spark/scheduler/MapStatus.scala#L125), but I guess we need to wait for the other details to shake out to figure out exactly how to update them both.\n",
+    "commit": "0c4bcba8c9ae25f67f3ab02e94ce41103ffae3ec",
+    "createdAt": "2015-11-12T22:54:45Z",
+    "diffHunk": "@@ -176,15 +179,17 @@ private[spark] object HighlyCompressedMapStatus {\n     // From a compression standpoint, it shouldn't matter whether we track empty or non-empty"
+  }, {
+    "author": {
+      "login": "lemire"
+    },
+    "body": "Yes, `RoaringBitmap` is not symmetric with respect to flips, but that is true also of `BitSet`. In Java's BitSet, if you do a flip, it can change the `wordsInUse` and if you do call `trimToSize()` afterward, the memory usage would change. What `runOptimize` will buy you however is that if you have a small memory usage before the flip (compared to a `BitSet`), your memory usage will still be \"small\".\n",
+    "commit": "0c4bcba8c9ae25f67f3ab02e94ce41103ffae3ec",
+    "createdAt": "2015-11-12T23:06:08Z",
+    "diffHunk": "@@ -176,15 +179,17 @@ private[spark] object HighlyCompressedMapStatus {\n     // From a compression standpoint, it shouldn't matter whether we track empty or non-empty"
+  }],
+  "prId": 9661
+}, {
+  "comments": [{
+    "author": {
+      "login": "lemire"
+    },
+    "body": "If you use `RoaringBitmap` and the RoaringBitmap objects are not expect to change often after this loop, a call such as `emptyBlocks.runOptimize();nonEmptyBlocks.runOptimize();` might be warranted. It should be checked. \n\nThough it should not help, you can also investigate whether adding `emptyBlocks.trim();nonEmptyBlocks.trim();` can be helpful.\n",
+    "commit": "0c4bcba8c9ae25f67f3ab02e94ce41103ffae3ec",
+    "createdAt": "2015-11-12T14:56:15Z",
+    "diffHunk": "@@ -176,15 +179,17 @@ private[spark] object HighlyCompressedMapStatus {\n     // From a compression standpoint, it shouldn't matter whether we track empty or non-empty\n     // blocks. From a performance standpoint, we benefit from tracking empty blocks because\n     // we expect that there will be far fewer of them, so we will perform fewer bitmap insertions.\n+    val emptyBlocks = new RoaringBitmap()\n+    val nonEmptyBlocks = new RoaringBitmap()\n     val totalNumBlocks = uncompressedSizes.length\n-    val emptyBlocks = new BitSet(totalNumBlocks)\n     while (i < totalNumBlocks) {\n       var size = uncompressedSizes(i)\n       if (size > 0) {\n         numNonEmptyBlocks += 1\n+        nonEmptyBlocks.add(i)\n         totalSize += size\n       } else {\n-        emptyBlocks.set(i)\n+        emptyBlocks.add(i)\n       }",
+    "line": 65
+  }, {
+    "author": {
+      "login": "squito"
+    },
+    "body": "+1\nWould this also eliminate the need to even bother w/ both `emptyBlocks` and `nonEmptyBlocks`?  Eg., after `emptyBlocks.runOptimize` its just as good as storing the empty blocks?  After this point, we only care about the memory used and the time it takes to call `contains` -- these are totally immutable after this.\n\nDoes it also make sense to call `runOptimize` periodically as these are being built, to avoid too much memory being used?  Say the upper end of the size of these is ~100k.  So the worst case would be storing 100k shorts, or ~200KB, before we call `runOptimize`?  That isn't really too bad, so I'm inclined to keep things simple, but just thought it was worth thinking about this now while we're looking.\n",
+    "commit": "0c4bcba8c9ae25f67f3ab02e94ce41103ffae3ec",
+    "createdAt": "2015-11-12T22:45:00Z",
+    "diffHunk": "@@ -176,15 +179,17 @@ private[spark] object HighlyCompressedMapStatus {\n     // From a compression standpoint, it shouldn't matter whether we track empty or non-empty\n     // blocks. From a performance standpoint, we benefit from tracking empty blocks because\n     // we expect that there will be far fewer of them, so we will perform fewer bitmap insertions.\n+    val emptyBlocks = new RoaringBitmap()\n+    val nonEmptyBlocks = new RoaringBitmap()\n     val totalNumBlocks = uncompressedSizes.length\n-    val emptyBlocks = new BitSet(totalNumBlocks)\n     while (i < totalNumBlocks) {\n       var size = uncompressedSizes(i)\n       if (size > 0) {\n         numNonEmptyBlocks += 1\n+        nonEmptyBlocks.add(i)\n         totalSize += size\n       } else {\n-        emptyBlocks.set(i)\n+        emptyBlocks.add(i)\n       }",
+    "line": 65
+  }, {
+    "author": {
+      "login": "lemire"
+    },
+    "body": "I am not exactly sure why you would keep track of both the empty and non-empty blocks. Seems redundant. But maybe I misunderstand.  But the comment above is probably right: you'd want to minimize the number of bitmap insertions.\n\nBy design, even without `runOptimize`, `RoaringBitmap` should not use more than 16 bits per value asymptotically. (Meaning that if you have just a few values, they will end up using more than 16 bits, but if you have thousands... then they should use 16 bits or less.) So while you cannot be sure that a `RoaringBitmap` will \"compress well\" for some meaning of \"compress well\", you can pretty much bound the memory usage with respect to totalNumBlocks. So for 100k possible values to be added, that would be 200kB... i.e., it would still fit in L2 cache. And that's an upper bound. Asympotically you are also sure not to use more memory than a `BitSet` with its wordsInUse set to the size of the universe, for a huge universe size, so if 100k is  `totalNumBlocks` then you neither a `RoaringBitmap` or a `BitSet` should use more than 12kB. \n\nSo my guess is that a single call to `runOptimize` at the end would be enough... \n",
+    "commit": "0c4bcba8c9ae25f67f3ab02e94ce41103ffae3ec",
+    "createdAt": "2015-11-12T23:24:01Z",
+    "diffHunk": "@@ -176,15 +179,17 @@ private[spark] object HighlyCompressedMapStatus {\n     // From a compression standpoint, it shouldn't matter whether we track empty or non-empty\n     // blocks. From a performance standpoint, we benefit from tracking empty blocks because\n     // we expect that there will be far fewer of them, so we will perform fewer bitmap insertions.\n+    val emptyBlocks = new RoaringBitmap()\n+    val nonEmptyBlocks = new RoaringBitmap()\n     val totalNumBlocks = uncompressedSizes.length\n-    val emptyBlocks = new BitSet(totalNumBlocks)\n     while (i < totalNumBlocks) {\n       var size = uncompressedSizes(i)\n       if (size > 0) {\n         numNonEmptyBlocks += 1\n+        nonEmptyBlocks.add(i)\n         totalSize += size\n       } else {\n-        emptyBlocks.set(i)\n+        emptyBlocks.add(i)\n       }",
+    "line": 65
+  }, {
+    "author": {
+      "login": "lemire"
+    },
+    "body": "Let me add that even with `BitSet`, you'd probably want to call `trimToSize()` after the `BitSet`s are constructed since, like `RoaringBitmap`, there are underlying \"dynamic\" arrays that have a capacity that can exceed the actual data size. (This often makes little difference statistically however.)\n",
+    "commit": "0c4bcba8c9ae25f67f3ab02e94ce41103ffae3ec",
+    "createdAt": "2015-11-12T23:31:52Z",
+    "diffHunk": "@@ -176,15 +179,17 @@ private[spark] object HighlyCompressedMapStatus {\n     // From a compression standpoint, it shouldn't matter whether we track empty or non-empty\n     // blocks. From a performance standpoint, we benefit from tracking empty blocks because\n     // we expect that there will be far fewer of them, so we will perform fewer bitmap insertions.\n+    val emptyBlocks = new RoaringBitmap()\n+    val nonEmptyBlocks = new RoaringBitmap()\n     val totalNumBlocks = uncompressedSizes.length\n-    val emptyBlocks = new BitSet(totalNumBlocks)\n     while (i < totalNumBlocks) {\n       var size = uncompressedSizes(i)\n       if (size > 0) {\n         numNonEmptyBlocks += 1\n+        nonEmptyBlocks.add(i)\n         totalSize += size\n       } else {\n-        emptyBlocks.set(i)\n+        emptyBlocks.add(i)\n       }",
+    "line": 65
+  }],
+  "prId": 9661
+}, {
+  "comments": [{
+    "author": {
+      "login": "squito"
+    },
+    "body": "(a) `isSparse` is not the right name and (b) we might not even need to bother with tracking empty vs. non-empty, after we see the results of calling `runOptimize`.  In fact, if they are the same, I'd suggest we change this code to consistently track nonEmpty blocks, just for clarity.\n",
+    "commit": "0c4bcba8c9ae25f67f3ab02e94ce41103ffae3ec",
+    "createdAt": "2015-11-12T22:46:48Z",
+    "diffHunk": "@@ -193,6 +198,11 @@ private[spark] object HighlyCompressedMapStatus {\n     } else {\n       0\n     }\n-    new HighlyCompressedMapStatus(loc, numNonEmptyBlocks, emptyBlocks, avgSize)\n+    if (numNonEmptyBlocks < totalNumBlocks / 2) {\n+      new HighlyCompressedMapStatus(loc, numNonEmptyBlocks, nonEmptyBlocks, avgSize, isSparse = true)\n+    } else {\n+      new HighlyCompressedMapStatus(loc, numNonEmptyBlocks, emptyBlocks, avgSize, isSparse = false)"
+  }],
+  "prId": 9661
+}, {
+  "comments": [{
+    "author": {
+      "login": "davies"
+    },
+    "body": "This comment still make sense, could you keep it?\n",
+    "commit": "0c4bcba8c9ae25f67f3ab02e94ce41103ffae3ec",
+    "createdAt": "2015-11-16T18:04:31Z",
+    "diffHunk": "@@ -173,18 +172,15 @@ private[spark] object HighlyCompressedMapStatus {\n     var i = 0\n     var numNonEmptyBlocks: Int = 0\n     var totalSize: Long = 0\n-    // From a compression standpoint, it shouldn't matter whether we track empty or non-empty\n-    // blocks. From a performance standpoint, we benefit from tracking empty blocks because\n-    // we expect that there will be far fewer of them, so we will perform fewer bitmap insertions.",
+    "line": 53
+  }, {
+    "author": {
+      "login": "yaooqinn"
+    },
+    "body": "OK\n",
+    "commit": "0c4bcba8c9ae25f67f3ab02e94ce41103ffae3ec",
+    "createdAt": "2015-11-17T00:42:32Z",
+    "diffHunk": "@@ -173,18 +172,15 @@ private[spark] object HighlyCompressedMapStatus {\n     var i = 0\n     var numNonEmptyBlocks: Int = 0\n     var totalSize: Long = 0\n-    // From a compression standpoint, it shouldn't matter whether we track empty or non-empty\n-    // blocks. From a performance standpoint, we benefit from tracking empty blocks because\n-    // we expect that there will be far fewer of them, so we will perform fewer bitmap insertions.",
+    "line": 53
+  }],
+  "prId": 9661
+}]

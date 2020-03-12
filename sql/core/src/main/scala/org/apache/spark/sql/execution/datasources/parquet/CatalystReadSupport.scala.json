@@ -1,0 +1,34 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "liancheng"
+    },
+    "body": "Not sure whether this method is useful enough to be added as methods of all complex data types.\n",
+    "commit": "fb6ee9fc2d39688dcbdc55398013324ede708848",
+    "createdAt": "2015-10-06T18:08:17Z",
+    "diffHunk": "@@ -271,4 +276,30 @@ private[parquet] object CatalystReadSupport {\n         .getOrElse(toParquet.convertField(f))\n     }\n   }\n+\n+  def expandUDT(schema: StructType): StructType = {\n+    def expand(dataType: DataType): DataType = {\n+      dataType match {\n+        case t: ArrayType =>\n+          t.copy(elementType = expand(t.elementType))\n+\n+        case t: MapType =>\n+          t.copy(\n+            keyType = expand(t.keyType),\n+            valueType = expand(t.valueType))\n+\n+        case t: StructType =>\n+          val expandedFields = t.fields.map(f => f.copy(dataType = expand(f.dataType)))\n+          t.copy(fields = expandedFields)\n+\n+        case t: UserDefinedType[_] =>\n+          t.sqlType\n+\n+        case t =>\n+          t\n+      }\n+    }\n+\n+    expand(schema).asInstanceOf[StructType]\n+  }",
+    "line": 52
+  }, {
+    "author": {
+      "login": "davies"
+    },
+    "body": "Maybe not.\n",
+    "commit": "fb6ee9fc2d39688dcbdc55398013324ede708848",
+    "createdAt": "2015-10-07T17:47:24Z",
+    "diffHunk": "@@ -271,4 +276,30 @@ private[parquet] object CatalystReadSupport {\n         .getOrElse(toParquet.convertField(f))\n     }\n   }\n+\n+  def expandUDT(schema: StructType): StructType = {\n+    def expand(dataType: DataType): DataType = {\n+      dataType match {\n+        case t: ArrayType =>\n+          t.copy(elementType = expand(t.elementType))\n+\n+        case t: MapType =>\n+          t.copy(\n+            keyType = expand(t.keyType),\n+            valueType = expand(t.valueType))\n+\n+        case t: StructType =>\n+          val expandedFields = t.fields.map(f => f.copy(dataType = expand(f.dataType)))\n+          t.copy(fields = expandedFields)\n+\n+        case t: UserDefinedType[_] =>\n+          t.sqlType\n+\n+        case t =>\n+          t\n+      }\n+    }\n+\n+    expand(schema).asInstanceOf[StructType]\n+  }",
+    "line": 52
+  }],
+  "prId": 8988
+}, {
+  "comments": [{
+    "author": {
+      "login": "liancheng"
+    },
+    "body": "Expands UDTs early so that `CatalystRowConverter` always receive a Catalyst schema without UDTs.\n",
+    "commit": "fb6ee9fc2d39688dcbdc55398013324ede708848",
+    "createdAt": "2015-10-06T18:17:56Z",
+    "diffHunk": "@@ -95,7 +95,9 @@ private[parquet] class CatalystReadSupport extends ReadSupport[InternalRow] with\n        \"\"\".stripMargin\n     }\n \n-    new CatalystRecordMaterializer(parquetRequestedSchema, catalystRequestedSchema)\n+    new CatalystRecordMaterializer(\n+      parquetRequestedSchema,\n+      CatalystReadSupport.expandUDT(catalystRequestedSchema))",
+    "line": 7
+  }],
+  "prId": 8988
+}]

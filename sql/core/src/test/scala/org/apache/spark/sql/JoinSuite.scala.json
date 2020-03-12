@@ -1,0 +1,25 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "This refactors this test to explicitly disable SMJ; this is necessary due to the defaults change.\n",
+    "commit": "eabacca9864e609a1b085a2acbe10907929700a4",
+    "createdAt": "2015-08-04T22:58:36Z",
+    "diffHunk": "@@ -97,82 +97,75 @@ class JoinSuite extends QueryTest with BeforeAndAfterEach {\n       (\"SELECT * FROM testData full JOIN testData2 ON (key * a != key + a)\",\n         classOf[BroadcastNestedLoopJoin])\n     ).foreach { case (query, joinClass) => assertJoin(query, joinClass) }\n-    try {\n-      ctx.conf.setConf(SQLConf.SORTMERGE_JOIN, true)\n+    withSQLConf(SQLConf.SORTMERGE_JOIN.key -> \"false\") {\n       Seq(\n-        (\"SELECT * FROM testData JOIN testData2 ON key = a\", classOf[SortMergeJoin]),\n-        (\"SELECT * FROM testData JOIN testData2 ON key = a and key = 2\", classOf[SortMergeJoin]),\n-        (\"SELECT * FROM testData JOIN testData2 ON key = a where key = 2\", classOf[SortMergeJoin])\n+        (\"SELECT * FROM testData JOIN testData2 ON key = a\", classOf[ShuffledHashJoin]),\n+        (\"SELECT * FROM testData JOIN testData2 ON key = a and key = 2\",\n+          classOf[ShuffledHashJoin]),\n+        (\"SELECT * FROM testData JOIN testData2 ON key = a where key = 2\",\n+          classOf[ShuffledHashJoin]),\n+        (\"SELECT * FROM testData LEFT JOIN testData2 ON key = a\", classOf[ShuffledHashOuterJoin]),\n+        (\"SELECT * FROM testData RIGHT JOIN testData2 ON key = a where key = 2\",\n+          classOf[ShuffledHashOuterJoin]),\n+        (\"SELECT * FROM testData right join testData2 ON key = a and key = 2\",\n+          classOf[ShuffledHashOuterJoin]),\n+        (\"SELECT * FROM testData full outer join testData2 ON key = a\",\n+          classOf[ShuffledHashOuterJoin])\n       ).foreach { case (query, joinClass) => assertJoin(query, joinClass) }\n-    } finally {\n-      ctx.conf.setConf(SQLConf.SORTMERGE_JOIN, SORTMERGEJOIN_ENABLED)\n     }\n   }\n \n   test(\"SortMergeJoin shouldn't work on unsortable columns\") {\n-    val SORTMERGEJOIN_ENABLED: Boolean = ctx.conf.sortMergeJoinEnabled\n-    try {\n-      ctx.conf.setConf(SQLConf.SORTMERGE_JOIN, true)\n+    withSQLConf(SQLConf.SORTMERGE_JOIN.key -> \"true\") {\n       Seq(\n         (\"SELECT * FROM arrayData JOIN complexData ON data = a\", classOf[ShuffledHashJoin])\n       ).foreach { case (query, joinClass) => assertJoin(query, joinClass) }\n-    } finally {\n-      ctx.conf.setConf(SQLConf.SORTMERGE_JOIN, SORTMERGEJOIN_ENABLED)\n     }\n   }\n \n   test(\"broadcasted hash join operator selection\") {\n     ctx.cacheManager.clearCache()\n     ctx.sql(\"CACHE TABLE testData\")\n-\n-    val SORTMERGEJOIN_ENABLED: Boolean = ctx.conf.sortMergeJoinEnabled\n-    Seq(\n-      (\"SELECT * FROM testData join testData2 ON key = a\", classOf[BroadcastHashJoin]),\n-      (\"SELECT * FROM testData join testData2 ON key = a and key = 2\", classOf[BroadcastHashJoin]),\n-      (\"SELECT * FROM testData join testData2 ON key = a where key = 2\",\n-        classOf[BroadcastHashJoin])\n-    ).foreach { case (query, joinClass) => assertJoin(query, joinClass) }\n-    try {\n-      ctx.conf.setConf(SQLConf.SORTMERGE_JOIN, true)\n-      Seq(\n-        (\"SELECT * FROM testData join testData2 ON key = a\", classOf[BroadcastHashJoin]),\n-        (\"SELECT * FROM testData join testData2 ON key = a and key = 2\",\n-          classOf[BroadcastHashJoin]),\n-        (\"SELECT * FROM testData join testData2 ON key = a where key = 2\",\n-          classOf[BroadcastHashJoin])\n-      ).foreach { case (query, joinClass) => assertJoin(query, joinClass) }\n-    } finally {\n-      ctx.conf.setConf(SQLConf.SORTMERGE_JOIN, SORTMERGEJOIN_ENABLED)\n+    for (sortMergeJoinEnabled <- Seq(true, false)) {",
+    "line": 121
+  }],
+  "prId": 7904
+}, {
+  "comments": [{
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "For thoroughness, I think that this test should also test with and without SMJ enabled, just to be sure that we're not accidentally prioritizing SMJ over broadcast for outer joins (the previous patch had this issue).\n",
+    "commit": "eabacca9864e609a1b085a2acbe10907929700a4",
+    "createdAt": "2015-08-04T22:59:46Z",
+    "diffHunk": "@@ -457,25 +450,24 @@ class JoinSuite extends QueryTest with BeforeAndAfterEach {\n   test(\"broadcasted left semi join operator selection\") {\n     ctx.cacheManager.clearCache()\n     ctx.sql(\"CACHE TABLE testData\")\n-    val tmp = ctx.conf.autoBroadcastJoinThreshold\n \n-    ctx.sql(s\"SET ${SQLConf.AUTO_BROADCASTJOIN_THRESHOLD.key}=1000000000\")\n-    Seq(\n-      (\"SELECT * FROM testData LEFT SEMI JOIN testData2 ON key = a\",\n-        classOf[BroadcastLeftSemiJoinHash])\n-    ).foreach {\n-      case (query, joinClass) => assertJoin(query, joinClass)\n+    withSQLConf(SQLConf.AUTO_BROADCASTJOIN_THRESHOLD.key -> \"1000000000\") {\n+      Seq(",
+    "line": 202
+  }],
+  "prId": 7904
+}]

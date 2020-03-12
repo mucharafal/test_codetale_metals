@@ -1,0 +1,115 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "HeartSaVioR"
+    },
+    "body": "Looks like it should not be exposed outside of class. Let's guard it as `private`. ",
+    "commit": "e4afa26baf8580bf5f630d0332e4ab49b243b434",
+    "createdAt": "2018-11-28T23:26:11Z",
+    "diffHunk": "@@ -0,0 +1,48 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst.util\n+\n+import java.io.Writer\n+\n+class WriterSizeException(val attemptedSize: Long, val charLimit: Long) extends Exception(\n+  s\"Attempted to write $attemptedSize characters to a writer that is limited to $charLimit\")\n+\n+/**\n+ * This class is used to control the size of generated writers.  Guarantees that the total number\n+ * of characters written will be less than the specified size.\n+ *\n+ * Checks size before writing and throws a WriterSizeException if the total size would count the\n+ * limit.\n+ */\n+class SizeLimitedWriter(underlying: Writer, charLimit: Long) extends Writer {\n+\n+  var charsWritten: Long = 0"
+  }, {
+    "author": {
+      "login": "DaveDeCaprio"
+    },
+    "body": "fixed",
+    "commit": "e4afa26baf8580bf5f630d0332e4ab49b243b434",
+    "createdAt": "2018-11-29T03:39:40Z",
+    "diffHunk": "@@ -0,0 +1,48 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst.util\n+\n+import java.io.Writer\n+\n+class WriterSizeException(val attemptedSize: Long, val charLimit: Long) extends Exception(\n+  s\"Attempted to write $attemptedSize characters to a writer that is limited to $charLimit\")\n+\n+/**\n+ * This class is used to control the size of generated writers.  Guarantees that the total number\n+ * of characters written will be less than the specified size.\n+ *\n+ * Checks size before writing and throws a WriterSizeException if the total size would count the\n+ * limit.\n+ */\n+class SizeLimitedWriter(underlying: Writer, charLimit: Long) extends Writer {\n+\n+  var charsWritten: Long = 0"
+  }],
+  "prId": 23169
+}, {
+  "comments": [{
+    "author": {
+      "login": "HeartSaVioR"
+    },
+    "body": "I'd rather make this writing the content as much as possible (with `...`), or let WriterSizeException contains relevant information to help caller be able to call this again with smaller length. \r\n\r\nIn worst case, if first physical plan is huge we end up only showing `...`.",
+    "commit": "e4afa26baf8580bf5f630d0332e4ab49b243b434",
+    "createdAt": "2018-11-28T23:37:15Z",
+    "diffHunk": "@@ -0,0 +1,48 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst.util\n+\n+import java.io.Writer\n+\n+class WriterSizeException(val attemptedSize: Long, val charLimit: Long) extends Exception(\n+  s\"Attempted to write $attemptedSize characters to a writer that is limited to $charLimit\")\n+\n+/**\n+ * This class is used to control the size of generated writers.  Guarantees that the total number\n+ * of characters written will be less than the specified size.\n+ *\n+ * Checks size before writing and throws a WriterSizeException if the total size would count the\n+ * limit.\n+ */\n+class SizeLimitedWriter(underlying: Writer, charLimit: Long) extends Writer {\n+\n+  var charsWritten: Long = 0\n+\n+  override def write(cbuf: Array[Char], off: Int, len: Int): Unit = {"
+  }, {
+    "author": {
+      "login": "DaveDeCaprio"
+    },
+    "body": "I changed to writing out to the full limit",
+    "commit": "e4afa26baf8580bf5f630d0332e4ab49b243b434",
+    "createdAt": "2018-11-29T03:39:33Z",
+    "diffHunk": "@@ -0,0 +1,48 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst.util\n+\n+import java.io.Writer\n+\n+class WriterSizeException(val attemptedSize: Long, val charLimit: Long) extends Exception(\n+  s\"Attempted to write $attemptedSize characters to a writer that is limited to $charLimit\")\n+\n+/**\n+ * This class is used to control the size of generated writers.  Guarantees that the total number\n+ * of characters written will be less than the specified size.\n+ *\n+ * Checks size before writing and throws a WriterSizeException if the total size would count the\n+ * limit.\n+ */\n+class SizeLimitedWriter(underlying: Writer, charLimit: Long) extends Writer {\n+\n+  var charsWritten: Long = 0\n+\n+  override def write(cbuf: Array[Char], off: Int, len: Int): Unit = {"
+  }],
+  "prId": 23169
+}, {
+  "comments": [{
+    "author": {
+      "login": "kiszk"
+    },
+    "body": "Should we take care of long overflow? If a lot of characters are written, `charsWritten` may exceed `Long.MaxValue`).",
+    "commit": "e4afa26baf8580bf5f630d0332e4ab49b243b434",
+    "createdAt": "2019-01-11T09:29:26Z",
+    "diffHunk": "@@ -0,0 +1,48 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst.util\n+\n+import java.io.Writer\n+\n+class WriterSizeException(val extraChars: Long, val charLimit: Long) extends Exception(\n+  s\"Writer reached limit of $charLimit characters.  $extraChars extra characters ignored.\")\n+\n+/**\n+ * This class is used to control the size of generated writers.  Guarantees that the total number\n+ * of characters written will be less than the specified size.\n+ *\n+ * Checks size before writing and throws a WriterSizeException if the total size would count the\n+ * limit.\n+ */\n+class SizeLimitedWriter(underlying: Writer, charLimit: Long) extends Writer {\n+\n+  private var charsWritten: Long = 0\n+\n+  override def write(cbuf: Array[Char], off: Int, len: Int): Unit = {\n+    val charsToWrite = Math.min(charLimit - charsWritten, len).toInt\n+    underlying.write(cbuf, off, charsToWrite)\n+    charsWritten += charsToWrite"
+  }, {
+    "author": {
+      "login": "DaveDeCaprio"
+    },
+    "body": "Long.MaxValue is  9,223,372,036,854,775,807, which would be equivalent to a string 9 exabytes long.    We are pretty safe.",
+    "commit": "e4afa26baf8580bf5f630d0332e4ab49b243b434",
+    "createdAt": "2019-01-11T15:39:21Z",
+    "diffHunk": "@@ -0,0 +1,48 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst.util\n+\n+import java.io.Writer\n+\n+class WriterSizeException(val extraChars: Long, val charLimit: Long) extends Exception(\n+  s\"Writer reached limit of $charLimit characters.  $extraChars extra characters ignored.\")\n+\n+/**\n+ * This class is used to control the size of generated writers.  Guarantees that the total number\n+ * of characters written will be less than the specified size.\n+ *\n+ * Checks size before writing and throws a WriterSizeException if the total size would count the\n+ * limit.\n+ */\n+class SizeLimitedWriter(underlying: Writer, charLimit: Long) extends Writer {\n+\n+  private var charsWritten: Long = 0\n+\n+  override def write(cbuf: Array[Char], off: Int, len: Int): Unit = {\n+    val charsToWrite = Math.min(charLimit - charsWritten, len).toInt\n+    underlying.write(cbuf, off, charsToWrite)\n+    charsWritten += charsToWrite"
+  }, {
+    "author": {
+      "login": "DaveDeCaprio"
+    },
+    "body": "Long.MaxValue is 9,223,372,036,854,775,807, which is a string 9 exabytes long.  I think that is a safe limit we don't have to worry about hitting.",
+    "commit": "e4afa26baf8580bf5f630d0332e4ab49b243b434",
+    "createdAt": "2019-01-11T15:42:22Z",
+    "diffHunk": "@@ -0,0 +1,48 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst.util\n+\n+import java.io.Writer\n+\n+class WriterSizeException(val extraChars: Long, val charLimit: Long) extends Exception(\n+  s\"Writer reached limit of $charLimit characters.  $extraChars extra characters ignored.\")\n+\n+/**\n+ * This class is used to control the size of generated writers.  Guarantees that the total number\n+ * of characters written will be less than the specified size.\n+ *\n+ * Checks size before writing and throws a WriterSizeException if the total size would count the\n+ * limit.\n+ */\n+class SizeLimitedWriter(underlying: Writer, charLimit: Long) extends Writer {\n+\n+  private var charsWritten: Long = 0\n+\n+  override def write(cbuf: Array[Char], off: Int, len: Int): Unit = {\n+    val charsToWrite = Math.min(charLimit - charsWritten, len).toInt\n+    underlying.write(cbuf, off, charsToWrite)\n+    charsWritten += charsToWrite"
+  }],
+  "prId": 23169
+}, {
+  "comments": [{
+    "author": {
+      "login": "MaxGekk"
+    },
+    "body": "I think it would be better to extend `StringConcat`",
+    "commit": "e4afa26baf8580bf5f630d0332e4ab49b243b434",
+    "createdAt": "2019-01-12T20:33:02Z",
+    "diffHunk": "@@ -0,0 +1,48 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst.util\n+\n+import java.io.Writer\n+\n+class WriterSizeException(val extraChars: Long, val charLimit: Long) extends Exception(\n+  s\"Writer reached limit of $charLimit characters.  $extraChars extra characters ignored.\")\n+\n+/**\n+ * This class is used to control the size of generated writers.  Guarantees that the total number\n+ * of characters written will be less than the specified size.\n+ *\n+ * Checks size before writing and throws a WriterSizeException if the total size would count the\n+ * limit.\n+ */\n+class SizeLimitedWriter(underlying: Writer, charLimit: Long) extends Writer {"
+  }, {
+    "author": {
+      "login": "DaveDeCaprio"
+    },
+    "body": "Yes, absolutely.  StringConcat wasn't there when I first wrote this",
+    "commit": "e4afa26baf8580bf5f630d0332e4ab49b243b434",
+    "createdAt": "2019-01-13T16:53:46Z",
+    "diffHunk": "@@ -0,0 +1,48 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst.util\n+\n+import java.io.Writer\n+\n+class WriterSizeException(val extraChars: Long, val charLimit: Long) extends Exception(\n+  s\"Writer reached limit of $charLimit characters.  $extraChars extra characters ignored.\")\n+\n+/**\n+ * This class is used to control the size of generated writers.  Guarantees that the total number\n+ * of characters written will be less than the specified size.\n+ *\n+ * Checks size before writing and throws a WriterSizeException if the total size would count the\n+ * limit.\n+ */\n+class SizeLimitedWriter(underlying: Writer, charLimit: Long) extends Writer {"
+  }, {
+    "author": {
+      "login": "hvanhovell"
+    },
+    "body": "+1",
+    "commit": "e4afa26baf8580bf5f630d0332e4ab49b243b434",
+    "createdAt": "2019-01-17T20:29:56Z",
+    "diffHunk": "@@ -0,0 +1,48 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst.util\n+\n+import java.io.Writer\n+\n+class WriterSizeException(val extraChars: Long, val charLimit: Long) extends Exception(\n+  s\"Writer reached limit of $charLimit characters.  $extraChars extra characters ignored.\")\n+\n+/**\n+ * This class is used to control the size of generated writers.  Guarantees that the total number\n+ * of characters written will be less than the specified size.\n+ *\n+ * Checks size before writing and throws a WriterSizeException if the total size would count the\n+ * limit.\n+ */\n+class SizeLimitedWriter(underlying: Writer, charLimit: Long) extends Writer {"
+  }],
+  "prId": 23169
+}, {
+  "comments": [{
+    "author": {
+      "login": "hvanhovell"
+    },
+    "body": "Can we try to avoid defining a custom exception. This is pretty bad in combination with python. Lets use a SparkException here.",
+    "commit": "e4afa26baf8580bf5f630d0332e4ab49b243b434",
+    "createdAt": "2019-01-17T20:29:51Z",
+    "diffHunk": "@@ -0,0 +1,48 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst.util\n+\n+import java.io.Writer\n+\n+class WriterSizeException(val extraChars: Long, val charLimit: Long) extends Exception("
+  }],
+  "prId": 23169
+}, {
+  "comments": [{
+    "author": {
+      "login": "hvanhovell"
+    },
+    "body": "Please don't use exceptions for control flow it is confusing and is likely to be broken by intermediate exception handlers. Can we do something a bit better here? One option would be to have the append function return `true`/`false` depending on whether we appended or not. Another one would be to just have `treeString(..)` run its course without appending anything else.",
+    "commit": "e4afa26baf8580bf5f630d0332e4ab49b243b434",
+    "createdAt": "2019-01-17T20:37:56Z",
+    "diffHunk": "@@ -0,0 +1,48 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.catalyst.util\n+\n+import java.io.Writer\n+\n+class WriterSizeException(val extraChars: Long, val charLimit: Long) extends Exception(\n+  s\"Writer reached limit of $charLimit characters.  $extraChars extra characters ignored.\")\n+\n+/**\n+ * This class is used to control the size of generated writers.  Guarantees that the total number\n+ * of characters written will be less than the specified size.\n+ *\n+ * Checks size before writing and throws a WriterSizeException if the total size would count the\n+ * limit.\n+ */\n+class SizeLimitedWriter(underlying: Writer, charLimit: Long) extends Writer {\n+\n+  private var charsWritten: Long = 0\n+\n+  override def write(cbuf: Array[Char], off: Int, len: Int): Unit = {\n+    val charsToWrite = Math.min(charLimit - charsWritten, len).toInt\n+    underlying.write(cbuf, off, charsToWrite)\n+    charsWritten += charsToWrite\n+    if (charsToWrite < len) {\n+      throw new WriterSizeException(len - charsToWrite, charLimit)"
+  }],
+  "prId": 23169
+}]

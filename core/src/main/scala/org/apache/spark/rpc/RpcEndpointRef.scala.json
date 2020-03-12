@@ -1,0 +1,90 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "nit: don't add.",
+    "commit": "42eb540f8617ee3dc22c81014452896eedec97a3",
+    "createdAt": "2017-01-27T21:49:06Z",
+    "diffHunk": "@@ -19,11 +19,13 @@ package org.apache.spark.rpc\n \n import scala.concurrent.Future\n import scala.reflect.ClassTag\n+import scala.util.control.NonFatal\n \n import org.apache.spark.{SparkConf, SparkException}\n import org.apache.spark.internal.Logging\n import org.apache.spark.util.RpcUtils\n \n+"
+  }],
+  "prId": 16690
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "`askWithBlocking` is a weird name. I'd use `blockingAsk`, or `askSync`.",
+    "commit": "42eb540f8617ee3dc22c81014452896eedec97a3",
+    "createdAt": "2017-01-27T21:50:27Z",
+    "diffHunk": "@@ -63,8 +65,48 @@ private[spark] abstract class RpcEndpointRef(conf: SparkConf)\n   def ask[T: ClassTag](message: Any): Future[T] = ask(message, defaultAskTimeout)\n \n   /**\n-   * Send a message to the corresponding [[RpcEndpoint]] and get its result within a default\n-   * timeout, or throw a SparkException if this fails even after the default number of retries.\n+   * Send a message to the corresponding [[RpcEndpoint.receiveAndReply]] and get its result within a\n+   * default timeout, throw a SparkException if this fails.\n+   *\n+   * Note: this is a blocking action which may cost a lot of time,  so don't call it in a message\n+   * loop of [[RpcEndpoint]].\n+\n+   * @param message the message to send\n+   * @tparam T type of the reply message\n+   * @return the reply message from the corresponding [[RpcEndpoint]]\n+   */\n+  def askWithBlocking[T: ClassTag](message: Any): T = askWithBlocking(message, defaultAskTimeout)"
+  }],
+  "prId": 16690
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "This is not an error. It's perfectly legitimate to return null.",
+    "commit": "42eb540f8617ee3dc22c81014452896eedec97a3",
+    "createdAt": "2017-01-27T21:51:01Z",
+    "diffHunk": "@@ -63,8 +65,48 @@ private[spark] abstract class RpcEndpointRef(conf: SparkConf)\n   def ask[T: ClassTag](message: Any): Future[T] = ask(message, defaultAskTimeout)\n \n   /**\n-   * Send a message to the corresponding [[RpcEndpoint]] and get its result within a default\n-   * timeout, or throw a SparkException if this fails even after the default number of retries.\n+   * Send a message to the corresponding [[RpcEndpoint.receiveAndReply]] and get its result within a\n+   * default timeout, throw a SparkException if this fails.\n+   *\n+   * Note: this is a blocking action which may cost a lot of time,  so don't call it in a message\n+   * loop of [[RpcEndpoint]].\n+\n+   * @param message the message to send\n+   * @tparam T type of the reply message\n+   * @return the reply message from the corresponding [[RpcEndpoint]]\n+   */\n+  def askWithBlocking[T: ClassTag](message: Any): T = askWithBlocking(message, defaultAskTimeout)\n+\n+  /**\n+   * Send a message to the corresponding [[RpcEndpoint.receiveAndReply]] and get its result within a\n+   * specified timeout, throw a SparkException if this fails.\n+   *\n+   * Note: this is a blocking action which may cost a lot of time, so don't call it in a message\n+   * loop of [[RpcEndpoint]].\n+   *\n+   * @param message the message to send\n+   * @param timeout the timeout duration\n+   * @tparam T type of the reply message\n+   * @return the reply message from the corresponding [[RpcEndpoint]]\n+   */\n+  def askWithBlocking[T: ClassTag](message: Any, timeout: RpcTimeout): T = {\n+    try {\n+      val future = ask[T](message, timeout)\n+      val result = timeout.awaitResult(future)\n+      if (result == null) {"
+  }],
+  "prId": 16690
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Isn't it better to just propagate the original exception? You can get the context from the stack trace.",
+    "commit": "42eb540f8617ee3dc22c81014452896eedec97a3",
+    "createdAt": "2017-01-27T21:51:39Z",
+    "diffHunk": "@@ -63,8 +65,48 @@ private[spark] abstract class RpcEndpointRef(conf: SparkConf)\n   def ask[T: ClassTag](message: Any): Future[T] = ask(message, defaultAskTimeout)\n \n   /**\n-   * Send a message to the corresponding [[RpcEndpoint]] and get its result within a default\n-   * timeout, or throw a SparkException if this fails even after the default number of retries.\n+   * Send a message to the corresponding [[RpcEndpoint.receiveAndReply]] and get its result within a\n+   * default timeout, throw a SparkException if this fails.\n+   *\n+   * Note: this is a blocking action which may cost a lot of time,  so don't call it in a message\n+   * loop of [[RpcEndpoint]].\n+\n+   * @param message the message to send\n+   * @tparam T type of the reply message\n+   * @return the reply message from the corresponding [[RpcEndpoint]]\n+   */\n+  def askWithBlocking[T: ClassTag](message: Any): T = askWithBlocking(message, defaultAskTimeout)\n+\n+  /**\n+   * Send a message to the corresponding [[RpcEndpoint.receiveAndReply]] and get its result within a\n+   * specified timeout, throw a SparkException if this fails.\n+   *\n+   * Note: this is a blocking action which may cost a lot of time, so don't call it in a message\n+   * loop of [[RpcEndpoint]].\n+   *\n+   * @param message the message to send\n+   * @param timeout the timeout duration\n+   * @tparam T type of the reply message\n+   * @return the reply message from the corresponding [[RpcEndpoint]]\n+   */\n+  def askWithBlocking[T: ClassTag](message: Any, timeout: RpcTimeout): T = {\n+    try {\n+      val future = ask[T](message, timeout)\n+      val result = timeout.awaitResult(future)\n+      if (result == null) {\n+        throw new SparkException(\"RpcEndpoint returned null\")\n+      }\n+      return result\n+    } catch {\n+      case NonFatal(e) =>\n+        throw new SparkException("
+  }],
+  "prId": 16690
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "2.2.0",
+    "commit": "42eb540f8617ee3dc22c81014452896eedec97a3",
+    "createdAt": "2017-01-31T19:19:25Z",
+    "diffHunk": "@@ -91,6 +123,7 @@ private[spark] abstract class RpcEndpointRef(conf: SparkConf)\n    * @tparam T type of the reply message\n    * @return the reply message from the corresponding [[RpcEndpoint]]\n    */\n+  @deprecated(\"use 'askSync' instead.\", \"2.1.0\")"
+  }],
+  "prId": 16690
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "2.2.0",
+    "commit": "42eb540f8617ee3dc22c81014452896eedec97a3",
+    "createdAt": "2017-01-31T19:19:38Z",
+    "diffHunk": "@@ -75,10 +106,11 @@ private[spark] abstract class RpcEndpointRef(conf: SparkConf)\n    * @tparam T type of the reply message\n    * @return the reply message from the corresponding [[RpcEndpoint]]\n    */\n+  @deprecated(\"use 'askSync' instead.\", \"2.1.0\")"
+  }],
+  "prId": 16690
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "not used",
+    "commit": "42eb540f8617ee3dc22c81014452896eedec97a3",
+    "createdAt": "2017-01-31T19:19:53Z",
+    "diffHunk": "@@ -19,6 +19,7 @@ package org.apache.spark.rpc\n \n import scala.concurrent.Future\n import scala.reflect.ClassTag\n+import scala.util.control.NonFatal"
+  }],
+  "prId": 16690
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "It seems like this has caused the build to produce a lot of deprecation warnings. @jinxing64 could the callers of this method be changed, in Spark, to use the new alternative?",
+    "commit": "42eb540f8617ee3dc22c81014452896eedec97a3",
+    "createdAt": "2017-02-16T20:18:46Z",
+    "diffHunk": "@@ -75,10 +105,11 @@ private[spark] abstract class RpcEndpointRef(conf: SparkConf)\n    * @tparam T type of the reply message\n    * @return the reply message from the corresponding [[RpcEndpoint]]\n    */\n+  @deprecated(\"use 'askSync' instead.\", \"2.2.0\")",
+    "line": 45
+  }],
+  "prId": 16690
+}]

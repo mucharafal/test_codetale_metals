@@ -1,0 +1,46 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "Should be able to remove the breeze imports now.\n",
+    "commit": "ab611fd61bb3436f7d548b5943b9ec036697e0a1",
+    "createdAt": "2015-05-15T18:19:59Z",
+    "diffHunk": "@@ -27,7 +27,7 @@ import org.json4s.JsonDSL._\n import org.json4s.jackson.JsonMethods._\n \n import org.apache.spark.{Logging, SparkContext, SparkException}\n-import org.apache.spark.mllib.linalg.{BLAS, DenseVector, SparseVector, Vector}\n+import org.apache.spark.mllib.linalg.{BLAS, DenseMatrix, DenseVector, SparseVector, Vector, Vectors}",
+    "line": 11
+  }],
+  "prId": 6189
+}, {
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "1. `private`\n2. `new DenseVector(pi)`\n",
+    "commit": "ab611fd61bb3436f7d548b5943b9ec036697e0a1",
+    "createdAt": "2015-05-15T18:20:00Z",
+    "diffHunk": "@@ -50,6 +50,9 @@ class NaiveBayesModel private[mllib] (\n     val modelType: String)\n   extends ClassificationModel with Serializable with Saveable {\n \n+  val piVector = Vectors.dense(pi).asInstanceOf[DenseVector]"
+  }],
+  "prId": 6189
+}, {
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "private\n",
+    "commit": "ab611fd61bb3436f7d548b5943b9ec036697e0a1",
+    "createdAt": "2015-05-15T18:20:02Z",
+    "diffHunk": "@@ -50,6 +50,9 @@ class NaiveBayesModel private[mllib] (\n     val modelType: String)\n   extends ClassificationModel with Serializable with Saveable {\n \n+  val piVector = Vectors.dense(pi).asInstanceOf[DenseVector]\n+  val thetaMatrix = new DenseMatrix(labels.size, theta(0).size, theta.flatten, true)"
+  }],
+  "prId": 6189
+}, {
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "`toDense` could be quite expensive. It would be great if we first add `multiply(x: Vector)` and optimize the implementation for `SparseVector`, then update this PR to use it.\n",
+    "commit": "ab611fd61bb3436f7d548b5943b9ec036697e0a1",
+    "createdAt": "2015-05-15T18:20:04Z",
+    "diffHunk": "@@ -85,17 +89,22 @@ class NaiveBayesModel private[mllib] (\n   }\n \n   override def predict(testData: Vector): Double = {\n-    val brzData = testData.toBreeze\n     modelType match {\n       case \"Multinomial\" =>\n-        labels(brzArgmax(brzPi + brzTheta * brzData))\n+        val prob = thetaMatrix.multiply(testData.toDense)\n+        BLAS.axpy(1.0, piVector, prob)\n+        labels(prob.argmax)\n       case \"Bernoulli\" =>\n-        if (!brzData.forall(v => v == 0.0 || v == 1.0)) {\n-          throw new SparkException(\n-            s\"Bernoulli Naive Bayes requires 0 or 1 feature values but found $testData.\")\n+        testData.foreachActive { (index, value) =>\n+          if (value != 0.0 && value != 1.0) {\n+            throw new SparkException(\n+              s\"Bernoulli Naive Bayes requires 0 or 1 feature values but found $testData.\")\n+          }\n         }\n-        labels(brzArgmax(brzPi +\n-          (brzTheta - brzNegTheta.get) * brzData + brzNegThetaSum.get))\n+        val prob = thetaMinusnegTheta.get.multiply(testData.toDense)"
+  }],
+  "prId": 6189
+}]

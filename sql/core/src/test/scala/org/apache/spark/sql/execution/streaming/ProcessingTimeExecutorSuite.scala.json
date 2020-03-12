@@ -1,0 +1,42 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "lw-lin"
+    },
+    "body": "Please note the `ProcessingTimeExecutor` issue would fail this test without this patch, but would pass with this patch.\n",
+    "commit": "bc899628fa67acfbe6bb3d8e2c0ba2aefc2422a6",
+    "createdAt": "2016-04-30T02:51:38Z",
+    "diffHunk": "@@ -21,19 +21,41 @@ import java.util.concurrent.{CountDownLatch, TimeUnit}\n \n import org.apache.spark.SparkFunSuite\n import org.apache.spark.sql.ProcessingTime\n-import org.apache.spark.util.ManualClock\n+import org.apache.spark.util.{Clock, ManualClock, SystemClock}\n \n class ProcessingTimeExecutorSuite extends SparkFunSuite {\n \n   test(\"nextBatchTime\") {\n     val processingTimeExecutor = ProcessingTimeExecutor(ProcessingTime(100))\n+    assert(processingTimeExecutor.nextBatchTime(0) === 100)\n     assert(processingTimeExecutor.nextBatchTime(1) === 100)\n     assert(processingTimeExecutor.nextBatchTime(99) === 100)\n-    assert(processingTimeExecutor.nextBatchTime(100) === 100)\n+    assert(processingTimeExecutor.nextBatchTime(100) === 200)\n     assert(processingTimeExecutor.nextBatchTime(101) === 200)\n     assert(processingTimeExecutor.nextBatchTime(150) === 200)\n   }\n \n+  private def testNextBatchTimeAgainstClock(clock: Clock) {\n+    val IntervalMS = 100\n+    val processingTimeExecutor = ProcessingTimeExecutor(ProcessingTime(IntervalMS), clock)\n+\n+    val ITERATION = 10\n+    var nextBatchTime: Long = 0\n+    for (it <- 1 to ITERATION)\n+      nextBatchTime = processingTimeExecutor.nextBatchTime(nextBatchTime)\n+\n+    // nextBatchTime should be 1000\n+    assert(nextBatchTime === IntervalMS * ITERATION)\n+  }\n+\n+  test(\"nextBatchTime against SystemClock\") {\n+    testNextBatchTimeAgainstClock(new SystemClock)\n+  }\n+\n+  test(\"nextBatchTime against ManualClock\") {"
+  }],
+  "prId": 12797
+}, {
+  "comments": [{
+    "author": {
+      "login": "marmbrus"
+    },
+    "body": "lowercase first letter for variables.\n",
+    "commit": "bc899628fa67acfbe6bb3d8e2c0ba2aefc2422a6",
+    "createdAt": "2016-05-02T17:51:01Z",
+    "diffHunk": "@@ -21,19 +21,41 @@ import java.util.concurrent.{CountDownLatch, TimeUnit}\n \n import org.apache.spark.SparkFunSuite\n import org.apache.spark.sql.ProcessingTime\n-import org.apache.spark.util.ManualClock\n+import org.apache.spark.util.{Clock, ManualClock, SystemClock}\n \n class ProcessingTimeExecutorSuite extends SparkFunSuite {\n \n   test(\"nextBatchTime\") {\n     val processingTimeExecutor = ProcessingTimeExecutor(ProcessingTime(100))\n+    assert(processingTimeExecutor.nextBatchTime(0) === 100)\n     assert(processingTimeExecutor.nextBatchTime(1) === 100)\n     assert(processingTimeExecutor.nextBatchTime(99) === 100)\n-    assert(processingTimeExecutor.nextBatchTime(100) === 100)\n+    assert(processingTimeExecutor.nextBatchTime(100) === 200)\n     assert(processingTimeExecutor.nextBatchTime(101) === 200)\n     assert(processingTimeExecutor.nextBatchTime(150) === 200)\n   }\n \n+  private def testNextBatchTimeAgainstClock(clock: Clock) {\n+    val IntervalMS = 100"
+  }, {
+    "author": {
+      "login": "lw-lin"
+    },
+    "body": "Sure; let me fix this\n",
+    "commit": "bc899628fa67acfbe6bb3d8e2c0ba2aefc2422a6",
+    "createdAt": "2016-05-03T04:35:57Z",
+    "diffHunk": "@@ -21,19 +21,41 @@ import java.util.concurrent.{CountDownLatch, TimeUnit}\n \n import org.apache.spark.SparkFunSuite\n import org.apache.spark.sql.ProcessingTime\n-import org.apache.spark.util.ManualClock\n+import org.apache.spark.util.{Clock, ManualClock, SystemClock}\n \n class ProcessingTimeExecutorSuite extends SparkFunSuite {\n \n   test(\"nextBatchTime\") {\n     val processingTimeExecutor = ProcessingTimeExecutor(ProcessingTime(100))\n+    assert(processingTimeExecutor.nextBatchTime(0) === 100)\n     assert(processingTimeExecutor.nextBatchTime(1) === 100)\n     assert(processingTimeExecutor.nextBatchTime(99) === 100)\n-    assert(processingTimeExecutor.nextBatchTime(100) === 100)\n+    assert(processingTimeExecutor.nextBatchTime(100) === 200)\n     assert(processingTimeExecutor.nextBatchTime(101) === 200)\n     assert(processingTimeExecutor.nextBatchTime(150) === 200)\n   }\n \n+  private def testNextBatchTimeAgainstClock(clock: Clock) {\n+    val IntervalMS = 100"
+  }],
+  "prId": 12797
+}, {
+  "comments": [{
+    "author": {
+      "login": "marmbrus"
+    },
+    "body": "What is this checking that isn't checked by `test(\"nextBatchTime\")` above?\n",
+    "commit": "bc899628fa67acfbe6bb3d8e2c0ba2aefc2422a6",
+    "createdAt": "2016-05-02T17:53:22Z",
+    "diffHunk": "@@ -21,19 +21,41 @@ import java.util.concurrent.{CountDownLatch, TimeUnit}\n \n import org.apache.spark.SparkFunSuite\n import org.apache.spark.sql.ProcessingTime\n-import org.apache.spark.util.ManualClock\n+import org.apache.spark.util.{Clock, ManualClock, SystemClock}\n \n class ProcessingTimeExecutorSuite extends SparkFunSuite {\n \n   test(\"nextBatchTime\") {\n     val processingTimeExecutor = ProcessingTimeExecutor(ProcessingTime(100))\n+    assert(processingTimeExecutor.nextBatchTime(0) === 100)\n     assert(processingTimeExecutor.nextBatchTime(1) === 100)\n     assert(processingTimeExecutor.nextBatchTime(99) === 100)\n-    assert(processingTimeExecutor.nextBatchTime(100) === 100)\n+    assert(processingTimeExecutor.nextBatchTime(100) === 200)\n     assert(processingTimeExecutor.nextBatchTime(101) === 200)\n     assert(processingTimeExecutor.nextBatchTime(150) === 200)\n   }\n \n+  private def testNextBatchTimeAgainstClock(clock: Clock) {\n+    val IntervalMS = 100\n+    val processingTimeExecutor = ProcessingTimeExecutor(ProcessingTime(IntervalMS), clock)\n+\n+    val ITERATION = 10\n+    var nextBatchTime: Long = 0\n+    for (it <- 1 to ITERATION)\n+      nextBatchTime = processingTimeExecutor.nextBatchTime(nextBatchTime)\n+\n+    // nextBatchTime should be 1000\n+    assert(nextBatchTime === IntervalMS * ITERATION)"
+  }],
+  "prId": 12797
+}]

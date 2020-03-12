@@ -1,0 +1,134 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "budde"
+    },
+    "body": "I think there needs to be a better abstraction around the ```initialPositionInStream``` and ```initialPositionInStreamTimestamp``` options. Providing both is redundant as a user would want to specify one or the other. Additionally, if ```initialPositionInStreamTimestamp``` is an optional value then its type should at the very least be ```Option[Date]``` with a default value of ```None```",
+    "commit": "bdd080c2ea7b3c2f215e1ca6a6614ade3f074601",
+    "createdAt": "2017-06-01T20:48:03Z",
+    "diffHunk": "@@ -38,6 +40,7 @@ private[kinesis] class KinesisInputDStream[T: ClassTag](\n     val endpointUrl: String,\n     val regionName: String,\n     val initialPositionInStream: InitialPositionInStream,\n+    val initialPositionInStreamTimestamp: Date,"
+  }, {
+    "author": {
+      "login": "yssharma"
+    },
+    "body": "@budde - I had two approaches in mind while adding this functionality-\r\n1. Additional parameter which can be set by an overloaded method in Builder.\r\n2. Creating a new case class for wrapping initial position with an optional timestamp.\r\n\r\nI went ahead with implementing the first one for backward compatibility such that users can use their same builders.",
+    "commit": "bdd080c2ea7b3c2f215e1ca6a6614ade3f074601",
+    "createdAt": "2017-06-03T10:21:13Z",
+    "diffHunk": "@@ -38,6 +40,7 @@ private[kinesis] class KinesisInputDStream[T: ClassTag](\n     val endpointUrl: String,\n     val regionName: String,\n     val initialPositionInStream: InitialPositionInStream,\n+    val initialPositionInStreamTimestamp: Date,"
+  }],
+  "prId": 18029
+}, {
+  "comments": [{
+    "author": {
+      "login": "brkyvz"
+    },
+    "body": "umm, I feel a better way would be like:\r\n```scala\r\ntrait InitialPosition {\r\n  def setInitialPosition(clientConf: KinesisClientLibConfiguration): KinesisClientLibConfiguration\r\n}\r\n\r\ncase object Latest {\r\n  override def setInitialPosition(clientConf: KinesisClientLibConfiguration): KinesisClientLibConfiguration = {\r\n    clientLibConf.withInitialPositionInStream(InitialPositionInStream.LATEST)\r\n  }\r\n}\r\n\r\ncase object TrimHorizon {\r\n  override def setInitialPosition(clientConf: KinesisClientLibConfiguration): KinesisClientLibConfiguration = {\r\n    clientLibConf.withInitialPositionInStream(InitialPositionInStream.TRIM_HORIZON)\r\n  }\r\n}\r\n\r\ncase class AtTimestamp(timestamp: Date) {\r\n  override def setInitialPosition(clientConf: KinesisClientLibConfiguration): KinesisClientLibConfiguration = {\r\n    clientLibConf. withTimestampAtInitialPositionInStream(timestamp)\r\n  }\r\n}\r\n```\r\n\r\nwhat do you think?",
+    "commit": "bdd080c2ea7b3c2f215e1ca6a6614ade3f074601",
+    "createdAt": "2017-06-05T18:46:38Z",
+    "diffHunk": "@@ -100,6 +103,7 @@ object KinesisInputDStream {\n     private var endpointUrl: Option[String] = None\n     private var regionName: Option[String] = None\n     private var initialPositionInStream: Option[InitialPositionInStream] = None\n+    private var initialPositionInStreamTimestamp: Option[Date] = None"
+  }, {
+    "author": {
+      "login": "yssharma"
+    },
+    "body": "@brkyvz Where exactly are we planning to add these changes. Are you proposing to change the type of \r\n`private var initialPositionInStreamTimestamp: Option[Date] = None`\r\n\r\nThat would introduce a backward incompatibility on the current builder ?",
+    "commit": "bdd080c2ea7b3c2f215e1ca6a6614ade3f074601",
+    "createdAt": "2017-06-05T23:27:07Z",
+    "diffHunk": "@@ -100,6 +103,7 @@ object KinesisInputDStream {\n     private var endpointUrl: Option[String] = None\n     private var regionName: Option[String] = None\n     private var initialPositionInStream: Option[InitialPositionInStream] = None\n+    private var initialPositionInStreamTimestamp: Option[Date] = None"
+  }, {
+    "author": {
+      "login": "brkyvz"
+    },
+    "body": "I'm hoping we won't have to take both `initialPositionInStream` and `initialPositionInStreamTimestamp`. The builder is internal APIs, therefore we can definitely change it.",
+    "commit": "bdd080c2ea7b3c2f215e1ca6a6614ade3f074601",
+    "createdAt": "2017-06-05T23:29:27Z",
+    "diffHunk": "@@ -100,6 +103,7 @@ object KinesisInputDStream {\n     private var endpointUrl: Option[String] = None\n     private var regionName: Option[String] = None\n     private var initialPositionInStream: Option[InitialPositionInStream] = None\n+    private var initialPositionInStreamTimestamp: Option[Date] = None"
+  }, {
+    "author": {
+      "login": "yssharma"
+    },
+    "body": "Ah alright, so you're asking to get another `initialPositionInStreamTimestamp`. Thats similar to the `withInitialPositionAtTimestamp`.  Can rename that to suit this purpose.\r\n\r\nAnother question, The InitialPosition gets passed to the KinesisReceiver. I was passing a timestamp along with the Initial position at the moment. Are we planning to pass the `KinesisClientLibConfiguration` to the `KinesisReceiver` now ?",
+    "commit": "bdd080c2ea7b3c2f215e1ca6a6614ade3f074601",
+    "createdAt": "2017-06-05T23:40:54Z",
+    "diffHunk": "@@ -100,6 +103,7 @@ object KinesisInputDStream {\n     private var endpointUrl: Option[String] = None\n     private var regionName: Option[String] = None\n     private var initialPositionInStream: Option[InitialPositionInStream] = None\n+    private var initialPositionInStreamTimestamp: Option[Date] = None"
+  }],
+  "prId": 18029
+}, {
+  "comments": [{
+    "author": {
+      "login": "brkyvz"
+    },
+    "body": "`withInitialPositionAtTimestamp`?",
+    "commit": "bdd080c2ea7b3c2f215e1ca6a6614ade3f074601",
+    "createdAt": "2017-06-05T18:48:59Z",
+    "diffHunk": "@@ -193,6 +197,21 @@ object KinesisInputDStream {\n     }\n \n     /**\n+     * Sets the Kinesis initial position data to the provided timestamp.\n+     * Sets InitialPositionInStream to [[InitialPositionInStream.AT_TIMESTAMP]]\n+     * and the timestamp to the provided value.\n+     *\n+     * @param timestamp Timestamp to resume the Kinesis stream from a provided\n+     *                  timestamp.\n+     * @return Reference to this [[KinesisInputDStream.Builder]]\n+     */\n+    def withTimestampAtInitialPositionInStream(timestamp: Date) : Builder = {"
+  }, {
+    "author": {
+      "login": "yssharma"
+    },
+    "body": "@brkyvz \r\n`withInitialPositionAtTimestamp` is an enhancer method for the InitialPositionAtTimestamp. If provided It will set the timestamp value along with the InitialPosition.AT_TIMESTAMP.\r\n\r\nIts optional, hence the `initialPositionInStream` can still be used. This will not introduce and incompatibilities in usage. \r\nThoughts ?",
+    "commit": "bdd080c2ea7b3c2f215e1ca6a6614ade3f074601",
+    "createdAt": "2017-06-05T23:37:25Z",
+    "diffHunk": "@@ -193,6 +197,21 @@ object KinesisInputDStream {\n     }\n \n     /**\n+     * Sets the Kinesis initial position data to the provided timestamp.\n+     * Sets InitialPositionInStream to [[InitialPositionInStream.AT_TIMESTAMP]]\n+     * and the timestamp to the provided value.\n+     *\n+     * @param timestamp Timestamp to resume the Kinesis stream from a provided\n+     *                  timestamp.\n+     * @return Reference to this [[KinesisInputDStream.Builder]]\n+     */\n+    def withTimestampAtInitialPositionInStream(timestamp: Date) : Builder = {"
+  }, {
+    "author": {
+      "login": "brkyvz"
+    },
+    "body": "I just suggested renaming it. Sorry for the confusion",
+    "commit": "bdd080c2ea7b3c2f215e1ca6a6614ade3f074601",
+    "createdAt": "2017-06-05T23:39:49Z",
+    "diffHunk": "@@ -193,6 +197,21 @@ object KinesisInputDStream {\n     }\n \n     /**\n+     * Sets the Kinesis initial position data to the provided timestamp.\n+     * Sets InitialPositionInStream to [[InitialPositionInStream.AT_TIMESTAMP]]\n+     * and the timestamp to the provided value.\n+     *\n+     * @param timestamp Timestamp to resume the Kinesis stream from a provided\n+     *                  timestamp.\n+     * @return Reference to this [[KinesisInputDStream.Builder]]\n+     */\n+    def withTimestampAtInitialPositionInStream(timestamp: Date) : Builder = {"
+  }, {
+    "author": {
+      "login": "yssharma"
+    },
+    "body": "Got it now. Read your new comment.",
+    "commit": "bdd080c2ea7b3c2f215e1ca6a6614ade3f074601",
+    "createdAt": "2017-06-05T23:41:30Z",
+    "diffHunk": "@@ -193,6 +197,21 @@ object KinesisInputDStream {\n     }\n \n     /**\n+     * Sets the Kinesis initial position data to the provided timestamp.\n+     * Sets InitialPositionInStream to [[InitialPositionInStream.AT_TIMESTAMP]]\n+     * and the timestamp to the provided value.\n+     *\n+     * @param timestamp Timestamp to resume the Kinesis stream from a provided\n+     *                  timestamp.\n+     * @return Reference to this [[KinesisInputDStream.Builder]]\n+     */\n+    def withTimestampAtInitialPositionInStream(timestamp: Date) : Builder = {"
+  }],
+  "prId": 18029
+}, {
+  "comments": [{
+    "author": {
+      "login": "budde"
+    },
+    "body": "*nit* Rename this to ```DEFAULT_INITIAL_POSITION``` to reflect the new class name",
+    "commit": "bdd080c2ea7b3c2f215e1ca6a6614ade3f074601",
+    "createdAt": "2017-08-18T22:34:47Z",
+    "diffHunk": "@@ -308,7 +308,6 @@ object KinesisInputDStream {\n   private[kinesis] val DEFAULT_KINESIS_ENDPOINT_URL: String =\n     \"https://kinesis.us-east-1.amazonaws.com\"\n   private[kinesis] val DEFAULT_KINESIS_REGION_NAME: String = \"us-east-1\"\n-  private[kinesis] val DEFAULT_INITIAL_POSITION_IN_STREAM: InitialPositionInStream =\n-    InitialPositionInStream.LATEST\n+  private[kinesis] val DEFAULT_INITIAL_POSITION_IN_STREAM: InitialPosition = InitialPosition.latest"
+  }],
+  "prId": 18029
+}, {
+  "comments": [{
+    "author": {
+      "login": "brkyvz"
+    },
+    "body": "don't remove this API, since it will break compatibility. Instead add an API to take the `withTimestamp`. In the end if we see that `withTimestamp` has been set, but initial position isn't `AtTimestamp`, then we throw an error. Likewise if `AtTimestamp` is set, but no timestamp has been provided, also throw an error.",
+    "commit": "bdd080c2ea7b3c2f215e1ca6a6614ade3f074601",
+    "createdAt": "2017-10-10T20:58:46Z",
+    "diffHunk": "@@ -182,14 +181,14 @@ object KinesisInputDStream {\n \n     /**\n      * Sets the initial position data is read from in the Kinesis stream. Defaults to\n-     * [[InitialPositionInStream.LATEST]] if no custom value is specified.\n+     * [[InitialPosition.latest]] if no custom value is specified.\n      *\n-     * @param initialPosition InitialPositionInStream value specifying where Spark Streaming\n+     * @param initialPosition [[InitialPosition]] value specifying where Spark Streaming\n      *                        will start reading records in the Kinesis stream from\n      * @return Reference to this [[KinesisInputDStream.Builder]]\n      */\n-    def initialPositionInStream(initialPosition: InitialPositionInStream): Builder = {"
+  }],
+  "prId": 18029
+}, {
+  "comments": [{
+    "author": {
+      "login": "brkyvz"
+    },
+    "body": "don't change docs",
+    "commit": "bdd080c2ea7b3c2f215e1ca6a6614ade3f074601",
+    "createdAt": "2017-10-10T20:58:54Z",
+    "diffHunk": "@@ -182,14 +181,14 @@ object KinesisInputDStream {\n \n     /**\n      * Sets the initial position data is read from in the Kinesis stream. Defaults to\n-     * [[InitialPositionInStream.LATEST]] if no custom value is specified.\n+     * [[InitialPosition.latest]] if no custom value is specified."
+  }],
+  "prId": 18029
+}, {
+  "comments": [{
+    "author": {
+      "login": "brkyvz"
+    },
+    "body": "2.3.0",
+    "commit": "bdd080c2ea7b3c2f215e1ca6a6614ade3f074601",
+    "createdAt": "2017-10-12T16:06:34Z",
+    "diffHunk": "@@ -182,14 +182,29 @@ object KinesisInputDStream {\n \n     /**\n      * Sets the initial position data is read from in the Kinesis stream. Defaults to\n+     * [[Latest]] if no custom value is specified.\n+     *\n+     * @param initialPosition [[InitialPosition]] value specifying where Spark Streaming\n+     *                        will start reading records in the Kinesis stream from\n+     * @return Reference to this [[KinesisInputDStream.Builder]]\n+     */\n+    def initialPosition(initialPosition: InitialPosition): Builder = {\n+      this.initialPosition = Option(initialPosition)\n+      this\n+    }\n+\n+    /**\n+     * Sets the initial position data is read from in the Kinesis stream. Defaults to\n      * [[InitialPositionInStream.LATEST]] if no custom value is specified.\n+     * This function would be removed when we deprecate the KinesisUtils.\n      *\n      * @param initialPosition InitialPositionInStream value specifying where Spark Streaming\n      *                        will start reading records in the Kinesis stream from\n      * @return Reference to this [[KinesisInputDStream.Builder]]\n      */\n+    @deprecated(\"use initialPosition(initialPosition: InitialPosition)\", \"2.0.0\")"
+  }],
+  "prId": 18029
+}]

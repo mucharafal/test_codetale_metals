@@ -1,0 +1,49 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "squito"
+    },
+    "body": "won't this prevent you from ever renewing these tokens?",
+    "commit": "0bccad5873158cfcba80e98ccb894b786978ec8d",
+    "createdAt": "2019-01-03T04:32:23Z",
+    "diffHunk": "@@ -67,11 +67,11 @@ private[spark] class HiveDelegationTokenProvider\n     // Other modes (such as client with or without keytab, or cluster mode with keytab) do not need\n     // a delegation token, since there's a valid kerberos TGT for the right user available to the\n     // driver, which is the only process that connects to the HMS.\n-    val deployMode = sparkConf.get(\"spark.submit.deployMode\", \"client\")\n-    UserGroupInformation.isSecurityEnabled &&\n+    val currentToken = UserGroupInformation.getCurrentUser().getCredentials().getToken(tokenAlias)\n+    currentToken == null && UserGroupInformation.isSecurityEnabled &&",
+    "line": 13
+  }, {
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "No, new DTs are created with empty UGI/Credentials instances, where no previous tokens exist, and then new tokens overwrite the \"current user\" credentials.",
+    "commit": "0bccad5873158cfcba80e98ccb894b786978ec8d",
+    "createdAt": "2019-01-03T18:19:24Z",
+    "diffHunk": "@@ -67,11 +67,11 @@ private[spark] class HiveDelegationTokenProvider\n     // Other modes (such as client with or without keytab, or cluster mode with keytab) do not need\n     // a delegation token, since there's a valid kerberos TGT for the right user available to the\n     // driver, which is the only process that connects to the HMS.\n-    val deployMode = sparkConf.get(\"spark.submit.deployMode\", \"client\")\n-    UserGroupInformation.isSecurityEnabled &&\n+    val currentToken = UserGroupInformation.getCurrentUser().getCredentials().getToken(tokenAlias)\n+    currentToken == null && UserGroupInformation.isSecurityEnabled &&",
+    "line": 13
+  }, {
+    "author": {
+      "login": "squito"
+    },
+    "body": "sorry I'm not sure I follow.  To put it another way -- whats the situation in which you're trying to *avoid* renewing tokens with this change?\r\n\r\nit looks to me like the first time, `delegationTokensRequired` will not find an existing token, so will return true, and then obtainDelegationTokens will get DTs with a new Credentials and then copy them to the current user.  But then on the next call to `delegationTokensRequired`, there will still be the old token sitting in the current user, so `currentToken != null`.  That will remain true forever.",
+    "commit": "0bccad5873158cfcba80e98ccb894b786978ec8d",
+    "createdAt": "2019-01-03T20:33:58Z",
+    "diffHunk": "@@ -67,11 +67,11 @@ private[spark] class HiveDelegationTokenProvider\n     // Other modes (such as client with or without keytab, or cluster mode with keytab) do not need\n     // a delegation token, since there's a valid kerberos TGT for the right user available to the\n     // driver, which is the only process that connects to the HMS.\n-    val deployMode = sparkConf.get(\"spark.submit.deployMode\", \"client\")\n-    UserGroupInformation.isSecurityEnabled &&\n+    val currentToken = UserGroupInformation.getCurrentUser().getCredentials().getToken(tokenAlias)\n+    currentToken == null && UserGroupInformation.isSecurityEnabled &&",
+    "line": 13
+  }, {
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "The Hive provider is a bit weird. The comment above explains a bit of the issue.\r\n\r\nThe added code avoids trying to get a delegation token in the case where you have a pre-defined token cache (e.g. what happens when you submit via Oozie). That would generate an ugly exception in my tests, although the app itself would work fine.\r\n\r\nHive tokens are actually never re-created by Spark. In client mode, they're not needed, since the driver has a kerberos tgt. In cluster mode, you either have a keytab and thus a tgt, or you have tokens created by the launcher, in which case you won't create new ones.",
+    "commit": "0bccad5873158cfcba80e98ccb894b786978ec8d",
+    "createdAt": "2019-01-03T20:39:58Z",
+    "diffHunk": "@@ -67,11 +67,11 @@ private[spark] class HiveDelegationTokenProvider\n     // Other modes (such as client with or without keytab, or cluster mode with keytab) do not need\n     // a delegation token, since there's a valid kerberos TGT for the right user available to the\n     // driver, which is the only process that connects to the HMS.\n-    val deployMode = sparkConf.get(\"spark.submit.deployMode\", \"client\")\n-    UserGroupInformation.isSecurityEnabled &&\n+    val currentToken = UserGroupInformation.getCurrentUser().getCredentials().getToken(tokenAlias)\n+    currentToken == null && UserGroupInformation.isSecurityEnabled &&",
+    "line": 13
+  }, {
+    "author": {
+      "login": "squito"
+    },
+    "body": "ok that makes more sense.  I think it would help to expand that comment that hive tokens are never renewed, and may even be provided eg. w/ oozie.",
+    "commit": "0bccad5873158cfcba80e98ccb894b786978ec8d",
+    "createdAt": "2019-01-03T20:47:32Z",
+    "diffHunk": "@@ -67,11 +67,11 @@ private[spark] class HiveDelegationTokenProvider\n     // Other modes (such as client with or without keytab, or cluster mode with keytab) do not need\n     // a delegation token, since there's a valid kerberos TGT for the right user available to the\n     // driver, which is the only process that connects to the HMS.\n-    val deployMode = sparkConf.get(\"spark.submit.deployMode\", \"client\")\n-    UserGroupInformation.isSecurityEnabled &&\n+    val currentToken = UserGroupInformation.getCurrentUser().getCredentials().getToken(tokenAlias)\n+    currentToken == null && UserGroupInformation.isSecurityEnabled &&",
+    "line": 13
+  }],
+  "prId": 23338
+}]

@@ -1,0 +1,61 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "organize imports  (Please follow style guide [https://cwiki.apache.org/confluence/display/SPARK/Spark+Code+Style+Guide])\n",
+    "commit": "965aaec8a762bf11b457d42a82ca38ef6a5c1474",
+    "createdAt": "2015-08-25T23:45:06Z",
+    "diffHunk": "@@ -0,0 +1,44 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.mllib.util\n+\n+import org.apache.spark.broadcast.Broadcast\n+import org.apache.spark.SparkContext\n+\n+import scala.reflect.ClassTag"
+  }],
+  "prId": 8241
+}, {
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "insert newline\n",
+    "commit": "965aaec8a762bf11b457d42a82ca38ef6a5c1474",
+    "createdAt": "2015-08-25T23:45:07Z",
+    "diffHunk": "@@ -0,0 +1,44 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.mllib.util\n+\n+import org.apache.spark.broadcast.Broadcast\n+import org.apache.spark.SparkContext\n+\n+import scala.reflect.ClassTag\n+\n+private[mllib] trait Broadcastable[T] {\n+\n+  private var bcModel: Option[Broadcast[T]] = None\n+  /**"
+  }],
+  "prId": 8241
+}, {
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "Was the ClassTag necessary to get this to work?  If you want to make sure T is a ClassTag, can you do\n\n```\ndef getBroadcastModel[T: ClassTag](sc ...): Broadcast[T]\n```\n",
+    "commit": "965aaec8a762bf11b457d42a82ca38ef6a5c1474",
+    "createdAt": "2015-08-25T23:45:08Z",
+    "diffHunk": "@@ -0,0 +1,44 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.mllib.util\n+\n+import org.apache.spark.broadcast.Broadcast\n+import org.apache.spark.SparkContext\n+\n+import scala.reflect.ClassTag\n+\n+private[mllib] trait Broadcastable[T] {\n+\n+  private var bcModel: Option[Broadcast[T]] = None\n+  /**\n+   * Checks whether the model object is already broadcast and returns the reference.\n+   * If not, then broadcasts the model and returns a reference\n+   * @param sc SparkContext that will be used for the broadcast\n+   * @param modelToBc Model object to broadcast\n+   * @return the broadcast model\n+   */\n+  def getBroadcastModel(sc: SparkContext, modelToBc: T)\n+                       (implicit ev: ClassTag[T]) : Broadcast[T] = {"
+  }, {
+    "author": {
+      "login": "feynmanliang"
+    },
+    "body": "I think it might be better to keep parameterization on the entire trait rather than just `getBroadcastModel` i.e. remove the `implicit` here and add a context bound `trait Broadcastable[T : ClassTag] {` up in the trait declaration\n",
+    "commit": "965aaec8a762bf11b457d42a82ca38ef6a5c1474",
+    "createdAt": "2015-08-25T23:59:12Z",
+    "diffHunk": "@@ -0,0 +1,44 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.mllib.util\n+\n+import org.apache.spark.broadcast.Broadcast\n+import org.apache.spark.SparkContext\n+\n+import scala.reflect.ClassTag\n+\n+private[mllib] trait Broadcastable[T] {\n+\n+  private var bcModel: Option[Broadcast[T]] = None\n+  /**\n+   * Checks whether the model object is already broadcast and returns the reference.\n+   * If not, then broadcasts the model and returns a reference\n+   * @param sc SparkContext that will be used for the broadcast\n+   * @param modelToBc Model object to broadcast\n+   * @return the broadcast model\n+   */\n+  def getBroadcastModel(sc: SparkContext, modelToBc: T)\n+                       (implicit ev: ClassTag[T]) : Broadcast[T] = {"
+  }, {
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "+1 that's better\n",
+    "commit": "965aaec8a762bf11b457d42a82ca38ef6a5c1474",
+    "createdAt": "2015-08-26T00:37:29Z",
+    "diffHunk": "@@ -0,0 +1,44 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.mllib.util\n+\n+import org.apache.spark.broadcast.Broadcast\n+import org.apache.spark.SparkContext\n+\n+import scala.reflect.ClassTag\n+\n+private[mllib] trait Broadcastable[T] {\n+\n+  private var bcModel: Option[Broadcast[T]] = None\n+  /**\n+   * Checks whether the model object is already broadcast and returns the reference.\n+   * If not, then broadcasts the model and returns a reference\n+   * @param sc SparkContext that will be used for the broadcast\n+   * @param modelToBc Model object to broadcast\n+   * @return the broadcast model\n+   */\n+  def getBroadcastModel(sc: SparkContext, modelToBc: T)\n+                       (implicit ev: ClassTag[T]) : Broadcast[T] = {"
+  }],
+  "prId": 8241
+}, {
+  "comments": [{
+    "author": {
+      "login": "feynmanliang"
+    },
+    "body": "Since this is for broadcasting models, it shouldn't be mixed in with anything else. Also, the inner type of `bcModel` should always be the same as the class mixing in `Broadcastable`.\n\nThus, how about we rename `Broadcastable` -> `BroadcastableModel`, upper bound the type of `T`, and constrain what types can mix this trait in with a self type annotation (i.e. altogether `trait BroadcastableModel[T <: Model] { self: T =>`)\n",
+    "commit": "965aaec8a762bf11b457d42a82ca38ef6a5c1474",
+    "createdAt": "2015-08-26T01:20:11Z",
+    "diffHunk": "@@ -0,0 +1,44 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.mllib.util\n+\n+import org.apache.spark.broadcast.Broadcast\n+import org.apache.spark.SparkContext\n+\n+import scala.reflect.ClassTag\n+\n+private[mllib] trait Broadcastable[T] {"
+  }],
+  "prId": 8241
+}]

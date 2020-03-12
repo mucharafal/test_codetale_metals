@@ -1,0 +1,66 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "gaborgsomogyi"
+    },
+    "body": "style: `val estimatedRateLimit = rateController.map { x => {`\r\n\r\nPlease take a look at https://spark.apache.org/contributing.html\r\n",
+    "commit": "d11e8078672048693b3538db902a2827d14eeaf5",
+    "createdAt": "2017-12-21T20:43:42Z",
+    "diffHunk": "@@ -91,9 +91,16 @@ class DirectKafkaInputDStream[\n   private val maxRateLimitPerPartition: Long = context.sparkContext.getConf.getLong(\n       \"spark.streaming.kafka.maxRatePerPartition\", 0)\n \n+  private val initialRate = context.sparkContext.getConf.getLong(\n+    \"spark.streaming.backpressure.initialRate\", 0)\n+\n   protected[streaming] def maxMessagesPerPartition(\n       offsets: Map[TopicAndPartition, Long]): Option[Map[TopicAndPartition, Long]] = {\n-    val estimatedRateLimit = rateController.map(_.getLatestRate())\n+\n+    val estimatedRateLimit = rateController.map(x => {"
+  }, {
+    "author": {
+      "login": "akonopko"
+    },
+    "body": "Fixed",
+    "commit": "d11e8078672048693b3538db902a2827d14eeaf5",
+    "createdAt": "2018-02-07T12:43:32Z",
+    "diffHunk": "@@ -91,9 +91,16 @@ class DirectKafkaInputDStream[\n   private val maxRateLimitPerPartition: Long = context.sparkContext.getConf.getLong(\n       \"spark.streaming.kafka.maxRatePerPartition\", 0)\n \n+  private val initialRate = context.sparkContext.getConf.getLong(\n+    \"spark.streaming.backpressure.initialRate\", 0)\n+\n   protected[streaming] def maxMessagesPerPartition(\n       offsets: Map[TopicAndPartition, Long]): Option[Map[TopicAndPartition, Long]] = {\n-    val estimatedRateLimit = rateController.map(_.getLatestRate())\n+\n+    val estimatedRateLimit = rateController.map(x => {"
+  }],
+  "prId": 19431
+}, {
+  "comments": [{
+    "author": {
+      "login": "gaborgsomogyi"
+    },
+    "body": "What is the intention here?",
+    "commit": "d11e8078672048693b3538db902a2827d14eeaf5",
+    "createdAt": "2017-12-21T20:50:21Z",
+    "diffHunk": "@@ -108,7 +115,9 @@ class DirectKafkaInputDStream[\n           tp -> (if (maxRateLimitPerPartition > 0) {\n             Math.min(backpressureRate, maxRateLimitPerPartition)} else backpressureRate)\n         }\n-      case None => offsets.map { case (tp, offset) => tp -> maxRateLimitPerPartition }\n+      case None => offsets.map { case (tp, offset) => tp -> {"
+  }, {
+    "author": {
+      "login": "akonopko"
+    },
+    "body": "Fixed",
+    "commit": "d11e8078672048693b3538db902a2827d14eeaf5",
+    "createdAt": "2018-02-07T12:43:54Z",
+    "diffHunk": "@@ -108,7 +115,9 @@ class DirectKafkaInputDStream[\n           tp -> (if (maxRateLimitPerPartition > 0) {\n             Math.min(backpressureRate, maxRateLimitPerPartition)} else backpressureRate)\n         }\n-      case None => offsets.map { case (tp, offset) => tp -> maxRateLimitPerPartition }\n+      case None => offsets.map { case (tp, offset) => tp -> {"
+  }],
+  "prId": 19431
+}, {
+  "comments": [{
+    "author": {
+      "login": "gaborgsomogyi"
+    },
+    "body": "Is it possible that the server is so heavily loaded that current rate limit drops to 0?",
+    "commit": "d11e8078672048693b3538db902a2827d14eeaf5",
+    "createdAt": "2017-12-21T21:26:53Z",
+    "diffHunk": "@@ -91,9 +91,16 @@ class DirectKafkaInputDStream[\n   private val maxRateLimitPerPartition: Long = context.sparkContext.getConf.getLong(\n       \"spark.streaming.kafka.maxRatePerPartition\", 0)\n \n+  private val initialRate = context.sparkContext.getConf.getLong(\n+    \"spark.streaming.backpressure.initialRate\", 0)\n+\n   protected[streaming] def maxMessagesPerPartition(\n       offsets: Map[TopicAndPartition, Long]): Option[Map[TopicAndPartition, Long]] = {\n-    val estimatedRateLimit = rateController.map(_.getLatestRate())\n+\n+    val estimatedRateLimit = rateController.map(x => {\n+      val lr = x.getLatestRate()\n+      if (lr > 0) lr else initialRate"
+  }, {
+    "author": {
+      "login": "akonopko"
+    },
+    "body": "Latest rate means rate of previous batch. Is it possible that in alive system 0 events were processed? Only if there is no backlog and no new events came during last batch. Completely possible.\r\n\r\nThis happens during first ran. And this parameter should limit it during 1st ran. Quote from docs:\r\n\r\nThis is the initial maximum receiving rate at which each receiver will receive data for the first batch when the backpressure mechanism is enabled.\r\n\r\nIf it happened during system run, for example there is no backlog and no new events came, we still need to limit system rate since with LatestRate = 0 it results in no limit, causing danger of overflowing the system",
+    "commit": "d11e8078672048693b3538db902a2827d14eeaf5",
+    "createdAt": "2018-02-07T12:43:46Z",
+    "diffHunk": "@@ -91,9 +91,16 @@ class DirectKafkaInputDStream[\n   private val maxRateLimitPerPartition: Long = context.sparkContext.getConf.getLong(\n       \"spark.streaming.kafka.maxRatePerPartition\", 0)\n \n+  private val initialRate = context.sparkContext.getConf.getLong(\n+    \"spark.streaming.backpressure.initialRate\", 0)\n+\n   protected[streaming] def maxMessagesPerPartition(\n       offsets: Map[TopicAndPartition, Long]): Option[Map[TopicAndPartition, Long]] = {\n-    val estimatedRateLimit = rateController.map(_.getLatestRate())\n+\n+    val estimatedRateLimit = rateController.map(x => {\n+      val lr = x.getLatestRate()\n+      if (lr > 0) lr else initialRate"
+  }, {
+    "author": {
+      "login": "gaborgsomogyi"
+    },
+    "body": "Same applies here.",
+    "commit": "d11e8078672048693b3538db902a2827d14eeaf5",
+    "createdAt": "2018-02-08T14:39:32Z",
+    "diffHunk": "@@ -91,9 +91,16 @@ class DirectKafkaInputDStream[\n   private val maxRateLimitPerPartition: Long = context.sparkContext.getConf.getLong(\n       \"spark.streaming.kafka.maxRatePerPartition\", 0)\n \n+  private val initialRate = context.sparkContext.getConf.getLong(\n+    \"spark.streaming.backpressure.initialRate\", 0)\n+\n   protected[streaming] def maxMessagesPerPartition(\n       offsets: Map[TopicAndPartition, Long]): Option[Map[TopicAndPartition, Long]] = {\n-    val estimatedRateLimit = rateController.map(_.getLatestRate())\n+\n+    val estimatedRateLimit = rateController.map(x => {\n+      val lr = x.getLatestRate()\n+      if (lr > 0) lr else initialRate"
+  }],
+  "prId": 19431
+}]

@@ -1,0 +1,63 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "Unfortunately, my PR breaks compatibility for this experimental Java API.  However, the previous version of this method hasn't been shipped in any Spark releases yet.\n",
+    "commit": "0d45fbc9e41c8dc2fffd58a0a48c19a6d9dafdd8",
+    "createdAt": "2014-10-11T05:40:22Z",
+    "diffHunk": "@@ -575,16 +575,49 @@ trait JavaRDDLike[T, This <: JavaRDDLike[T, This]] extends Serializable {\n   def name(): String = rdd.name\n \n   /**\n-   * :: Experimental ::\n-   * The asynchronous version of the foreach action.\n-   *\n-   * @param f the function to apply to all the elements of the RDD\n-   * @return a FutureAction for the action\n+   * The asynchronous version of `count`, which returns a\n+   * future for counting the number of elements in this RDD.\n    */\n-  @Experimental\n-  def foreachAsync(f: VoidFunction[T]): FutureAction[Unit] = {",
+    "line": 39
+  }, {
+    "author": {
+      "login": "rxin"
+    },
+    "body": "yea i think this is fine\n",
+    "commit": "0d45fbc9e41c8dc2fffd58a0a48c19a6d9dafdd8",
+    "createdAt": "2014-10-11T05:41:02Z",
+    "diffHunk": "@@ -575,16 +575,49 @@ trait JavaRDDLike[T, This <: JavaRDDLike[T, This]] extends Serializable {\n   def name(): String = rdd.name\n \n   /**\n-   * :: Experimental ::\n-   * The asynchronous version of the foreach action.\n-   *\n-   * @param f the function to apply to all the elements of the RDD\n-   * @return a FutureAction for the action\n+   * The asynchronous version of `count`, which returns a\n+   * future for counting the number of elements in this RDD.\n    */\n-  @Experimental\n-  def foreachAsync(f: VoidFunction[T]): FutureAction[Unit] = {",
+    "line": 39
+  }],
+  "prId": 2760
+}, {
+  "comments": [{
+    "author": {
+      "login": "rxin"
+    },
+    "body": "an extra import?\n",
+    "commit": "0d45fbc9e41c8dc2fffd58a0a48c19a6d9dafdd8",
+    "createdAt": "2014-10-13T20:39:50Z",
+    "diffHunk": "@@ -17,6 +17,7 @@\n \n package org.apache.spark.api.java\n \n+import java.util"
+  }, {
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "Good catch; fixed.\n",
+    "commit": "0d45fbc9e41c8dc2fffd58a0a48c19a6d9dafdd8",
+    "createdAt": "2014-10-14T18:39:02Z",
+    "diffHunk": "@@ -17,6 +17,7 @@\n \n package org.apache.spark.api.java\n \n+import java.util"
+  }],
+  "prId": 2760
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Would it be better to add this import at the top of the class (or together with the other imports)?\n",
+    "commit": "0d45fbc9e41c8dc2fffd58a0a48c19a6d9dafdd8",
+    "createdAt": "2014-10-14T19:59:03Z",
+    "diffHunk": "@@ -575,16 +574,49 @@ trait JavaRDDLike[T, This <: JavaRDDLike[T, This]] extends Serializable {\n   def name(): String = rdd.name\n \n   /**\n-   * :: Experimental ::\n-   * The asynchronous version of the foreach action.\n-   *\n-   * @param f the function to apply to all the elements of the RDD\n-   * @return a FutureAction for the action\n+   * The asynchronous version of `count`, which returns a\n+   * future for counting the number of elements in this RDD.\n    */\n-  @Experimental\n-  def foreachAsync(f: VoidFunction[T]): FutureAction[Unit] = {\n+  def countAsync(): JavaFutureAction[JLong] = {\n+    import org.apache.spark.SparkContext._"
+  }],
+  "prId": 2760
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "I wonder if `x.asJava` would be more efficient by avoiding the copy.\n",
+    "commit": "0d45fbc9e41c8dc2fffd58a0a48c19a6d9dafdd8",
+    "createdAt": "2014-10-14T20:00:56Z",
+    "diffHunk": "@@ -575,16 +574,49 @@ trait JavaRDDLike[T, This <: JavaRDDLike[T, This]] extends Serializable {\n   def name(): String = rdd.name\n \n   /**\n-   * :: Experimental ::\n-   * The asynchronous version of the foreach action.\n-   *\n-   * @param f the function to apply to all the elements of the RDD\n-   * @return a FutureAction for the action\n+   * The asynchronous version of `count`, which returns a\n+   * future for counting the number of elements in this RDD.\n    */\n-  @Experimental\n-  def foreachAsync(f: VoidFunction[T]): FutureAction[Unit] = {\n+  def countAsync(): JavaFutureAction[JLong] = {\n+    import org.apache.spark.SparkContext._\n+    new JavaFutureActionWrapper[Long, JLong](rdd.countAsync(), x => new JLong(x))\n+  }\n+\n+  /**\n+   * The asynchronous version of `collect`, which returns a future for\n+   * retrieving an array containing all of the elements in this RDD.\n+   */\n+  def collectAsync(): JavaFutureAction[JList[T]] = {\n+    import org.apache.spark.SparkContext._\n+    new JavaFutureActionWrapper(rdd.collectAsync(), (x: Seq[T]) => new java.util.ArrayList(x))"
+  }],
+  "prId": 2760
+}]

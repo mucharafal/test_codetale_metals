@@ -1,0 +1,55 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "colorant"
+    },
+    "body": "should this handler run on separate EventLoopGroup? since GetBlockData might block.\n",
+    "commit": "bdab2c74111c8bce382323f68732f87ca9b080a9",
+    "createdAt": "2014-09-17T08:51:47Z",
+    "diffHunk": "@@ -121,18 +91,18 @@ class BlockServer(conf: NettyConfig, dataProvider: BlockDataProvider) extends Lo\n       bootstrap.option[java.lang.Integer](ChannelOption.SO_BACKLOG, backLog)\n     }\n     conf.receiveBuf.foreach { receiveBuf =>\n-      bootstrap.option[java.lang.Integer](ChannelOption.SO_RCVBUF, receiveBuf)\n+      bootstrap.childOption[java.lang.Integer](ChannelOption.SO_RCVBUF, receiveBuf)\n     }\n     conf.sendBuf.foreach { sendBuf =>\n-      bootstrap.option[java.lang.Integer](ChannelOption.SO_SNDBUF, sendBuf)\n+      bootstrap.childOption[java.lang.Integer](ChannelOption.SO_SNDBUF, sendBuf)\n     }\n \n     bootstrap.childHandler(new ChannelInitializer[SocketChannel] {\n       override def initChannel(ch: SocketChannel): Unit = {\n         ch.pipeline\n-          .addLast(\"frameDecoder\", new LineBasedFrameDecoder(1024))  // max block id length 1024\n-          .addLast(\"stringDecoder\", new StringDecoder(CharsetUtil.UTF_8))\n-          .addLast(\"blockHeaderEncoder\", new BlockHeaderEncoder)\n+          .addLast(\"frameDecoder\", ProtocolUtils.createFrameDecoder())\n+          .addLast(\"clientRequestDecoder\", new ClientRequestDecoder)\n+          .addLast(\"serverResponseEncoder\", new ServerResponseEncoder)\n           .addLast(\"handler\", new BlockServerHandler(dataProvider))",
+    "line": 132
+  }],
+  "prId": 2330
+}, {
+  "comments": [{
+    "author": {
+      "login": "uce"
+    },
+    "body": "I don't know if it's on purpose, but both send and receive buffer size options in `NettyConfig` use the same config key `spark.shuffle.io.sendBuffer`, so you might set both at the same time here.\n",
+    "commit": "bdab2c74111c8bce382323f68732f87ca9b080a9",
+    "createdAt": "2014-09-30T12:45:51Z",
+    "diffHunk": "@@ -121,18 +83,18 @@ class BlockServer(conf: NettyConfig, dataProvider: BlockDataProvider) extends Lo\n       bootstrap.option[java.lang.Integer](ChannelOption.SO_BACKLOG, backLog)\n     }\n     conf.receiveBuf.foreach { receiveBuf =>\n-      bootstrap.option[java.lang.Integer](ChannelOption.SO_RCVBUF, receiveBuf)\n+      bootstrap.childOption[java.lang.Integer](ChannelOption.SO_RCVBUF, receiveBuf)\n     }\n     conf.sendBuf.foreach { sendBuf =>\n-      bootstrap.option[java.lang.Integer](ChannelOption.SO_SNDBUF, sendBuf)\n+      bootstrap.childOption[java.lang.Integer](ChannelOption.SO_SNDBUF, sendBuf)",
+    "line": 120
+  }, {
+    "author": {
+      "login": "rxin"
+    },
+    "body": "oops - thanks for catching that!\n",
+    "commit": "bdab2c74111c8bce382323f68732f87ca9b080a9",
+    "createdAt": "2014-09-30T19:27:52Z",
+    "diffHunk": "@@ -121,18 +83,18 @@ class BlockServer(conf: NettyConfig, dataProvider: BlockDataProvider) extends Lo\n       bootstrap.option[java.lang.Integer](ChannelOption.SO_BACKLOG, backLog)\n     }\n     conf.receiveBuf.foreach { receiveBuf =>\n-      bootstrap.option[java.lang.Integer](ChannelOption.SO_RCVBUF, receiveBuf)\n+      bootstrap.childOption[java.lang.Integer](ChannelOption.SO_RCVBUF, receiveBuf)\n     }\n     conf.sendBuf.foreach { sendBuf =>\n-      bootstrap.option[java.lang.Integer](ChannelOption.SO_SNDBUF, sendBuf)\n+      bootstrap.childOption[java.lang.Integer](ChannelOption.SO_SNDBUF, sendBuf)",
+    "line": 120
+  }],
+  "prId": 2330
+}, {
+  "comments": [{
+    "author": {
+      "login": "uce"
+    },
+    "body": "If you keep both boss and worker group the same, I think it's sufficient to just shutdown one of the two in `close()`. But maybe it's more future proof to keep it as it is. ;)\n",
+    "commit": "bdab2c74111c8bce382323f68732f87ca9b080a9",
+    "createdAt": "2014-09-30T12:47:48Z",
+    "diffHunk": "@@ -74,42 +54,24 @@ class BlockServer(conf: NettyConfig, dataProvider: BlockDataProvider) extends Lo\n   /** Initialize the server. */\n   private def init(): Unit = {\n     bootstrap = new ServerBootstrap\n-    val bossThreadFactory = Utils.namedThreadFactory(\"spark-shuffle-server-boss\")\n-    val workerThreadFactory = Utils.namedThreadFactory(\"spark-shuffle-server-worker\")\n+    val threadFactory = Utils.namedThreadFactory(\"spark-netty-server\")\n \n     // Use only one thread to accept connections, and 2 * num_cores for worker.\n     def initNio(): Unit = {\n-      val bossGroup = new NioEventLoopGroup(1, bossThreadFactory)\n-      val workerGroup = new NioEventLoopGroup(0, workerThreadFactory)\n-      workerGroup.setIoRatio(conf.ioRatio)\n+      val bossGroup = new NioEventLoopGroup(conf.serverThreads, threadFactory)\n+      val workerGroup = bossGroup\n       bootstrap.group(bossGroup, workerGroup).channel(classOf[NioServerSocketChannel])\n     }\n-    def initOio(): Unit = {\n-      val bossGroup = new OioEventLoopGroup(1, bossThreadFactory)\n-      val workerGroup = new OioEventLoopGroup(0, workerThreadFactory)\n-      bootstrap.group(bossGroup, workerGroup).channel(classOf[OioServerSocketChannel])\n-    }\n     def initEpoll(): Unit = {\n-      val bossGroup = new EpollEventLoopGroup(1, bossThreadFactory)\n-      val workerGroup = new EpollEventLoopGroup(0, workerThreadFactory)\n-      workerGroup.setIoRatio(conf.ioRatio)\n+      val bossGroup = new EpollEventLoopGroup(conf.serverThreads, threadFactory)\n+      val workerGroup = bossGroup",
+    "line": 89
+  }, {
+    "author": {
+      "login": "rxin"
+    },
+    "body": "Good point. And yes too, very likely we might separate them in the future.\n",
+    "commit": "bdab2c74111c8bce382323f68732f87ca9b080a9",
+    "createdAt": "2014-09-30T19:25:54Z",
+    "diffHunk": "@@ -74,42 +54,24 @@ class BlockServer(conf: NettyConfig, dataProvider: BlockDataProvider) extends Lo\n   /** Initialize the server. */\n   private def init(): Unit = {\n     bootstrap = new ServerBootstrap\n-    val bossThreadFactory = Utils.namedThreadFactory(\"spark-shuffle-server-boss\")\n-    val workerThreadFactory = Utils.namedThreadFactory(\"spark-shuffle-server-worker\")\n+    val threadFactory = Utils.namedThreadFactory(\"spark-netty-server\")\n \n     // Use only one thread to accept connections, and 2 * num_cores for worker.\n     def initNio(): Unit = {\n-      val bossGroup = new NioEventLoopGroup(1, bossThreadFactory)\n-      val workerGroup = new NioEventLoopGroup(0, workerThreadFactory)\n-      workerGroup.setIoRatio(conf.ioRatio)\n+      val bossGroup = new NioEventLoopGroup(conf.serverThreads, threadFactory)\n+      val workerGroup = bossGroup\n       bootstrap.group(bossGroup, workerGroup).channel(classOf[NioServerSocketChannel])\n     }\n-    def initOio(): Unit = {\n-      val bossGroup = new OioEventLoopGroup(1, bossThreadFactory)\n-      val workerGroup = new OioEventLoopGroup(0, workerThreadFactory)\n-      bootstrap.group(bossGroup, workerGroup).channel(classOf[OioServerSocketChannel])\n-    }\n     def initEpoll(): Unit = {\n-      val bossGroup = new EpollEventLoopGroup(1, bossThreadFactory)\n-      val workerGroup = new EpollEventLoopGroup(0, workerThreadFactory)\n-      workerGroup.setIoRatio(conf.ioRatio)\n+      val bossGroup = new EpollEventLoopGroup(conf.serverThreads, threadFactory)\n+      val workerGroup = bossGroup",
+    "line": 89
+  }],
+  "prId": 2330
+}]

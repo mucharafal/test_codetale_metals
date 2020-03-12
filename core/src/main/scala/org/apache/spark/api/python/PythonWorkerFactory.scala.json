@@ -1,0 +1,53 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "felixcheung"
+    },
+    "body": "generally, I thought we use the name \"command\" as what we call the thing to execute ",
+    "commit": "fc658034639c1aa56ff5b9a44624cad05377fe51",
+    "createdAt": "2018-01-05T07:20:28Z",
+    "diffHunk": "@@ -34,17 +34,25 @@ private[spark] class PythonWorkerFactory(pythonExec: String, envVars: Map[String\n \n   import PythonWorkerFactory._\n \n-  // Because forking processes from Java is expensive, we prefer to launch a single Python daemon\n-  // (pyspark/daemon.py) and tell it to fork new workers for our tasks. This daemon currently\n-  // only works on UNIX-based systems now because it uses signals for child management, so we can\n-  // also fall back to launching workers (pyspark/worker.py) directly.\n+  // Because forking processes from Java is expensive, we prefer to launch a single Python daemon,\n+  // pyspark/daemon.py (by default) and tell it to fork new workers for our tasks. This daemon\n+  // currently only works on UNIX-based systems now because it uses signals for child management,\n+  // so we can also fall back to launching workers, pyspark/worker.py (by default) directly.\n   val useDaemon = {\n     val useDaemonEnabled = SparkEnv.get.conf.getBoolean(\"spark.python.use.daemon\", true)\n \n     // This flag is ignored on Windows as it's unable to fork.\n     !System.getProperty(\"os.name\").startsWith(\"Windows\") && useDaemonEnabled\n   }\n \n+  // This configuration indicates the module to run the daemon to execute its Python workers.\n+  val daemonModule = SparkEnv.get.conf.get(\"spark.python.daemon.module\", \"pyspark.daemon\")"
+  }, {
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "Ah, yup that's true in general. But please let me stick to \"module\" here as that's what we execute (`python -m`) describes:\r\n\r\n```\r\npython --help\r\n...\r\n-m mod : run library module as a script (terminates option list)\r\n...\r\n```\r\n",
+    "commit": "fc658034639c1aa56ff5b9a44624cad05377fe51",
+    "createdAt": "2018-01-06T09:24:51Z",
+    "diffHunk": "@@ -34,17 +34,25 @@ private[spark] class PythonWorkerFactory(pythonExec: String, envVars: Map[String\n \n   import PythonWorkerFactory._\n \n-  // Because forking processes from Java is expensive, we prefer to launch a single Python daemon\n-  // (pyspark/daemon.py) and tell it to fork new workers for our tasks. This daemon currently\n-  // only works on UNIX-based systems now because it uses signals for child management, so we can\n-  // also fall back to launching workers (pyspark/worker.py) directly.\n+  // Because forking processes from Java is expensive, we prefer to launch a single Python daemon,\n+  // pyspark/daemon.py (by default) and tell it to fork new workers for our tasks. This daemon\n+  // currently only works on UNIX-based systems now because it uses signals for child management,\n+  // so we can also fall back to launching workers, pyspark/worker.py (by default) directly.\n   val useDaemon = {\n     val useDaemonEnabled = SparkEnv.get.conf.getBoolean(\"spark.python.use.daemon\", true)\n \n     // This flag is ignored on Windows as it's unable to fork.\n     !System.getProperty(\"os.name\").startsWith(\"Windows\") && useDaemonEnabled\n   }\n \n+  // This configuration indicates the module to run the daemon to execute its Python workers.\n+  val daemonModule = SparkEnv.get.conf.get(\"spark.python.daemon.module\", \"pyspark.daemon\")"
+  }],
+  "prId": 20151
+}, {
+  "comments": [{
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "Just double checked it shows the log only when the configuration is explicitly set:\r\n\r\n```\r\n18/01/10 21:23:24 INFO PythonWorkerFactory: Python daemon module in PySpark is set to [pyspark.daemon] in\r\n 'spark.python.daemon.module', using this to start the daemon up. Note that this configuration only has an \r\neffect when 'spark.python.use.daemon' is enabled and the platform is not Windows.\r\n```",
+    "commit": "fc658034639c1aa56ff5b9a44624cad05377fe51",
+    "createdAt": "2018-01-10T12:25:21Z",
+    "diffHunk": "@@ -34,17 +34,39 @@ private[spark] class PythonWorkerFactory(pythonExec: String, envVars: Map[String\n \n   import PythonWorkerFactory._\n \n-  // Because forking processes from Java is expensive, we prefer to launch a single Python daemon\n-  // (pyspark/daemon.py) and tell it to fork new workers for our tasks. This daemon currently\n-  // only works on UNIX-based systems now because it uses signals for child management, so we can\n-  // also fall back to launching workers (pyspark/worker.py) directly.\n+  // Because forking processes from Java is expensive, we prefer to launch a single Python daemon,\n+  // pyspark/daemon.py (by default) and tell it to fork new workers for our tasks. This daemon\n+  // currently only works on UNIX-based systems now because it uses signals for child management,\n+  // so we can also fall back to launching workers, pyspark/worker.py (by default) directly.\n   val useDaemon = {\n     val useDaemonEnabled = SparkEnv.get.conf.getBoolean(\"spark.python.use.daemon\", true)\n \n     // This flag is ignored on Windows as it's unable to fork.\n     !System.getProperty(\"os.name\").startsWith(\"Windows\") && useDaemonEnabled\n   }\n \n+  // WARN: Both configurations, 'spark.python.daemon.module' and 'spark.python.worker.module' are\n+  // for very advanced users and they are experimental. This should be considered\n+  // as expert-only option, and shouldn't be used before knowing what it means exactly.\n+\n+  // This configuration indicates the module to run the daemon to execute its Python workers.\n+  val daemonModule = SparkEnv.get.conf.getOption(\"spark.python.daemon.module\").map { value =>\n+    logInfo(\n+      s\"Python daemon module in PySpark is set to [$value] in 'spark.python.daemon.module', \" +\n+      \"using this to start the daemon up. Note that this configuration only has an effect when \" +\n+      \"'spark.python.use.daemon' is enabled and the platform is not Windows.\")",
+    "line": 28
+  }],
+  "prId": 20151
+}, {
+  "comments": [{
+    "author": {
+      "login": "viirya"
+    },
+    "body": "Do we need to restrict the module's package to only allow something like `pyspark.*`?",
+    "commit": "fc658034639c1aa56ff5b9a44624cad05377fe51",
+    "createdAt": "2018-01-10T22:32:57Z",
+    "diffHunk": "@@ -34,17 +34,39 @@ private[spark] class PythonWorkerFactory(pythonExec: String, envVars: Map[String\n \n   import PythonWorkerFactory._\n \n-  // Because forking processes from Java is expensive, we prefer to launch a single Python daemon\n-  // (pyspark/daemon.py) and tell it to fork new workers for our tasks. This daemon currently\n-  // only works on UNIX-based systems now because it uses signals for child management, so we can\n-  // also fall back to launching workers (pyspark/worker.py) directly.\n+  // Because forking processes from Java is expensive, we prefer to launch a single Python daemon,\n+  // pyspark/daemon.py (by default) and tell it to fork new workers for our tasks. This daemon\n+  // currently only works on UNIX-based systems now because it uses signals for child management,\n+  // so we can also fall back to launching workers, pyspark/worker.py (by default) directly.\n   val useDaemon = {\n     val useDaemonEnabled = SparkEnv.get.conf.getBoolean(\"spark.python.use.daemon\", true)\n \n     // This flag is ignored on Windows as it's unable to fork.\n     !System.getProperty(\"os.name\").startsWith(\"Windows\") && useDaemonEnabled\n   }\n \n+  // WARN: Both configurations, 'spark.python.daemon.module' and 'spark.python.worker.module' are\n+  // for very advanced users and they are experimental. This should be considered\n+  // as expert-only option, and shouldn't be used before knowing what it means exactly.\n+\n+  // This configuration indicates the module to run the daemon to execute its Python workers.\n+  val daemonModule = SparkEnv.get.conf.getOption(\"spark.python.daemon.module\").map { value =>",
+    "line": 24
+  }, {
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "Hm, actually we could check like .. if it's empty string too. I wrote \"shouldn't be used before knowing what it means exactly.\" above. So, I think it's fine.",
+    "commit": "fc658034639c1aa56ff5b9a44624cad05377fe51",
+    "createdAt": "2018-01-11T04:41:51Z",
+    "diffHunk": "@@ -34,17 +34,39 @@ private[spark] class PythonWorkerFactory(pythonExec: String, envVars: Map[String\n \n   import PythonWorkerFactory._\n \n-  // Because forking processes from Java is expensive, we prefer to launch a single Python daemon\n-  // (pyspark/daemon.py) and tell it to fork new workers for our tasks. This daemon currently\n-  // only works on UNIX-based systems now because it uses signals for child management, so we can\n-  // also fall back to launching workers (pyspark/worker.py) directly.\n+  // Because forking processes from Java is expensive, we prefer to launch a single Python daemon,\n+  // pyspark/daemon.py (by default) and tell it to fork new workers for our tasks. This daemon\n+  // currently only works on UNIX-based systems now because it uses signals for child management,\n+  // so we can also fall back to launching workers, pyspark/worker.py (by default) directly.\n   val useDaemon = {\n     val useDaemonEnabled = SparkEnv.get.conf.getBoolean(\"spark.python.use.daemon\", true)\n \n     // This flag is ignored on Windows as it's unable to fork.\n     !System.getProperty(\"os.name\").startsWith(\"Windows\") && useDaemonEnabled\n   }\n \n+  // WARN: Both configurations, 'spark.python.daemon.module' and 'spark.python.worker.module' are\n+  // for very advanced users and they are experimental. This should be considered\n+  // as expert-only option, and shouldn't be used before knowing what it means exactly.\n+\n+  // This configuration indicates the module to run the daemon to execute its Python workers.\n+  val daemonModule = SparkEnv.get.conf.getOption(\"spark.python.daemon.module\").map { value =>",
+    "line": 24
+  }],
+  "prId": 20151
+}]

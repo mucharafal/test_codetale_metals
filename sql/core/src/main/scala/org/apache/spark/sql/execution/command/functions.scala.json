@@ -1,0 +1,23 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "maropu"
+    },
+    "body": "How about this?\r\n```\r\n        // Checks if the given resources exist\r\n        val hadoopConf = sparkSession.sparkContext.hadoopConfiguration\r\n        val nonExistentResources = resources.filter { r =>\r\n          val path = new Path(r.uri)\r\n          !path.getFileSystem(hadoopConf).exists(path)\r\n        }\r\n        if (nonExistentResources.nonEmpty) {\r\n          throw new AnalysisException(s\"Resources not found: ${nonExistentResources.mkString(\",\")}\")\r\n        }\r\n```\r\nbtw, this check should be placed in the start of  `CreateFunctionCommand.run`?",
+    "commit": "eddf3fea34a029ac255cc76be5fd2c1776eca796",
+    "createdAt": "2019-08-10T04:33:10Z",
+    "diffHunk": "@@ -88,6 +98,7 @@ case class CreateFunctionCommand(\n         // For a permanent, we will store the metadata into underlying external catalog.\n         // This function will be loaded into the FunctionRegistry when a query uses it.\n         // We do not load it into FunctionRegistry right now.\n+        checkIfResourceExists"
+  }],
+  "prId": 25399
+}, {
+  "comments": [{
+    "author": {
+      "login": "dilipbiswal"
+    },
+    "body": "Previously we used to load the function resources. We don't need to do that any more ? Is it done some place else ? If so, we need to adjust the comment above.",
+    "commit": "eddf3fea34a029ac255cc76be5fd2c1776eca796",
+    "createdAt": "2019-08-10T05:23:30Z",
+    "diffHunk": "@@ -75,9 +76,18 @@ case class CreateFunctionCommand(\n   override def run(sparkSession: SparkSession): Seq[Row] = {\n     val catalog = sparkSession.sessionState.catalog\n     val func = CatalogFunction(FunctionIdentifier(functionName, databaseName), className, resources)\n+    // throws Exception if it does not find the resource\n+    def checkIfResourceExists = {\n+      resources.foreach(\n+        resource =>\n+          if (!Utils.isFileExists(resource.uri, sparkSession.sparkContext.hadoopConfiguration)) {\n+            throw new AnalysisException(s\" Could not find the resource ${resource.uri}\")\n+          }\n+      )\n+    }\n     if (isTemp) {\n       // We first load resources and then put the builder in the function registry.\n-      catalog.loadFunctionResources(resources)\n+      checkIfResourceExists"
+  }],
+  "prId": 25399
+}]

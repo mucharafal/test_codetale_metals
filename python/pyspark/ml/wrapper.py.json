@@ -1,0 +1,52 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "yanboliang"
+    },
+    "body": "Unify the construction of `Model` and `Estimator`. `Model` can be instantiated without argument which is used by `load`.\n",
+    "commit": "7334be978468cee2bb4b9e5b13e296392080246b",
+    "createdAt": "2016-01-26T15:18:53Z",
+    "diffHunk": "@@ -159,15 +151,16 @@ class JavaModel(Model, JavaTransformer):\n \n     __metaclass__ = ABCMeta\n \n-    def __init__(self, java_model):\n+    def __init__(self, java_model=None):",
+    "line": 28
+  }, {
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "Can you add a note in the doc to explain this?\n",
+    "commit": "7334be978468cee2bb4b9e5b13e296392080246b",
+    "createdAt": "2016-01-26T21:31:18Z",
+    "diffHunk": "@@ -159,15 +151,16 @@ class JavaModel(Model, JavaTransformer):\n \n     __metaclass__ = ABCMeta\n \n-    def __init__(self, java_model):\n+    def __init__(self, java_model=None):",
+    "line": 28
+  }],
+  "prId": 10469
+}, {
+  "comments": [{
+    "author": {
+      "login": "yanboliang"
+    },
+    "body": "We should also copy `parent` from peer java object if the python object is instantiated by `load`. That we can keep the consistency of `uid` between java and python object.\n",
+    "commit": "7334be978468cee2bb4b9e5b13e296392080246b",
+    "createdAt": "2016-01-26T15:21:50Z",
+    "diffHunk": "@@ -82,13 +71,16 @@ def _transfer_params_to_java(self):\n                 pair = self._make_java_param_pair(param, paramMap[param])\n                 self._java_obj.set(pair)\n \n-    def _transfer_params_from_java(self):\n+    def _transfer_params_from_java(self, withParent=False):\n         \"\"\"\n         Transforms the embedded params from the companion Java object.\n         \"\"\"\n         sc = SparkContext._active_spark_context\n+        parent = self._java_obj.uid()\n         for param in self.params:\n             if self._java_obj.hasParam(param.name):\n+                if withParent:\n+                    param.parent = parent"
+  }],
+  "prId": 10469
+}, {
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "I think it'd be better to set the Param.parent field for each Param in load().  I don't think we'd reuse this functionality elsewhere, so it would be good to isolate to load().\n",
+    "commit": "7334be978468cee2bb4b9e5b13e296392080246b",
+    "createdAt": "2016-01-26T21:31:16Z",
+    "diffHunk": "@@ -82,13 +71,16 @@ def _transfer_params_to_java(self):\n                 pair = self._make_java_param_pair(param, paramMap[param])\n                 self._java_obj.set(pair)\n \n-    def _transfer_params_from_java(self):\n+    def _transfer_params_from_java(self, withParent=False):"
+  }, {
+    "author": {
+      "login": "yanboliang"
+    },
+    "body": "I tried to put setting `Param.parent` field into `load()`, then we will add code snippet to `JavaMLReader.load()` likes:\n\n``` Scala\nfor param in self._instance.params:\n    value = self._instance._paramMap[param]\n    self._instance._paramMap.pop(param)\n    param.parent = self._instance.uid\n    self._instance._paramMap[param] = value\n```\n\nIt will first pop elements from the `_paramMap` dict and then push new ones, I think it's inefficient.\nAnd this code will operate on `_paramMap` which is the ML instance's internal variable, I think it's more suitable to operate in the ML instance member function. \nSo I vote to do this work at `_transfer_params_from_java` or we can add a new function there to do the similar work. I'm open to hear your thoughts. @jkbradley \n",
+    "commit": "7334be978468cee2bb4b9e5b13e296392080246b",
+    "createdAt": "2016-01-27T07:55:22Z",
+    "diffHunk": "@@ -82,13 +71,16 @@ def _transfer_params_to_java(self):\n                 pair = self._make_java_param_pair(param, paramMap[param])\n                 self._java_obj.set(pair)\n \n-    def _transfer_params_from_java(self):\n+    def _transfer_params_from_java(self, withParent=False):"
+  }],
+  "prId": 10469
+}]

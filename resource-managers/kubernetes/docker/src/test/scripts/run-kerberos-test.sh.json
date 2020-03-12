@@ -1,0 +1,13 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Adding files to the classpath does not do anything.\r\n\r\n```\r\n$ scala -cp /etc/krb5.conf\r\nscala> getClass().getResource(\"/krb5.conf\")\r\nres0: java.net.URL = null\r\n\r\n$ scala -cp /etc\r\nscala> getClass().getResource(\"/krb5.conf\")\r\nres0: java.net.URL = file:/etc/krb5.conf\r\n```\r\n\r\nSo this seems not needed. Also because I'd expect spark-submit or the k8s backend code to add the hadoop conf to the driver's classpath somehow.",
+    "commit": "0de8c87f971d9dccb681678faffe92231a1f0c38",
+    "createdAt": "2018-11-01T23:09:18Z",
+    "diffHunk": "@@ -0,0 +1,40 @@\n+#!/usr/bin/env bash\n+#\n+# Licensed to the Apache Software Foundation (ASF) under one or more\n+# contributor license agreements.  See the NOTICE file distributed with\n+# this work for additional information regarding copyright ownership.\n+# The ASF licenses this file to You under the Apache License, Version 2.0\n+# (the \"License\"); you may not use this file except in compliance with\n+# the License.  You may obtain a copy of the License at\n+#\n+#    http://www.apache.org/licenses/LICENSE-2.0\n+#\n+# Unless required by applicable law or agreed to in writing, software\n+# distributed under the License is distributed on an \"AS IS\" BASIS,\n+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+# See the License for the specific language governing permissions and\n+# limitations under the License.\n+#\n+sed -i -e 's/#//' -e 's/default_ccache_name/# default_ccache_name/' /etc/krb5.conf\n+export HADOOP_OPTS=\"-Djava.net.preferIPv4Stack=true -Dsun.security.krb5.debug=true\"\n+export HADOOP_JAAS_DEBUG=true\n+export HADOOP_ROOT_LOGGER=DEBUG,console\n+cp ${TMP_KRB_LOC} /etc/krb5.conf\n+cp ${TMP_CORE_LOC} /opt/spark/hconf/core-site.xml\n+cp ${TMP_HDFS_LOC} /opt/spark/hconf/hdfs-site.xml\n+mkdir -p /etc/krb5.conf.d\n+/opt/spark/bin/spark-submit \\\n+      --deploy-mode cluster \\\n+      --class ${CLASS_NAME} \\\n+      --master k8s://${MASTER_URL} \\\n+      --conf spark.kubernetes.namespace=${NAMESPACE} \\\n+      --conf spark.executor.instances=1 \\\n+      --conf spark.app.name=spark-hdfs \\\n+      --conf spark.driver.extraClassPath=/opt/spark/hconf/core-site.xml:/opt/spark/hconf/hdfs-site.xml:/opt/spark/hconf/yarn-site.xml:/etc/krb5.conf \\",
+    "line": 33
+  }],
+  "prId": 22608
+}]

@@ -1,0 +1,63 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "@tdas, I think there's a bug here because we'll re-assign to `_value` if there are multiple `onCompletes`.  There's also a race in allowing `_value` to be assigned here, since there's a lag between when the `jobWaiter` future completes and when this callback runs.  Fixing this now...\n",
+    "commit": "17edbcd06086b6a8cad922b4c535eb2a6265b2e3",
+    "createdAt": "2015-07-14T05:33:44Z",
+    "diffHunk": "@@ -116,57 +121,32 @@ class SimpleFutureAction[T] private[spark](jobWaiter: JobWaiter[_], resultFunc:\n   }\n \n   override def ready(atMost: Duration)(implicit permit: CanAwait): SimpleFutureAction.this.type = {\n-    if (!atMost.isFinite()) {\n-      awaitResult()\n-    } else jobWaiter.synchronized {\n-      val finishTime = System.currentTimeMillis() + atMost.toMillis\n-      while (!isCompleted) {\n-        val time = System.currentTimeMillis()\n-        if (time >= finishTime) {\n-          throw new TimeoutException\n-        } else {\n-          jobWaiter.wait(finishTime - time)\n-        }\n-      }\n-    }\n+    // This call to the JobWaiter's future will throw an exception if the job failed.\n+    jobWaiter.toFuture.ready(atMost)(permit)\n     this\n   }\n \n   @throws(classOf[Exception])\n   override def result(atMost: Duration)(implicit permit: CanAwait): T = {\n-    ready(atMost)(permit)\n-    awaitResult() match {\n-      case scala.util.Success(res) => res\n-      case scala.util.Failure(e) => throw e\n-    }\n+    // This call to the JobWaiter's future will throw an exception if the job failed.\n+    jobWaiter.toFuture.result(atMost)(permit)\n+    // At this point, we know that the job succeeded so it's safe to evaluate this function:\n+    resultFunc\n   }\n \n-  override def onComplete[U](func: (Try[T]) => U)(implicit executor: ExecutionContext) {\n-    executor.execute(new Runnable {\n-      override def run() {\n-        func(awaitResult())\n-      }\n-    })\n+  override def onComplete[U](func: (Try[T]) => U)(implicit executor: ExecutionContext): Unit = {\n+    jobWaiter.toFuture.onComplete { (jobWaiterResult: Try[Unit]) =>\n+      // If the job succeeded, then evaluate the result function; otherwise, preserve the exception.\n+      _value = jobWaiterResult.map(_ => resultFunc)"
+  }],
+  "prId": 7385
+}, {
+  "comments": [{
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "How about adding `private lazy val _resultFunc = resultFunc` and use `_resultFunc` in this class? This should avoid calling `resultFunc` multiple times.\n",
+    "commit": "17edbcd06086b6a8cad922b4c535eb2a6265b2e3",
+    "createdAt": "2015-07-14T07:01:33Z",
+    "diffHunk": "@@ -116,37 +120,18 @@ class SimpleFutureAction[T] private[spark](jobWaiter: JobWaiter[_], resultFunc:\n   }\n \n   override def ready(atMost: Duration)(implicit permit: CanAwait): SimpleFutureAction.this.type = {\n-    if (!atMost.isFinite()) {\n-      awaitResult()\n-    } else jobWaiter.synchronized {\n-      val finishTime = System.currentTimeMillis() + atMost.toMillis\n-      while (!isCompleted) {\n-        val time = System.currentTimeMillis()\n-        if (time >= finishTime) {\n-          throw new TimeoutException\n-        } else {\n-          jobWaiter.wait(finishTime - time)\n-        }\n-      }\n-    }\n+    jobWaiterFuture.ready(atMost)(permit) // Throws exception if the job failed.\n     this\n   }\n \n   @throws(classOf[Exception])\n   override def result(atMost: Duration)(implicit permit: CanAwait): T = {\n-    ready(atMost)(permit)\n-    awaitResult() match {\n-      case scala.util.Success(res) => res\n-      case scala.util.Failure(e) => throw e\n-    }\n+    jobWaiterFuture.result(atMost)(permit) // Throws exception if the job failed.\n+    resultFunc // This function is safe to evaluate because the job must have succeeded.\n   }\n \n-  override def onComplete[U](func: (Try[T]) => U)(implicit executor: ExecutionContext) {\n-    executor.execute(new Runnable {\n-      override def run() {\n-        func(awaitResult())\n-      }\n-    })\n+  override def onComplete[U](func: (Try[T]) => U)(implicit executor: ExecutionContext): Unit = {\n+    jobWaiterFuture.map { _ => resultFunc }.onComplete(func)"
+  }, {
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "I think that @tdas and I considered this and ended up not doing it because we thought that `resultFunc` would only be computed once, but I suppose it doesn't hurt to be more explicit here.  Even if the current code works, if it's confusing enough to merit a comment then I think we should just be explicit and use a lazy val. I'll update this now to do this.\n",
+    "commit": "17edbcd06086b6a8cad922b4c535eb2a6265b2e3",
+    "createdAt": "2015-07-14T17:27:31Z",
+    "diffHunk": "@@ -116,37 +120,18 @@ class SimpleFutureAction[T] private[spark](jobWaiter: JobWaiter[_], resultFunc:\n   }\n \n   override def ready(atMost: Duration)(implicit permit: CanAwait): SimpleFutureAction.this.type = {\n-    if (!atMost.isFinite()) {\n-      awaitResult()\n-    } else jobWaiter.synchronized {\n-      val finishTime = System.currentTimeMillis() + atMost.toMillis\n-      while (!isCompleted) {\n-        val time = System.currentTimeMillis()\n-        if (time >= finishTime) {\n-          throw new TimeoutException\n-        } else {\n-          jobWaiter.wait(finishTime - time)\n-        }\n-      }\n-    }\n+    jobWaiterFuture.ready(atMost)(permit) // Throws exception if the job failed.\n     this\n   }\n \n   @throws(classOf[Exception])\n   override def result(atMost: Duration)(implicit permit: CanAwait): T = {\n-    ready(atMost)(permit)\n-    awaitResult() match {\n-      case scala.util.Success(res) => res\n-      case scala.util.Failure(e) => throw e\n-    }\n+    jobWaiterFuture.result(atMost)(permit) // Throws exception if the job failed.\n+    resultFunc // This function is safe to evaluate because the job must have succeeded.\n   }\n \n-  override def onComplete[U](func: (Try[T]) => U)(implicit executor: ExecutionContext) {\n-    executor.execute(new Runnable {\n-      override def run() {\n-        func(awaitResult())\n-      }\n-    })\n+  override def onComplete[U](func: (Try[T]) => U)(implicit executor: ExecutionContext): Unit = {\n+    jobWaiterFuture.map { _ => resultFunc }.onComplete(func)"
+  }],
+  "prId": 7385
+}, {
+  "comments": [{
+    "author": {
+      "login": "tdas"
+    },
+    "body": "This part seems like a bad hack to use `awaitResult` to get the result. Rather, there should be a `JobWaiter.jobResult` (make it public), that return `Option[JobResult]` and use that.\n",
+    "commit": "17edbcd06086b6a8cad922b4c535eb2a6265b2e3",
+    "createdAt": "2015-07-14T23:57:28Z",
+    "diffHunk": "@@ -154,17 +143,13 @@ class SimpleFutureAction[T] private[spark](jobWaiter: JobWaiter[_], resultFunc:\n   override def isCancelled: Boolean = _cancelled\n \n   override def value: Option[Try[T]] = {\n-    if (jobWaiter.jobFinished) {\n-      Some(awaitResult())\n-    } else {\n+    if (!isCompleted) {\n       None\n-    }\n-  }\n-\n-  private def awaitResult(): Try[T] = {\n-    jobWaiter.awaitResult() match {\n-      case JobSucceeded => scala.util.Success(resultFunc)\n-      case JobFailed(e: Exception) => scala.util.Failure(e)\n+    } else {\n+      jobWaiter.awaitResult() match {"
+  }],
+  "prId": 7385
+}, {
+  "comments": [{
+    "author": {
+      "login": "rxin"
+    },
+    "body": "what thread does this use? does it use some implicit thread pool?\n",
+    "commit": "17edbcd06086b6a8cad922b4c535eb2a6265b2e3",
+    "createdAt": "2015-07-16T04:05:58Z",
+    "diffHunk": "@@ -116,55 +123,27 @@ class SimpleFutureAction[T] private[spark](jobWaiter: JobWaiter[_], resultFunc:\n   }\n \n   override def ready(atMost: Duration)(implicit permit: CanAwait): SimpleFutureAction.this.type = {\n-    if (!atMost.isFinite()) {\n-      awaitResult()\n-    } else jobWaiter.synchronized {\n-      val finishTime = System.currentTimeMillis() + atMost.toMillis\n-      while (!isCompleted) {\n-        val time = System.currentTimeMillis()\n-        if (time >= finishTime) {\n-          throw new TimeoutException\n-        } else {\n-          jobWaiter.wait(finishTime - time)\n-        }\n-      }\n-    }\n+    jobWaiter.ready(atMost)(permit)\n     this\n   }\n \n   @throws(classOf[Exception])\n   override def result(atMost: Duration)(implicit permit: CanAwait): T = {\n-    ready(atMost)(permit)\n-    awaitResult() match {\n-      case scala.util.Success(res) => res\n-      case scala.util.Failure(e) => throw e\n-    }\n+    jobWaiter.result(atMost)(permit) // Throws exception if the job failed.",
+    "line": 52
+  }, {
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "Let's see... jobWaiter.result delegates to the job waiter's promise.future.result.\n\nHere, I think we have an instance of DefaultPromise, whose `result` (https://github.com/scala/scala/blob/v2.10.4/src/library/scala/concurrent/impl/Promise.scala#L222) is implemented in terms of `ready` (https://github.com/scala/scala/blob/v2.10.4/src/library/scala/concurrent/impl/Promise.scala#L218), which in turn is implemented using the internal `tryAwait` method: https://github.com/scala/scala/blob/v2.10.4/src/library/scala/concurrent/impl/Promise.scala#L194\n\nIt looks like this is implemented by scheduling an `onComplete` callback which updates a latch.  This callback runs on `Future`'s InternalCallbackExecutor: https://github.com/scala/scala/blob/v2.10.4/src/library/scala/concurrent/Future.scala#L590\n",
+    "commit": "17edbcd06086b6a8cad922b4c535eb2a6265b2e3",
+    "createdAt": "2015-07-16T04:37:13Z",
+    "diffHunk": "@@ -116,55 +123,27 @@ class SimpleFutureAction[T] private[spark](jobWaiter: JobWaiter[_], resultFunc:\n   }\n \n   override def ready(atMost: Duration)(implicit permit: CanAwait): SimpleFutureAction.this.type = {\n-    if (!atMost.isFinite()) {\n-      awaitResult()\n-    } else jobWaiter.synchronized {\n-      val finishTime = System.currentTimeMillis() + atMost.toMillis\n-      while (!isCompleted) {\n-        val time = System.currentTimeMillis()\n-        if (time >= finishTime) {\n-          throw new TimeoutException\n-        } else {\n-          jobWaiter.wait(finishTime - time)\n-        }\n-      }\n-    }\n+    jobWaiter.ready(atMost)(permit)\n     this\n   }\n \n   @throws(classOf[Exception])\n   override def result(atMost: Duration)(implicit permit: CanAwait): T = {\n-    ready(atMost)(permit)\n-    awaitResult() match {\n-      case scala.util.Success(res) => res\n-      case scala.util.Failure(e) => throw e\n-    }\n+    jobWaiter.result(atMost)(permit) // Throws exception if the job failed.",
+    "line": 52
+  }],
+  "prId": 7385
+}]

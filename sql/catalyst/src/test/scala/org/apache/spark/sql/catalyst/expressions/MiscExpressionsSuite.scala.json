@@ -1,0 +1,31 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "hvanhovell"
+    },
+    "body": "Can you wrap setting the `stderr` in a `try { ... } finally { ... }`?",
+    "commit": "15262aa035d0cc70c2964b093b6f96d22480207f",
+    "createdAt": "2018-03-08T15:50:09Z",
+    "diffHunk": "@@ -43,4 +45,21 @@ class MiscExpressionsSuite extends SparkFunSuite with ExpressionEvalHelper {\n     checkEvaluation(Length(Uuid()), 36)\n     assert(evaluateWithoutCodegen(Uuid()) !== evaluateWithoutCodegen(Uuid()))\n   }\n+\n+  test(\"PrintToStderr\") {\n+    val errorStream = new java.io.ByteArrayOutputStream()\n+    val systemErr = System.err"
+  }],
+  "prId": 20773
+}, {
+  "comments": [{
+    "author": {
+      "login": "hvanhovell"
+    },
+    "body": "`checkEvaluationWithoutCodegen`?  Shouldn't we use `checkEvaluationWithUnsafeProjection` or `checkEvaluationWithGeneratedMutableProjection`?",
+    "commit": "15262aa035d0cc70c2964b093b6f96d22480207f",
+    "createdAt": "2018-03-08T16:42:14Z",
+    "diffHunk": "@@ -47,18 +47,24 @@ class MiscExpressionsSuite extends SparkFunSuite with ExpressionEvalHelper {\n   }\n \n   test(\"PrintToStderr\") {\n-    val errorStream = new java.io.ByteArrayOutputStream()\n-    val systemErr = System.err\n-    System.setErr(new PrintStream(errorStream))\n     val inputExpr = Literal(1)\n-    // check without codegen\n-    checkEvaluationWithoutCodegen(PrintToStderr(inputExpr), 1)\n-    val outputEval = errorStream.toString\n-    errorStream.reset()\n-    // check with codegen\n-    checkEvaluationWithoutCodegen(PrintToStderr(inputExpr), 1)\n-    val outputCodegen = errorStream.toString\n-    System.setErr(systemErr)\n+    val systemErr = System.err\n+\n+    val (outputEval, outputCodegen) = try {\n+      val errorStream = new java.io.ByteArrayOutputStream()\n+      System.setErr(new PrintStream(errorStream))\n+      // check without codegen\n+      checkEvaluationWithoutCodegen(PrintToStderr(inputExpr), 1)\n+      val outputEval = errorStream.toString\n+      errorStream.reset()\n+      // check with codegen\n+      checkEvaluationWithoutCodegen(PrintToStderr(inputExpr), 1)"
+  }, {
+    "author": {
+      "login": "mgaido91"
+    },
+    "body": "yes, sorry, my bad",
+    "commit": "15262aa035d0cc70c2964b093b6f96d22480207f",
+    "createdAt": "2018-03-08T16:45:33Z",
+    "diffHunk": "@@ -47,18 +47,24 @@ class MiscExpressionsSuite extends SparkFunSuite with ExpressionEvalHelper {\n   }\n \n   test(\"PrintToStderr\") {\n-    val errorStream = new java.io.ByteArrayOutputStream()\n-    val systemErr = System.err\n-    System.setErr(new PrintStream(errorStream))\n     val inputExpr = Literal(1)\n-    // check without codegen\n-    checkEvaluationWithoutCodegen(PrintToStderr(inputExpr), 1)\n-    val outputEval = errorStream.toString\n-    errorStream.reset()\n-    // check with codegen\n-    checkEvaluationWithoutCodegen(PrintToStderr(inputExpr), 1)\n-    val outputCodegen = errorStream.toString\n-    System.setErr(systemErr)\n+    val systemErr = System.err\n+\n+    val (outputEval, outputCodegen) = try {\n+      val errorStream = new java.io.ByteArrayOutputStream()\n+      System.setErr(new PrintStream(errorStream))\n+      // check without codegen\n+      checkEvaluationWithoutCodegen(PrintToStderr(inputExpr), 1)\n+      val outputEval = errorStream.toString\n+      errorStream.reset()\n+      // check with codegen\n+      checkEvaluationWithoutCodegen(PrintToStderr(inputExpr), 1)"
+  }],
+  "prId": 20773
+}]

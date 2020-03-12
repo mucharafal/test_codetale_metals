@@ -1,0 +1,136 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "Discussed offline. Instead of building filter functions separately, both can be presented by `FileStatus => Boolean`",
+    "commit": "71db855468691b18f9365f70ca376225fc046989",
+    "createdAt": "2019-04-17T21:03:58Z",
+    "diffHunk": "@@ -93,6 +98,68 @@ class BinaryFileFormat extends FileFormat with DataSourceRegister {\n \n     val pathGlobPattern = binaryFileSourceOptions.pathGlobFilter\n \n+    val modificationTimeFilters = new mutable.ListBuffer[Long => Boolean]"
+  }],
+  "prId": 24387
+}, {
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "I would call it `createFilterFunctions` and let it return `Seq[FileStatus => Boolean]`",
+    "commit": "71db855468691b18f9365f70ca376225fc046989",
+    "createdAt": "2019-04-17T21:04:40Z",
+    "diffHunk": "@@ -93,6 +98,68 @@ class BinaryFileFormat extends FileFormat with DataSourceRegister {\n \n     val pathGlobPattern = binaryFileSourceOptions.pathGlobFilter\n \n+    val modificationTimeFilters = new mutable.ListBuffer[Long => Boolean]\n+    val lengthFilters = new mutable.ListBuffer[Long => Boolean]\n+\n+    def parseFilter(filter: Filter): Unit = {"
+  }],
+  "prId": 24387
+}, {
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "Then here becomes one line `filterFuncs.forall(f => f(fileStatus))`",
+    "commit": "71db855468691b18f9365f70ca376225fc046989",
+    "createdAt": "2019-04-17T21:05:30Z",
+    "diffHunk": "@@ -104,35 +171,43 @@ class BinaryFileFormat extends FileFormat with DataSourceRegister {\n         val fileStatus = fs.getFileStatus(fsPath)\n         val length = fileStatus.getLen()\n         val modificationTime = fileStatus.getModificationTime()\n-        val stream = fs.open(fsPath)\n-\n-        val content = try {\n-          ByteStreams.toByteArray(stream)\n-        } finally {\n-          Closeables.close(stream, true)\n-        }\n-\n-        val fullOutput = dataSchema.map { f =>\n-          AttributeReference(f.name, f.dataType, f.nullable, f.metadata)()\n-        }\n-        val requiredOutput = fullOutput.filter { a =>\n-          requiredSchema.fieldNames.contains(a.name)\n-        }\n \n-        // TODO: Add column pruning\n-        // currently it still read the file content even if content column is not required.\n-        val requiredColumns = GenerateUnsafeProjection.generate(requiredOutput, fullOutput)\n-\n-        val internalRow = InternalRow(\n-          content,\n-          InternalRow(\n+        if ("
+  }],
+  "prId": 24387
+}, {
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "Please update the API doc too.",
+    "commit": "71db855468691b18f9365f70ca376225fc046989",
+    "createdAt": "2019-04-17T21:06:12Z",
+    "diffHunk": "@@ -160,8 +235,10 @@ object BinaryFileFormat {\n    *    - length (LongType): The length of the file in bytes.\n    */\n   val schema = StructType(\n-    StructField(\"content\", BinaryType, true) ::\n-      StructField(\"status\", fileStatusSchema, false) :: Nil)\n+    StructField(\"path\", StringType, false) ::\n+    StructField(\"modificationTime\", TimestampType, false) ::"
+  }],
+  "prId": 24387
+}, {
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "`case And(left, right) =>`",
+    "commit": "71db855468691b18f9365f70ca376225fc046989",
+    "createdAt": "2019-04-18T04:03:11Z",
+    "diffHunk": "@@ -142,26 +151,46 @@ class BinaryFileFormat extends FileFormat with DataSourceRegister {\n \n object BinaryFileFormat {\n \n-  private val fileStatusSchema = StructType(\n-    StructField(\"path\", StringType, false) ::\n-      StructField(\"modificationTime\", TimestampType, false) ::\n-      StructField(\"length\", LongType, false) :: Nil)\n-\n   /**\n    * Schema for the binary file data source.\n    *\n    * Schema:\n+   *  - path (StringType): The path of the file.\n+   *  - modificationTime (TimestampType): The modification time of the file.\n+   *    In some Hadoop FileSystem implementation, this might be unavailable and fallback to some\n+   *    default value.\n+   *  - length (LongType): The length of the file in bytes.\n    *  - content (BinaryType): The content of the file.\n-   *  - status (StructType): The status of the file.\n-   *    - path (StringType): The path of the file.\n-   *    - modificationTime (TimestampType): The modification time of the file.\n-   *      In some Hadoop FileSystem implementation, this might be unavailable and fallback to some\n-   *      default value.\n-   *    - length (LongType): The length of the file in bytes.\n    */\n   val schema = StructType(\n-    StructField(\"content\", BinaryType, true) ::\n-      StructField(\"status\", fileStatusSchema, false) :: Nil)\n+    StructField(\"path\", StringType, false) ::\n+    StructField(\"modificationTime\", TimestampType, false) ::\n+    StructField(\"length\", LongType, false) ::\n+    StructField(\"content\", BinaryType, true) :: Nil)\n+\n+  private[binaryfile] def createFilterFunctions(filter: Filter): Seq[FileStatus => Boolean] = {\n+    filter match {\n+      case andFilter: And =>"
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "shall we support `Or`?",
+    "commit": "71db855468691b18f9365f70ca376225fc046989",
+    "createdAt": "2019-04-18T06:51:20Z",
+    "diffHunk": "@@ -142,26 +151,46 @@ class BinaryFileFormat extends FileFormat with DataSourceRegister {\n \n object BinaryFileFormat {\n \n-  private val fileStatusSchema = StructType(\n-    StructField(\"path\", StringType, false) ::\n-      StructField(\"modificationTime\", TimestampType, false) ::\n-      StructField(\"length\", LongType, false) :: Nil)\n-\n   /**\n    * Schema for the binary file data source.\n    *\n    * Schema:\n+   *  - path (StringType): The path of the file.\n+   *  - modificationTime (TimestampType): The modification time of the file.\n+   *    In some Hadoop FileSystem implementation, this might be unavailable and fallback to some\n+   *    default value.\n+   *  - length (LongType): The length of the file in bytes.\n    *  - content (BinaryType): The content of the file.\n-   *  - status (StructType): The status of the file.\n-   *    - path (StringType): The path of the file.\n-   *    - modificationTime (TimestampType): The modification time of the file.\n-   *      In some Hadoop FileSystem implementation, this might be unavailable and fallback to some\n-   *      default value.\n-   *    - length (LongType): The length of the file in bytes.\n    */\n   val schema = StructType(\n-    StructField(\"content\", BinaryType, true) ::\n-      StructField(\"status\", fileStatusSchema, false) :: Nil)\n+    StructField(\"path\", StringType, false) ::\n+    StructField(\"modificationTime\", TimestampType, false) ::\n+    StructField(\"length\", LongType, false) ::\n+    StructField(\"content\", BinaryType, true) :: Nil)\n+\n+  private[binaryfile] def createFilterFunctions(filter: Filter): Seq[FileStatus => Boolean] = {\n+    filter match {\n+      case andFilter: And =>"
+  }],
+  "prId": 24387
+}, {
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "Instead of group by filter, could you group them by the field name?",
+    "commit": "71db855468691b18f9365f70ca376225fc046989",
+    "createdAt": "2019-04-18T04:03:36Z",
+    "diffHunk": "@@ -142,26 +151,46 @@ class BinaryFileFormat extends FileFormat with DataSourceRegister {\n \n object BinaryFileFormat {\n \n-  private val fileStatusSchema = StructType(\n-    StructField(\"path\", StringType, false) ::\n-      StructField(\"modificationTime\", TimestampType, false) ::\n-      StructField(\"length\", LongType, false) :: Nil)\n-\n   /**\n    * Schema for the binary file data source.\n    *\n    * Schema:\n+   *  - path (StringType): The path of the file.\n+   *  - modificationTime (TimestampType): The modification time of the file.\n+   *    In some Hadoop FileSystem implementation, this might be unavailable and fallback to some\n+   *    default value.\n+   *  - length (LongType): The length of the file in bytes.\n    *  - content (BinaryType): The content of the file.\n-   *  - status (StructType): The status of the file.\n-   *    - path (StringType): The path of the file.\n-   *    - modificationTime (TimestampType): The modification time of the file.\n-   *      In some Hadoop FileSystem implementation, this might be unavailable and fallback to some\n-   *      default value.\n-   *    - length (LongType): The length of the file in bytes.\n    */\n   val schema = StructType(\n-    StructField(\"content\", BinaryType, true) ::\n-      StructField(\"status\", fileStatusSchema, false) :: Nil)\n+    StructField(\"path\", StringType, false) ::\n+    StructField(\"modificationTime\", TimestampType, false) ::\n+    StructField(\"length\", LongType, false) ::\n+    StructField(\"content\", BinaryType, true) :: Nil)\n+\n+  private[binaryfile] def createFilterFunctions(filter: Filter): Seq[FileStatus => Boolean] = {\n+    filter match {\n+      case andFilter: And =>\n+        createFilterFunctions(andFilter.left) ++ createFilterFunctions(andFilter.right)\n+      case LessThan(\"length\", value: Long) =>"
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "+1",
+    "commit": "71db855468691b18f9365f70ca376225fc046989",
+    "createdAt": "2019-04-18T06:48:45Z",
+    "diffHunk": "@@ -142,26 +151,46 @@ class BinaryFileFormat extends FileFormat with DataSourceRegister {\n \n object BinaryFileFormat {\n \n-  private val fileStatusSchema = StructType(\n-    StructField(\"path\", StringType, false) ::\n-      StructField(\"modificationTime\", TimestampType, false) ::\n-      StructField(\"length\", LongType, false) :: Nil)\n-\n   /**\n    * Schema for the binary file data source.\n    *\n    * Schema:\n+   *  - path (StringType): The path of the file.\n+   *  - modificationTime (TimestampType): The modification time of the file.\n+   *    In some Hadoop FileSystem implementation, this might be unavailable and fallback to some\n+   *    default value.\n+   *  - length (LongType): The length of the file in bytes.\n    *  - content (BinaryType): The content of the file.\n-   *  - status (StructType): The status of the file.\n-   *    - path (StringType): The path of the file.\n-   *    - modificationTime (TimestampType): The modification time of the file.\n-   *      In some Hadoop FileSystem implementation, this might be unavailable and fallback to some\n-   *      default value.\n-   *    - length (LongType): The length of the file in bytes.\n    */\n   val schema = StructType(\n-    StructField(\"content\", BinaryType, true) ::\n-      StructField(\"status\", fileStatusSchema, false) :: Nil)\n+    StructField(\"path\", StringType, false) ::\n+    StructField(\"modificationTime\", TimestampType, false) ::\n+    StructField(\"length\", LongType, false) ::\n+    StructField(\"content\", BinaryType, true) :: Nil)\n+\n+  private[binaryfile] def createFilterFunctions(filter: Filter): Seq[FileStatus => Boolean] = {\n+    filter match {\n+      case andFilter: And =>\n+        createFilterFunctions(andFilter.left) ++ createFilterFunctions(andFilter.right)\n+      case LessThan(\"length\", value: Long) =>"
+  }],
+  "prId": 24387
+}, {
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "minor: `Seq` => `Some`",
+    "commit": "71db855468691b18f9365f70ca376225fc046989",
+    "createdAt": "2019-04-18T04:03:47Z",
+    "diffHunk": "@@ -142,26 +151,46 @@ class BinaryFileFormat extends FileFormat with DataSourceRegister {\n \n object BinaryFileFormat {\n \n-  private val fileStatusSchema = StructType(\n-    StructField(\"path\", StringType, false) ::\n-      StructField(\"modificationTime\", TimestampType, false) ::\n-      StructField(\"length\", LongType, false) :: Nil)\n-\n   /**\n    * Schema for the binary file data source.\n    *\n    * Schema:\n+   *  - path (StringType): The path of the file.\n+   *  - modificationTime (TimestampType): The modification time of the file.\n+   *    In some Hadoop FileSystem implementation, this might be unavailable and fallback to some\n+   *    default value.\n+   *  - length (LongType): The length of the file in bytes.\n    *  - content (BinaryType): The content of the file.\n-   *  - status (StructType): The status of the file.\n-   *    - path (StringType): The path of the file.\n-   *    - modificationTime (TimestampType): The modification time of the file.\n-   *      In some Hadoop FileSystem implementation, this might be unavailable and fallback to some\n-   *      default value.\n-   *    - length (LongType): The length of the file in bytes.\n    */\n   val schema = StructType(\n-    StructField(\"content\", BinaryType, true) ::\n-      StructField(\"status\", fileStatusSchema, false) :: Nil)\n+    StructField(\"path\", StringType, false) ::\n+    StructField(\"modificationTime\", TimestampType, false) ::\n+    StructField(\"length\", LongType, false) ::\n+    StructField(\"content\", BinaryType, true) :: Nil)\n+\n+  private[binaryfile] def createFilterFunctions(filter: Filter): Seq[FileStatus => Boolean] = {\n+    filter match {\n+      case andFilter: And =>\n+        createFilterFunctions(andFilter.left) ++ createFilterFunctions(andFilter.right)\n+      case LessThan(\"length\", value: Long) =>\n+        Seq((status: FileStatus) => status.getLen < value)"
+  }],
+  "prId": 24387
+}, {
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "Just to confirm, does SQL always convert the value to `Long`?",
+    "commit": "71db855468691b18f9365f70ca376225fc046989",
+    "createdAt": "2019-04-18T04:05:29Z",
+    "diffHunk": "@@ -142,26 +151,46 @@ class BinaryFileFormat extends FileFormat with DataSourceRegister {\n \n object BinaryFileFormat {\n \n-  private val fileStatusSchema = StructType(\n-    StructField(\"path\", StringType, false) ::\n-      StructField(\"modificationTime\", TimestampType, false) ::\n-      StructField(\"length\", LongType, false) :: Nil)\n-\n   /**\n    * Schema for the binary file data source.\n    *\n    * Schema:\n+   *  - path (StringType): The path of the file.\n+   *  - modificationTime (TimestampType): The modification time of the file.\n+   *    In some Hadoop FileSystem implementation, this might be unavailable and fallback to some\n+   *    default value.\n+   *  - length (LongType): The length of the file in bytes.\n    *  - content (BinaryType): The content of the file.\n-   *  - status (StructType): The status of the file.\n-   *    - path (StringType): The path of the file.\n-   *    - modificationTime (TimestampType): The modification time of the file.\n-   *      In some Hadoop FileSystem implementation, this might be unavailable and fallback to some\n-   *      default value.\n-   *    - length (LongType): The length of the file in bytes.\n    */\n   val schema = StructType(\n-    StructField(\"content\", BinaryType, true) ::\n-      StructField(\"status\", fileStatusSchema, false) :: Nil)\n+    StructField(\"path\", StringType, false) ::\n+    StructField(\"modificationTime\", TimestampType, false) ::\n+    StructField(\"length\", LongType, false) ::\n+    StructField(\"content\", BinaryType, true) :: Nil)\n+\n+  private[binaryfile] def createFilterFunctions(filter: Filter): Seq[FileStatus => Boolean] = {\n+    filter match {\n+      case andFilter: And =>\n+        createFilterFunctions(andFilter.left) ++ createFilterFunctions(andFilter.right)\n+      case LessThan(\"length\", value: Long) =>\n+        Seq((status: FileStatus) => status.getLen < value)\n+      case LessThan(\"modificationTime\", value: Timestamp) =>\n+        Seq((status: FileStatus) => status.getModificationTime < value.getTime)\n+      case LessThanOrEqual(\"length\", value: Long) =>"
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "yes, if the data type is long type.",
+    "commit": "71db855468691b18f9365f70ca376225fc046989",
+    "createdAt": "2019-04-18T06:48:14Z",
+    "diffHunk": "@@ -142,26 +151,46 @@ class BinaryFileFormat extends FileFormat with DataSourceRegister {\n \n object BinaryFileFormat {\n \n-  private val fileStatusSchema = StructType(\n-    StructField(\"path\", StringType, false) ::\n-      StructField(\"modificationTime\", TimestampType, false) ::\n-      StructField(\"length\", LongType, false) :: Nil)\n-\n   /**\n    * Schema for the binary file data source.\n    *\n    * Schema:\n+   *  - path (StringType): The path of the file.\n+   *  - modificationTime (TimestampType): The modification time of the file.\n+   *    In some Hadoop FileSystem implementation, this might be unavailable and fallback to some\n+   *    default value.\n+   *  - length (LongType): The length of the file in bytes.\n    *  - content (BinaryType): The content of the file.\n-   *  - status (StructType): The status of the file.\n-   *    - path (StringType): The path of the file.\n-   *    - modificationTime (TimestampType): The modification time of the file.\n-   *      In some Hadoop FileSystem implementation, this might be unavailable and fallback to some\n-   *      default value.\n-   *    - length (LongType): The length of the file in bytes.\n    */\n   val schema = StructType(\n-    StructField(\"content\", BinaryType, true) ::\n-      StructField(\"status\", fileStatusSchema, false) :: Nil)\n+    StructField(\"path\", StringType, false) ::\n+    StructField(\"modificationTime\", TimestampType, false) ::\n+    StructField(\"length\", LongType, false) ::\n+    StructField(\"content\", BinaryType, true) :: Nil)\n+\n+  private[binaryfile] def createFilterFunctions(filter: Filter): Seq[FileStatus => Boolean] = {\n+    filter match {\n+      case andFilter: And =>\n+        createFilterFunctions(andFilter.left) ++ createFilterFunctions(andFilter.right)\n+      case LessThan(\"length\", value: Long) =>\n+        Seq((status: FileStatus) => status.getLen < value)\n+      case LessThan(\"modificationTime\", value: Timestamp) =>\n+        Seq((status: FileStatus) => status.getModificationTime < value.getTime)\n+      case LessThanOrEqual(\"length\", value: Long) =>"
+  }],
+  "prId": 24387
+}, {
+  "comments": [{
+    "author": {
+      "login": "mengxr"
+    },
+    "body": "minor: `=> None`",
+    "commit": "71db855468691b18f9365f70ca376225fc046989",
+    "createdAt": "2019-04-18T04:05:39Z",
+    "diffHunk": "@@ -142,26 +151,46 @@ class BinaryFileFormat extends FileFormat with DataSourceRegister {\n \n object BinaryFileFormat {\n \n-  private val fileStatusSchema = StructType(\n-    StructField(\"path\", StringType, false) ::\n-      StructField(\"modificationTime\", TimestampType, false) ::\n-      StructField(\"length\", LongType, false) :: Nil)\n-\n   /**\n    * Schema for the binary file data source.\n    *\n    * Schema:\n+   *  - path (StringType): The path of the file.\n+   *  - modificationTime (TimestampType): The modification time of the file.\n+   *    In some Hadoop FileSystem implementation, this might be unavailable and fallback to some\n+   *    default value.\n+   *  - length (LongType): The length of the file in bytes.\n    *  - content (BinaryType): The content of the file.\n-   *  - status (StructType): The status of the file.\n-   *    - path (StringType): The path of the file.\n-   *    - modificationTime (TimestampType): The modification time of the file.\n-   *      In some Hadoop FileSystem implementation, this might be unavailable and fallback to some\n-   *      default value.\n-   *    - length (LongType): The length of the file in bytes.\n    */\n   val schema = StructType(\n-    StructField(\"content\", BinaryType, true) ::\n-      StructField(\"status\", fileStatusSchema, false) :: Nil)\n+    StructField(\"path\", StringType, false) ::\n+    StructField(\"modificationTime\", TimestampType, false) ::\n+    StructField(\"length\", LongType, false) ::\n+    StructField(\"content\", BinaryType, true) :: Nil)\n+\n+  private[binaryfile] def createFilterFunctions(filter: Filter): Seq[FileStatus => Boolean] = {\n+    filter match {\n+      case andFilter: And =>\n+        createFilterFunctions(andFilter.left) ++ createFilterFunctions(andFilter.right)\n+      case LessThan(\"length\", value: Long) =>\n+        Seq((status: FileStatus) => status.getLen < value)\n+      case LessThan(\"modificationTime\", value: Timestamp) =>\n+        Seq((status: FileStatus) => status.getModificationTime < value.getTime)\n+      case LessThanOrEqual(\"length\", value: Long) =>\n+        Seq((status: FileStatus) => status.getLen <= value)\n+      case LessThanOrEqual(\"modificationTime\", value: Timestamp) =>\n+        Seq((status: FileStatus) => status.getModificationTime <= value.getTime)\n+      case GreaterThan(\"length\", value: Long) =>\n+        Seq((status: FileStatus) => status.getLen > value)\n+      case GreaterThan(\"modificationTime\", value: Timestamp) =>\n+        Seq((status: FileStatus) => status.getModificationTime > value.getTime)\n+      case GreaterThanOrEqual(\"length\", value: Long) =>\n+        Seq((status: FileStatus) => status.getLen >= value)\n+      case GreaterThanOrEqual(\"modificationTime\", value: Timestamp) =>\n+        Seq((status: FileStatus) => status.getModificationTime >= value.getTime)\n+      case _ => Seq.empty"
+  }],
+  "prId": 24387
+}, {
+  "comments": [{
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "Looks `EqualNullSafe` and `In` are missing.",
+    "commit": "71db855468691b18f9365f70ca376225fc046989",
+    "createdAt": "2019-04-28T15:47:54Z",
+    "diffHunk": "@@ -142,26 +150,62 @@ class BinaryFileFormat extends FileFormat with DataSourceRegister {\n \n object BinaryFileFormat {\n \n-  private val fileStatusSchema = StructType(\n-    StructField(\"path\", StringType, false) ::\n-      StructField(\"modificationTime\", TimestampType, false) ::\n-      StructField(\"length\", LongType, false) :: Nil)\n+  private[binaryfile] val PATH = \"path\"\n+  private[binaryfile] val MODIFICATION_TIME = \"modificationTime\"\n+  private[binaryfile] val LENGTH = \"length\"\n+  private[binaryfile] val CONTENT = \"content\"\n \n   /**\n    * Schema for the binary file data source.\n    *\n    * Schema:\n+   *  - path (StringType): The path of the file.\n+   *  - modificationTime (TimestampType): The modification time of the file.\n+   *    In some Hadoop FileSystem implementation, this might be unavailable and fallback to some\n+   *    default value.\n+   *  - length (LongType): The length of the file in bytes.\n    *  - content (BinaryType): The content of the file.\n-   *  - status (StructType): The status of the file.\n-   *    - path (StringType): The path of the file.\n-   *    - modificationTime (TimestampType): The modification time of the file.\n-   *      In some Hadoop FileSystem implementation, this might be unavailable and fallback to some\n-   *      default value.\n-   *    - length (LongType): The length of the file in bytes.\n    */\n   val schema = StructType(\n-    StructField(\"content\", BinaryType, true) ::\n-      StructField(\"status\", fileStatusSchema, false) :: Nil)\n+    StructField(PATH, StringType, false) ::\n+    StructField(MODIFICATION_TIME, TimestampType, false) ::\n+    StructField(LENGTH, LongType, false) ::\n+    StructField(CONTENT, BinaryType, true) :: Nil)\n+\n+  private[binaryfile] def createFilterFunction(filter: Filter): FileStatus => Boolean = {\n+    filter match {\n+      case And(left, right) =>\n+        s => createFilterFunction(left)(s) && createFilterFunction(right)(s)\n+      case Or(left, right) =>\n+        s => createFilterFunction(left)(s) || createFilterFunction(right)(s)\n+      case Not(child) =>\n+        s => !createFilterFunction(child)(s)\n+\n+      case LessThan(LENGTH, value: Long) =>\n+        _.getLen < value\n+      case LessThanOrEqual(LENGTH, value: Long) =>\n+        _.getLen <= value\n+      case GreaterThan(LENGTH, value: Long) =>\n+        _.getLen > value\n+      case GreaterThanOrEqual(LENGTH, value: Long) =>\n+        _.getLen >= value\n+      case EqualTo(LENGTH, value: Long) =>\n+        _.getLen == value\n+\n+      case LessThan(MODIFICATION_TIME, value: Timestamp) =>\n+        _.getModificationTime < value.getTime\n+      case LessThanOrEqual(MODIFICATION_TIME, value: Timestamp) =>\n+        _.getModificationTime <= value.getTime\n+      case GreaterThan(MODIFICATION_TIME, value: Timestamp) =>\n+        _.getModificationTime > value.getTime\n+      case GreaterThanOrEqual(MODIFICATION_TIME, value: Timestamp) =>\n+        _.getModificationTime >= value.getTime\n+      case EqualTo(MODIFICATION_TIME, value: Timestamp) =>\n+        _.getModificationTime == value.getTime",
+    "line": 189
+  }],
+  "prId": 24387
+}]

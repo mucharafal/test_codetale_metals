@@ -1,0 +1,49 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "marmbrus"
+    },
+    "body": "Why isn't this a `RunnableCommand`?\n",
+    "commit": "51a82f2ae3fe9d28455940d953de7b76306f49b2",
+    "createdAt": "2014-12-16T20:27:00Z",
+    "diffHunk": "@@ -134,7 +129,7 @@ case class InsertIntoHiveTable(\n    *\n    * Note: this is run once and then kept to avoid double insertions.\n    */\n-  override protected[sql] lazy val sideEffectResult: Seq[Row] = {\n+  protected[sql] lazy val sideEffectResult: Seq[Row] = {",
+    "line": 51
+  }, {
+    "author": {
+      "login": "scwf"
+    },
+    "body": "This is because `InsertIntoHiveTable` is `UnaryNode`, which has a child. But ExecutedCommand is leafnode\n",
+    "commit": "51a82f2ae3fe9d28455940d953de7b76306f49b2",
+    "createdAt": "2014-12-16T23:42:53Z",
+    "diffHunk": "@@ -134,7 +129,7 @@ case class InsertIntoHiveTable(\n    *\n    * Note: this is run once and then kept to avoid double insertions.\n    */\n-  override protected[sql] lazy val sideEffectResult: Seq[Row] = {\n+  protected[sql] lazy val sideEffectResult: Seq[Row] = {",
+    "line": 51
+  }],
+  "prId": 3712
+}, {
+  "comments": [{
+    "author": {
+      "login": "marmbrus"
+    },
+    "body": "Can we use the context that is provided by `SparkPlan` here?\n",
+    "commit": "51a82f2ae3fe9d28455940d953de7b76306f49b2",
+    "createdAt": "2014-12-17T23:29:50Z",
+    "diffHunk": "@@ -52,9 +49,7 @@ case class InsertIntoHiveTable(\n     table: MetastoreRelation,\n     partition: Map[String, Option[String]],\n     child: SparkPlan,\n-    overwrite: Boolean)\n-    (@transient sc: HiveContext)\n-  extends UnaryNode with Command with HiveInspectors {\n+    overwrite: Boolean)(@transient sc: HiveContext) extends UnaryNode with HiveInspectors {"
+  }, {
+    "author": {
+      "login": "scwf"
+    },
+    "body": "will get the error of make copy if using SparkPlan here\n\n```\n[info]   Failed to execute query using catalyst:\n[info]   Error: makeCopy, tree:\n[info]   InsertIntoHiveTable (MetastoreRelation default, dest1, None), Map(), true\n[info]    Project [key#4178,value#4183]\n[info]     ShuffledHashJoin [key#4178], [key#4182], BuildRight\n[info]      Filter (key#4178 > 100)\n[info]       InMemoryColumnarTableScan [key#4178], [(key#4178 > 100)], (InMemoryRelation [key#4178,value#4179], true, 5, StorageLevel(true, true, false, true, 1), (HiveTableScan [key#4079,value#4080], (MetastoreRelatio\nn default, src, None), None), Some(src))\n[info]      Project [value#4183,key#4182]\n[info]       Filter (ds#4180 = 2008-04-08)\n[info]        InMemoryColumnarTableScan [value#4183,key#4182,ds#4180], [(ds#4180 = 2008-04-08)], (InMemoryRelation [key#4182,value#4183,ds#4180,hr#4181], true, 5, StorageLevel(true, true, false, true, 1), (HiveTableSca\nn [key#4093,value#4094,ds#4091,hr#4092], (MetastoreRelation default, srcpart, None), None), Some(srcpart))\n```\n",
+    "commit": "51a82f2ae3fe9d28455940d953de7b76306f49b2",
+    "createdAt": "2014-12-18T02:33:35Z",
+    "diffHunk": "@@ -52,9 +49,7 @@ case class InsertIntoHiveTable(\n     table: MetastoreRelation,\n     partition: Map[String, Option[String]],\n     child: SparkPlan,\n-    overwrite: Boolean)\n-    (@transient sc: HiveContext)\n-  extends UnaryNode with Command with HiveInspectors {\n+    overwrite: Boolean)(@transient sc: HiveContext) extends UnaryNode with HiveInspectors {"
+  }, {
+    "author": {
+      "login": "marmbrus"
+    },
+    "body": "You need to remove `otherCopyArgs` if you remove the second constructor.\n",
+    "commit": "51a82f2ae3fe9d28455940d953de7b76306f49b2",
+    "createdAt": "2014-12-18T02:37:28Z",
+    "diffHunk": "@@ -52,9 +49,7 @@ case class InsertIntoHiveTable(\n     table: MetastoreRelation,\n     partition: Map[String, Option[String]],\n     child: SparkPlan,\n-    overwrite: Boolean)\n-    (@transient sc: HiveContext)\n-  extends UnaryNode with Command with HiveInspectors {\n+    overwrite: Boolean)(@transient sc: HiveContext) extends UnaryNode with HiveInspectors {"
+  }],
+  "prId": 3712
+}]

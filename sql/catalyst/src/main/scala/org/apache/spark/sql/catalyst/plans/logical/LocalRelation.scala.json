@@ -1,0 +1,12 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "we can use `encoderFor[T]` here\n",
+    "commit": "2500de3ba716ad93dca8001f5fde6c670c898416",
+    "createdAt": "2015-12-18T17:28:19Z",
+    "diffHunk": "@@ -29,20 +30,28 @@ object LocalRelation {\n     new LocalRelation(StructType(output1 +: output).toAttributes)\n   }\n \n+  def fromInternalRows(output: Seq[Attribute], data: Seq[InternalRow]): LocalRelation = {\n+    val projection = UnsafeProjection.create(output.map(_.dataType).toArray)\n+    new LocalRelation(output, data.map(projection(_).copy()))\n+  }\n+\n   def fromExternalRows(output: Seq[Attribute], data: Seq[Row]): LocalRelation = {\n     val schema = StructType.fromAttributes(output)\n     val converter = CatalystTypeConverters.createToCatalystConverter(schema)\n-    LocalRelation(output, data.map(converter(_).asInstanceOf[InternalRow]))\n+    val internalRows = data.map(converter(_).asInstanceOf[InternalRow])\n+    fromInternalRows(output, internalRows)\n   }\n \n-  def fromProduct(output: Seq[Attribute], data: Seq[Product]): LocalRelation = {\n+  def fromProduct[T <: Product : ExpressionEncoder](\n+      output: Seq[Attribute],\n+      data: Seq[T]): LocalRelation = {\n+    val encoder = implicitly[ExpressionEncoder[T]]"
+  }],
+  "prId": 10283
+}]

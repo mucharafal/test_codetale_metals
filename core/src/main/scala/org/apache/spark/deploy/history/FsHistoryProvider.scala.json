@@ -1,0 +1,22 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "squito"
+    },
+    "body": "if you don't do this here for all entries, I think the cleaning around line 522 isn't going to work.",
+    "commit": "1190ffcb109025bd62c909059b0cf16e6a748de9",
+    "createdAt": "2018-09-18T01:53:02Z",
+    "diffHunk": "@@ -465,20 +475,31 @@ private[history] class FsHistoryProvider(conf: SparkConf, clock: Clock)\n             }\n           } catch {\n             case _: NoSuchElementException =>\n-              // If the file is currently not being tracked by the SHS, add an entry for it and try\n-              // to parse it. This will allow the cleaner code to detect the file as stale later on\n-              // if it was not possible to parse it.\n-              listing.write(LogInfo(entry.getPath().toString(), newLastScanTime, None, None,\n-                entry.getLen()))",
+    "line": 32
+  }, {
+    "author": {
+      "login": "jianjianjiao"
+    },
+    "body": "Hi, @squito  thanks for looking into this PR.\r\n\r\nWhen Spark history starts, it will scan event logs folder, and using multi-threads to handle. it will not do next scan before the first finishes.  That is the problem, in our cluster, there are about 20K event-log files(often bigger than 1G), including like 1K .inprogress files, it takes about 2 and a half hours to do the first scan. that means, during this 2.5 hours, if an user submit a spark application, and it finishes, user cannot find it via the spark history UI, and has to wait for the next scan.\r\n\r\nThat is why I add a limit of how much to scan each time, like set to 3K.  That means no matter how many log files in the event-logs folder, it will first scan the first 3K and handle them, and then do the second scan, let's assume that during the first scan, there are 5 applications newly submitted and finished, and there are another 10 applications updated. then the second scan will handle these 15 applications and another 2885 files ( from 3001 to 5885) in the event folder. \r\n\r\n checkForLogs scan event-log folders, and only handles files that are updated or not loaded. \r\n",
+    "commit": "1190ffcb109025bd62c909059b0cf16e6a748de9",
+    "createdAt": "2018-09-18T03:55:57Z",
+    "diffHunk": "@@ -465,20 +475,31 @@ private[history] class FsHistoryProvider(conf: SparkConf, clock: Clock)\n             }\n           } catch {\n             case _: NoSuchElementException =>\n-              // If the file is currently not being tracked by the SHS, add an entry for it and try\n-              // to parse it. This will allow the cleaner code to detect the file as stale later on\n-              // if it was not possible to parse it.\n-              listing.write(LogInfo(entry.getPath().toString(), newLastScanTime, None, None,\n-                entry.getLen()))",
+    "line": 32
+  }],
+  "prId": 22444
+}]

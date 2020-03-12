@@ -1,0 +1,41 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "viirya"
+    },
+    "body": "Do we need to do logging in test?",
+    "commit": "a5e3d119d354c352d6f55f457db3ed685f03b0d3",
+    "createdAt": "2018-11-21T10:30:30Z",
+    "diffHunk": "@@ -170,3 +198,17 @@ private case class ExceptionInjectingOperator(child: SparkPlan) extends UnaryExe\n \n   override def outputPartitioning: Partitioning = child.outputPartitioning\n }\n+\n+private class TestUncaughtExceptionHandler extends Thread.UncaughtExceptionHandler with Logging {\n+\n+  @volatile private var _exception: Throwable = _\n+\n+  def exception: Option[Throwable] = Option(_exception)\n+\n+  def cleanStatus: Unit = _exception = null\n+\n+  override def uncaughtException(t: Thread, e: Throwable): Unit = {\n+    logError(s\"Thread ${t.getName} handle by TestUncaughtExceptionHandler\")"
+  }, {
+    "author": {
+      "login": "LuciferYang"
+    },
+    "body": "needn't ~",
+    "commit": "a5e3d119d354c352d6f55f457db3ed685f03b0d3",
+    "createdAt": "2018-11-21T10:44:59Z",
+    "diffHunk": "@@ -170,3 +198,17 @@ private case class ExceptionInjectingOperator(child: SparkPlan) extends UnaryExe\n \n   override def outputPartitioning: Partitioning = child.outputPartitioning\n }\n+\n+private class TestUncaughtExceptionHandler extends Thread.UncaughtExceptionHandler with Logging {\n+\n+  @volatile private var _exception: Throwable = _\n+\n+  def exception: Option[Throwable] = Option(_exception)\n+\n+  def cleanStatus: Unit = _exception = null\n+\n+  override def uncaughtException(t: Thread, e: Throwable): Unit = {\n+    logError(s\"Thread ${t.getName} handle by TestUncaughtExceptionHandler\")"
+  }],
+  "prId": 22149
+}, {
+  "comments": [{
+    "author": {
+      "login": "viirya"
+    },
+    "body": "Shall we better get default handler and restore it?",
+    "commit": "a5e3d119d354c352d6f55f457db3ed685f03b0d3",
+    "createdAt": "2018-11-21T10:30:49Z",
+    "diffHunk": "@@ -49,6 +52,23 @@ class ScriptTransformationSuite extends SparkPlanTest with TestHiveSingleton {\n     outputSerdeClass = Some(classOf[LazySimpleSerDe].getCanonicalName)\n   )\n \n+  private val uncaughtExceptionHandler = new TestUncaughtExceptionHandler\n+\n+  protected override def beforeAll(): Unit = {\n+    super.beforeAll()\n+    Thread.setDefaultUncaughtExceptionHandler(uncaughtExceptionHandler)",
+    "line": 29
+  }, {
+    "author": {
+      "login": "LuciferYang"
+    },
+    "body": "ok~ `getDefaultUncaughtExceptionHandler` and store it at `beforeAll` method, then restore use `defaultUncaughtExceptionHandler` at `afterAll` method",
+    "commit": "a5e3d119d354c352d6f55f457db3ed685f03b0d3",
+    "createdAt": "2018-11-21T10:56:42Z",
+    "diffHunk": "@@ -49,6 +52,23 @@ class ScriptTransformationSuite extends SparkPlanTest with TestHiveSingleton {\n     outputSerdeClass = Some(classOf[LazySimpleSerDe].getCanonicalName)\n   )\n \n+  private val uncaughtExceptionHandler = new TestUncaughtExceptionHandler\n+\n+  protected override def beforeAll(): Unit = {\n+    super.beforeAll()\n+    Thread.setDefaultUncaughtExceptionHandler(uncaughtExceptionHandler)",
+    "line": 29
+  }],
+  "prId": 22149
+}]

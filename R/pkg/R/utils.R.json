@@ -1,0 +1,83 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "felixcheung"
+    },
+    "body": "are there cases where the IllegalArgument should be checked on the R side first to avoid the exception in the first place?\n",
+    "commit": "c8a433bf7b52b04451412adc5b7b67003a93de12",
+    "createdAt": "2016-09-26T07:11:38Z",
+    "diffHunk": "@@ -698,6 +698,21 @@ isSparkRShell <- function() {\n   grepl(\".*shell\\\\.R$\", Sys.getenv(\"R_PROFILE_USER\"), perl = TRUE)\n }\n \n+captureJVMException <- function(e) {\n+  stacktrace <- as.character(e)\n+  if (any(grep(\"java.lang.IllegalArgumentException: \", stacktrace))) {"
+  }, {
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "Thanks! @felixcheung I will address all other comments above. However, for this one, I was thinking hard but it seems not easy because we won't know if given data source is valid or not in R side first.\n\nI might be able to do this only for internal data sources or known databricks datasources such as \"redshift\" or \"xml\" like.. creating a map for our internal data sources and then checking a path is given or not. However, I am not sure if it is a good idea to manage another list for datasources.\n",
+    "commit": "c8a433bf7b52b04451412adc5b7b67003a93de12",
+    "createdAt": "2016-09-26T08:16:27Z",
+    "diffHunk": "@@ -698,6 +698,21 @@ isSparkRShell <- function() {\n   grepl(\".*shell\\\\.R$\", Sys.getenv(\"R_PROFILE_USER\"), perl = TRUE)\n }\n \n+captureJVMException <- function(e) {\n+  stacktrace <- as.character(e)\n+  if (any(grep(\"java.lang.IllegalArgumentException: \", stacktrace))) {"
+  }, {
+    "author": {
+      "login": "felixcheung"
+    },
+    "body": "I agree, I don't think we should couple the R code to the underlining data source implementations, and was not suggesting that :)\n\nI guess I'm saying there are still many (other) cases where the parameters are unchecked and would be good to see if this check to convert JVM IllegalArgumentException is sufficient or more checks should be added to the R side.\n",
+    "commit": "c8a433bf7b52b04451412adc5b7b67003a93de12",
+    "createdAt": "2016-09-26T18:08:41Z",
+    "diffHunk": "@@ -698,6 +698,21 @@ isSparkRShell <- function() {\n   grepl(\".*shell\\\\.R$\", Sys.getenv(\"R_PROFILE_USER\"), perl = TRUE)\n }\n \n+captureJVMException <- function(e) {\n+  stacktrace <- as.character(e)\n+  if (any(grep(\"java.lang.IllegalArgumentException: \", stacktrace))) {"
+  }, {
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "Ah, I see. Yeap. This might be about best effort thing. I think I tried (if I am right) all combinations of parameters mssing/wrong in the APIs. One exceptional case for both APIs is, they throw an exception, `ClassCastException` when the extra options are wrongly typed, which I think we should check within R side and this will be handled in https://github.com/apache/spark/pull/15239\nI might better open another PR for validating parameters across SparkR if you think it is okay.\n",
+    "commit": "c8a433bf7b52b04451412adc5b7b67003a93de12",
+    "createdAt": "2016-09-26T23:18:43Z",
+    "diffHunk": "@@ -698,6 +698,21 @@ isSparkRShell <- function() {\n   grepl(\".*shell\\\\.R$\", Sys.getenv(\"R_PROFILE_USER\"), perl = TRUE)\n }\n \n+captureJVMException <- function(e) {\n+  stacktrace <- as.character(e)\n+  if (any(grep(\"java.lang.IllegalArgumentException: \", stacktrace))) {"
+  }, {
+    "author": {
+      "login": "felixcheung"
+    },
+    "body": "great, thanks - generally I'd prefer having parameter checks in R; though in this case I think we need balance the added code complicity and reduced usability (by checking more, it might fail where it didn't before).\n\nso I'm not 100% sure we should add parameter checks all across the board.\n",
+    "commit": "c8a433bf7b52b04451412adc5b7b67003a93de12",
+    "createdAt": "2016-09-26T23:32:12Z",
+    "diffHunk": "@@ -698,6 +698,21 @@ isSparkRShell <- function() {\n   grepl(\".*shell\\\\.R$\", Sys.getenv(\"R_PROFILE_USER\"), perl = TRUE)\n }\n \n+captureJVMException <- function(e) {\n+  stacktrace <- as.character(e)\n+  if (any(grep(\"java.lang.IllegalArgumentException: \", stacktrace))) {"
+  }, {
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "Yeap, I do understand and will investigate it with keeping this in mind :)\n",
+    "commit": "c8a433bf7b52b04451412adc5b7b67003a93de12",
+    "createdAt": "2016-09-26T23:56:23Z",
+    "diffHunk": "@@ -698,6 +698,21 @@ isSparkRShell <- function() {\n   grepl(\".*shell\\\\.R$\", Sys.getenv(\"R_PROFILE_USER\"), perl = TRUE)\n }\n \n+captureJVMException <- function(e) {\n+  stacktrace <- as.character(e)\n+  if (any(grep(\"java.lang.IllegalArgumentException: \", stacktrace))) {"
+  }],
+  "prId": 15231
+}, {
+  "comments": [{
+    "author": {
+      "login": "felixcheung"
+    },
+    "body": "It'll be great to add some tests that would trigger tryCatch and this function?\n",
+    "commit": "c8a433bf7b52b04451412adc5b7b67003a93de12",
+    "createdAt": "2016-09-26T07:12:52Z",
+    "diffHunk": "@@ -698,6 +698,21 @@ isSparkRShell <- function() {\n   grepl(\".*shell\\\\.R$\", Sys.getenv(\"R_PROFILE_USER\"), perl = TRUE)\n }\n \n+captureJVMException <- function(e) {"
+  }, {
+    "author": {
+      "login": "felixcheung"
+    },
+    "body": "since there are 3 (or 2) cases here and their handling seem nontrivial, could you add a test for each of the exception main types?\n",
+    "commit": "c8a433bf7b52b04451412adc5b7b67003a93de12",
+    "createdAt": "2016-09-26T18:17:34Z",
+    "diffHunk": "@@ -698,6 +698,21 @@ isSparkRShell <- function() {\n   grepl(\".*shell\\\\.R$\", Sys.getenv(\"R_PROFILE_USER\"), perl = TRUE)\n }\n \n+captureJVMException <- function(e) {"
+  }],
+  "prId": 15231
+}, {
+  "comments": [{
+    "author": {
+      "login": "felixcheung"
+    },
+    "body": "very minor nit: you could probably replace the double pass with grep above and strsplit with just the result from strsplit\n",
+    "commit": "c8a433bf7b52b04451412adc5b7b67003a93de12",
+    "createdAt": "2016-10-05T05:44:02Z",
+    "diffHunk": "@@ -698,18 +698,55 @@ isSparkRShell <- function() {\n   grepl(\".*shell\\\\.R$\", Sys.getenv(\"R_PROFILE_USER\"), perl = TRUE)\n }\n \n-captureJVMException <- function(e) {\n-  stacktrace <- as.character(e)\n+# Works identically with `callJStatic(...)` but throws a pretty formatted exception.\n+handledCallJStatic <- function(cls, method, ...) {\n+  result <- tryCatch(callJStatic(cls, method, ...),\n+                     error = function(e) {\n+                       captureJVMException(e, method)\n+                     })\n+  result\n+}\n+\n+# Works identically with `callJMethod(...)` but throws a pretty formatted exception.\n+handledCallJMethod <- function(obj, method, ...) {\n+  result <- tryCatch(callJMethod(obj, method, ...),\n+                     error = function(e) {\n+                       captureJVMException(e, method)\n+                     })\n+  result\n+}\n+\n+captureJVMException <- function(e, method) {\n+  rawmsg <- as.character(e)\n+  if (any(grep(\"^Error in .*?: \", rawmsg))) {\n+    # If the exception message starts with \"Error in ...\", this is possibly\n+    # \"Error in invokeJava(...)\". Here, it replaces the characters to\n+    # `paste(\"Error in\", method, \":\")` in order to identify which function\n+    # was called in JVM side.\n+    stacktrace <- strsplit(rawmsg, \"Error in .*?: \")[[1]]",
+    "line": 29
+  }],
+  "prId": 15231
+}]

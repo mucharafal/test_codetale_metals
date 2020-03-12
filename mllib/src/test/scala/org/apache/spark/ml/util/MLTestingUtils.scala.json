@@ -1,0 +1,105 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "sethah"
+    },
+    "body": "What do you think about merging the weight col check into the existing `checkNumericTypes` method? We can check if the estimator passed in accepts weight col and if it does we can check that along with label col at the same time. That way if either of them fails then the whole test will fail. To be more concrete, something like this inside `checkNumericType`:\n\n**EDIT:** you'll have to cast the weight column to the type inside the map. So maybe don't make the weights doubles but random `Ints` instead, then we can cast those to all the other types.\n\n``` scala\nval actuals = dfs.keys.filter(_ != DoubleType).map { t =>\n      estimator match {\n        case weighted: Estimator[M] with HasWeightCol =>\n          weighted.set(weighted.weightCol, \"weight\")\n            .fit(dfs(t).withColumn(\"weight\", rand(seed = 42)))\n        case _: Estimator[M] => estimator.fit(dfs(t))\n        case _ => throw new Exception()\n      }\n    }\n```\n\nThis will allow us to avoid doing a bunch of extra fit calls which are expensive, and we won't have to create any new methods. For testing that strings throw an error, we can check label col and weight col separately inside the method. What are your thoughts?\n",
+    "commit": "1d41615863e7d4a0cc225a9a32cc1b175af22a49",
+    "createdAt": "2016-10-04T15:31:53Z",
+    "diffHunk": "@@ -61,6 +61,29 @@ object MLTestingUtils extends SparkFunSuite {\n       \"Column label must be of type NumericType but was actually of type StringType\"))\n   }\n \n+  def checkWeightColNumericTypes[M <: Model[M], T <: Estimator[M]]("
+  }, {
+    "author": {
+      "login": "zhengruifeng"
+    },
+    "body": "Agreed. I will update this PR accroding to your comments. \n",
+    "commit": "1d41615863e7d4a0cc225a9a32cc1b175af22a49",
+    "createdAt": "2016-10-05T02:45:42Z",
+    "diffHunk": "@@ -61,6 +61,29 @@ object MLTestingUtils extends SparkFunSuite {\n       \"Column label must be of type NumericType but was actually of type StringType\"))\n   }\n \n+  def checkWeightColNumericTypes[M <: Model[M], T <: Estimator[M]]("
+  }],
+  "prId": 15314
+}, {
+  "comments": [{
+    "author": {
+      "login": "sethah"
+    },
+    "body": "So, you've added a weight column to the `genRegressionDF` and `genClassificationDF` methods, but then you're overwriting them here. Since we add them in the df generators, we don't need the `withColumn` here.\n",
+    "commit": "1d41615863e7d4a0cc225a9a32cc1b175af22a49",
+    "createdAt": "2016-10-05T22:10:15Z",
+    "diffHunk": "@@ -47,18 +48,49 @@ object MLTestingUtils extends SparkFunSuite {\n     } else {\n       genRegressionDFWithNumericLabelCol(spark)\n     }\n-    val expected = estimator.fit(dfs(DoubleType))\n-    val actuals = dfs.keys.filter(_ != DoubleType).map(t => estimator.fit(dfs(t)))\n+\n+    val expected = estimator match {\n+      case weighted: Estimator[M] with HasWeightCol =>\n+        weighted.set(weighted.weightCol, \"weight\")\n+        weighted.fit(dfs(DoubleType).withColumn(\"weight\", rand(seed = 42)))\n+      case _: Estimator[M] => estimator.fit(dfs(DoubleType))\n+      case _ => throw new Exception()\n+    }\n+\n+    val actuals = dfs.keys.filter(_ != DoubleType).map { t =>\n+      estimator match {\n+        case weighted: Estimator[M] with HasWeightCol =>\n+          weighted.set(weighted.weightCol, \"weight\")\n+          weighted.fit(dfs(t).withColumn(\"weight\", rand(seed = 42)))"
+  }],
+  "prId": 15314
+}, {
+  "comments": [{
+    "author": {
+      "login": "sethah"
+    },
+    "body": "`TreeTests.setMetadata` selects only the label and features column, so you set a weight column but return a df that does not contain it. The following worked for me:\n\n``` scala\n    types.map { t =>\n        val castDF = df.select(col(labelColName).cast(t),\n          col(featuresColName))\n        t -> TreeTests.setMetadata(castDF, 0, labelColName, featuresColName)\n          .withColumn(censorColName, lit(0.0))\n          .withColumn(weightColName, ceil(rand() * 10).cast(t))\n      }.toMap\n```\n\nThe weight column is just a column of random whole numbers between 0 and 10. This way, when we convert to types like `Short, Int, Long` we don't lose any information and the weights are still the same.\n",
+    "commit": "1d41615863e7d4a0cc225a9a32cc1b175af22a49",
+    "createdAt": "2016-10-05T22:12:48Z",
+    "diffHunk": "@@ -104,19 +136,21 @@ object MLTestingUtils extends SparkFunSuite {\n   def genClassifDFWithNumericLabelCol(\n       spark: SparkSession,\n       labelColName: String = \"label\",\n-      featuresColName: String = \"features\"): Map[NumericType, DataFrame] = {\n+      featuresColName: String = \"features\",\n+      weightColName: String = \"weight\"): Map[NumericType, DataFrame] = {\n     val df = spark.createDataFrame(Seq(\n-      (0, Vectors.dense(0, 2, 3)),\n-      (1, Vectors.dense(0, 3, 1)),\n-      (0, Vectors.dense(0, 2, 2)),\n-      (1, Vectors.dense(0, 3, 9)),\n-      (0, Vectors.dense(0, 2, 6))\n-    )).toDF(labelColName, featuresColName)\n+      (0, 1, Vectors.dense(0, 2, 3)),\n+      (1, 2, Vectors.dense(0, 3, 1)),\n+      (0, 2, Vectors.dense(0, 2, 2)),\n+      (1, 1, Vectors.dense(0, 3, 9)),\n+      (0, 1, Vectors.dense(0, 2, 6))\n+    )).toDF(labelColName, weightColName, featuresColName)\n \n     val types =\n       Seq(ShortType, LongType, IntegerType, FloatType, ByteType, DoubleType, DecimalType(10, 0))\n     types.map { t =>\n-        val castDF = df.select(col(labelColName).cast(t), col(featuresColName))\n+        val castDF = df.select(col(labelColName).cast(t), col(weightColName).cast(t),"
+  }, {
+    "author": {
+      "login": "sethah"
+    },
+    "body": "Need to do the same thing for regression as well.\n",
+    "commit": "1d41615863e7d4a0cc225a9a32cc1b175af22a49",
+    "createdAt": "2016-10-05T22:13:43Z",
+    "diffHunk": "@@ -104,19 +136,21 @@ object MLTestingUtils extends SparkFunSuite {\n   def genClassifDFWithNumericLabelCol(\n       spark: SparkSession,\n       labelColName: String = \"label\",\n-      featuresColName: String = \"features\"): Map[NumericType, DataFrame] = {\n+      featuresColName: String = \"features\",\n+      weightColName: String = \"weight\"): Map[NumericType, DataFrame] = {\n     val df = spark.createDataFrame(Seq(\n-      (0, Vectors.dense(0, 2, 3)),\n-      (1, Vectors.dense(0, 3, 1)),\n-      (0, Vectors.dense(0, 2, 2)),\n-      (1, Vectors.dense(0, 3, 9)),\n-      (0, Vectors.dense(0, 2, 6))\n-    )).toDF(labelColName, featuresColName)\n+      (0, 1, Vectors.dense(0, 2, 3)),\n+      (1, 2, Vectors.dense(0, 3, 1)),\n+      (0, 2, Vectors.dense(0, 2, 2)),\n+      (1, 1, Vectors.dense(0, 3, 9)),\n+      (0, 1, Vectors.dense(0, 2, 6))\n+    )).toDF(labelColName, weightColName, featuresColName)\n \n     val types =\n       Seq(ShortType, LongType, IntegerType, FloatType, ByteType, DoubleType, DecimalType(10, 0))\n     types.map { t =>\n-        val castDF = df.select(col(labelColName).cast(t), col(featuresColName))\n+        val castDF = df.select(col(labelColName).cast(t), col(weightColName).cast(t),"
+  }],
+  "prId": 15314
+}, {
+  "comments": [{
+    "author": {
+      "login": "sethah"
+    },
+    "body": "remove `* 10` unless there is some good reason to have it. Same thing above.\n",
+    "commit": "1d41615863e7d4a0cc225a9a32cc1b175af22a49",
+    "createdAt": "2016-11-03T22:45:13Z",
+    "diffHunk": "@@ -137,10 +172,11 @@ object MLTestingUtils extends SparkFunSuite {\n     val types =\n       Seq(ShortType, LongType, IntegerType, FloatType, ByteType, DoubleType, DecimalType(10, 0))\n     types.map { t =>\n-        val castDF = df.select(col(labelColName).cast(t), col(featuresColName))\n-        t -> TreeTests.setMetadata(castDF, 0, labelColName, featuresColName)\n-          .withColumn(censorColName, lit(0.0))\n-      }.toMap\n+      val castDF = df.select(col(labelColName).cast(t), col(featuresColName))\n+      t -> TreeTests.setMetadata(castDF, 0, labelColName, featuresColName)\n+        .withColumn(censorColName, lit(0.0))\n+        .withColumn(weightColName, ceil(rand(seed = 42) * 10).cast(t))"
+  }],
+  "prId": 15314
+}, {
+  "comments": [{
+    "author": {
+      "login": "sethah"
+    },
+    "body": "Simplify this: \n\n``` scala\nval expected = estimator match {\n      case weighted: Estimator[M] with HasWeightCol =>\n        weighted.set(weighted.weightCol, \"weight\")\n        weighted.fit(dfs(DoubleType))\n      case _ => estimator.fit(dfs(DoubleType))\n    }\n```\n\nSame thing below\n",
+    "commit": "1d41615863e7d4a0cc225a9a32cc1b175af22a49",
+    "createdAt": "2016-11-03T22:55:26Z",
+    "diffHunk": "@@ -47,18 +48,49 @@ object MLTestingUtils extends SparkFunSuite {\n     } else {\n       genRegressionDFWithNumericLabelCol(spark)\n     }\n-    val expected = estimator.fit(dfs(DoubleType))\n-    val actuals = dfs.keys.filter(_ != DoubleType).map(t => estimator.fit(dfs(t)))\n+\n+    val expected = estimator match {"
+  }],
+  "prId": 15314
+}, {
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "ceil(rand(...)) will always be 1.  Use round() instead of ceil()",
+    "commit": "1d41615863e7d4a0cc225a9a32cc1b175af22a49",
+    "createdAt": "2017-01-04T19:12:19Z",
+    "diffHunk": "@@ -118,12 +148,14 @@ object MLTestingUtils extends SparkFunSuite {\n     types.map { t =>\n         val castDF = df.select(col(labelColName).cast(t), col(featuresColName))\n         t -> TreeTests.setMetadata(castDF, 2, labelColName, featuresColName)\n+          .withColumn(weightColName, ceil(rand(seed = 42)).cast(t))"
+  }],
+  "prId": 15314
+}, {
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "You could also move the code dealing with weights outside these 2 sections:\r\n```\r\nfinalEstimator = estimator match {\r\n  case weighted: ... =>\r\n    weighted.set(weighted.weightCol, \"weight\")\r\n  case _ => estimator\r\n}\r\n```\r\nThen the other code could remain unchanged.",
+    "commit": "1d41615863e7d4a0cc225a9a32cc1b175af22a49",
+    "createdAt": "2017-01-04T19:12:22Z",
+    "diffHunk": "@@ -47,18 +47,47 @@ object MLTestingUtils extends SparkFunSuite {\n     } else {\n       genRegressionDFWithNumericLabelCol(spark)\n     }\n-    val expected = estimator.fit(dfs(DoubleType))\n-    val actuals = dfs.keys.filter(_ != DoubleType).map(t => estimator.fit(dfs(t)))\n+\n+    val expected = estimator match {\n+      case weighted: Estimator[M] with HasWeightCol =>\n+        weighted.set(weighted.weightCol, \"weight\")"
+  }],
+  "prId": 15314
+}, {
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "same here: use round",
+    "commit": "1d41615863e7d4a0cc225a9a32cc1b175af22a49",
+    "createdAt": "2017-01-04T19:13:36Z",
+    "diffHunk": "@@ -137,10 +169,11 @@ object MLTestingUtils extends SparkFunSuite {\n     val types =\n       Seq(ShortType, LongType, IntegerType, FloatType, ByteType, DoubleType, DecimalType(10, 0))\n     types.map { t =>\n-        val castDF = df.select(col(labelColName).cast(t), col(featuresColName))\n-        t -> TreeTests.setMetadata(castDF, 0, labelColName, featuresColName)\n-          .withColumn(censorColName, lit(0.0))\n-      }.toMap\n+      val castDF = df.select(col(labelColName).cast(t), col(featuresColName))\n+      t -> TreeTests.setMetadata(castDF, 0, labelColName, featuresColName)\n+        .withColumn(censorColName, lit(0.0))\n+        .withColumn(weightColName, ceil(rand(seed = 42)).cast(t))"
+  }],
+  "prId": 15314
+}]

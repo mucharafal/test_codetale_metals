@@ -1,0 +1,190 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "hvanhovell"
+    },
+    "body": "This has the potential of storing a very large (in size) value (if you use some complex structure). Do we want this? \n",
+    "commit": "734abad045a5378d14489a4e956b7a8e1c95a811",
+    "createdAt": "2016-09-14T11:33:28Z",
+    "diffHunk": "@@ -32,19 +34,70 @@ package org.apache.spark.sql.catalyst.plans.logical\n  * @param sizeInBytes Physical size in bytes. For leaf operators this defaults to 1, otherwise it\n  *                    defaults to the product of children's `sizeInBytes`.\n  * @param rowCount Estimated number of rows.\n+ * @param basicColStats Basic column-level statistics.\n  * @param isBroadcastable If true, output is small enough to be used in a broadcast join.\n  */\n case class Statistics(\n     sizeInBytes: BigInt,\n     rowCount: Option[BigInt] = None,\n+    basicColStats: Map[String, BasicColStats] = Map.empty,\n     isBroadcastable: Boolean = false) {\n+\n   override def toString: String = \"Statistics(\" + simpleString + \")\"\n \n   /** Readable string representation for the Statistics. */\n   def simpleString: String = {\n     Seq(s\"sizeInBytes=$sizeInBytes\",\n       if (rowCount.isDefined) s\"rowCount=${rowCount.get}\" else \"\",\n+      if (basicColStats.nonEmpty) s\"basicColStats=$basicColStats\" else \"\",\n       s\"isBroadcastable=$isBroadcastable\"\n-    ).filter(_.nonEmpty).mkString(\"\", \", \", \"\")\n+    ).filter(_.nonEmpty).mkString(\", \")\n+  }\n+}\n+\n+case class BasicColStats(\n+    dataType: DataType,\n+    numNulls: Long,\n+    max: Option[Any] = None,"
+  }, {
+    "author": {
+      "login": "wzhfy"
+    },
+    "body": "max is an option in column stats, for data types that can have very large values, we don't collect their max values.\n",
+    "commit": "734abad045a5378d14489a4e956b7a8e1c95a811",
+    "createdAt": "2016-09-15T00:19:53Z",
+    "diffHunk": "@@ -32,19 +34,70 @@ package org.apache.spark.sql.catalyst.plans.logical\n  * @param sizeInBytes Physical size in bytes. For leaf operators this defaults to 1, otherwise it\n  *                    defaults to the product of children's `sizeInBytes`.\n  * @param rowCount Estimated number of rows.\n+ * @param basicColStats Basic column-level statistics.\n  * @param isBroadcastable If true, output is small enough to be used in a broadcast join.\n  */\n case class Statistics(\n     sizeInBytes: BigInt,\n     rowCount: Option[BigInt] = None,\n+    basicColStats: Map[String, BasicColStats] = Map.empty,\n     isBroadcastable: Boolean = false) {\n+\n   override def toString: String = \"Statistics(\" + simpleString + \")\"\n \n   /** Readable string representation for the Statistics. */\n   def simpleString: String = {\n     Seq(s\"sizeInBytes=$sizeInBytes\",\n       if (rowCount.isDefined) s\"rowCount=${rowCount.get}\" else \"\",\n+      if (basicColStats.nonEmpty) s\"basicColStats=$basicColStats\" else \"\",\n       s\"isBroadcastable=$isBroadcastable\"\n-    ).filter(_.nonEmpty).mkString(\"\", \", \", \"\")\n+    ).filter(_.nonEmpty).mkString(\", \")\n+  }\n+}\n+\n+case class BasicColStats(\n+    dataType: DataType,\n+    numNulls: Long,\n+    max: Option[Any] = None,"
+  }],
+  "prId": 15090
+}, {
+  "comments": [{
+    "author": {
+      "login": "viirya"
+    },
+    "body": "Any reason why `numNulls` is the only one not wrapped in `Option` here?\n",
+    "commit": "734abad045a5378d14489a4e956b7a8e1c95a811",
+    "createdAt": "2016-09-15T14:17:26Z",
+    "diffHunk": "@@ -32,19 +34,70 @@ package org.apache.spark.sql.catalyst.plans.logical\n  * @param sizeInBytes Physical size in bytes. For leaf operators this defaults to 1, otherwise it\n  *                    defaults to the product of children's `sizeInBytes`.\n  * @param rowCount Estimated number of rows.\n+ * @param basicColStats Basic column-level statistics.\n  * @param isBroadcastable If true, output is small enough to be used in a broadcast join.\n  */\n case class Statistics(\n     sizeInBytes: BigInt,\n     rowCount: Option[BigInt] = None,\n+    basicColStats: Map[String, BasicColStats] = Map.empty,\n     isBroadcastable: Boolean = false) {\n+\n   override def toString: String = \"Statistics(\" + simpleString + \")\"\n \n   /** Readable string representation for the Statistics. */\n   def simpleString: String = {\n     Seq(s\"sizeInBytes=$sizeInBytes\",\n       if (rowCount.isDefined) s\"rowCount=${rowCount.get}\" else \"\",\n+      if (basicColStats.nonEmpty) s\"basicColStats=$basicColStats\" else \"\",\n       s\"isBroadcastable=$isBroadcastable\"\n-    ).filter(_.nonEmpty).mkString(\"\", \", \", \"\")\n+    ).filter(_.nonEmpty).mkString(\", \")\n+  }\n+}\n+\n+case class BasicColStats(\n+    dataType: DataType,\n+    numNulls: Long,"
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "nvm. I got it.\n",
+    "commit": "734abad045a5378d14489a4e956b7a8e1c95a811",
+    "createdAt": "2016-09-15T14:45:41Z",
+    "diffHunk": "@@ -32,19 +34,70 @@ package org.apache.spark.sql.catalyst.plans.logical\n  * @param sizeInBytes Physical size in bytes. For leaf operators this defaults to 1, otherwise it\n  *                    defaults to the product of children's `sizeInBytes`.\n  * @param rowCount Estimated number of rows.\n+ * @param basicColStats Basic column-level statistics.\n  * @param isBroadcastable If true, output is small enough to be used in a broadcast join.\n  */\n case class Statistics(\n     sizeInBytes: BigInt,\n     rowCount: Option[BigInt] = None,\n+    basicColStats: Map[String, BasicColStats] = Map.empty,\n     isBroadcastable: Boolean = false) {\n+\n   override def toString: String = \"Statistics(\" + simpleString + \")\"\n \n   /** Readable string representation for the Statistics. */\n   def simpleString: String = {\n     Seq(s\"sizeInBytes=$sizeInBytes\",\n       if (rowCount.isDefined) s\"rowCount=${rowCount.get}\" else \"\",\n+      if (basicColStats.nonEmpty) s\"basicColStats=$basicColStats\" else \"\",\n       s\"isBroadcastable=$isBroadcastable\"\n-    ).filter(_.nonEmpty).mkString(\"\", \", \", \"\")\n+    ).filter(_.nonEmpty).mkString(\", \")\n+  }\n+}\n+\n+case class BasicColStats(\n+    dataType: DataType,\n+    numNulls: Long,"
+  }],
+  "prId": 15090
+}, {
+  "comments": [{
+    "author": {
+      "login": "viirya"
+    },
+    "body": "Add a section of comments explaining the meaning for each statistic? E.g., Readers may not know what `ndv` means.\n",
+    "commit": "734abad045a5378d14489a4e956b7a8e1c95a811",
+    "createdAt": "2016-09-19T04:38:43Z",
+    "diffHunk": "@@ -32,19 +34,70 @@ package org.apache.spark.sql.catalyst.plans.logical\n  * @param sizeInBytes Physical size in bytes. For leaf operators this defaults to 1, otherwise it\n  *                    defaults to the product of children's `sizeInBytes`.\n  * @param rowCount Estimated number of rows.\n+ * @param basicColStats Basic column-level statistics.\n  * @param isBroadcastable If true, output is small enough to be used in a broadcast join.\n  */\n case class Statistics(\n     sizeInBytes: BigInt,\n     rowCount: Option[BigInt] = None,\n+    basicColStats: Map[String, BasicColStats] = Map.empty,\n     isBroadcastable: Boolean = false) {\n+\n   override def toString: String = \"Statistics(\" + simpleString + \")\"\n \n   /** Readable string representation for the Statistics. */\n   def simpleString: String = {\n     Seq(s\"sizeInBytes=$sizeInBytes\",\n       if (rowCount.isDefined) s\"rowCount=${rowCount.get}\" else \"\",\n+      if (basicColStats.nonEmpty) s\"basicColStats=$basicColStats\" else \"\",\n       s\"isBroadcastable=$isBroadcastable\"\n-    ).filter(_.nonEmpty).mkString(\"\", \", \", \"\")\n+    ).filter(_.nonEmpty).mkString(\", \")\n+  }\n+}\n+\n+case class BasicColStats("
+  }, {
+    "author": {
+      "login": "wzhfy"
+    },
+    "body": "@viirya thanks for the advice.\n",
+    "commit": "734abad045a5378d14489a4e956b7a8e1c95a811",
+    "createdAt": "2016-09-19T05:30:04Z",
+    "diffHunk": "@@ -32,19 +34,70 @@ package org.apache.spark.sql.catalyst.plans.logical\n  * @param sizeInBytes Physical size in bytes. For leaf operators this defaults to 1, otherwise it\n  *                    defaults to the product of children's `sizeInBytes`.\n  * @param rowCount Estimated number of rows.\n+ * @param basicColStats Basic column-level statistics.\n  * @param isBroadcastable If true, output is small enough to be used in a broadcast join.\n  */\n case class Statistics(\n     sizeInBytes: BigInt,\n     rowCount: Option[BigInt] = None,\n+    basicColStats: Map[String, BasicColStats] = Map.empty,\n     isBroadcastable: Boolean = false) {\n+\n   override def toString: String = \"Statistics(\" + simpleString + \")\"\n \n   /** Readable string representation for the Statistics. */\n   def simpleString: String = {\n     Seq(s\"sizeInBytes=$sizeInBytes\",\n       if (rowCount.isDefined) s\"rowCount=${rowCount.get}\" else \"\",\n+      if (basicColStats.nonEmpty) s\"basicColStats=$basicColStats\" else \"\",\n       s\"isBroadcastable=$isBroadcastable\"\n-    ).filter(_.nonEmpty).mkString(\"\", \", \", \"\")\n+    ).filter(_.nonEmpty).mkString(\", \")\n+  }\n+}\n+\n+case class BasicColStats("
+  }],
+  "prId": 15090
+}, {
+  "comments": [{
+    "author": {
+      "login": "srinathshankar"
+    },
+    "body": "This seems special-cased for booleans. If we're planning to maintain histograms or frequent values, it would seem that this is unnecessary\n",
+    "commit": "734abad045a5378d14489a4e956b7a8e1c95a811",
+    "createdAt": "2016-09-21T17:43:58Z",
+    "diffHunk": "@@ -32,19 +34,74 @@ package org.apache.spark.sql.catalyst.plans.logical\n  * @param sizeInBytes Physical size in bytes. For leaf operators this defaults to 1, otherwise it\n  *                    defaults to the product of children's `sizeInBytes`.\n  * @param rowCount Estimated number of rows.\n+ * @param colStats Column-level statistics.\n  * @param isBroadcastable If true, output is small enough to be used in a broadcast join.\n  */\n case class Statistics(\n     sizeInBytes: BigInt,\n     rowCount: Option[BigInt] = None,\n+    colStats: Map[String, ColumnStats] = Map.empty,\n     isBroadcastable: Boolean = false) {\n+\n   override def toString: String = \"Statistics(\" + simpleString + \")\"\n \n   /** Readable string representation for the Statistics. */\n   def simpleString: String = {\n     Seq(s\"sizeInBytes=$sizeInBytes\",\n       if (rowCount.isDefined) s\"rowCount=${rowCount.get}\" else \"\",\n+      if (colStats.nonEmpty) s\"colStats=$colStats\" else \"\",\n       s\"isBroadcastable=$isBroadcastable\"\n-    ).filter(_.nonEmpty).mkString(\"\", \", \", \"\")\n+    ).filter(_.nonEmpty).mkString(\", \")\n+  }\n+}\n+\n+/**\n+ * Statistics for a column.\n+ * @param ndv Number of distinct values of the column.\n+ */\n+case class ColumnStats(\n+    dataType: DataType,\n+    numNulls: Long,\n+    max: Option[Any] = None,\n+    min: Option[Any] = None,\n+    ndv: Option[Long] = None,\n+    avgColLen: Option[Double] = None,\n+    maxColLen: Option[Long] = None,\n+    numTrues: Option[Long] = None,"
+  }, {
+    "author": {
+      "login": "wzhfy"
+    },
+    "body": "For boolean type, we don't need histograms, we can just use these two values.\n",
+    "commit": "734abad045a5378d14489a4e956b7a8e1c95a811",
+    "createdAt": "2016-09-21T20:30:35Z",
+    "diffHunk": "@@ -32,19 +34,74 @@ package org.apache.spark.sql.catalyst.plans.logical\n  * @param sizeInBytes Physical size in bytes. For leaf operators this defaults to 1, otherwise it\n  *                    defaults to the product of children's `sizeInBytes`.\n  * @param rowCount Estimated number of rows.\n+ * @param colStats Column-level statistics.\n  * @param isBroadcastable If true, output is small enough to be used in a broadcast join.\n  */\n case class Statistics(\n     sizeInBytes: BigInt,\n     rowCount: Option[BigInt] = None,\n+    colStats: Map[String, ColumnStats] = Map.empty,\n     isBroadcastable: Boolean = false) {\n+\n   override def toString: String = \"Statistics(\" + simpleString + \")\"\n \n   /** Readable string representation for the Statistics. */\n   def simpleString: String = {\n     Seq(s\"sizeInBytes=$sizeInBytes\",\n       if (rowCount.isDefined) s\"rowCount=${rowCount.get}\" else \"\",\n+      if (colStats.nonEmpty) s\"colStats=$colStats\" else \"\",\n       s\"isBroadcastable=$isBroadcastable\"\n-    ).filter(_.nonEmpty).mkString(\"\", \", \", \"\")\n+    ).filter(_.nonEmpty).mkString(\", \")\n+  }\n+}\n+\n+/**\n+ * Statistics for a column.\n+ * @param ndv Number of distinct values of the column.\n+ */\n+case class ColumnStats(\n+    dataType: DataType,\n+    numNulls: Long,\n+    max: Option[Any] = None,\n+    min: Option[Any] = None,\n+    ndv: Option[Long] = None,\n+    avgColLen: Option[Double] = None,\n+    maxColLen: Option[Long] = None,\n+    numTrues: Option[Long] = None,"
+  }],
+  "prId": 15090
+}, {
+  "comments": [{
+    "author": {
+      "login": "srinathshankar"
+    },
+    "body": "Suggestion: Based on fromString, It looks like simpleString above is practically used as a serializer to stuff stats in the catalog ? If so, could you change the name to catalogRepresentation or something like that so it's clear.\n",
+    "commit": "734abad045a5378d14489a4e956b7a8e1c95a811",
+    "createdAt": "2016-09-21T17:51:48Z",
+    "diffHunk": "@@ -32,19 +34,74 @@ package org.apache.spark.sql.catalyst.plans.logical\n  * @param sizeInBytes Physical size in bytes. For leaf operators this defaults to 1, otherwise it\n  *                    defaults to the product of children's `sizeInBytes`.\n  * @param rowCount Estimated number of rows.\n+ * @param colStats Column-level statistics.\n  * @param isBroadcastable If true, output is small enough to be used in a broadcast join.\n  */\n case class Statistics(\n     sizeInBytes: BigInt,\n     rowCount: Option[BigInt] = None,\n+    colStats: Map[String, ColumnStats] = Map.empty,\n     isBroadcastable: Boolean = false) {\n+\n   override def toString: String = \"Statistics(\" + simpleString + \")\"\n \n   /** Readable string representation for the Statistics. */\n   def simpleString: String = {\n     Seq(s\"sizeInBytes=$sizeInBytes\",\n       if (rowCount.isDefined) s\"rowCount=${rowCount.get}\" else \"\",\n+      if (colStats.nonEmpty) s\"colStats=$colStats\" else \"\",\n       s\"isBroadcastable=$isBroadcastable\"\n-    ).filter(_.nonEmpty).mkString(\"\", \", \", \"\")\n+    ).filter(_.nonEmpty).mkString(\", \")\n+  }\n+}\n+\n+/**\n+ * Statistics for a column.\n+ * @param ndv Number of distinct values of the column.\n+ */\n+case class ColumnStats(\n+    dataType: DataType,\n+    numNulls: Long,\n+    max: Option[Any] = None,\n+    min: Option[Any] = None,\n+    ndv: Option[Long] = None,\n+    avgColLen: Option[Double] = None,\n+    maxColLen: Option[Long] = None,\n+    numTrues: Option[Long] = None,\n+    numFalses: Option[Long] = None) {\n+\n+  override def toString: String = \"ColumnStats(\" + simpleString + \")\"\n+\n+  def simpleString: String = {\n+    Seq(s\"numNulls=$numNulls\",\n+      if (max.isDefined) s\"max=${max.get}\" else \"\",\n+      if (min.isDefined) s\"min=${min.get}\" else \"\",\n+      if (ndv.isDefined) s\"ndv=${ndv.get}\" else \"\",\n+      if (avgColLen.isDefined) s\"avgColLen=${avgColLen.get}\" else \"\",\n+      if (maxColLen.isDefined) s\"maxColLen=${maxColLen.get}\" else \"\",\n+      if (numTrues.isDefined) s\"numTrues=${numTrues.get}\" else \"\",\n+      if (numFalses.isDefined) s\"numFalses=${numFalses.get}\" else \"\"\n+    ).filter(_.nonEmpty).mkString(\", \")\n+  }\n+}\n+\n+object ColumnStats {\n+  def fromString(str: String, dataType: DataType): ColumnStats = {"
+  }, {
+    "author": {
+      "login": "wzhfy"
+    },
+    "body": "ok, I think apply() is better.\n",
+    "commit": "734abad045a5378d14489a4e956b7a8e1c95a811",
+    "createdAt": "2016-09-21T20:30:49Z",
+    "diffHunk": "@@ -32,19 +34,74 @@ package org.apache.spark.sql.catalyst.plans.logical\n  * @param sizeInBytes Physical size in bytes. For leaf operators this defaults to 1, otherwise it\n  *                    defaults to the product of children's `sizeInBytes`.\n  * @param rowCount Estimated number of rows.\n+ * @param colStats Column-level statistics.\n  * @param isBroadcastable If true, output is small enough to be used in a broadcast join.\n  */\n case class Statistics(\n     sizeInBytes: BigInt,\n     rowCount: Option[BigInt] = None,\n+    colStats: Map[String, ColumnStats] = Map.empty,\n     isBroadcastable: Boolean = false) {\n+\n   override def toString: String = \"Statistics(\" + simpleString + \")\"\n \n   /** Readable string representation for the Statistics. */\n   def simpleString: String = {\n     Seq(s\"sizeInBytes=$sizeInBytes\",\n       if (rowCount.isDefined) s\"rowCount=${rowCount.get}\" else \"\",\n+      if (colStats.nonEmpty) s\"colStats=$colStats\" else \"\",\n       s\"isBroadcastable=$isBroadcastable\"\n-    ).filter(_.nonEmpty).mkString(\"\", \", \", \"\")\n+    ).filter(_.nonEmpty).mkString(\", \")\n+  }\n+}\n+\n+/**\n+ * Statistics for a column.\n+ * @param ndv Number of distinct values of the column.\n+ */\n+case class ColumnStats(\n+    dataType: DataType,\n+    numNulls: Long,\n+    max: Option[Any] = None,\n+    min: Option[Any] = None,\n+    ndv: Option[Long] = None,\n+    avgColLen: Option[Double] = None,\n+    maxColLen: Option[Long] = None,\n+    numTrues: Option[Long] = None,\n+    numFalses: Option[Long] = None) {\n+\n+  override def toString: String = \"ColumnStats(\" + simpleString + \")\"\n+\n+  def simpleString: String = {\n+    Seq(s\"numNulls=$numNulls\",\n+      if (max.isDefined) s\"max=${max.get}\" else \"\",\n+      if (min.isDefined) s\"min=${min.get}\" else \"\",\n+      if (ndv.isDefined) s\"ndv=${ndv.get}\" else \"\",\n+      if (avgColLen.isDefined) s\"avgColLen=${avgColLen.get}\" else \"\",\n+      if (maxColLen.isDefined) s\"maxColLen=${maxColLen.get}\" else \"\",\n+      if (numTrues.isDefined) s\"numTrues=${numTrues.get}\" else \"\",\n+      if (numFalses.isDefined) s\"numFalses=${numFalses.get}\" else \"\"\n+    ).filter(_.nonEmpty).mkString(\", \")\n+  }\n+}\n+\n+object ColumnStats {\n+  def fromString(str: String, dataType: DataType): ColumnStats = {"
+  }],
+  "prId": 15090
+}, {
+  "comments": [{
+    "author": {
+      "login": "srinathshankar"
+    },
+    "body": "Shouldn't max/min be numeric ? (You're not planning on putting strings in here, right) ?\n",
+    "commit": "734abad045a5378d14489a4e956b7a8e1c95a811",
+    "createdAt": "2016-09-21T17:53:40Z",
+    "diffHunk": "@@ -32,19 +34,74 @@ package org.apache.spark.sql.catalyst.plans.logical\n  * @param sizeInBytes Physical size in bytes. For leaf operators this defaults to 1, otherwise it\n  *                    defaults to the product of children's `sizeInBytes`.\n  * @param rowCount Estimated number of rows.\n+ * @param colStats Column-level statistics.\n  * @param isBroadcastable If true, output is small enough to be used in a broadcast join.\n  */\n case class Statistics(\n     sizeInBytes: BigInt,\n     rowCount: Option[BigInt] = None,\n+    colStats: Map[String, ColumnStats] = Map.empty,\n     isBroadcastable: Boolean = false) {\n+\n   override def toString: String = \"Statistics(\" + simpleString + \")\"\n \n   /** Readable string representation for the Statistics. */\n   def simpleString: String = {\n     Seq(s\"sizeInBytes=$sizeInBytes\",\n       if (rowCount.isDefined) s\"rowCount=${rowCount.get}\" else \"\",\n+      if (colStats.nonEmpty) s\"colStats=$colStats\" else \"\",\n       s\"isBroadcastable=$isBroadcastable\"\n-    ).filter(_.nonEmpty).mkString(\"\", \", \", \"\")\n+    ).filter(_.nonEmpty).mkString(\", \")\n+  }\n+}\n+\n+/**\n+ * Statistics for a column.\n+ * @param ndv Number of distinct values of the column.\n+ */\n+case class ColumnStats(\n+    dataType: DataType,\n+    numNulls: Long,\n+    max: Option[Any] = None,"
+  }, {
+    "author": {
+      "login": "wzhfy"
+    },
+    "body": "Yes, max/min are numeric, but do we have a primitive numeric type in scala?\n",
+    "commit": "734abad045a5378d14489a4e956b7a8e1c95a811",
+    "createdAt": "2016-09-21T20:28:22Z",
+    "diffHunk": "@@ -32,19 +34,74 @@ package org.apache.spark.sql.catalyst.plans.logical\n  * @param sizeInBytes Physical size in bytes. For leaf operators this defaults to 1, otherwise it\n  *                    defaults to the product of children's `sizeInBytes`.\n  * @param rowCount Estimated number of rows.\n+ * @param colStats Column-level statistics.\n  * @param isBroadcastable If true, output is small enough to be used in a broadcast join.\n  */\n case class Statistics(\n     sizeInBytes: BigInt,\n     rowCount: Option[BigInt] = None,\n+    colStats: Map[String, ColumnStats] = Map.empty,\n     isBroadcastable: Boolean = false) {\n+\n   override def toString: String = \"Statistics(\" + simpleString + \")\"\n \n   /** Readable string representation for the Statistics. */\n   def simpleString: String = {\n     Seq(s\"sizeInBytes=$sizeInBytes\",\n       if (rowCount.isDefined) s\"rowCount=${rowCount.get}\" else \"\",\n+      if (colStats.nonEmpty) s\"colStats=$colStats\" else \"\",\n       s\"isBroadcastable=$isBroadcastable\"\n-    ).filter(_.nonEmpty).mkString(\"\", \", \", \"\")\n+    ).filter(_.nonEmpty).mkString(\", \")\n+  }\n+}\n+\n+/**\n+ * Statistics for a column.\n+ * @param ndv Number of distinct values of the column.\n+ */\n+case class ColumnStats(\n+    dataType: DataType,\n+    numNulls: Long,\n+    max: Option[Any] = None,"
+  }],
+  "prId": 15090
+}, {
+  "comments": [{
+    "author": {
+      "login": "gatorsmile"
+    },
+    "body": "I am not sure whether we should do this. Hive does not show it in the `DESC FORMATTED/EXTENDED`, right? The string could be super long when the table has many columns. cc @rxin @hvanhovell @cloud-fan \n",
+    "commit": "734abad045a5378d14489a4e956b7a8e1c95a811",
+    "createdAt": "2016-09-22T23:19:01Z",
+    "diffHunk": "@@ -32,19 +34,74 @@ package org.apache.spark.sql.catalyst.plans.logical\n  * @param sizeInBytes Physical size in bytes. For leaf operators this defaults to 1, otherwise it\n  *                    defaults to the product of children's `sizeInBytes`.\n  * @param rowCount Estimated number of rows.\n+ * @param colStats Column-level statistics.\n  * @param isBroadcastable If true, output is small enough to be used in a broadcast join.\n  */\n case class Statistics(\n     sizeInBytes: BigInt,\n     rowCount: Option[BigInt] = None,\n+    colStats: Map[String, ColumnStats] = Map.empty,\n     isBroadcastable: Boolean = false) {\n+\n   override def toString: String = \"Statistics(\" + simpleString + \")\"\n \n   /** Readable string representation for the Statistics. */\n   def simpleString: String = {\n     Seq(s\"sizeInBytes=$sizeInBytes\",\n       if (rowCount.isDefined) s\"rowCount=${rowCount.get}\" else \"\",\n+      if (colStats.nonEmpty) s\"colStats=$colStats\" else \"\","
+  }, {
+    "author": {
+      "login": "wzhfy"
+    },
+    "body": "I think it's ok for now, because we don't have other ways to see the column stats. We can delete this when we support `DESC FORMATTED TABLE COLUMN` command, which shows column-level stats (including histograms?) of the given column. \n",
+    "commit": "734abad045a5378d14489a4e956b7a8e1c95a811",
+    "createdAt": "2016-09-23T00:09:19Z",
+    "diffHunk": "@@ -32,19 +34,74 @@ package org.apache.spark.sql.catalyst.plans.logical\n  * @param sizeInBytes Physical size in bytes. For leaf operators this defaults to 1, otherwise it\n  *                    defaults to the product of children's `sizeInBytes`.\n  * @param rowCount Estimated number of rows.\n+ * @param colStats Column-level statistics.\n  * @param isBroadcastable If true, output is small enough to be used in a broadcast join.\n  */\n case class Statistics(\n     sizeInBytes: BigInt,\n     rowCount: Option[BigInt] = None,\n+    colStats: Map[String, ColumnStats] = Map.empty,\n     isBroadcastable: Boolean = false) {\n+\n   override def toString: String = \"Statistics(\" + simpleString + \")\"\n \n   /** Readable string representation for the Statistics. */\n   def simpleString: String = {\n     Seq(s\"sizeInBytes=$sizeInBytes\",\n       if (rowCount.isDefined) s\"rowCount=${rowCount.get}\" else \"\",\n+      if (colStats.nonEmpty) s\"colStats=$colStats\" else \"\","
+  }, {
+    "author": {
+      "login": "wzhfy"
+    },
+    "body": "BTW, I've created a jira [SPARK-17642](https://issues.apache.org/jira/browse/SPARK-17642) for this. We can fix it when column-level statistics including histograms are supported.\n",
+    "commit": "734abad045a5378d14489a4e956b7a8e1c95a811",
+    "createdAt": "2016-09-23T00:50:10Z",
+    "diffHunk": "@@ -32,19 +34,74 @@ package org.apache.spark.sql.catalyst.plans.logical\n  * @param sizeInBytes Physical size in bytes. For leaf operators this defaults to 1, otherwise it\n  *                    defaults to the product of children's `sizeInBytes`.\n  * @param rowCount Estimated number of rows.\n+ * @param colStats Column-level statistics.\n  * @param isBroadcastable If true, output is small enough to be used in a broadcast join.\n  */\n case class Statistics(\n     sizeInBytes: BigInt,\n     rowCount: Option[BigInt] = None,\n+    colStats: Map[String, ColumnStats] = Map.empty,\n     isBroadcastable: Boolean = false) {\n+\n   override def toString: String = \"Statistics(\" + simpleString + \")\"\n \n   /** Readable string representation for the Statistics. */\n   def simpleString: String = {\n     Seq(s\"sizeInBytes=$sizeInBytes\",\n       if (rowCount.isDefined) s\"rowCount=${rowCount.get}\" else \"\",\n+      if (colStats.nonEmpty) s\"colStats=$colStats\" else \"\","
+  }],
+  "prId": 15090
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "we can just write `UnsafeRow.createFromBytesArray(bytes, numFields)`\n",
+    "commit": "734abad045a5378d14489a4e956b7a8e1c95a811",
+    "createdAt": "2016-09-29T09:44:49Z",
+    "diffHunk": "@@ -32,19 +38,84 @@ package org.apache.spark.sql.catalyst.plans.logical\n  * @param sizeInBytes Physical size in bytes. For leaf operators this defaults to 1, otherwise it\n  *                    defaults to the product of children's `sizeInBytes`.\n  * @param rowCount Estimated number of rows.\n+ * @param colStats Column-level statistics.\n  * @param isBroadcastable If true, output is small enough to be used in a broadcast join.\n  */\n case class Statistics(\n     sizeInBytes: BigInt,\n     rowCount: Option[BigInt] = None,\n+    colStats: Map[String, ColumnStat] = Map.empty,\n     isBroadcastable: Boolean = false) {\n+\n   override def toString: String = \"Statistics(\" + simpleString + \")\"\n \n   /** Readable string representation for the Statistics. */\n   def simpleString: String = {\n     Seq(s\"sizeInBytes=$sizeInBytes\",\n       if (rowCount.isDefined) s\"rowCount=${rowCount.get}\" else \"\",\n       s\"isBroadcastable=$isBroadcastable\"\n-    ).filter(_.nonEmpty).mkString(\"\", \", \", \"\")\n+    ).filter(_.nonEmpty).mkString(\", \")\n+  }\n+}\n+\n+/**\n+ * Statistics for a column.\n+ */\n+case class ColumnStat(statRow: InternalRow) {\n+\n+  def forNumeric[T <: AtomicType](dataType: T): NumericColumnStat[T] = {\n+    NumericColumnStat(statRow, dataType)\n+  }\n+  def forString: StringColumnStat = StringColumnStat(statRow)\n+  def forBinary: BinaryColumnStat = BinaryColumnStat(statRow)\n+  def forBoolean: BooleanColumnStat = BooleanColumnStat(statRow)\n+\n+  override def toString: String = {\n+    // use Base64 for encoding\n+    Base64.encodeBase64String(statRow.asInstanceOf[UnsafeRow].getBytes)\n   }\n }\n+\n+object ColumnStat {\n+  def apply(dataType: DataType, str: String): ColumnStat = {\n+    // use Base64 for decoding\n+    val bytes = Base64.decodeBase64(str)\n+    val numFields = dataType match {\n+      case BinaryType | BooleanType => 3\n+      case _ => 4\n+    }\n+    val unsafeRow = new UnsafeRow(numFields)"
+  }, {
+    "author": {
+      "login": "wzhfy"
+    },
+    "body": "it only returns an empty UnsafeRow:\n\n``` java\nrow.pointTo(new byte[numBytes], numBytes);\n```\n",
+    "commit": "734abad045a5378d14489a4e956b7a8e1c95a811",
+    "createdAt": "2016-09-29T16:54:28Z",
+    "diffHunk": "@@ -32,19 +38,84 @@ package org.apache.spark.sql.catalyst.plans.logical\n  * @param sizeInBytes Physical size in bytes. For leaf operators this defaults to 1, otherwise it\n  *                    defaults to the product of children's `sizeInBytes`.\n  * @param rowCount Estimated number of rows.\n+ * @param colStats Column-level statistics.\n  * @param isBroadcastable If true, output is small enough to be used in a broadcast join.\n  */\n case class Statistics(\n     sizeInBytes: BigInt,\n     rowCount: Option[BigInt] = None,\n+    colStats: Map[String, ColumnStat] = Map.empty,\n     isBroadcastable: Boolean = false) {\n+\n   override def toString: String = \"Statistics(\" + simpleString + \")\"\n \n   /** Readable string representation for the Statistics. */\n   def simpleString: String = {\n     Seq(s\"sizeInBytes=$sizeInBytes\",\n       if (rowCount.isDefined) s\"rowCount=${rowCount.get}\" else \"\",\n       s\"isBroadcastable=$isBroadcastable\"\n-    ).filter(_.nonEmpty).mkString(\"\", \", \", \"\")\n+    ).filter(_.nonEmpty).mkString(\", \")\n+  }\n+}\n+\n+/**\n+ * Statistics for a column.\n+ */\n+case class ColumnStat(statRow: InternalRow) {\n+\n+  def forNumeric[T <: AtomicType](dataType: T): NumericColumnStat[T] = {\n+    NumericColumnStat(statRow, dataType)\n+  }\n+  def forString: StringColumnStat = StringColumnStat(statRow)\n+  def forBinary: BinaryColumnStat = BinaryColumnStat(statRow)\n+  def forBoolean: BooleanColumnStat = BooleanColumnStat(statRow)\n+\n+  override def toString: String = {\n+    // use Base64 for encoding\n+    Base64.encodeBase64String(statRow.asInstanceOf[UnsafeRow].getBytes)\n   }\n }\n+\n+object ColumnStat {\n+  def apply(dataType: DataType, str: String): ColumnStat = {\n+    // use Base64 for decoding\n+    val bytes = Base64.decodeBase64(str)\n+    val numFields = dataType match {\n+      case BinaryType | BooleanType => 3\n+      case _ => 4\n+    }\n+    val unsafeRow = new UnsafeRow(numFields)"
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "ah i see, sorry I read the code wrong\n",
+    "commit": "734abad045a5378d14489a4e956b7a8e1c95a811",
+    "createdAt": "2016-09-30T00:00:05Z",
+    "diffHunk": "@@ -32,19 +38,84 @@ package org.apache.spark.sql.catalyst.plans.logical\n  * @param sizeInBytes Physical size in bytes. For leaf operators this defaults to 1, otherwise it\n  *                    defaults to the product of children's `sizeInBytes`.\n  * @param rowCount Estimated number of rows.\n+ * @param colStats Column-level statistics.\n  * @param isBroadcastable If true, output is small enough to be used in a broadcast join.\n  */\n case class Statistics(\n     sizeInBytes: BigInt,\n     rowCount: Option[BigInt] = None,\n+    colStats: Map[String, ColumnStat] = Map.empty,\n     isBroadcastable: Boolean = false) {\n+\n   override def toString: String = \"Statistics(\" + simpleString + \")\"\n \n   /** Readable string representation for the Statistics. */\n   def simpleString: String = {\n     Seq(s\"sizeInBytes=$sizeInBytes\",\n       if (rowCount.isDefined) s\"rowCount=${rowCount.get}\" else \"\",\n       s\"isBroadcastable=$isBroadcastable\"\n-    ).filter(_.nonEmpty).mkString(\"\", \", \", \"\")\n+    ).filter(_.nonEmpty).mkString(\", \")\n+  }\n+}\n+\n+/**\n+ * Statistics for a column.\n+ */\n+case class ColumnStat(statRow: InternalRow) {\n+\n+  def forNumeric[T <: AtomicType](dataType: T): NumericColumnStat[T] = {\n+    NumericColumnStat(statRow, dataType)\n+  }\n+  def forString: StringColumnStat = StringColumnStat(statRow)\n+  def forBinary: BinaryColumnStat = BinaryColumnStat(statRow)\n+  def forBoolean: BooleanColumnStat = BooleanColumnStat(statRow)\n+\n+  override def toString: String = {\n+    // use Base64 for encoding\n+    Base64.encodeBase64String(statRow.asInstanceOf[UnsafeRow].getBytes)\n   }\n }\n+\n+object ColumnStat {\n+  def apply(dataType: DataType, str: String): ColumnStat = {\n+    // use Base64 for decoding\n+    val bytes = Base64.decodeBase64(str)\n+    val numFields = dataType match {\n+      case BinaryType | BooleanType => 3\n+      case _ => 4\n+    }\n+    val unsafeRow = new UnsafeRow(numFields)"
+  }],
+  "prId": 15090
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "We have `NumericType`, can we use that?\n",
+    "commit": "734abad045a5378d14489a4e956b7a8e1c95a811",
+    "createdAt": "2016-10-01T12:59:40Z",
+    "diffHunk": "@@ -32,19 +38,80 @@ package org.apache.spark.sql.catalyst.plans.logical\n  * @param sizeInBytes Physical size in bytes. For leaf operators this defaults to 1, otherwise it\n  *                    defaults to the product of children's `sizeInBytes`.\n  * @param rowCount Estimated number of rows.\n+ * @param colStats Column-level statistics.\n  * @param isBroadcastable If true, output is small enough to be used in a broadcast join.\n  */\n case class Statistics(\n     sizeInBytes: BigInt,\n     rowCount: Option[BigInt] = None,\n+    colStats: Map[String, ColumnStat] = Map.empty,\n     isBroadcastable: Boolean = false) {\n+\n   override def toString: String = \"Statistics(\" + simpleString + \")\"\n \n   /** Readable string representation for the Statistics. */\n   def simpleString: String = {\n     Seq(s\"sizeInBytes=$sizeInBytes\",\n       if (rowCount.isDefined) s\"rowCount=${rowCount.get}\" else \"\",\n       s\"isBroadcastable=$isBroadcastable\"\n-    ).filter(_.nonEmpty).mkString(\"\", \", \", \"\")\n+    ).filter(_.nonEmpty).mkString(\", \")\n+  }\n+}\n+\n+/**\n+ * Statistics for a column.\n+ */\n+case class ColumnStat(statRow: InternalRow) {\n+\n+  def forNumeric[T <: AtomicType](dataType: T): NumericColumnStat[T] = {",
+    "line": 43
+  }, {
+    "author": {
+      "login": "wzhfy"
+    },
+    "body": "But we need to include DateType and TimestampType also, so I use AtomicType.\n",
+    "commit": "734abad045a5378d14489a4e956b7a8e1c95a811",
+    "createdAt": "2016-10-01T16:50:55Z",
+    "diffHunk": "@@ -32,19 +38,80 @@ package org.apache.spark.sql.catalyst.plans.logical\n  * @param sizeInBytes Physical size in bytes. For leaf operators this defaults to 1, otherwise it\n  *                    defaults to the product of children's `sizeInBytes`.\n  * @param rowCount Estimated number of rows.\n+ * @param colStats Column-level statistics.\n  * @param isBroadcastable If true, output is small enough to be used in a broadcast join.\n  */\n case class Statistics(\n     sizeInBytes: BigInt,\n     rowCount: Option[BigInt] = None,\n+    colStats: Map[String, ColumnStat] = Map.empty,\n     isBroadcastable: Boolean = false) {\n+\n   override def toString: String = \"Statistics(\" + simpleString + \")\"\n \n   /** Readable string representation for the Statistics. */\n   def simpleString: String = {\n     Seq(s\"sizeInBytes=$sizeInBytes\",\n       if (rowCount.isDefined) s\"rowCount=${rowCount.get}\" else \"\",\n       s\"isBroadcastable=$isBroadcastable\"\n-    ).filter(_.nonEmpty).mkString(\"\", \", \", \"\")\n+    ).filter(_.nonEmpty).mkString(\", \")\n+  }\n+}\n+\n+/**\n+ * Statistics for a column.\n+ */\n+case class ColumnStat(statRow: InternalRow) {\n+\n+  def forNumeric[T <: AtomicType](dataType: T): NumericColumnStat[T] = {",
+    "line": 43
+  }],
+  "prId": 15090
+}]

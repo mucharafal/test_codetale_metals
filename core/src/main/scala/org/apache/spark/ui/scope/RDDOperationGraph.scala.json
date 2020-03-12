@@ -1,0 +1,110 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "The whole if-else is just `ids.isEmpty || parentIds.exists(id => ids.contains(id) || !dropRDDIds.contains(id))` ?\n",
+    "commit": "5163a51a81ea509bd76b3452fa33fb83078c279e",
+    "createdAt": "2016-08-21T10:15:53Z",
+    "diffHunk": "@@ -119,18 +119,47 @@ private[ui] object RDDOperationGraph extends Logging {\n       { if (stage.attemptId == 0) \"\" else s\" (attempt ${stage.attemptId})\" }\n     val rootCluster = new RDDOperationCluster(stageClusterId, stageClusterName)\n \n+    var rootNodeCount = 0\n+    val addRDDIds = new mutable.HashSet[Int]()\n+    val dropRDDIds = new mutable.HashSet[Int]()\n+\n+    def isAllowed(ids: mutable.HashSet[Int], rdd: RDDInfo): Boolean = {\n+      val parentIds = rdd.parentIds\n+      if (parentIds.size == 0) {\n+        rootNodeCount < retainedNodes\n+      } else {\n+        if (ids.size > 0) {"
+  }, {
+    "author": {
+      "login": "cenyuhai"
+    },
+    "body": "yes, you are right...\n",
+    "commit": "5163a51a81ea509bd76b3452fa33fb83078c279e",
+    "createdAt": "2016-08-21T11:39:57Z",
+    "diffHunk": "@@ -119,18 +119,47 @@ private[ui] object RDDOperationGraph extends Logging {\n       { if (stage.attemptId == 0) \"\" else s\" (attempt ${stage.attemptId})\" }\n     val rootCluster = new RDDOperationCluster(stageClusterId, stageClusterName)\n \n+    var rootNodeCount = 0\n+    val addRDDIds = new mutable.HashSet[Int]()\n+    val dropRDDIds = new mutable.HashSet[Int]()\n+\n+    def isAllowed(ids: mutable.HashSet[Int], rdd: RDDInfo): Boolean = {\n+      val parentIds = rdd.parentIds\n+      if (parentIds.size == 0) {\n+        rootNodeCount < retainedNodes\n+      } else {\n+        if (ids.size > 0) {"
+  }],
+  "prId": 14737
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Nit: usually don't write type on local vars unless it's necessary\n",
+    "commit": "5163a51a81ea509bd76b3452fa33fb83078c279e",
+    "createdAt": "2016-08-21T10:16:23Z",
+    "diffHunk": "@@ -119,18 +119,47 @@ private[ui] object RDDOperationGraph extends Logging {\n       { if (stage.attemptId == 0) \"\" else s\" (attempt ${stage.attemptId})\" }\n     val rootCluster = new RDDOperationCluster(stageClusterId, stageClusterName)\n \n+    var rootNodeCount = 0\n+    val addRDDIds = new mutable.HashSet[Int]()\n+    val dropRDDIds = new mutable.HashSet[Int]()\n+\n+    def isAllowed(ids: mutable.HashSet[Int], rdd: RDDInfo): Boolean = {\n+      val parentIds = rdd.parentIds\n+      if (parentIds.size == 0) {\n+        rootNodeCount < retainedNodes\n+      } else {\n+        if (ids.size > 0) {\n+            parentIds.exists(id => ids.contains(id) || !dropRDDIds.contains(id))\n+        } else {\n+            true\n+        }\n+      }\n+    }\n+\n     // Find nodes, edges, and operation scopes that belong to this stage\n-    stage.rddInfos.foreach { rdd =>\n-      edges ++= rdd.parentIds.map { parentId => RDDOperationEdge(parentId, rdd.id) }\n+    stage.rddInfos.sortBy(_.id).foreach { rdd =>\n+      val keepNode: Boolean = isAllowed(addRDDIds, rdd)"
+  }, {
+    "author": {
+      "login": "cenyuhai"
+    },
+    "body": "OK.\n",
+    "commit": "5163a51a81ea509bd76b3452fa33fb83078c279e",
+    "createdAt": "2016-08-21T11:39:41Z",
+    "diffHunk": "@@ -119,18 +119,47 @@ private[ui] object RDDOperationGraph extends Logging {\n       { if (stage.attemptId == 0) \"\" else s\" (attempt ${stage.attemptId})\" }\n     val rootCluster = new RDDOperationCluster(stageClusterId, stageClusterName)\n \n+    var rootNodeCount = 0\n+    val addRDDIds = new mutable.HashSet[Int]()\n+    val dropRDDIds = new mutable.HashSet[Int]()\n+\n+    def isAllowed(ids: mutable.HashSet[Int], rdd: RDDInfo): Boolean = {\n+      val parentIds = rdd.parentIds\n+      if (parentIds.size == 0) {\n+        rootNodeCount < retainedNodes\n+      } else {\n+        if (ids.size > 0) {\n+            parentIds.exists(id => ids.contains(id) || !dropRDDIds.contains(id))\n+        } else {\n+            true\n+        }\n+      }\n+    }\n+\n     // Find nodes, edges, and operation scopes that belong to this stage\n-    stage.rddInfos.foreach { rdd =>\n-      edges ++= rdd.parentIds.map { parentId => RDDOperationEdge(parentId, rdd.id) }\n+    stage.rddInfos.sortBy(_.id).foreach { rdd =>\n+      val keepNode: Boolean = isAllowed(addRDDIds, rdd)"
+  }],
+  "prId": 14737
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Nit: a scope with braces isn't needed\n",
+    "commit": "5163a51a81ea509bd76b3452fa33fb83078c279e",
+    "createdAt": "2016-08-21T10:16:36Z",
+    "diffHunk": "@@ -119,18 +119,47 @@ private[ui] object RDDOperationGraph extends Logging {\n       { if (stage.attemptId == 0) \"\" else s\" (attempt ${stage.attemptId})\" }\n     val rootCluster = new RDDOperationCluster(stageClusterId, stageClusterName)\n \n+    var rootNodeCount = 0\n+    val addRDDIds = new mutable.HashSet[Int]()\n+    val dropRDDIds = new mutable.HashSet[Int]()\n+\n+    def isAllowed(ids: mutable.HashSet[Int], rdd: RDDInfo): Boolean = {\n+      val parentIds = rdd.parentIds\n+      if (parentIds.size == 0) {\n+        rootNodeCount < retainedNodes\n+      } else {\n+        if (ids.size > 0) {\n+            parentIds.exists(id => ids.contains(id) || !dropRDDIds.contains(id))\n+        } else {\n+            true\n+        }\n+      }\n+    }\n+\n     // Find nodes, edges, and operation scopes that belong to this stage\n-    stage.rddInfos.foreach { rdd =>\n-      edges ++= rdd.parentIds.map { parentId => RDDOperationEdge(parentId, rdd.id) }\n+    stage.rddInfos.sortBy(_.id).foreach { rdd =>\n+      val keepNode: Boolean = isAllowed(addRDDIds, rdd)\n+      if (keepNode) {\n+        addRDDIds.add(rdd.id)\n+        edges ++= rdd.parentIds.filter(id => !dropRDDIds.contains(id))\n+          .map { parentId => RDDOperationEdge(parentId, rdd.id) }"
+  }, {
+    "author": {
+      "login": "markhamstra"
+    },
+    "body": "This isn't just a question of whether `{ }` is necessary, but also whether using them to delimit closures with `map`, `filter`, etc. has become the defacto and accepted style in Spark code.  It has -- for just one of many, many examples, see the code that this diff is replacing.  Delimiting closures in this way even when not strictly necessary improves consistency and readability by not requiring more parsing of parentheses levels.  I wouldn't have recommended that this diff be changed. \n",
+    "commit": "5163a51a81ea509bd76b3452fa33fb83078c279e",
+    "createdAt": "2016-08-21T20:15:53Z",
+    "diffHunk": "@@ -119,18 +119,47 @@ private[ui] object RDDOperationGraph extends Logging {\n       { if (stage.attemptId == 0) \"\" else s\" (attempt ${stage.attemptId})\" }\n     val rootCluster = new RDDOperationCluster(stageClusterId, stageClusterName)\n \n+    var rootNodeCount = 0\n+    val addRDDIds = new mutable.HashSet[Int]()\n+    val dropRDDIds = new mutable.HashSet[Int]()\n+\n+    def isAllowed(ids: mutable.HashSet[Int], rdd: RDDInfo): Boolean = {\n+      val parentIds = rdd.parentIds\n+      if (parentIds.size == 0) {\n+        rootNodeCount < retainedNodes\n+      } else {\n+        if (ids.size > 0) {\n+            parentIds.exists(id => ids.contains(id) || !dropRDDIds.contains(id))\n+        } else {\n+            true\n+        }\n+      }\n+    }\n+\n     // Find nodes, edges, and operation scopes that belong to this stage\n-    stage.rddInfos.foreach { rdd =>\n-      edges ++= rdd.parentIds.map { parentId => RDDOperationEdge(parentId, rdd.id) }\n+    stage.rddInfos.sortBy(_.id).foreach { rdd =>\n+      val keepNode: Boolean = isAllowed(addRDDIds, rdd)\n+      if (keepNode) {\n+        addRDDIds.add(rdd.id)\n+        edges ++= rdd.parentIds.filter(id => !dropRDDIds.contains(id))\n+          .map { parentId => RDDOperationEdge(parentId, rdd.id) }"
+  }],
+  "prId": 14737
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Minor stuff like: \n\n```\nif (rdd.parnetIds.isEmpty) {\n  rootNoteCount += 1\n}\n```\n",
+    "commit": "5163a51a81ea509bd76b3452fa33fb83078c279e",
+    "createdAt": "2016-09-09T12:33:36Z",
+    "diffHunk": "@@ -119,18 +119,43 @@ private[ui] object RDDOperationGraph extends Logging {\n       { if (stage.attemptId == 0) \"\" else s\" (attempt ${stage.attemptId})\" }\n     val rootCluster = new RDDOperationCluster(stageClusterId, stageClusterName)\n \n+    var rootNodeCount = 0\n+    val addRDDIds = new mutable.HashSet[Int]()\n+    val dropRDDIds = new mutable.HashSet[Int]()\n+\n+    def isAllowed(rdd: RDDInfo): Boolean = {\n+      val parentIds = rdd.parentIds\n+      if (parentIds.size == 0) {\n+        rootNodeCount < retainedNodes\n+      } else {\n+        parentIds.exists(id => addRDDIds.contains(id) || !dropRDDIds.contains(id))\n+      }\n+    }\n+\n     // Find nodes, edges, and operation scopes that belong to this stage\n-    stage.rddInfos.foreach { rdd =>\n-      edges ++= rdd.parentIds.map { parentId => RDDOperationEdge(parentId, rdd.id) }\n+    stage.rddInfos.sortBy(_.id).foreach { rdd =>\n+      val keepNode = isAllowed(rdd)\n+      if (keepNode) {\n+        addRDDIds.add(rdd.id)\n+        edges ++= rdd.parentIds.filter(id => !dropRDDIds.contains(id))\n+          .map { parentId => RDDOperationEdge(parentId, rdd.id) }\n+      } else {\n+        dropRDDIds.add(rdd.id)\n+      }\n+\n+      if (rdd.parentIds.size == 0) {"
+  }],
+  "prId": 14737
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Is += more idiomatic?\nCan you also use `stage.rddInfos.sortBy(_.id).partition(isAllowed)` to build the added/dropped ID sets directly? and then iterate over the added ones?\n",
+    "commit": "5163a51a81ea509bd76b3452fa33fb83078c279e",
+    "createdAt": "2016-09-09T12:35:00Z",
+    "diffHunk": "@@ -119,18 +119,43 @@ private[ui] object RDDOperationGraph extends Logging {\n       { if (stage.attemptId == 0) \"\" else s\" (attempt ${stage.attemptId})\" }\n     val rootCluster = new RDDOperationCluster(stageClusterId, stageClusterName)\n \n+    var rootNodeCount = 0\n+    val addRDDIds = new mutable.HashSet[Int]()\n+    val dropRDDIds = new mutable.HashSet[Int]()\n+\n+    def isAllowed(rdd: RDDInfo): Boolean = {\n+      val parentIds = rdd.parentIds\n+      if (parentIds.size == 0) {\n+        rootNodeCount < retainedNodes\n+      } else {\n+        parentIds.exists(id => addRDDIds.contains(id) || !dropRDDIds.contains(id))\n+      }\n+    }\n+\n     // Find nodes, edges, and operation scopes that belong to this stage\n-    stage.rddInfos.foreach { rdd =>\n-      edges ++= rdd.parentIds.map { parentId => RDDOperationEdge(parentId, rdd.id) }\n+    stage.rddInfos.sortBy(_.id).foreach { rdd =>\n+      val keepNode = isAllowed(rdd)\n+      if (keepNode) {\n+        addRDDIds.add(rdd.id)"
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Hm, maybe you can't because it depends on the set's current value. Anyway I wonder if you can just inline isAllowed to make this simpler.\n",
+    "commit": "5163a51a81ea509bd76b3452fa33fb83078c279e",
+    "createdAt": "2016-09-09T12:35:51Z",
+    "diffHunk": "@@ -119,18 +119,43 @@ private[ui] object RDDOperationGraph extends Logging {\n       { if (stage.attemptId == 0) \"\" else s\" (attempt ${stage.attemptId})\" }\n     val rootCluster = new RDDOperationCluster(stageClusterId, stageClusterName)\n \n+    var rootNodeCount = 0\n+    val addRDDIds = new mutable.HashSet[Int]()\n+    val dropRDDIds = new mutable.HashSet[Int]()\n+\n+    def isAllowed(rdd: RDDInfo): Boolean = {\n+      val parentIds = rdd.parentIds\n+      if (parentIds.size == 0) {\n+        rootNodeCount < retainedNodes\n+      } else {\n+        parentIds.exists(id => addRDDIds.contains(id) || !dropRDDIds.contains(id))\n+      }\n+    }\n+\n     // Find nodes, edges, and operation scopes that belong to this stage\n-    stage.rddInfos.foreach { rdd =>\n-      edges ++= rdd.parentIds.map { parentId => RDDOperationEdge(parentId, rdd.id) }\n+    stage.rddInfos.sortBy(_.id).foreach { rdd =>\n+      val keepNode = isAllowed(rdd)\n+      if (keepNode) {\n+        addRDDIds.add(rdd.id)"
+  }],
+  "prId": 14737
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Now we're just down to style stuff but I how about...\n\n```\nval isAllowed =\n  if (parentId.isEmpty) {\n    rootNodeCount += 1\n    rootNodeCount <= retainedNodes\n  } else {\n    parentIds.exists(...)\n  }\n```\n",
+    "commit": "5163a51a81ea509bd76b3452fa33fb83078c279e",
+    "createdAt": "2016-09-10T09:02:53Z",
+    "diffHunk": "@@ -119,18 +119,38 @@ private[ui] object RDDOperationGraph extends Logging {\n       { if (stage.attemptId == 0) \"\" else s\" (attempt ${stage.attemptId})\" }\n     val rootCluster = new RDDOperationCluster(stageClusterId, stageClusterName)\n \n+    var rootNodeCount = 0\n+    val addRDDIds = new mutable.HashSet[Int]()\n+    val dropRDDIds = new mutable.HashSet[Int]()\n+\n     // Find nodes, edges, and operation scopes that belong to this stage\n-    stage.rddInfos.foreach { rdd =>\n-      edges ++= rdd.parentIds.map { parentId => RDDOperationEdge(parentId, rdd.id) }\n+    stage.rddInfos.sortBy(_.id).foreach { rdd =>\n+      var isAllowed = true\n+      val parentIds = rdd.parentIds\n+      if (parentIds.isEmpty) {"
+  }],
+  "prId": 14737
+}, {
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Also consider simplifying blocks like this to `.map(RDDOperationEdge(_, rdd.id))`\n",
+    "commit": "5163a51a81ea509bd76b3452fa33fb83078c279e",
+    "createdAt": "2016-09-10T09:03:26Z",
+    "diffHunk": "@@ -119,18 +119,38 @@ private[ui] object RDDOperationGraph extends Logging {\n       { if (stage.attemptId == 0) \"\" else s\" (attempt ${stage.attemptId})\" }\n     val rootCluster = new RDDOperationCluster(stageClusterId, stageClusterName)\n \n+    var rootNodeCount = 0\n+    val addRDDIds = new mutable.HashSet[Int]()\n+    val dropRDDIds = new mutable.HashSet[Int]()\n+\n     // Find nodes, edges, and operation scopes that belong to this stage\n-    stage.rddInfos.foreach { rdd =>\n-      edges ++= rdd.parentIds.map { parentId => RDDOperationEdge(parentId, rdd.id) }\n+    stage.rddInfos.sortBy(_.id).foreach { rdd =>\n+      var isAllowed = true\n+      val parentIds = rdd.parentIds\n+      if (parentIds.isEmpty) {\n+        isAllowed = rootNodeCount < retainedNodes\n+        rootNodeCount += 1\n+      } else {\n+        isAllowed = parentIds.exists(id => addRDDIds.contains(id) || !dropRDDIds.contains(id))\n+      }\n+\n+      if (isAllowed) {\n+        addRDDIds += rdd.id\n+        edges ++= parentIds.filter(id => !dropRDDIds.contains(id))\n+          .map { parentId => RDDOperationEdge(parentId, rdd.id) }"
+  }],
+  "prId": 14737
+}]

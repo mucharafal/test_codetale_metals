@@ -1,0 +1,13 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "Typo: string -> struct\n",
+    "commit": "9162f4204a5a38b84b9c758a20764c9d32307168",
+    "createdAt": "2015-07-28T04:37:08Z",
+    "diffHunk": "@@ -81,6 +82,52 @@ public static int write(UnsafeRow target, int ordinal, int cursor, byte[] input)\n     }\n   }\n \n+  /**\n+   * Writer for struct type where the struct field is backed by an {@link UnsafeRow}.\n+   *\n+   * We throw UnsupportedOperationException for inputs that are not backed by {@link UnsafeRow}.\n+   * Non-UnsafeRow struct fields are handled directly in\n+   * {@link org.apache.spark.sql.catalyst.expressions.codegen.GenerateUnsafeProjection}\n+   * by generating the Java code needed to convert them into UnsafeRow.\n+   */\n+  public static class StructWriter {\n+    public static int getSize(InternalRow input) {\n+      int numBytes = 0;\n+      if (input instanceof UnsafeRow) {\n+        numBytes = ((UnsafeRow) input).getSizeInBytes();\n+      } else {\n+        // This is handled directly in GenerateUnsafeProjection.\n+        throw new UnsupportedOperationException();\n+      }\n+      return ByteArrayMethods.roundNumberOfBytesToNearestWord(numBytes);\n+    }\n+\n+    public static int write(UnsafeRow target, int ordinal, int cursor, InternalRow input) {\n+      int numBytes = 0;\n+      final long offset = target.getBaseOffset() + cursor;\n+      if (input instanceof UnsafeRow) {\n+        final UnsafeRow row = (UnsafeRow) input;\n+        numBytes = row.getSizeInBytes();\n+\n+        // zero-out the padding bytes\n+        if ((numBytes & 0x07) > 0) {\n+          PlatformDependent.UNSAFE.putLong(\n+            target.getBaseObject(), offset + ((numBytes >> 3) << 3), 0L);\n+        }\n+\n+        // Write the string to the variable length portion.",
+    "line": 45
+  }],
+  "prId": 7689
+}]

@@ -1,0 +1,31 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "I believe this is already fixed in https://issues.apache.org/jira/browse/SPARK-21884",
+    "commit": "d624955aa7fd07acde698a50d05ed5679ee91533",
+    "createdAt": "2018-04-20T05:00:07Z",
+    "diffHunk": "@@ -114,11 +119,8 @@ case class OptimizeMetadataOnlyQuery(catalog: SessionCatalog) extends Rule[Logic\n         relation match {\n           case l @ LogicalRelation(fsRelation: HadoopFsRelation, _, _, isStreaming) =>\n             val partAttrs = getPartitionAttrs(fsRelation.partitionSchema.map(_.name), l)\n-            val partitionData = fsRelation.location.listFiles(relFilters, Nil)\n-            // partition data may be a stream, which can cause serialization to hit stack level too\n-            // deep exceptions because it is a recursive structure in memory. converting to array\n-            // avoids the problem.",
+    "line": 40
+  }, {
+    "author": {
+      "login": "rdblue"
+    },
+    "body": "Yes, that does fix it but that's in a non-obvious way. What isn't clear is what guarantees that the rows used to construct the LocalRelation will never need to be serialized. Would it be reasonable for a future commit to remove the `@transient` modifier and re-introduce the problem?\r\n\r\nI would rather this return the data in a non-recursive structure, but it's a minor point.",
+    "commit": "d624955aa7fd07acde698a50d05ed5679ee91533",
+    "createdAt": "2018-04-20T16:15:09Z",
+    "diffHunk": "@@ -114,11 +119,8 @@ case class OptimizeMetadataOnlyQuery(catalog: SessionCatalog) extends Rule[Logic\n         relation match {\n           case l @ LogicalRelation(fsRelation: HadoopFsRelation, _, _, isStreaming) =>\n             val partAttrs = getPartitionAttrs(fsRelation.partitionSchema.map(_.name), l)\n-            val partitionData = fsRelation.location.listFiles(relFilters, Nil)\n-            // partition data may be a stream, which can cause serialization to hit stack level too\n-            // deep exceptions because it is a recursive structure in memory. converting to array\n-            // avoids the problem.",
+    "line": 40
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "> Would it be reasonable for a future commit to remove the @transient modifier and re-introduce the problem?\r\n\r\nThat's very unlikely. SPARK-21884 guarantees Spark won't serialize the rows and we have regression tests to protect us. BTW it would be a lot of work to make sure all the places that create `LocalRelation` do not use recursive structure. I'll add some comments to `LocalRelation` to emphasize it.",
+    "commit": "d624955aa7fd07acde698a50d05ed5679ee91533",
+    "createdAt": "2018-04-23T02:45:15Z",
+    "diffHunk": "@@ -114,11 +119,8 @@ case class OptimizeMetadataOnlyQuery(catalog: SessionCatalog) extends Rule[Logic\n         relation match {\n           case l @ LogicalRelation(fsRelation: HadoopFsRelation, _, _, isStreaming) =>\n             val partAttrs = getPartitionAttrs(fsRelation.partitionSchema.map(_.name), l)\n-            val partitionData = fsRelation.location.listFiles(relFilters, Nil)\n-            // partition data may be a stream, which can cause serialization to hit stack level too\n-            // deep exceptions because it is a recursive structure in memory. converting to array\n-            // avoids the problem.",
+    "line": 40
+  }],
+  "prId": 21111
+}]

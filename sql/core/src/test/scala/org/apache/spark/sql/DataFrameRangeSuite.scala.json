@@ -1,0 +1,160 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "What if this runs after the stage is canceled in the listener but before the thread is interrupted?\r\n\r\nThe more I look at this, the more it looks like SPARK-22764 (the SparkContextSuite flakiness). If you do the same thing here, I'm pretty sure it will work.\r\n\r\n- in the listener, wait until the task signals it's running\r\n- in the task, signal that it's running (by setting a boolean, like in SparkContextSuite, or through some other means), then go to sleep\r\n- in the listener, cancel the stage after the tasks signal they're running\r\n\r\nThis makes sure both that the tasks have started and have not yet finished when the listener cancels the stage.",
+    "commit": "c8a0d8d2dcad81968ba1a13bee8ff30f66f7a922",
+    "createdAt": "2018-04-10T18:01:09Z",
+    "diffHunk": "@@ -164,10 +164,13 @@ class DataFrameRangeSuite extends QueryTest with SharedSQLContext with Eventuall\n     sparkContext.addSparkListener(listener)\n     for (codegen <- Seq(true, false)) {\n       withSQLConf(SQLConf.WHOLESTAGE_CODEGEN_ENABLED.key -> codegen.toString()) {\n-        DataFrameRangeSuite.stageToKill = -1\n+        DataFrameRangeSuite.stageToKill = DataFrameRangeSuite.INVALID_STAGE_ID\n         val ex = intercept[SparkException] {\n           spark.range(0, 100000000000L, 1, 1).map { x =>\n-            DataFrameRangeSuite.stageToKill = TaskContext.get().stageId()\n+            val taskContext = TaskContext.get()\n+            if (!taskContext.isInterrupted()) {"
+  }, {
+    "author": {
+      "login": "gaborgsomogyi"
+    },
+    "body": "To answer your question the whole point of this change is to block `DataFrameRangeSuite.stageToKill` overwrite while the first iteration's thread is running after `DataFrameRangeSuite.stageToKill = DataFrameRangeSuite.INVALID_STAGE_ID` happened. This would work also but would be less trivial.\r\n\r\nI agree if `DataFrameRangeSuite.stageToKill` object member removed and switch to `onTaskStart` then the whole mumbo-jumbo is not required.",
+    "commit": "c8a0d8d2dcad81968ba1a13bee8ff30f66f7a922",
+    "createdAt": "2018-04-11T09:33:34Z",
+    "diffHunk": "@@ -164,10 +164,13 @@ class DataFrameRangeSuite extends QueryTest with SharedSQLContext with Eventuall\n     sparkContext.addSparkListener(listener)\n     for (codegen <- Seq(true, false)) {\n       withSQLConf(SQLConf.WHOLESTAGE_CODEGEN_ENABLED.key -> codegen.toString()) {\n-        DataFrameRangeSuite.stageToKill = -1\n+        DataFrameRangeSuite.stageToKill = DataFrameRangeSuite.INVALID_STAGE_ID\n         val ex = intercept[SparkException] {\n           spark.range(0, 100000000000L, 1, 1).map { x =>\n-            DataFrameRangeSuite.stageToKill = TaskContext.get().stageId()\n+            val taskContext = TaskContext.get()\n+            if (!taskContext.isInterrupted()) {"
+  }],
+  "prId": 20888
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "I know this is what the other test does, but after looking at this again I think this is still dangerous.\r\n\r\n`sparkContext.cancelStage` is asynchronous, so you might wake up all the tasks and they might finish before the cancellation actually happens. If you just remove this line, then you guarantee the tasks won't finish unless the state is canceled.\r\n\r\nWhich means you don't really need the semaphore, you can just sleep indefinitely in the tasks (e.g. call `wait()`). And instead of the `eventually` above you could use a `CountDownLatch`.\r\n\r\nAnd if you think of it, you don't need the `DataFrameSuite` object since everything here is local to this test.\r\n\r\nAll this also applies to the other test, so if you feel like cleaning up that one in a separate PR...",
+    "commit": "c8a0d8d2dcad81968ba1a13bee8ff30f66f7a922",
+    "createdAt": "2018-04-12T01:11:12Z",
+    "diffHunk": "@@ -152,22 +154,28 @@ class DataFrameRangeSuite extends QueryTest with SharedSQLContext with Eventuall\n   }\n \n   test(\"Cancelling stage in a query with Range.\") {\n+    val slices = 10\n+\n     val listener = new SparkListener {\n-      override def onJobStart(jobStart: SparkListenerJobStart): Unit = {\n-        eventually(timeout(10.seconds), interval(1.millis)) {\n-          assert(DataFrameRangeSuite.stageToKill > 0)\n+      override def onTaskStart(taskStart: SparkListenerTaskStart): Unit = {\n+        eventually(timeout(10.seconds)) {\n+          assert(DataFrameRangeSuite.isTaskStarted)\n         }\n-        sparkContext.cancelStage(DataFrameRangeSuite.stageToKill)\n+        sparkContext.cancelStage(taskStart.stageId)\n+        DataFrameRangeSuite.semaphore.release(slices)"
+  }, {
+    "author": {
+      "login": "gaborgsomogyi"
+    },
+    "body": "I see your point and tried similar things before. How do you think it's possible to wait on anything in the task's code without having `NotSerializableException`? That's a quite hard limitation.",
+    "commit": "c8a0d8d2dcad81968ba1a13bee8ff30f66f7a922",
+    "createdAt": "2018-04-13T08:59:20Z",
+    "diffHunk": "@@ -152,22 +154,28 @@ class DataFrameRangeSuite extends QueryTest with SharedSQLContext with Eventuall\n   }\n \n   test(\"Cancelling stage in a query with Range.\") {\n+    val slices = 10\n+\n     val listener = new SparkListener {\n-      override def onJobStart(jobStart: SparkListenerJobStart): Unit = {\n-        eventually(timeout(10.seconds), interval(1.millis)) {\n-          assert(DataFrameRangeSuite.stageToKill > 0)\n+      override def onTaskStart(taskStart: SparkListenerTaskStart): Unit = {\n+        eventually(timeout(10.seconds)) {\n+          assert(DataFrameRangeSuite.isTaskStarted)\n         }\n-        sparkContext.cancelStage(DataFrameRangeSuite.stageToKill)\n+        sparkContext.cancelStage(taskStart.stageId)\n+        DataFrameRangeSuite.semaphore.release(slices)"
+  }, {
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "The task can wait on itself (`synchronized { wait() }`). The goal is to just go to sleep indefinitely.",
+    "commit": "c8a0d8d2dcad81968ba1a13bee8ff30f66f7a922",
+    "createdAt": "2018-04-13T17:23:12Z",
+    "diffHunk": "@@ -152,22 +154,28 @@ class DataFrameRangeSuite extends QueryTest with SharedSQLContext with Eventuall\n   }\n \n   test(\"Cancelling stage in a query with Range.\") {\n+    val slices = 10\n+\n     val listener = new SparkListener {\n-      override def onJobStart(jobStart: SparkListenerJobStart): Unit = {\n-        eventually(timeout(10.seconds), interval(1.millis)) {\n-          assert(DataFrameRangeSuite.stageToKill > 0)\n+      override def onTaskStart(taskStart: SparkListenerTaskStart): Unit = {\n+        eventually(timeout(10.seconds)) {\n+          assert(DataFrameRangeSuite.isTaskStarted)\n         }\n-        sparkContext.cancelStage(DataFrameRangeSuite.stageToKill)\n+        sparkContext.cancelStage(taskStart.stageId)\n+        DataFrameRangeSuite.semaphore.release(slices)"
+  }, {
+    "author": {
+      "login": "gaborgsomogyi"
+    },
+    "body": "The concept is clear.\r\n```\r\nsparkContext.range(0, 10000L, numSlices = slices).mapPartitions { x =>\r\n  synchronized { wait() }\r\n  x\r\n}.toDF(\"id\").agg(sum(\"id\")).collect()\r\n```\r\nthrows:\r\n```\r\nExpected the cause to be SparkException, got java.io.NotSerializableException: org.scalatest.Assertions$AssertionsHelper\r\nSerialization stack:\r\n\t- object not serializable (class: org.scalatest.Assertions$AssertionsHelper, value: org.scalatest.Assertions$AssertionsHelper@aced190)\r\n...\r\n```\r\nI mean this.",
+    "commit": "c8a0d8d2dcad81968ba1a13bee8ff30f66f7a922",
+    "createdAt": "2018-04-13T17:35:45Z",
+    "diffHunk": "@@ -152,22 +154,28 @@ class DataFrameRangeSuite extends QueryTest with SharedSQLContext with Eventuall\n   }\n \n   test(\"Cancelling stage in a query with Range.\") {\n+    val slices = 10\n+\n     val listener = new SparkListener {\n-      override def onJobStart(jobStart: SparkListenerJobStart): Unit = {\n-        eventually(timeout(10.seconds), interval(1.millis)) {\n-          assert(DataFrameRangeSuite.stageToKill > 0)\n+      override def onTaskStart(taskStart: SparkListenerTaskStart): Unit = {\n+        eventually(timeout(10.seconds)) {\n+          assert(DataFrameRangeSuite.isTaskStarted)\n         }\n-        sparkContext.cancelStage(DataFrameRangeSuite.stageToKill)\n+        sparkContext.cancelStage(taskStart.stageId)\n+        DataFrameRangeSuite.semaphore.release(slices)"
+  }, {
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Then do:\r\n\r\n```\r\nval lock = new Object()\r\nlock.synchronized { lock.wait() }\r\n```\r\n\r\nAgain, you just want to go to sleep waiting for an interrupt. There's like a thousand ways to do that.",
+    "commit": "c8a0d8d2dcad81968ba1a13bee8ff30f66f7a922",
+    "createdAt": "2018-04-13T17:38:04Z",
+    "diffHunk": "@@ -152,22 +154,28 @@ class DataFrameRangeSuite extends QueryTest with SharedSQLContext with Eventuall\n   }\n \n   test(\"Cancelling stage in a query with Range.\") {\n+    val slices = 10\n+\n     val listener = new SparkListener {\n-      override def onJobStart(jobStart: SparkListenerJobStart): Unit = {\n-        eventually(timeout(10.seconds), interval(1.millis)) {\n-          assert(DataFrameRangeSuite.stageToKill > 0)\n+      override def onTaskStart(taskStart: SparkListenerTaskStart): Unit = {\n+        eventually(timeout(10.seconds)) {\n+          assert(DataFrameRangeSuite.isTaskStarted)\n         }\n-        sparkContext.cancelStage(DataFrameRangeSuite.stageToKill)\n+        sparkContext.cancelStage(taskStart.stageId)\n+        DataFrameRangeSuite.semaphore.release(slices)"
+  }, {
+    "author": {
+      "login": "gaborgsomogyi"
+    },
+    "body": "If we do that so the stopped threads not get died. In the RDD iterator the following code makes sure that the thread will be killed:\r\n```\r\nprivate[spark] override def killTaskIfInterrupted(): Unit = {\r\n val reason = reasonIfKilled\r\n  if (reason.isDefined) {\r\n    throw new TaskKilledException(reason.get)\r\n  }\r\n}\r\n```\r\nIf `SparkContext.SPARK_JOB_INTERRUPT_ON_CANCEL` will be set then they will die properly.",
+    "commit": "c8a0d8d2dcad81968ba1a13bee8ff30f66f7a922",
+    "createdAt": "2018-04-13T19:32:52Z",
+    "diffHunk": "@@ -152,22 +154,28 @@ class DataFrameRangeSuite extends QueryTest with SharedSQLContext with Eventuall\n   }\n \n   test(\"Cancelling stage in a query with Range.\") {\n+    val slices = 10\n+\n     val listener = new SparkListener {\n-      override def onJobStart(jobStart: SparkListenerJobStart): Unit = {\n-        eventually(timeout(10.seconds), interval(1.millis)) {\n-          assert(DataFrameRangeSuite.stageToKill > 0)\n+      override def onTaskStart(taskStart: SparkListenerTaskStart): Unit = {\n+        eventually(timeout(10.seconds)) {\n+          assert(DataFrameRangeSuite.isTaskStarted)\n         }\n-        sparkContext.cancelStage(DataFrameRangeSuite.stageToKill)\n+        sparkContext.cancelStage(taskStart.stageId)\n+        DataFrameRangeSuite.semaphore.release(slices)"
+  }],
+  "prId": 20888
+}, {
+  "comments": [{
+    "author": {
+      "login": "jiangxb1987"
+    },
+    "body": "Can we create a new SparkContext for this test case, so you can have full control of the configurations/properties?",
+    "commit": "c8a0d8d2dcad81968ba1a13bee8ff30f66f7a922",
+    "createdAt": "2018-04-16T14:06:46Z",
+    "diffHunk": "@@ -152,39 +154,54 @@ class DataFrameRangeSuite extends QueryTest with SharedSQLContext with Eventuall\n   }\n \n   test(\"Cancelling stage in a query with Range.\") {\n-    val listener = new SparkListener {\n-      override def onJobStart(jobStart: SparkListenerJobStart): Unit = {\n-        eventually(timeout(10.seconds), interval(1.millis)) {\n-          assert(DataFrameRangeSuite.stageToKill > 0)\n+    val slices = 10\n+\n+    // Save and restore the value because SparkContext is shared\n+    val savedInterruptOnCancel = sparkContext\n+      .getLocalProperty(SparkContext.SPARK_JOB_INTERRUPT_ON_CANCEL)\n+\n+    try {\n+      sparkContext.setLocalProperty(SparkContext.SPARK_JOB_INTERRUPT_ON_CANCEL, \"true\")",
+    "line": 32
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "I'm afraid we can't, as we have a shared spark context for all the test cases in this suite, and we don't stop the context after each test case.",
+    "commit": "c8a0d8d2dcad81968ba1a13bee8ff30f66f7a922",
+    "createdAt": "2018-04-16T15:04:00Z",
+    "diffHunk": "@@ -152,39 +154,54 @@ class DataFrameRangeSuite extends QueryTest with SharedSQLContext with Eventuall\n   }\n \n   test(\"Cancelling stage in a query with Range.\") {\n-    val listener = new SparkListener {\n-      override def onJobStart(jobStart: SparkListenerJobStart): Unit = {\n-        eventually(timeout(10.seconds), interval(1.millis)) {\n-          assert(DataFrameRangeSuite.stageToKill > 0)\n+    val slices = 10\n+\n+    // Save and restore the value because SparkContext is shared\n+    val savedInterruptOnCancel = sparkContext\n+      .getLocalProperty(SparkContext.SPARK_JOB_INTERRUPT_ON_CANCEL)\n+\n+    try {\n+      sparkContext.setLocalProperty(SparkContext.SPARK_JOB_INTERRUPT_ON_CANCEL, \"true\")",
+    "line": 32
+  }],
+  "prId": 20888
+}, {
+  "comments": [{
+    "author": {
+      "login": "jiangxb1987"
+    },
+    "body": "Why do we need to specify the `numSlices`?",
+    "commit": "c8a0d8d2dcad81968ba1a13bee8ff30f66f7a922",
+    "createdAt": "2018-04-16T14:37:49Z",
+    "diffHunk": "@@ -156,43 +156,52 @@ class DataFrameRangeSuite extends QueryTest with SharedSQLContext with Eventuall\n   test(\"Cancelling stage in a query with Range.\") {\n     val slices = 10\n \n-    val listener = new SparkListener {\n-      override def onTaskStart(taskStart: SparkListenerTaskStart): Unit = {\n-        eventually(timeout(10.seconds)) {\n-          assert(DataFrameRangeSuite.isTaskStarted)\n+    // Save and restore the value because SparkContext is shared\n+    val savedInterruptOnCancel = sparkContext\n+      .getLocalProperty(SparkContext.SPARK_JOB_INTERRUPT_ON_CANCEL)\n+\n+    try {\n+      sparkContext.setLocalProperty(SparkContext.SPARK_JOB_INTERRUPT_ON_CANCEL, \"true\")\n+\n+      for (codegen <- Seq(true, false)) {\n+        val latch = new CountDownLatch(2)\n+\n+        val listener = new SparkListener {\n+          override def onTaskStart(taskStart: SparkListenerTaskStart): Unit = {\n+            sparkContext.cancelStage(taskStart.stageId)\n+            latch.countDown()\n+          }\n         }\n-        sparkContext.cancelStage(taskStart.stageId)\n-        DataFrameRangeSuite.semaphore.release(slices)\n-      }\n-    }\n \n-    sparkContext.addSparkListener(listener)\n-    for (codegen <- Seq(true, false)) {\n-      withSQLConf(SQLConf.WHOLESTAGE_CODEGEN_ENABLED.key -> codegen.toString()) {\n-        DataFrameRangeSuite.semaphore.drainPermits()\n-        DataFrameRangeSuite.isTaskStarted = false\n-        val ex = intercept[SparkException] {\n-          sparkContext.range(0, 10000L, numSlices = slices).mapPartitions { x =>\n-            DataFrameRangeSuite.isTaskStarted = true\n-            // Block waiting for the listener to cancel the stage.\n-            DataFrameRangeSuite.semaphore.acquire()\n-            x\n-          }.toDF(\"id\").agg(sum(\"id\")).collect()\n+        sparkContext.addSparkListener(listener)\n+        withSQLConf(SQLConf.WHOLESTAGE_CODEGEN_ENABLED.key -> codegen.toString()) {\n+          val ex = intercept[SparkException] {\n+            sparkContext.range(0, 10000L, numSlices = slices).mapPartitions { x =>"
+  }, {
+    "author": {
+      "login": "gaborgsomogyi"
+    },
+    "body": "If not set then the default is the number of cores on the local machine which makes the test hardware dependent. It's better to define it for test reproducibility. On the other hand the variable declaration is not required so removed.",
+    "commit": "c8a0d8d2dcad81968ba1a13bee8ff30f66f7a922",
+    "createdAt": "2018-04-17T09:36:25Z",
+    "diffHunk": "@@ -156,43 +156,52 @@ class DataFrameRangeSuite extends QueryTest with SharedSQLContext with Eventuall\n   test(\"Cancelling stage in a query with Range.\") {\n     val slices = 10\n \n-    val listener = new SparkListener {\n-      override def onTaskStart(taskStart: SparkListenerTaskStart): Unit = {\n-        eventually(timeout(10.seconds)) {\n-          assert(DataFrameRangeSuite.isTaskStarted)\n+    // Save and restore the value because SparkContext is shared\n+    val savedInterruptOnCancel = sparkContext\n+      .getLocalProperty(SparkContext.SPARK_JOB_INTERRUPT_ON_CANCEL)\n+\n+    try {\n+      sparkContext.setLocalProperty(SparkContext.SPARK_JOB_INTERRUPT_ON_CANCEL, \"true\")\n+\n+      for (codegen <- Seq(true, false)) {\n+        val latch = new CountDownLatch(2)\n+\n+        val listener = new SparkListener {\n+          override def onTaskStart(taskStart: SparkListenerTaskStart): Unit = {\n+            sparkContext.cancelStage(taskStart.stageId)\n+            latch.countDown()\n+          }\n         }\n-        sparkContext.cancelStage(taskStart.stageId)\n-        DataFrameRangeSuite.semaphore.release(slices)\n-      }\n-    }\n \n-    sparkContext.addSparkListener(listener)\n-    for (codegen <- Seq(true, false)) {\n-      withSQLConf(SQLConf.WHOLESTAGE_CODEGEN_ENABLED.key -> codegen.toString()) {\n-        DataFrameRangeSuite.semaphore.drainPermits()\n-        DataFrameRangeSuite.isTaskStarted = false\n-        val ex = intercept[SparkException] {\n-          sparkContext.range(0, 10000L, numSlices = slices).mapPartitions { x =>\n-            DataFrameRangeSuite.isTaskStarted = true\n-            // Block waiting for the listener to cancel the stage.\n-            DataFrameRangeSuite.semaphore.acquire()\n-            x\n-          }.toDF(\"id\").agg(sum(\"id\")).collect()\n+        sparkContext.addSparkListener(listener)\n+        withSQLConf(SQLConf.WHOLESTAGE_CODEGEN_ENABLED.key -> codegen.toString()) {\n+          val ex = intercept[SparkException] {\n+            sparkContext.range(0, 10000L, numSlices = slices).mapPartitions { x =>"
+  }],
+  "prId": 20888
+}, {
+  "comments": [{
+    "author": {
+      "login": "ala"
+    },
+    "body": "Could you add a comment explaining what is the purpose of the latch?",
+    "commit": "c8a0d8d2dcad81968ba1a13bee8ff30f66f7a922",
+    "createdAt": "2018-04-16T14:52:39Z",
+    "diffHunk": "@@ -152,39 +154,54 @@ class DataFrameRangeSuite extends QueryTest with SharedSQLContext with Eventuall\n   }\n \n   test(\"Cancelling stage in a query with Range.\") {\n-    val listener = new SparkListener {\n-      override def onJobStart(jobStart: SparkListenerJobStart): Unit = {\n-        eventually(timeout(10.seconds), interval(1.millis)) {\n-          assert(DataFrameRangeSuite.stageToKill > 0)\n+    val slices = 10\n+\n+    // Save and restore the value because SparkContext is shared\n+    val savedInterruptOnCancel = sparkContext\n+      .getLocalProperty(SparkContext.SPARK_JOB_INTERRUPT_ON_CANCEL)\n+\n+    try {\n+      sparkContext.setLocalProperty(SparkContext.SPARK_JOB_INTERRUPT_ON_CANCEL, \"true\")\n+\n+      for (codegen <- Seq(true, false)) {\n+        val latch = new CountDownLatch(2)"
+  }, {
+    "author": {
+      "login": "gaborgsomogyi"
+    },
+    "body": "Comment added.",
+    "commit": "c8a0d8d2dcad81968ba1a13bee8ff30f66f7a922",
+    "createdAt": "2018-04-17T09:41:49Z",
+    "diffHunk": "@@ -152,39 +154,54 @@ class DataFrameRangeSuite extends QueryTest with SharedSQLContext with Eventuall\n   }\n \n   test(\"Cancelling stage in a query with Range.\") {\n-    val listener = new SparkListener {\n-      override def onJobStart(jobStart: SparkListenerJobStart): Unit = {\n-        eventually(timeout(10.seconds), interval(1.millis)) {\n-          assert(DataFrameRangeSuite.stageToKill > 0)\n+    val slices = 10\n+\n+    // Save and restore the value because SparkContext is shared\n+    val savedInterruptOnCancel = sparkContext\n+      .getLocalProperty(SparkContext.SPARK_JOB_INTERRUPT_ON_CANCEL)\n+\n+    try {\n+      sparkContext.setLocalProperty(SparkContext.SPARK_JOB_INTERRUPT_ON_CANCEL, \"true\")\n+\n+      for (codegen <- Seq(true, false)) {\n+        val latch = new CountDownLatch(2)"
+  }],
+  "prId": 20888
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "We create a 10-slices range, so there are 10 tasks, and `onTaskStart` might be called 10 times, why do we use a `CountDownLatch(2)` here?",
+    "commit": "c8a0d8d2dcad81968ba1a13bee8ff30f66f7a922",
+    "createdAt": "2018-04-20T12:28:10Z",
+    "diffHunk": "@@ -152,39 +154,53 @@ class DataFrameRangeSuite extends QueryTest with SharedSQLContext with Eventuall\n   }\n \n   test(\"Cancelling stage in a query with Range.\") {\n-    val listener = new SparkListener {\n-      override def onJobStart(jobStart: SparkListenerJobStart): Unit = {\n-        eventually(timeout(10.seconds), interval(1.millis)) {\n-          assert(DataFrameRangeSuite.stageToKill > 0)\n+    // Save and restore the value because SparkContext is shared\n+    val savedInterruptOnCancel = sparkContext\n+      .getLocalProperty(SparkContext.SPARK_JOB_INTERRUPT_ON_CANCEL)\n+\n+    try {\n+      sparkContext.setLocalProperty(SparkContext.SPARK_JOB_INTERRUPT_ON_CANCEL, \"true\")\n+\n+      for (codegen <- Seq(true, false)) {\n+        // This countdown latch used to make sure with all the stages cancelStage called in listener\n+        val latch = new CountDownLatch(2)",
+    "line": 36
+  }, {
+    "author": {
+      "login": "gaborgsomogyi"
+    },
+    "body": "I've just taken a look at the logs here: \r\n\r\nhttps://amplab.cs.berkeley.edu/jenkins//job/SparkPullRequestBuilder/89602/artifact/sql/core/target/unit-tests.log\r\n\r\nand as I see the fixed test passed properly.\r\n\r\n```\r\n===== FINISHED o.a.s.sql.DataFrameRangeSuite: 'Cancelling stage in a query with Range.' =====\r\n```\r\n\r\nHardcoding 2 is not really elegant I admit. To answer your question `SparkContext` is initialized in `TestSparkSession` this way: `SparkContext(\"local[2]\", \"test-sql-context\", sparkConf.set(\"spark.sql.testkey\", \"true\")`.\r\n\r\nBecause of this and the fact that executors put to wait state `CountDownLatch(2)` is there.\r\n```\r\nsparkContext.range(0, 10000L, numSlices = 10).mapPartitions { x =>\r\n  x.synchronized {\r\n    x.wait()\r\n  }\r\n  x\r\n}.toDF(\"id\").agg(sum(\"id\")).collect()\r\n```\r\n",
+    "commit": "c8a0d8d2dcad81968ba1a13bee8ff30f66f7a922",
+    "createdAt": "2018-04-20T14:26:30Z",
+    "diffHunk": "@@ -152,39 +154,53 @@ class DataFrameRangeSuite extends QueryTest with SharedSQLContext with Eventuall\n   }\n \n   test(\"Cancelling stage in a query with Range.\") {\n-    val listener = new SparkListener {\n-      override def onJobStart(jobStart: SparkListenerJobStart): Unit = {\n-        eventually(timeout(10.seconds), interval(1.millis)) {\n-          assert(DataFrameRangeSuite.stageToKill > 0)\n+    // Save and restore the value because SparkContext is shared\n+    val savedInterruptOnCancel = sparkContext\n+      .getLocalProperty(SparkContext.SPARK_JOB_INTERRUPT_ON_CANCEL)\n+\n+    try {\n+      sparkContext.setLocalProperty(SparkContext.SPARK_JOB_INTERRUPT_ON_CANCEL, \"true\")\n+\n+      for (codegen <- Seq(true, false)) {\n+        // This countdown latch used to make sure with all the stages cancelStage called in listener\n+        val latch = new CountDownLatch(2)",
+    "line": 36
+  }, {
+    "author": {
+      "login": "gaborgsomogyi"
+    },
+    "body": "To solve this ambiguity `slices` variable can be reintroduced with value 1 and can be passed to the `CountDownLatch ` as well as to the `numSlices `.",
+    "commit": "c8a0d8d2dcad81968ba1a13bee8ff30f66f7a922",
+    "createdAt": "2018-04-20T14:30:32Z",
+    "diffHunk": "@@ -152,39 +154,53 @@ class DataFrameRangeSuite extends QueryTest with SharedSQLContext with Eventuall\n   }\n \n   test(\"Cancelling stage in a query with Range.\") {\n-    val listener = new SparkListener {\n-      override def onJobStart(jobStart: SparkListenerJobStart): Unit = {\n-        eventually(timeout(10.seconds), interval(1.millis)) {\n-          assert(DataFrameRangeSuite.stageToKill > 0)\n+    // Save and restore the value because SparkContext is shared\n+    val savedInterruptOnCancel = sparkContext\n+      .getLocalProperty(SparkContext.SPARK_JOB_INTERRUPT_ON_CANCEL)\n+\n+    try {\n+      sparkContext.setLocalProperty(SparkContext.SPARK_JOB_INTERRUPT_ON_CANCEL, \"true\")\n+\n+      for (codegen <- Seq(true, false)) {\n+        // This countdown latch used to make sure with all the stages cancelStage called in listener\n+        val latch = new CountDownLatch(2)",
+    "line": 36
+  }],
+  "prId": 20888
+}]

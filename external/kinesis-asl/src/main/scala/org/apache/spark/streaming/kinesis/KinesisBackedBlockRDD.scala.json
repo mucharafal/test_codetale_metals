@@ -1,0 +1,139 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Why is this a property of a range -- or when would it not equal (from - to + 1)?",
+    "commit": "c8efdcf8d253d2f733cfa3a5a0e89288f4e8f1cf",
+    "createdAt": "2017-02-07T20:56:57Z",
+    "diffHunk": "@@ -36,7 +36,8 @@ import org.apache.spark.util.NextIterator\n /** Class representing a range of Kinesis sequence numbers. Both sequence numbers are inclusive. */\n private[kinesis]\n case class SequenceNumberRange(\n-    streamName: String, shardId: String, fromSeqNumber: String, toSeqNumber: String)\n+    streamName: String, shardId: String, fromSeqNumber: String, toSeqNumber: String,\n+    recordCount: Int)"
+  }, {
+    "author": {
+      "login": "Gauravshah"
+    },
+    "body": "Not sure of a better place to put.\r\nfrom - to != count. Kinesis seqNumber are in order but are not sequential",
+    "commit": "c8efdcf8d253d2f733cfa3a5a0e89288f4e8f1cf",
+    "createdAt": "2017-02-07T20:58:45Z",
+    "diffHunk": "@@ -36,7 +36,8 @@ import org.apache.spark.util.NextIterator\n /** Class representing a range of Kinesis sequence numbers. Both sequence numbers are inclusive. */\n private[kinesis]\n case class SequenceNumberRange(\n-    streamName: String, shardId: String, fromSeqNumber: String, toSeqNumber: String)\n+    streamName: String, shardId: String, fromSeqNumber: String, toSeqNumber: String,\n+    recordCount: Int)"
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "OK, but is it an 'input' or 'output'? the usage below makes it look like the caller dictates how many records are in the range, but it doesn't know that ahead of time? I probably misunderstand this.",
+    "commit": "c8efdcf8d253d2f733cfa3a5a0e89288f4e8f1cf",
+    "createdAt": "2017-02-07T21:01:50Z",
+    "diffHunk": "@@ -36,7 +36,8 @@ import org.apache.spark.util.NextIterator\n /** Class representing a range of Kinesis sequence numbers. Both sequence numbers are inclusive. */\n private[kinesis]\n case class SequenceNumberRange(\n-    streamName: String, shardId: String, fromSeqNumber: String, toSeqNumber: String)\n+    streamName: String, shardId: String, fromSeqNumber: String, toSeqNumber: String,\n+    recordCount: Int)"
+  }, {
+    "author": {
+      "login": "Gauravshah"
+    },
+    "body": "http://docs.aws.amazon.com/streams/latest/dev/key-concepts.html#sequence-number",
+    "commit": "c8efdcf8d253d2f733cfa3a5a0e89288f4e8f1cf",
+    "createdAt": "2017-02-07T21:02:16Z",
+    "diffHunk": "@@ -36,7 +36,8 @@ import org.apache.spark.util.NextIterator\n /** Class representing a range of Kinesis sequence numbers. Both sequence numbers are inclusive. */\n private[kinesis]\n case class SequenceNumberRange(\n-    streamName: String, shardId: String, fromSeqNumber: String, toSeqNumber: String)\n+    streamName: String, shardId: String, fromSeqNumber: String, toSeqNumber: String,\n+    recordCount: Int)"
+  }, {
+    "author": {
+      "login": "Gauravshah"
+    },
+    "body": "its an input to spark checkpoint metadata. On streaming KinesisReceiver receives records creates blocks & knows about seqNumber, count. When recovering from checkpoint we read back this information from checkpoint and make aws kinesis getRecords call with fromSeqNumber & limit",
+    "commit": "c8efdcf8d253d2f733cfa3a5a0e89288f4e8f1cf",
+    "createdAt": "2017-02-07T21:08:07Z",
+    "diffHunk": "@@ -36,7 +36,8 @@ import org.apache.spark.util.NextIterator\n /** Class representing a range of Kinesis sequence numbers. Both sequence numbers are inclusive. */\n private[kinesis]\n case class SequenceNumberRange(\n-    streamName: String, shardId: String, fromSeqNumber: String, toSeqNumber: String)\n+    streamName: String, shardId: String, fromSeqNumber: String, toSeqNumber: String,\n+    recordCount: Int)"
+  }, {
+    "author": {
+      "login": "brkyvz"
+    },
+    "body": "I'm worried this change will break checkpoint recovery, because we use Java serialization, and be a barrier to users from upgrading.",
+    "commit": "c8efdcf8d253d2f733cfa3a5a0e89288f4e8f1cf",
+    "createdAt": "2017-02-21T23:14:45Z",
+    "diffHunk": "@@ -36,7 +36,8 @@ import org.apache.spark.util.NextIterator\n /** Class representing a range of Kinesis sequence numbers. Both sequence numbers are inclusive. */\n private[kinesis]\n case class SequenceNumberRange(\n-    streamName: String, shardId: String, fromSeqNumber: String, toSeqNumber: String)\n+    streamName: String, shardId: String, fromSeqNumber: String, toSeqNumber: String,\n+    recordCount: Int)"
+  }, {
+    "author": {
+      "login": "Gauravshah"
+    },
+    "body": "Not sure on upgrading, since for code upgrade we need to delete the checkpoint directory and start afresh. I did run this patch and was able to serialize the limit into checkpoint, ( not a scala pro though)",
+    "commit": "c8efdcf8d253d2f733cfa3a5a0e89288f4e8f1cf",
+    "createdAt": "2017-02-22T01:49:50Z",
+    "diffHunk": "@@ -36,7 +36,8 @@ import org.apache.spark.util.NextIterator\n /** Class representing a range of Kinesis sequence numbers. Both sequence numbers are inclusive. */\n private[kinesis]\n case class SequenceNumberRange(\n-    streamName: String, shardId: String, fromSeqNumber: String, toSeqNumber: String)\n+    streamName: String, shardId: String, fromSeqNumber: String, toSeqNumber: String,\n+    recordCount: Int)"
+  }],
+  "prId": 16842
+}, {
+  "comments": [{
+    "author": {
+      "login": "brkyvz"
+    },
+    "body": "if this value is greater than 10000, this will throw an error",
+    "commit": "c8efdcf8d253d2f733cfa3a5a0e89288f4e8f1cf",
+    "createdAt": "2017-02-21T23:11:55Z",
+    "diffHunk": "@@ -204,10 +208,11 @@ class KinesisSequenceRangeIterator(\n    * to get records from Kinesis), and get the next shard iterator for next consumption.\n    */\n   private def getRecordsAndNextKinesisIterator(\n-      shardIterator: String): (Iterator[Record], String) = {\n+      shardIterator: String, recordCount: Int): (Iterator[Record], String) = {\n     val getRecordsRequest = new GetRecordsRequest\n     getRecordsRequest.setRequestCredentials(credentials)\n     getRecordsRequest.setShardIterator(shardIterator)\n+    getRecordsRequest.setLimit(recordCount)"
+  }, {
+    "author": {
+      "login": "Gauravshah"
+    },
+    "body": "👍 ",
+    "commit": "c8efdcf8d253d2f733cfa3a5a0e89288f4e8f1cf",
+    "createdAt": "2017-02-22T01:49:58Z",
+    "diffHunk": "@@ -204,10 +208,11 @@ class KinesisSequenceRangeIterator(\n    * to get records from Kinesis), and get the next shard iterator for next consumption.\n    */\n   private def getRecordsAndNextKinesisIterator(\n-      shardIterator: String): (Iterator[Record], String) = {\n+      shardIterator: String, recordCount: Int): (Iterator[Record], String) = {\n     val getRecordsRequest = new GetRecordsRequest\n     getRecordsRequest.setRequestCredentials(credentials)\n     getRecordsRequest.setShardIterator(shardIterator)\n+    getRecordsRequest.setLimit(recordCount)"
+  }],
+  "prId": 16842
+}, {
+  "comments": [{
+    "author": {
+      "login": "brkyvz"
+    },
+    "body": "this should be a `min` not a `max`",
+    "commit": "c8efdcf8d253d2f733cfa3a5a0e89288f4e8f1cf",
+    "createdAt": "2017-02-27T18:17:27Z",
+    "diffHunk": "@@ -212,7 +214,7 @@ class KinesisSequenceRangeIterator(\n     val getRecordsRequest = new GetRecordsRequest\n     getRecordsRequest.setRequestCredentials(credentials)\n     getRecordsRequest.setShardIterator(shardIterator)\n-    getRecordsRequest.setLimit(recordCount)\n+    getRecordsRequest.setLimit(Math.max(recordCount, this.maxGetRecordsLimit))"
+  }, {
+    "author": {
+      "login": "Gauravshah"
+    },
+    "body": "👍 ",
+    "commit": "c8efdcf8d253d2f733cfa3a5a0e89288f4e8f1cf",
+    "createdAt": "2017-02-28T16:59:13Z",
+    "diffHunk": "@@ -212,7 +214,7 @@ class KinesisSequenceRangeIterator(\n     val getRecordsRequest = new GetRecordsRequest\n     getRecordsRequest.setRequestCredentials(credentials)\n     getRecordsRequest.setShardIterator(shardIterator)\n-    getRecordsRequest.setLimit(recordCount)\n+    getRecordsRequest.setLimit(Math.max(recordCount, this.maxGetRecordsLimit))"
+  }],
+  "prId": 16842
+}, {
+  "comments": [{
+    "author": {
+      "login": "brkyvz"
+    },
+    "body": "one parameter per line:\r\n\r\n```scala\r\n  streamName: String,\r\n  shardId: String,\r\n  ...\r\n```",
+    "commit": "c8efdcf8d253d2f733cfa3a5a0e89288f4e8f1cf",
+    "createdAt": "2017-02-28T20:44:44Z",
+    "diffHunk": "@@ -36,7 +36,8 @@ import org.apache.spark.util.NextIterator\n /** Class representing a range of Kinesis sequence numbers. Both sequence numbers are inclusive. */\n private[kinesis]\n case class SequenceNumberRange(\n-    streamName: String, shardId: String, fromSeqNumber: String, toSeqNumber: String)\n+    streamName: String, shardId: String, fromSeqNumber: String, toSeqNumber: String,"
+  }],
+  "prId": 16842
+}, {
+  "comments": [{
+    "author": {
+      "login": "brkyvz"
+    },
+    "body": "ditto, one param per line",
+    "commit": "c8efdcf8d253d2f733cfa3a5a0e89288f4e8f1cf",
+    "createdAt": "2017-02-28T20:45:21Z",
+    "diffHunk": "@@ -204,10 +210,11 @@ class KinesisSequenceRangeIterator(\n    * to get records from Kinesis), and get the next shard iterator for next consumption.\n    */\n   private def getRecordsAndNextKinesisIterator(\n-      shardIterator: String): (Iterator[Record], String) = {\n+      shardIterator: String, recordCount: Int): (Iterator[Record], String) = {"
+  }],
+  "prId": 16842
+}, {
+  "comments": [{
+    "author": {
+      "login": "brkyvz"
+    },
+    "body": "you forgot here",
+    "commit": "c8efdcf8d253d2f733cfa3a5a0e89288f4e8f1cf",
+    "createdAt": "2017-03-03T18:12:25Z",
+    "diffHunk": "@@ -193,9 +201,10 @@ class KinesisSequenceRangeIterator(\n   /**\n    * Get records starting from or after the given sequence number.\n    */\n-  private def getRecords(iteratorType: ShardIteratorType, seqNum: String): Iterator[Record] = {\n+  private def getRecords(iteratorType: ShardIteratorType, seqNum: String,"
+  }, {
+    "author": {
+      "login": "Gauravshah"
+    },
+    "body": "👍 ",
+    "commit": "c8efdcf8d253d2f733cfa3a5a0e89288f4e8f1cf",
+    "createdAt": "2017-03-04T07:42:18Z",
+    "diffHunk": "@@ -193,9 +201,10 @@ class KinesisSequenceRangeIterator(\n   /**\n    * Get records starting from or after the given sequence number.\n    */\n-  private def getRecords(iteratorType: ShardIteratorType, seqNum: String): Iterator[Record] = {\n+  private def getRecords(iteratorType: ShardIteratorType, seqNum: String,"
+  }],
+  "prId": 16842
+}]

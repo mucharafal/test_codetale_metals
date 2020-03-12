@@ -1,0 +1,42 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "nit: `classOf[SimpleExtensionService].getName()`\n",
+    "commit": "b9a183467e529dbde79bbf1548c0c921eba18d0e",
+    "createdAt": "2015-10-28T13:28:04Z",
+    "diffHunk": "@@ -0,0 +1,88 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.scheduler.cluster\n+\n+import org.scalatest.BeforeAndAfter\n+\n+import org.apache.spark.{Logging, SparkConf, SparkContext, SparkFunSuite}\n+\n+/**\n+ * Test the integration with [[SchedulerExtensionServices]]\n+ */\n+class ExtensionServiceIntegrationSuite extends SparkFunSuite\n+  with BeforeAndAfter\n+  with Logging {\n+\n+  val applicationId = new StubApplicationId(0, 1111L)\n+  val attemptId = new StubApplicationAttemptId(applicationId, 1)\n+  var sparkCtx: SparkContext = _\n+\n+  /*\n+   * Setup phase creates the spark context\n+   */\n+  before {\n+    val sparkConf = new SparkConf()\n+    sparkConf.set(SchedulerExtensionServices.SPARK_YARN_SERVICES,\n+      \"org.apache.spark.scheduler.cluster.SimpleExtensionService\")"
+  }],
+  "prId": 9182
+}, {
+  "comments": [{
+    "author": {
+      "login": "steveloughran"
+    },
+    "body": "whitespace line; will fix\n",
+    "commit": "b9a183467e529dbde79bbf1548c0c921eba18d0e",
+    "createdAt": "2015-10-28T16:39:13Z",
+    "diffHunk": "@@ -0,0 +1,88 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.scheduler.cluster\n+\n+import org.scalatest.BeforeAndAfter\n+\n+import org.apache.spark.{Logging, SparkConf, SparkContext, SparkFunSuite}\n+\n+/**\n+ * Test the integration with [[SchedulerExtensionServices]]\n+ */\n+class ExtensionServiceIntegrationSuite extends SparkFunSuite\n+  with BeforeAndAfter\n+  with Logging {\n+\n+  val applicationId = new StubApplicationId(0, 1111L)\n+  val attemptId = new StubApplicationAttemptId(applicationId, 1)\n+  var sparkCtx: SparkContext = _\n+\n+  /*\n+   * Setup phase creates the spark context\n+   */\n+  before {\n+    val sparkConf = new SparkConf()\n+    sparkConf.set(SchedulerExtensionServices.SPARK_YARN_SERVICES,\n+      \"org.apache.spark.scheduler.cluster.SimpleExtensionService\")\n+    sparkConf.setMaster(\"local\").setAppName(\"ExtensionServiceIntegrationSuite\")\n+    sparkCtx = new SparkContext(sparkConf)\n+  }\n+\n+  /*\n+   * Teardown stops all services and the VM-wide spark context\n+   */\n+  after {\n+    stopSparkContext()\n+  }\n+\n+  protected def stopSparkContext(): Unit = {\n+    if (sparkCtx != null) {\n+      logDebug(\"Stopping spark context\")\n+      sparkCtx.stop()\n+      sparkCtx = null\n+    }\n+  }\n+\n+"
+  }],
+  "prId": 9182
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "You can probably use `LocalSparkContext` instead of rolling your own code for cleaning this up.\n",
+    "commit": "b9a183467e529dbde79bbf1548c0c921eba18d0e",
+    "createdAt": "2015-12-01T20:46:08Z",
+    "diffHunk": "@@ -0,0 +1,87 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.scheduler.cluster\n+\n+import org.scalatest.BeforeAndAfter\n+\n+import org.apache.spark.{Logging, SparkConf, SparkContext, SparkFunSuite}\n+\n+/**\n+ * Test the integration with [[SchedulerExtensionServices]]\n+ */\n+class ExtensionServiceIntegrationSuite extends SparkFunSuite\n+  with BeforeAndAfter\n+  with Logging {\n+\n+  val applicationId = new StubApplicationId(0, 1111L)\n+  val attemptId = new StubApplicationAttemptId(applicationId, 1)\n+  var sparkCtx: SparkContext = _\n+\n+  /*\n+   * Setup phase creates the spark context\n+   */\n+  before {\n+    val sparkConf = new SparkConf()\n+    sparkConf.set(SchedulerExtensionServices.SPARK_YARN_SERVICES,\n+      classOf[SimpleExtensionService].getName())\n+    sparkConf.setMaster(\"local\").setAppName(\"ExtensionServiceIntegrationSuite\")\n+    sparkCtx = new SparkContext(sparkConf)"
+  }, {
+    "author": {
+      "login": "steveloughran"
+    },
+    "body": "will do\n",
+    "commit": "b9a183467e529dbde79bbf1548c0c921eba18d0e",
+    "createdAt": "2015-12-02T16:10:28Z",
+    "diffHunk": "@@ -0,0 +1,87 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.scheduler.cluster\n+\n+import org.scalatest.BeforeAndAfter\n+\n+import org.apache.spark.{Logging, SparkConf, SparkContext, SparkFunSuite}\n+\n+/**\n+ * Test the integration with [[SchedulerExtensionServices]]\n+ */\n+class ExtensionServiceIntegrationSuite extends SparkFunSuite\n+  with BeforeAndAfter\n+  with Logging {\n+\n+  val applicationId = new StubApplicationId(0, 1111L)\n+  val attemptId = new StubApplicationAttemptId(applicationId, 1)\n+  var sparkCtx: SparkContext = _\n+\n+  /*\n+   * Setup phase creates the spark context\n+   */\n+  before {\n+    val sparkConf = new SparkConf()\n+    sparkConf.set(SchedulerExtensionServices.SPARK_YARN_SERVICES,\n+      classOf[SimpleExtensionService].getName())\n+    sparkConf.setMaster(\"local\").setAppName(\"ExtensionServiceIntegrationSuite\")\n+    sparkCtx = new SparkContext(sparkConf)"
+  }],
+  "prId": 9182
+}]

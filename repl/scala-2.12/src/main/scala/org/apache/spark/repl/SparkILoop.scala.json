@@ -1,0 +1,103 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "+1, LGTM for `spark-shell` and `pyspark`. For consistency, we are going to change `sparkR` and `spark-sql` later in this way, aren't we? Could you mention `spark-shell` and `pyspark` in the PR title specifically?",
+    "commit": "6d53ca024a5f88d7d3dcd41257c3de72aadd40b6",
+    "createdAt": "2018-05-19T01:34:28Z",
+    "diffHunk": "@@ -37,7 +37,14 @@ class SparkILoop(in0: Option[BufferedReader], out: JPrintWriter)\n     @transient val spark = if (org.apache.spark.repl.Main.sparkSession != null) {\n         org.apache.spark.repl.Main.sparkSession\n       } else {\n-        org.apache.spark.repl.Main.createSparkSession()\n+        try {\n+          org.apache.spark.repl.Main.createSparkSession()\n+        } catch {\n+          case e: Exception =>\n+            println(\"Failed to initialize Spark session:\")\n+            e.printStackTrace()\n+            sys.exit(1)\n+        }"
+  }, {
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "I'm not that familiar with those two shells but I'll give it a try.",
+    "commit": "6d53ca024a5f88d7d3dcd41257c3de72aadd40b6",
+    "createdAt": "2018-05-21T16:57:08Z",
+    "diffHunk": "@@ -37,7 +37,14 @@ class SparkILoop(in0: Option[BufferedReader], out: JPrintWriter)\n     @transient val spark = if (org.apache.spark.repl.Main.sparkSession != null) {\n         org.apache.spark.repl.Main.sparkSession\n       } else {\n-        org.apache.spark.repl.Main.createSparkSession()\n+        try {\n+          org.apache.spark.repl.Main.createSparkSession()\n+        } catch {\n+          case e: Exception =>\n+            println(\"Failed to initialize Spark session:\")\n+            e.printStackTrace()\n+            sys.exit(1)\n+        }"
+  }, {
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "Thank you, @vanzin .",
+    "commit": "6d53ca024a5f88d7d3dcd41257c3de72aadd40b6",
+    "createdAt": "2018-05-21T18:30:40Z",
+    "diffHunk": "@@ -37,7 +37,14 @@ class SparkILoop(in0: Option[BufferedReader], out: JPrintWriter)\n     @transient val spark = if (org.apache.spark.repl.Main.sparkSession != null) {\n         org.apache.spark.repl.Main.sparkSession\n       } else {\n-        org.apache.spark.repl.Main.createSparkSession()\n+        try {\n+          org.apache.spark.repl.Main.createSparkSession()\n+        } catch {\n+          case e: Exception =>\n+            println(\"Failed to initialize Spark session:\")\n+            e.printStackTrace()\n+            sys.exit(1)\n+        }"
+  }, {
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "SparkR already does something close to this:\r\n\r\n```\r\n  # 0 is success and +1 is reserved for heartbeats. Other negative values indicate errors.\r\n  if (returnStatus < 0) {\r\n    stop(readString(conn))\r\n  }\r\n```\r\n\r\nExcept that \"stop()\" doesn't actually exit the shell. That's probably by design, so unless @felixcheung  says it's ok to exit the shell (and tells me how), I'll leave things as is.",
+    "commit": "6d53ca024a5f88d7d3dcd41257c3de72aadd40b6",
+    "createdAt": "2018-05-21T18:53:44Z",
+    "diffHunk": "@@ -37,7 +37,14 @@ class SparkILoop(in0: Option[BufferedReader], out: JPrintWriter)\n     @transient val spark = if (org.apache.spark.repl.Main.sparkSession != null) {\n         org.apache.spark.repl.Main.sparkSession\n       } else {\n-        org.apache.spark.repl.Main.createSparkSession()\n+        try {\n+          org.apache.spark.repl.Main.createSparkSession()\n+        } catch {\n+          case e: Exception =>\n+            println(\"Failed to initialize Spark session:\")\n+            e.printStackTrace()\n+            sys.exit(1)\n+        }"
+  }, {
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Also, spark-sql for me exits right away if the SparkContext does not come up, showing the underlying exception, so it looks good already.",
+    "commit": "6d53ca024a5f88d7d3dcd41257c3de72aadd40b6",
+    "createdAt": "2018-05-21T18:55:31Z",
+    "diffHunk": "@@ -37,7 +37,14 @@ class SparkILoop(in0: Option[BufferedReader], out: JPrintWriter)\n     @transient val spark = if (org.apache.spark.repl.Main.sparkSession != null) {\n         org.apache.spark.repl.Main.sparkSession\n       } else {\n-        org.apache.spark.repl.Main.createSparkSession()\n+        try {\n+          org.apache.spark.repl.Main.createSparkSession()\n+        } catch {\n+          case e: Exception =>\n+            println(\"Failed to initialize Spark session:\")\n+            e.printStackTrace()\n+            sys.exit(1)\n+        }"
+  }, {
+    "author": {
+      "login": "felixcheung"
+    },
+    "body": "there's a way, but overall we do not exit/terminate the R session since SparkR could be running in an interactive session (eg. RStudio)\r\n\r\none possible approach is to exit only when running sparkR shell, by checking here:\r\nhttps://github.com/apache/spark/blob/master/R/pkg/inst/profile/shell.R#L27\r\n\r\nI'm not sure if stop() vs exit makes much of a difference though.\r\n",
+    "commit": "6d53ca024a5f88d7d3dcd41257c3de72aadd40b6",
+    "createdAt": "2018-05-22T05:35:31Z",
+    "diffHunk": "@@ -37,7 +37,14 @@ class SparkILoop(in0: Option[BufferedReader], out: JPrintWriter)\n     @transient val spark = if (org.apache.spark.repl.Main.sparkSession != null) {\n         org.apache.spark.repl.Main.sparkSession\n       } else {\n-        org.apache.spark.repl.Main.createSparkSession()\n+        try {\n+          org.apache.spark.repl.Main.createSparkSession()\n+        } catch {\n+          case e: Exception =>\n+            println(\"Failed to initialize Spark session:\")\n+            e.printStackTrace()\n+            sys.exit(1)\n+        }"
+  }],
+  "prId": 21368
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Hm, I thought I had reverted this. Let me look again.",
+    "commit": "6d53ca024a5f88d7d3dcd41257c3de72aadd40b6",
+    "createdAt": "2018-05-21T20:46:03Z",
+    "diffHunk": "@@ -37,7 +37,14 @@ class SparkILoop(in0: Option[BufferedReader], out: JPrintWriter)\n     @transient val spark = if (org.apache.spark.repl.Main.sparkSession != null) {\n         org.apache.spark.repl.Main.sparkSession\n       } else {\n-        org.apache.spark.repl.Main.createSparkSession()\n+        try {\n+          org.apache.spark.repl.Main.createSparkSession()\n+        } catch {\n+          case e: Exception =>\n+            println(\"Failed to initialize Spark session:\")\n+            e.printStackTrace()\n+            sys.exit(1)"
+  }, {
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "yeah, looks like github is confused. It's definitely reverted in https://github.com/apache/spark/pull/21368/commits/a062e4c4c349e0035d50a6de9abc1e7eb04c1568",
+    "commit": "6d53ca024a5f88d7d3dcd41257c3de72aadd40b6",
+    "createdAt": "2018-05-21T20:47:38Z",
+    "diffHunk": "@@ -37,7 +37,14 @@ class SparkILoop(in0: Option[BufferedReader], out: JPrintWriter)\n     @transient val spark = if (org.apache.spark.repl.Main.sparkSession != null) {\n         org.apache.spark.repl.Main.sparkSession\n       } else {\n-        org.apache.spark.repl.Main.createSparkSession()\n+        try {\n+          org.apache.spark.repl.Main.createSparkSession()\n+        } catch {\n+          case e: Exception =>\n+            println(\"Failed to initialize Spark session:\")\n+            e.printStackTrace()\n+            sys.exit(1)"
+  }, {
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "how about just squashing the commits if it's not hard?",
+    "commit": "6d53ca024a5f88d7d3dcd41257c3de72aadd40b6",
+    "createdAt": "2018-05-22T01:13:21Z",
+    "diffHunk": "@@ -37,7 +37,14 @@ class SparkILoop(in0: Option[BufferedReader], out: JPrintWriter)\n     @transient val spark = if (org.apache.spark.repl.Main.sparkSession != null) {\n         org.apache.spark.repl.Main.sparkSession\n       } else {\n-        org.apache.spark.repl.Main.createSparkSession()\n+        try {\n+          org.apache.spark.repl.Main.createSparkSession()\n+        } catch {\n+          case e: Exception =>\n+            println(\"Failed to initialize Spark session:\")\n+            e.printStackTrace()\n+            sys.exit(1)"
+  }, {
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Let me try that...",
+    "commit": "6d53ca024a5f88d7d3dcd41257c3de72aadd40b6",
+    "createdAt": "2018-05-22T01:18:51Z",
+    "diffHunk": "@@ -37,7 +37,14 @@ class SparkILoop(in0: Option[BufferedReader], out: JPrintWriter)\n     @transient val spark = if (org.apache.spark.repl.Main.sparkSession != null) {\n         org.apache.spark.repl.Main.sparkSession\n       } else {\n-        org.apache.spark.repl.Main.createSparkSession()\n+        try {\n+          org.apache.spark.repl.Main.createSparkSession()\n+        } catch {\n+          case e: Exception =>\n+            println(\"Failed to initialize Spark session:\")\n+            e.printStackTrace()\n+            sys.exit(1)"
+  }, {
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Ah I know. I didn't update the scala 2.12 code. D'oh.",
+    "commit": "6d53ca024a5f88d7d3dcd41257c3de72aadd40b6",
+    "createdAt": "2018-05-22T01:20:32Z",
+    "diffHunk": "@@ -37,7 +37,14 @@ class SparkILoop(in0: Option[BufferedReader], out: JPrintWriter)\n     @transient val spark = if (org.apache.spark.repl.Main.sparkSession != null) {\n         org.apache.spark.repl.Main.sparkSession\n       } else {\n-        org.apache.spark.repl.Main.createSparkSession()\n+        try {\n+          org.apache.spark.repl.Main.createSparkSession()\n+        } catch {\n+          case e: Exception =>\n+            println(\"Failed to initialize Spark session:\")\n+            e.printStackTrace()\n+            sys.exit(1)"
+  }, {
+    "author": {
+      "login": "HyukjinKwon"
+    },
+    "body": "Ohh haha sure. I just noticed it too.",
+    "commit": "6d53ca024a5f88d7d3dcd41257c3de72aadd40b6",
+    "createdAt": "2018-05-22T01:21:12Z",
+    "diffHunk": "@@ -37,7 +37,14 @@ class SparkILoop(in0: Option[BufferedReader], out: JPrintWriter)\n     @transient val spark = if (org.apache.spark.repl.Main.sparkSession != null) {\n         org.apache.spark.repl.Main.sparkSession\n       } else {\n-        org.apache.spark.repl.Main.createSparkSession()\n+        try {\n+          org.apache.spark.repl.Main.createSparkSession()\n+        } catch {\n+          case e: Exception =>\n+            println(\"Failed to initialize Spark session:\")\n+            e.printStackTrace()\n+            sys.exit(1)"
+  }],
+  "prId": 21368
+}]

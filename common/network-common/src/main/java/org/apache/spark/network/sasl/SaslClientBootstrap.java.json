@@ -1,0 +1,108 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "My initial idea is that this should be more dynamic... e.g. instead of an explicit configuration, if the user enables SASL encryption, the code would automatically negotiate the strongest possible cipher to use.\n\nFor example, the `SaslMessage` could have a new field saying whether the receiving side supports AES encryption, or which ciphers it supports. When talking to an old shuffle service, that field would be empty (on the wire), meaning it only supports built-in SASL ciphers. Newer servers would list AES-specific info there (e.g. enabled cipher transformations), and could use the new key negotiation code.\n\nThat's a little more work though. I like that it requires less input from the user. But maybe having an explicit option for the moment is fine...\n",
+    "commit": "6863efe77118f91c0f849d34d4698dad608213b1",
+    "createdAt": "2016-09-23T19:05:56Z",
+    "diffHunk": "@@ -67,27 +64,21 @@ public SaslClientBootstrap(\n    */\n   @Override\n   public void doBootstrap(TransportClient client, Channel channel) {\n-    SparkSaslClient saslClient = new SparkSaslClient(appId, secretKeyHolder, encrypt);\n-    try {\n-      byte[] payload = saslClient.firstToken();\n-\n-      while (!saslClient.isComplete()) {\n-        SaslMessage msg = new SaslMessage(appId, payload);\n-        ByteBuf buf = Unpooled.buffer(msg.encodedLength() + (int) msg.body().size());\n-        msg.encode(buf);\n-        buf.writeBytes(msg.body().nioByteBuffer());\n-\n-        ByteBuffer response = client.sendRpcSync(buf.nioBuffer(), conf.saslRTTimeoutMs());\n-        payload = saslClient.response(JavaUtils.bufferToArray(response));\n-      }\n+    boolean aesEnable = conf.saslEncryptionAesEnabled();"
+  }],
+  "prId": 15172
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "nit: space after `if`\n",
+    "commit": "6863efe77118f91c0f849d34d4698dad608213b1",
+    "createdAt": "2016-10-14T22:40:53Z",
+    "diffHunk": "@@ -88,7 +90,16 @@ public void doBootstrap(TransportClient client, Channel channel) {\n           throw new RuntimeException(\n             new SaslException(\"Encryption requests by negotiated non-encrypted connection.\"));\n         }\n-        SaslEncryption.addToChannel(channel, saslClient, conf.maxSaslEncryptedBlockSize());\n+\n+        if(conf.saslEncryptionAesEnabled()) {"
+  }],
+  "prId": 15172
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Use `JavaUtils.bufferToArray`.\n",
+    "commit": "6863efe77118f91c0f849d34d4698dad608213b1",
+    "createdAt": "2016-10-24T19:57:23Z",
+    "diffHunk": "@@ -88,7 +90,35 @@ public void doBootstrap(TransportClient client, Channel channel) {\n           throw new RuntimeException(\n             new SaslException(\"Encryption requests by negotiated non-encrypted connection.\"));\n         }\n-        SaslEncryption.addToChannel(channel, saslClient, conf.maxSaslEncryptedBlockSize());\n+\n+        if (conf.saslEncryptionAesEnabled()) {\n+          // Generate a request config message to send to server.\n+          AesConfigMessage reqConfigMessage = AesCipher.requestConfigMessage(conf);\n+          ByteBuffer buf = reqConfigMessage.encodeMessage();\n+\n+          ByteBuffer response = client.sendRpcSync(buf, conf.saslRTTimeoutMs());\n+\n+          // Decrypt the config message.\n+          ByteBuffer decrypted = ByteBuffer.wrap(\n+            saslClient.unwrap(response.array(), 0, response.array().length));"
+  }],
+  "prId": 15172
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Why is this call necessary? Shouldn't these fields have been populated by the `decodeMessage` call above?\n",
+    "commit": "6863efe77118f91c0f849d34d4698dad608213b1",
+    "createdAt": "2016-10-24T19:59:25Z",
+    "diffHunk": "@@ -88,7 +90,35 @@ public void doBootstrap(TransportClient client, Channel channel) {\n           throw new RuntimeException(\n             new SaslException(\"Encryption requests by negotiated non-encrypted connection.\"));\n         }\n-        SaslEncryption.addToChannel(channel, saslClient, conf.maxSaslEncryptedBlockSize());\n+\n+        if (conf.saslEncryptionAesEnabled()) {\n+          // Generate a request config message to send to server.\n+          AesConfigMessage reqConfigMessage = AesCipher.requestConfigMessage(conf);\n+          ByteBuffer buf = reqConfigMessage.encodeMessage();\n+\n+          ByteBuffer response = client.sendRpcSync(buf, conf.saslRTTimeoutMs());\n+\n+          // Decrypt the config message.\n+          ByteBuffer decrypted = ByteBuffer.wrap(\n+            saslClient.unwrap(response.array(), 0, response.array().length));\n+\n+          AesConfigMessage configMessage = AesConfigMessage.decodeMessage(decrypted);\n+\n+          // Exchange the key and IV\n+          configMessage.setParameters("
+  }],
+  "prId": 15172
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "nit: remove `SASL` since it's no longer accurate now.\n",
+    "commit": "6863efe77118f91c0f849d34d4698dad608213b1",
+    "createdAt": "2016-10-24T20:00:21Z",
+    "diffHunk": "@@ -88,7 +90,35 @@ public void doBootstrap(TransportClient client, Channel channel) {\n           throw new RuntimeException(\n             new SaslException(\"Encryption requests by negotiated non-encrypted connection.\"));\n         }\n-        SaslEncryption.addToChannel(channel, saslClient, conf.maxSaslEncryptedBlockSize());\n+\n+        if (conf.saslEncryptionAesEnabled()) {\n+          // Generate a request config message to send to server.\n+          AesConfigMessage reqConfigMessage = AesCipher.requestConfigMessage(conf);\n+          ByteBuffer buf = reqConfigMessage.encodeMessage();\n+\n+          ByteBuffer response = client.sendRpcSync(buf, conf.saslRTTimeoutMs());\n+\n+          // Decrypt the config message.\n+          ByteBuffer decrypted = ByteBuffer.wrap(\n+            saslClient.unwrap(response.array(), 0, response.array().length));\n+\n+          AesConfigMessage configMessage = AesConfigMessage.decodeMessage(decrypted);\n+\n+          // Exchange the key and IV\n+          configMessage.setParameters(\n+            configMessage.keySize,\n+            configMessage.outKey,\n+            configMessage.outIv,\n+            configMessage.inKey,\n+            configMessage.inIv\n+          );\n+\n+          AesCipher cipher = new AesCipher(configMessage);\n+          logger.info(\"Enabling AES cipher for client channel {}\", client);\n+          cipher.addToChannel(channel);\n+        } else {\n+          SaslEncryption.addToChannel(channel, saslClient, conf.maxSaslEncryptedBlockSize());\n+        }\n         saslClient = null;\n         logger.debug(\"Channel {} configured for SASL encryption.\", client);"
+  }],
+  "prId": 15172
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "nit: method names should start with lower-case letters.\n",
+    "commit": "6863efe77118f91c0f849d34d4698dad608213b1",
+    "createdAt": "2016-10-31T22:23:20Z",
+    "diffHunk": "@@ -88,9 +90,25 @@ public void doBootstrap(TransportClient client, Channel channel) {\n           throw new RuntimeException(\n             new SaslException(\"Encryption requests by negotiated non-encrypted connection.\"));\n         }\n-        SaslEncryption.addToChannel(channel, saslClient, conf.maxSaslEncryptedBlockSize());\n+\n+        if (conf.AesEncryptionEnabled()) {"
+  }],
+  "prId": 15172
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "Wait. Isn't this now sending the keys in plain text over the wire?\n\nI commented before that using 3des to encrypt the keys is sub-optimal, but I didn't mean for you to remove the encryption altogether.\n",
+    "commit": "6863efe77118f91c0f849d34d4698dad608213b1",
+    "createdAt": "2016-11-09T22:54:44Z",
+    "diffHunk": "@@ -88,9 +90,20 @@ public void doBootstrap(TransportClient client, Channel channel) {\n           throw new RuntimeException(\n             new SaslException(\"Encryption requests by negotiated non-encrypted connection.\"));\n         }\n-        SaslEncryption.addToChannel(channel, saslClient, conf.maxSaslEncryptedBlockSize());\n+\n+        if (conf.aesEncryptionEnabled()) {\n+          // Generate a request config message to send to server.\n+          AesConfigMessage configMessage = AesCipher.createConfigMessage(conf);\n+          ByteBuffer buf = configMessage.encodeMessage();\n+          client.sendRpcSync(buf, conf.saslRTTimeoutMs());"
+  }],
+  "prId": 15172
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "You need to dispose of the `saslClient` here.\n",
+    "commit": "6863efe77118f91c0f849d34d4698dad608213b1",
+    "createdAt": "2016-11-09T22:54:58Z",
+    "diffHunk": "@@ -88,9 +90,20 @@ public void doBootstrap(TransportClient client, Channel channel) {\n           throw new RuntimeException(\n             new SaslException(\"Encryption requests by negotiated non-encrypted connection.\"));\n         }\n-        SaslEncryption.addToChannel(channel, saslClient, conf.maxSaslEncryptedBlockSize());\n+\n+        if (conf.aesEncryptionEnabled()) {\n+          // Generate a request config message to send to server.\n+          AesConfigMessage configMessage = AesCipher.createConfigMessage(conf);\n+          ByteBuffer buf = configMessage.encodeMessage();\n+          client.sendRpcSync(buf, conf.saslRTTimeoutMs());\n+          AesCipher cipher = new AesCipher(configMessage);\n+          logger.info(\"Enabling AES cipher for client channel {}\", client);\n+          cipher.addToChannel(channel);"
+  }],
+  "prId": 15172
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "`JavaUtils.bufferToArray`\n",
+    "commit": "6863efe77118f91c0f849d34d4698dad608213b1",
+    "createdAt": "2016-11-10T04:12:12Z",
+    "diffHunk": "@@ -88,9 +90,26 @@ public void doBootstrap(TransportClient client, Channel channel) {\n           throw new RuntimeException(\n             new SaslException(\"Encryption requests by negotiated non-encrypted connection.\"));\n         }\n-        SaslEncryption.addToChannel(channel, saslClient, conf.maxSaslEncryptedBlockSize());\n+\n+        if (conf.aesEncryptionEnabled()) {\n+          // Generate a request config message to send to server.\n+          AesConfigMessage configMessage = AesCipher.createConfigMessage(conf);\n+          ByteBuffer buf = configMessage.encodeMessage();\n+\n+          // Encrypted the config message.\n+          ByteBuffer encrypted = ByteBuffer.wrap(\n+            saslClient.wrap(buf.array(), 0, buf.array().length));"
+  }, {
+    "author": {
+      "login": "chenjunjiedada"
+    },
+    "body": "Really thanks:)\n",
+    "commit": "6863efe77118f91c0f849d34d4698dad608213b1",
+    "createdAt": "2016-11-10T04:45:02Z",
+    "diffHunk": "@@ -88,9 +90,26 @@ public void doBootstrap(TransportClient client, Channel channel) {\n           throw new RuntimeException(\n             new SaslException(\"Encryption requests by negotiated non-encrypted connection.\"));\n         }\n-        SaslEncryption.addToChannel(channel, saslClient, conf.maxSaslEncryptedBlockSize());\n+\n+        if (conf.aesEncryptionEnabled()) {\n+          // Generate a request config message to send to server.\n+          AesConfigMessage configMessage = AesCipher.createConfigMessage(conf);\n+          ByteBuffer buf = configMessage.encodeMessage();\n+\n+          // Encrypted the config message.\n+          ByteBuffer encrypted = ByteBuffer.wrap(\n+            saslClient.wrap(buf.array(), 0, buf.array().length));"
+  }],
+  "prId": 15172
+}]

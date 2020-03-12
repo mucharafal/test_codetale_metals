@@ -1,0 +1,49 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "In the unit tests added here, when does `join()` throw `InterruptedException`? \n",
+    "commit": "521125e825bd4919c0a36c1092aaf789a42539bb",
+    "createdAt": "2015-03-31T04:40:05Z",
+    "diffHunk": "@@ -76,9 +76,21 @@ private[spark] abstract class EventLoop[E](name: String) extends Logging {\n   def stop(): Unit = {\n     if (stopped.compareAndSet(false, true)) {\n       eventThread.interrupt()\n-      eventThread.join()\n-      // Call onStop after the event thread exits to make sure onReceive happens before onStop\n-      onStop()\n+      var onStopCalled = false\n+      try {\n+        eventThread.join()\n+        // Call onStop after the event thread exits to make sure onReceive happens before onStop\n+        onStopCalled = true\n+        onStop()\n+      } catch {\n+        case ie: InterruptedException =>\n+          Thread.currentThread().interrupt()\n+          if (!onStopCalled) {\n+            // ie is thrown from `eventThread.join()`. Otherwise, we should not call `onStop` since",
+    "line": 17
+  }, {
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "The current thread is eventThread, then eventThread.interrupt() set the interrupt flag to the current thread (eventThread). So `join` will throw `InterruptedException`.\n",
+    "commit": "521125e825bd4919c0a36c1092aaf789a42539bb",
+    "createdAt": "2015-03-31T04:55:34Z",
+    "diffHunk": "@@ -76,9 +76,21 @@ private[spark] abstract class EventLoop[E](name: String) extends Logging {\n   def stop(): Unit = {\n     if (stopped.compareAndSet(false, true)) {\n       eventThread.interrupt()\n-      eventThread.join()\n-      // Call onStop after the event thread exits to make sure onReceive happens before onStop\n-      onStop()\n+      var onStopCalled = false\n+      try {\n+        eventThread.join()\n+        // Call onStop after the event thread exits to make sure onReceive happens before onStop\n+        onStopCalled = true\n+        onStop()\n+      } catch {\n+        case ie: InterruptedException =>\n+          Thread.currentThread().interrupt()\n+          if (!onStopCalled) {\n+            // ie is thrown from `eventThread.join()`. Otherwise, we should not call `onStop` since",
+    "line": 17
+  }, {
+    "author": {
+      "login": "zhichao-li"
+    },
+    "body": "@zsxwing  Just go through the source code and stop here by accident. Seems like the unit test haven't cover the case that join() throw InterruptedException?  and how about move `onStop()` to the finally block to ensure it would be executed in call cases.\n",
+    "commit": "521125e825bd4919c0a36c1092aaf789a42539bb",
+    "createdAt": "2015-08-10T14:30:57Z",
+    "diffHunk": "@@ -76,9 +76,21 @@ private[spark] abstract class EventLoop[E](name: String) extends Logging {\n   def stop(): Unit = {\n     if (stopped.compareAndSet(false, true)) {\n       eventThread.interrupt()\n-      eventThread.join()\n-      // Call onStop after the event thread exits to make sure onReceive happens before onStop\n-      onStop()\n+      var onStopCalled = false\n+      try {\n+        eventThread.join()\n+        // Call onStop after the event thread exits to make sure onReceive happens before onStop\n+        onStopCalled = true\n+        onStop()\n+      } catch {\n+        case ie: InterruptedException =>\n+          Thread.currentThread().interrupt()\n+          if (!onStopCalled) {\n+            // ie is thrown from `eventThread.join()`. Otherwise, we should not call `onStop` since",
+    "line": 17
+  }, {
+    "author": {
+      "login": "zsxwing"
+    },
+    "body": "I think it's covered. There are some tests which test calling `stop` in the event thread.\n",
+    "commit": "521125e825bd4919c0a36c1092aaf789a42539bb",
+    "createdAt": "2015-08-10T15:34:07Z",
+    "diffHunk": "@@ -76,9 +76,21 @@ private[spark] abstract class EventLoop[E](name: String) extends Logging {\n   def stop(): Unit = {\n     if (stopped.compareAndSet(false, true)) {\n       eventThread.interrupt()\n-      eventThread.join()\n-      // Call onStop after the event thread exits to make sure onReceive happens before onStop\n-      onStop()\n+      var onStopCalled = false\n+      try {\n+        eventThread.join()\n+        // Call onStop after the event thread exits to make sure onReceive happens before onStop\n+        onStopCalled = true\n+        onStop()\n+      } catch {\n+        case ie: InterruptedException =>\n+          Thread.currentThread().interrupt()\n+          if (!onStopCalled) {\n+            // ie is thrown from `eventThread.join()`. Otherwise, we should not call `onStop` since",
+    "line": 17
+  }, {
+    "author": {
+      "login": "zhichao-li"
+    },
+    "body": "Oops...... there's indeed `eventThread.interrupt()` at the begin of stop(). Thanks for clarifying this. \n",
+    "commit": "521125e825bd4919c0a36c1092aaf789a42539bb",
+    "createdAt": "2015-08-11T01:41:08Z",
+    "diffHunk": "@@ -76,9 +76,21 @@ private[spark] abstract class EventLoop[E](name: String) extends Logging {\n   def stop(): Unit = {\n     if (stopped.compareAndSet(false, true)) {\n       eventThread.interrupt()\n-      eventThread.join()\n-      // Call onStop after the event thread exits to make sure onReceive happens before onStop\n-      onStop()\n+      var onStopCalled = false\n+      try {\n+        eventThread.join()\n+        // Call onStop after the event thread exits to make sure onReceive happens before onStop\n+        onStopCalled = true\n+        onStop()\n+      } catch {\n+        case ie: InterruptedException =>\n+          Thread.currentThread().interrupt()\n+          if (!onStopCalled) {\n+            // ie is thrown from `eventThread.join()`. Otherwise, we should not call `onStop` since",
+    "line": 17
+  }],
+  "prId": 5280
+}]

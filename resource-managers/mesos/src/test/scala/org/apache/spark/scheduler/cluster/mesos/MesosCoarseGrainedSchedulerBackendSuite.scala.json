@@ -1,0 +1,20 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "lins05"
+    },
+    "body": "I would suggest increasing the test coverage by testing a second round of launching by calling `backend.requestTotalExecutors / offerResources/ verify ..` again. \r\n\r\nWe can update the first call to `requestTotalExecutors` to only request one executor, and increase to two in the second call. ",
+    "commit": "38b79aa4eca79656d8a7aaa5ce26af4b336c5c77",
+    "createdAt": "2017-06-19T03:34:38Z",
+    "diffHunk": "@@ -586,6 +586,44 @@ class MesosCoarseGrainedSchedulerBackendSuite extends SparkFunSuite\n     assert(backend.isReady)\n   }\n \n+  test(\"supports data locality with dynamic allocation\") {\n+    setBackend(Map(\n+      \"spark.dynamicAllocation.enabled\" -> \"true\",\n+      \"spark.dynamicAllocation.testing\" -> \"true\",\n+      \"spark.locality.wait\" -> \"2s\"))\n+\n+    assert(backend.getExecutorIds().isEmpty)\n+\n+    backend.requestTotalExecutors(2, 2, Map(\"hosts10\" -> 1, \"hosts11\" -> 1))\n+\n+    // Offer non-local resources, which should be rejected\n+    var id = 1\n+    offerResources(List(Resources(backend.executorMemory(sc), 1)), id)\n+    verifyTaskNotLaunched(driver, s\"o$id\")\n+    id = 2\n+    offerResources(List(Resources(backend.executorMemory(sc), 1)), id)\n+    verifyTaskNotLaunched(driver, s\"o$id\")\n+\n+    // Offer local resource\n+    id = 10\n+    offerResources(List(Resources(backend.executorMemory(sc), 1)), id)\n+    var launchedTasks = verifyTaskLaunched(driver, s\"o$id\")\n+    assert(s\"s$id\" == launchedTasks.head.getSlaveId.getValue)\n+    registerMockExecutor(launchedTasks.head.getTaskId.getValue, s\"s$id\", 1)\n+    assert(backend.getExecutorIds().size == 1)\n+\n+    // Wait longer than spark.locality.wait\n+    Thread.sleep(3000)\n+\n+    // Offer non-local resource, which should be accepted\n+    id = 1\n+    offerResources(List(Resources(backend.executorMemory(sc), 1)), id)\n+    launchedTasks = verifyTaskLaunched(driver, s\"o$id\")\n+    assert(s\"s$id\" == launchedTasks.head.getSlaveId.getValue)\n+    registerMockExecutor(launchedTasks.head.getTaskId.getValue, s\"s$id\", 1)\n+    assert(backend.getExecutorIds().size == 2)\n+  }"
+  }, {
+    "author": {
+      "login": "gpang"
+    },
+    "body": "Updated test to increase test coverage.",
+    "commit": "38b79aa4eca79656d8a7aaa5ce26af4b336c5c77",
+    "createdAt": "2017-06-19T15:08:02Z",
+    "diffHunk": "@@ -586,6 +586,44 @@ class MesosCoarseGrainedSchedulerBackendSuite extends SparkFunSuite\n     assert(backend.isReady)\n   }\n \n+  test(\"supports data locality with dynamic allocation\") {\n+    setBackend(Map(\n+      \"spark.dynamicAllocation.enabled\" -> \"true\",\n+      \"spark.dynamicAllocation.testing\" -> \"true\",\n+      \"spark.locality.wait\" -> \"2s\"))\n+\n+    assert(backend.getExecutorIds().isEmpty)\n+\n+    backend.requestTotalExecutors(2, 2, Map(\"hosts10\" -> 1, \"hosts11\" -> 1))\n+\n+    // Offer non-local resources, which should be rejected\n+    var id = 1\n+    offerResources(List(Resources(backend.executorMemory(sc), 1)), id)\n+    verifyTaskNotLaunched(driver, s\"o$id\")\n+    id = 2\n+    offerResources(List(Resources(backend.executorMemory(sc), 1)), id)\n+    verifyTaskNotLaunched(driver, s\"o$id\")\n+\n+    // Offer local resource\n+    id = 10\n+    offerResources(List(Resources(backend.executorMemory(sc), 1)), id)\n+    var launchedTasks = verifyTaskLaunched(driver, s\"o$id\")\n+    assert(s\"s$id\" == launchedTasks.head.getSlaveId.getValue)\n+    registerMockExecutor(launchedTasks.head.getTaskId.getValue, s\"s$id\", 1)\n+    assert(backend.getExecutorIds().size == 1)\n+\n+    // Wait longer than spark.locality.wait\n+    Thread.sleep(3000)\n+\n+    // Offer non-local resource, which should be accepted\n+    id = 1\n+    offerResources(List(Resources(backend.executorMemory(sc), 1)), id)\n+    launchedTasks = verifyTaskLaunched(driver, s\"o$id\")\n+    assert(s\"s$id\" == launchedTasks.head.getSlaveId.getValue)\n+    registerMockExecutor(launchedTasks.head.getTaskId.getValue, s\"s$id\", 1)\n+    assert(backend.getExecutorIds().size == 2)\n+  }"
+  }],
+  "prId": 18098
+}]

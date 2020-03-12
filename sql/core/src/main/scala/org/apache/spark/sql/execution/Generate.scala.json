@@ -1,0 +1,184 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "viirya"
+    },
+    "body": "Looks like you are calling `terminate` on each partition. Is that not the same as how Hive does? In Hive it seems that `close` is called after all rows are processed.\n",
+    "commit": "98b4e4b9b788e473b52153b5fb792ca43d4f6b1a",
+    "createdAt": "2015-04-07T08:54:52Z",
+    "diffHunk": "@@ -74,10 +84,15 @@ case class Generate(\n           } else {\n             outputRows.map(or => joinProjection(joinedRow(row, or)))\n           }\n+        } ++ LazyIterator(() => boundGenerator.terminate()).map { row =>\n+          joinedRow(nullOriginalRow, row)\n         }\n       }\n     } else {\n-      child.execute().mapPartitions(iter => iter.flatMap(row => boundGenerator.eval(row)))\n+      child.execute().mapPartitions(iter =>\n+        iter.flatMap(row => boundGenerator.eval(row)) ++\n+          LazyIterator(() => boundGenerator.terminate())"
+  }, {
+    "author": {
+      "login": "chenghao-intel"
+    },
+    "body": "Yes, I that's OK by called in each partition.\n\nSee \nhttps://github.com/apache/hive/blob/trunk/ql/src/java/org/apache/hadoop/hive/ql/exec/mr/ExecReducer.java#L278\nhttps://github.com/apache/hive/blob/trunk/ql/src/java/org/apache/hadoop/hive/ql/exec/mr/ExecMapper.java#L192\nThe `Operator.close()` is called in `MapReduceBase.close`, which mean they are supposed to run once within each Mapper/Reducer.\n\nAnd \nhttps://github.com/apache/hive/blob/trunk/ql/src/java/org/apache/hadoop/hive/ql/exec/UDTFOperator.java#L144\nhttps://github.com/apache/hive/blob/trunk/ql/src/java/org/apache/hadoop/hive/ql/exec/Operator.java#L616\nshows the `genericUDTF.close()` is called within the `Operator.close`.\n\nSorry, please correct me if my understanding is wrong.\n",
+    "commit": "98b4e4b9b788e473b52153b5fb792ca43d4f6b1a",
+    "createdAt": "2015-04-07T17:04:49Z",
+    "diffHunk": "@@ -74,10 +84,15 @@ case class Generate(\n           } else {\n             outputRows.map(or => joinProjection(joinedRow(row, or)))\n           }\n+        } ++ LazyIterator(() => boundGenerator.terminate()).map { row =>\n+          joinedRow(nullOriginalRow, row)\n         }\n       }\n     } else {\n-      child.execute().mapPartitions(iter => iter.flatMap(row => boundGenerator.eval(row)))\n+      child.execute().mapPartitions(iter =>\n+        iter.flatMap(row => boundGenerator.eval(row)) ++\n+          LazyIterator(() => boundGenerator.terminate())"
+  }, {
+    "author": {
+      "login": "maropu"
+    },
+    "body": "How about codes below to simplify that?\n\n```\nchild.execute().mapPartitions(iter =>\n    iter.flatMap(row => boundGenerator.eval(row)))\n   .mapPartitions(_ ++ boundGenerator.terminate())\n```\n",
+    "commit": "98b4e4b9b788e473b52153b5fb792ca43d4f6b1a",
+    "createdAt": "2015-04-08T11:59:29Z",
+    "diffHunk": "@@ -74,10 +84,15 @@ case class Generate(\n           } else {\n             outputRows.map(or => joinProjection(joinedRow(row, or)))\n           }\n+        } ++ LazyIterator(() => boundGenerator.terminate()).map { row =>\n+          joinedRow(nullOriginalRow, row)\n         }\n       }\n     } else {\n-      child.execute().mapPartitions(iter => iter.flatMap(row => boundGenerator.eval(row)))\n+      child.execute().mapPartitions(iter =>\n+        iter.flatMap(row => boundGenerator.eval(row)) ++\n+          LazyIterator(() => boundGenerator.terminate())"
+  }, {
+    "author": {
+      "login": "chenghao-intel"
+    },
+    "body": "@maropu thanks for the suggestion, I'd like to try that locally. BTW can you confirm if this PR work for you, as we talked offline? Just to double confirm the concern of @viirya.\nThanks.\n",
+    "commit": "98b4e4b9b788e473b52153b5fb792ca43d4f6b1a",
+    "createdAt": "2015-04-08T15:47:30Z",
+    "diffHunk": "@@ -74,10 +84,15 @@ case class Generate(\n           } else {\n             outputRows.map(or => joinProjection(joinedRow(row, or)))\n           }\n+        } ++ LazyIterator(() => boundGenerator.terminate()).map { row =>\n+          joinedRow(nullOriginalRow, row)\n         }\n       }\n     } else {\n-      child.execute().mapPartitions(iter => iter.flatMap(row => boundGenerator.eval(row)))\n+      child.execute().mapPartitions(iter =>\n+        iter.flatMap(row => boundGenerator.eval(row)) ++\n+          LazyIterator(() => boundGenerator.terminate())"
+  }, {
+    "author": {
+      "login": "maropu"
+    },
+    "body": "Ok, I'll try and let you know the result.\n",
+    "commit": "98b4e4b9b788e473b52153b5fb792ca43d4f6b1a",
+    "createdAt": "2015-04-08T17:58:04Z",
+    "diffHunk": "@@ -74,10 +84,15 @@ case class Generate(\n           } else {\n             outputRows.map(or => joinProjection(joinedRow(row, or)))\n           }\n+        } ++ LazyIterator(() => boundGenerator.terminate()).map { row =>\n+          joinedRow(nullOriginalRow, row)\n         }\n       }\n     } else {\n-      child.execute().mapPartitions(iter => iter.flatMap(row => boundGenerator.eval(row)))\n+      child.execute().mapPartitions(iter =>\n+        iter.flatMap(row => boundGenerator.eval(row)) ++\n+          LazyIterator(() => boundGenerator.terminate())"
+  }, {
+    "author": {
+      "login": "maropu"
+    },
+    "body": "yeah, it works correctly, thanks.\n",
+    "commit": "98b4e4b9b788e473b52153b5fb792ca43d4f6b1a",
+    "createdAt": "2015-04-09T02:32:07Z",
+    "diffHunk": "@@ -74,10 +84,15 @@ case class Generate(\n           } else {\n             outputRows.map(or => joinProjection(joinedRow(row, or)))\n           }\n+        } ++ LazyIterator(() => boundGenerator.terminate()).map { row =>\n+          joinedRow(nullOriginalRow, row)\n         }\n       }\n     } else {\n-      child.execute().mapPartitions(iter => iter.flatMap(row => boundGenerator.eval(row)))\n+      child.execute().mapPartitions(iter =>\n+        iter.flatMap(row => boundGenerator.eval(row)) ++\n+          LazyIterator(() => boundGenerator.terminate())"
+  }],
+  "prId": 5383
+}, {
+  "comments": [{
+    "author": {
+      "login": "liancheng"
+    },
+    "body": "Can we merge this `.mapPartitions` into the above one?\n",
+    "commit": "98b4e4b9b788e473b52153b5fb792ca43d4f6b1a",
+    "createdAt": "2015-04-12T17:42:20Z",
+    "diffHunk": "@@ -75,9 +78,15 @@ case class Generate(\n             outputRows.map(or => joinProjection(joinedRow(row, or)))\n           }\n         }\n+      }.mapPartitions { iter =>\n+        val nullOriginalRow = Row(Seq.fill(generator.output.size)(Literal(null)): _*)\n+        val joinedRow = new JoinedRow\n+        iter ++ boundGenerator.terminate().map(joinedRow(nullOriginalRow, _))"
+  }],
+  "prId": 5383
+}, {
+  "comments": [{
+    "author": {
+      "login": "liancheng"
+    },
+    "body": "The original line doesn't exceeded 100 columns, please revert this change.\n",
+    "commit": "98b4e4b9b788e473b52153b5fb792ca43d4f6b1a",
+    "createdAt": "2015-04-12T17:42:51Z",
+    "diffHunk": "@@ -75,9 +78,15 @@ case class Generate(\n             outputRows.map(or => joinProjection(joinedRow(row, or)))\n           }\n         }\n+      }.mapPartitions { iter =>\n+        val nullOriginalRow = Row(Seq.fill(generator.output.size)(Literal(null)): _*)\n+        val joinedRow = new JoinedRow\n+        iter ++ boundGenerator.terminate().map(joinedRow(nullOriginalRow, _))\n       }\n     } else {\n-      child.execute().mapPartitions(iter => iter.flatMap(row => boundGenerator.eval(row)))\n-    }\n+      child.execute().mapPartitions(iter =>\n+        iter.flatMap(row => boundGenerator.eval(row))\n+      )"
+  }],
+  "prId": 5383
+}, {
+  "comments": [{
+    "author": {
+      "login": "liancheng"
+    },
+    "body": "Why the `: _*`?\n",
+    "commit": "98b4e4b9b788e473b52153b5fb792ca43d4f6b1a",
+    "createdAt": "2015-04-12T17:59:14Z",
+    "diffHunk": "@@ -75,9 +78,15 @@ case class Generate(\n             outputRows.map(or => joinProjection(joinedRow(row, or)))\n           }\n         }\n+      }.mapPartitions { iter =>\n+        val nullOriginalRow = Row(Seq.fill(generator.output.size)(Literal(null)): _*)"
+  }, {
+    "author": {
+      "login": "liancheng"
+    },
+    "body": "My mistake, I see you're building the `Row`. But here we should use `child.output.size` rather than `generator.output.size`. Also we can use `Row.fromSeq` instead of `Row.appy(values: Any*)` for clarity:\n\n``` scala\nval nullOriginalRow = Row.fromSeq(Seq.fill(child.output.size)(Literal(null))\n```\n",
+    "commit": "98b4e4b9b788e473b52153b5fb792ca43d4f6b1a",
+    "createdAt": "2015-04-12T18:08:12Z",
+    "diffHunk": "@@ -75,9 +78,15 @@ case class Generate(\n             outputRows.map(or => joinProjection(joinedRow(row, or)))\n           }\n         }\n+      }.mapPartitions { iter =>\n+        val nullOriginalRow = Row(Seq.fill(generator.output.size)(Literal(null)): _*)"
+  }, {
+    "author": {
+      "login": "chenghao-intel"
+    },
+    "body": "Yes, you're right, we should use the `child.output.size`, not the `generator.output.size`.\n",
+    "commit": "98b4e4b9b788e473b52153b5fb792ca43d4f6b1a",
+    "createdAt": "2015-04-13T05:06:10Z",
+    "diffHunk": "@@ -75,9 +78,15 @@ case class Generate(\n             outputRows.map(or => joinProjection(joinedRow(row, or)))\n           }\n         }\n+      }.mapPartitions { iter =>\n+        val nullOriginalRow = Row(Seq.fill(generator.output.size)(Literal(null)): _*)"
+  }],
+  "prId": 5383
+}, {
+  "comments": [{
+    "author": {
+      "login": "liancheng"
+    },
+    "body": "This should only be added when `join` is false. Move it to the above line.\n",
+    "commit": "98b4e4b9b788e473b52153b5fb792ca43d4f6b1a",
+    "createdAt": "2015-04-12T18:09:55Z",
+    "diffHunk": "@@ -75,9 +78,15 @@ case class Generate(\n             outputRows.map(or => joinProjection(joinedRow(row, or)))\n           }\n         }\n+      }.mapPartitions { iter =>\n+        val nullOriginalRow = Row(Seq.fill(generator.output.size)(Literal(null)): _*)\n+        val joinedRow = new JoinedRow\n+        iter ++ boundGenerator.terminate().map(joinedRow(nullOriginalRow, _))\n       }\n     } else {\n-      child.execute().mapPartitions(iter => iter.flatMap(row => boundGenerator.eval(row)))\n-    }\n+      child.execute().mapPartitions(iter =>\n+        iter.flatMap(row => boundGenerator.eval(row))\n+      )\n+    }.mapPartitions(_ ++ boundGenerator.terminate())"
+  }, {
+    "author": {
+      "login": "chenghao-intel"
+    },
+    "body": "Oh, yeah, that's a bug, thank you @liancheng I will update the code soon\n",
+    "commit": "98b4e4b9b788e473b52153b5fb792ca43d4f6b1a",
+    "createdAt": "2015-04-13T03:13:00Z",
+    "diffHunk": "@@ -75,9 +78,15 @@ case class Generate(\n             outputRows.map(or => joinProjection(joinedRow(row, or)))\n           }\n         }\n+      }.mapPartitions { iter =>\n+        val nullOriginalRow = Row(Seq.fill(generator.output.size)(Literal(null)): _*)\n+        val joinedRow = new JoinedRow\n+        iter ++ boundGenerator.terminate().map(joinedRow(nullOriginalRow, _))\n       }\n     } else {\n-      child.execute().mapPartitions(iter => iter.flatMap(row => boundGenerator.eval(row)))\n-    }\n+      child.execute().mapPartitions(iter =>\n+        iter.flatMap(row => boundGenerator.eval(row))\n+      )\n+    }.mapPartitions(_ ++ boundGenerator.terminate())"
+  }],
+  "prId": 5383
+}, {
+  "comments": [{
+    "author": {
+      "login": "liancheng"
+    },
+    "body": "I think we can just use `org.apache.spark.util.CompletionIterator` to ensure `terminate()` is called at the very last.\n",
+    "commit": "98b4e4b9b788e473b52153b5fb792ca43d4f6b1a",
+    "createdAt": "2015-04-14T07:41:10Z",
+    "diffHunk": "@@ -56,28 +65,33 @@ case class Generate(\n   val boundGenerator = BindReferences.bindReference(generator, child.output)\n \n   override def execute(): RDD[Row] = {\n+    // boundGenerator.terminate() should be triggered after all of the rows in the partition\n     if (join) {\n       child.execute().mapPartitions { iter =>\n-        val nullValues = Seq.fill(generator.output.size)(Literal(null))\n-        // Used to produce rows with no matches when outer = true.\n-        val outerProjection =\n-          newProjection(child.output ++ nullValues, child.output)\n-\n-        val joinProjection =\n-          newProjection(child.output ++ generatorOutput, child.output ++ generatorOutput)\n+        val generatorNullRow = Row.fromSeq(Seq.fill[Any](generator.output.size)(null))\n         val joinedRow = new JoinedRow\n \n         iter.flatMap {row =>\n+          // we should always set the left (child output)\n+          joinedRow.withLeft(row)\n           val outputRows = boundGenerator.eval(row)\n           if (outer && outputRows.isEmpty) {\n-            outerProjection(row) :: Nil\n+            joinedRow.withRight(generatorNullRow) :: Nil\n           } else {\n-            outputRows.map(or => joinProjection(joinedRow(row, or)))\n+            outputRows.map(or => joinedRow.withRight(or))\n           }\n+        } ++ LazyIterator(() => boundGenerator.terminate()).map { row =>",
+    "line": 47
+  }],
+  "prId": 5383
+}, {
+  "comments": [{
+    "author": {
+      "login": "liancheng"
+    },
+    "body": "This can be removed since `CompletionIterator` should be enough.\n",
+    "commit": "98b4e4b9b788e473b52153b5fb792ca43d4f6b1a",
+    "createdAt": "2015-04-14T08:56:32Z",
+    "diffHunk": "@@ -21,6 +21,15 @@ import org.apache.spark.annotation.DeveloperApi\n import org.apache.spark.rdd.RDD\n import org.apache.spark.sql.catalyst.expressions._\n \n+// for lazy computing, be sure the generator.terminate() called in the very last\n+private[execution] sealed case class LazyIterator(func: () => TraversableOnce[Row])\n+  extends Iterator[Row] {\n+\n+  lazy val results = func().toIterator\n+  override def hasNext: Boolean = results.hasNext\n+  override def next(): Row = results.next()\n+}",
+    "line": 13
+  }, {
+    "author": {
+      "login": "chenghao-intel"
+    },
+    "body": "@liancheng I just confirmed, the `CompletionIterator` provides a callback machinism once finish iterating the iterator, however, all we need here is to append an new iterator, which produced by the `terminate()` method.\n\nBut you're right, probably we need to update the `CompletionIterator` a little bit, I leave a `TODO` here, and will file another PR for this improvement.\n",
+    "commit": "98b4e4b9b788e473b52153b5fb792ca43d4f6b1a",
+    "createdAt": "2015-04-21T02:28:46Z",
+    "diffHunk": "@@ -21,6 +21,15 @@ import org.apache.spark.annotation.DeveloperApi\n import org.apache.spark.rdd.RDD\n import org.apache.spark.sql.catalyst.expressions._\n \n+// for lazy computing, be sure the generator.terminate() called in the very last\n+private[execution] sealed case class LazyIterator(func: () => TraversableOnce[Row])\n+  extends Iterator[Row] {\n+\n+  lazy val results = func().toIterator\n+  override def hasNext: Boolean = results.hasNext\n+  override def next(): Row = results.next()\n+}",
+    "line": 13
+  }, {
+    "author": {
+      "login": "liancheng"
+    },
+    "body": "Yeah, sorry I didn't realize the semantics differences between these two iterator classes at first.  I think it's OK to leave `CompletionIterator` as is.\n",
+    "commit": "98b4e4b9b788e473b52153b5fb792ca43d4f6b1a",
+    "createdAt": "2015-05-13T15:59:28Z",
+    "diffHunk": "@@ -21,6 +21,15 @@ import org.apache.spark.annotation.DeveloperApi\n import org.apache.spark.rdd.RDD\n import org.apache.spark.sql.catalyst.expressions._\n \n+// for lazy computing, be sure the generator.terminate() called in the very last\n+private[execution] sealed case class LazyIterator(func: () => TraversableOnce[Row])\n+  extends Iterator[Row] {\n+\n+  lazy val results = func().toIterator\n+  override def hasNext: Boolean = results.hasNext\n+  override def next(): Row = results.next()\n+}",
+    "line": 13
+  }],
+  "prId": 5383
+}, {
+  "comments": [{
+    "author": {
+      "login": "liancheng"
+    },
+    "body": "BTW, please help adding a space after the `{`.\n",
+    "commit": "98b4e4b9b788e473b52153b5fb792ca43d4f6b1a",
+    "createdAt": "2015-04-14T08:56:34Z",
+    "diffHunk": "@@ -56,28 +65,33 @@ case class Generate(\n   val boundGenerator = BindReferences.bindReference(generator, child.output)\n \n   override def execute(): RDD[Row] = {\n+    // boundGenerator.terminate() should be triggered after all of the rows in the partition\n     if (join) {\n       child.execute().mapPartitions { iter =>\n-        val nullValues = Seq.fill(generator.output.size)(Literal(null))\n-        // Used to produce rows with no matches when outer = true.\n-        val outerProjection =\n-          newProjection(child.output ++ nullValues, child.output)\n-\n-        val joinProjection =\n-          newProjection(child.output ++ generatorOutput, child.output ++ generatorOutput)\n+        val generatorNullRow = Row.fromSeq(Seq.fill[Any](generator.output.size)(null))\n         val joinedRow = new JoinedRow\n \n         iter.flatMap {row =>"
+  }],
+  "prId": 5383
+}, {
+  "comments": [{
+    "author": {
+      "login": "marmbrus"
+    },
+    "body": "Use ScalaDoc style for class comments.\n",
+    "commit": "98b4e4b9b788e473b52153b5fb792ca43d4f6b1a",
+    "createdAt": "2015-04-21T22:26:18Z",
+    "diffHunk": "@@ -21,6 +21,16 @@ import org.apache.spark.annotation.DeveloperApi\n import org.apache.spark.rdd.RDD\n import org.apache.spark.sql.catalyst.expressions._\n \n+// for lazy computing, be sure the generator.terminate() called in the very last\n+// TODO reusing the CompletionIterator?"
+  }],
+  "prId": 5383
+}]

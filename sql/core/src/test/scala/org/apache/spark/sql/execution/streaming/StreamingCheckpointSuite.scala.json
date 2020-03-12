@@ -1,0 +1,25 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "HeartSaVioR"
+    },
+    "body": "Nice to have verifying with checkpointDir!\r\n\r\nBtw, if we know the path of checkpointDir, we can record actual path of request in MkdirRecordingFileSystem (like before) and let them just created, and find whether recorded directories have checkpointDir. This would make test still pass when Spark will be changed to create multiple directories including checkpointDir. \r\n\r\nThis change may disable the impact of `fs.exist(checkpointDir)`, but we can determine which filesystem creates that directory so IMHO it's not a big deal.",
+    "commit": "54f86b729a07e4d1bcf5847a61b75ccbdcbdfdad",
+    "createdAt": "2019-02-26T19:07:25Z",
+    "diffHunk": "@@ -0,0 +1,78 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.execution.streaming\n+\n+import java.net.URI\n+\n+import org.apache.hadoop.fs.{LocalFileSystem, Path, RawLocalFileSystem}\n+import org.apache.hadoop.fs.permission.FsPermission\n+\n+import org.apache.spark.{SparkConf, SparkFunSuite}\n+import org.apache.spark.sql.{Encoder, LocalSparkSession, SparkSession, SQLContext}\n+\n+class StreamingCheckpointSuite extends SparkFunSuite with LocalSparkSession {\n+\n+  test(\"temp checkpoint dir should stay local even if default filesystem is not local\") {\n+    val conf = new SparkConf()\n+      .set(\"spark.hadoop.fs.file.impl\", classOf[LocalFileSystem].getName)\n+      .set(\"spark.hadoop.fs.mockfs.impl\", classOf[MkdirRecordingFileSystem].getName)\n+      .set(\"spark.hadoop.fs.defaultFS\", \"mockfs:///\")\n+\n+    spark = SparkSession.builder().master(\"local\").appName(\"test\").config(conf).getOrCreate()\n+\n+    implicit val intEncoder: Encoder[Int] = spark.implicits.newIntEncoder\n+    implicit val sqlContext: SQLContext = spark.sqlContext\n+\n+    MkdirRecordingFileSystem.reset()\n+    val query = MemoryStream[Int].toDF().writeStream.format(\"console\").start()\n+    try {\n+      val checkpointDir = new Path(\n+        query.asInstanceOf[StreamingQueryWrapper].streamingQuery.resolvedCheckpointRoot)\n+      val fs = checkpointDir.getFileSystem(spark.sessionState.newHadoopConf())\n+      assert(fs.getScheme === \"file\")\n+      assert(fs.exists(checkpointDir))\n+      assert(MkdirRecordingFileSystem.requests === 0,",
+    "line": 49
+  }],
+  "prId": 23764
+}, {
+  "comments": [{
+    "author": {
+      "login": "HeartSaVioR"
+    },
+    "body": "I guess having SPARK-26825 as prefix helps to the future readers why the change was necessary. Please ignore if test name is too long to add it.",
+    "commit": "54f86b729a07e4d1bcf5847a61b75ccbdcbdfdad",
+    "createdAt": "2019-02-26T19:14:50Z",
+    "diffHunk": "@@ -0,0 +1,78 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.sql.execution.streaming\n+\n+import java.net.URI\n+\n+import org.apache.hadoop.fs.{LocalFileSystem, Path, RawLocalFileSystem}\n+import org.apache.hadoop.fs.permission.FsPermission\n+\n+import org.apache.spark.{SparkConf, SparkFunSuite}\n+import org.apache.spark.sql.{Encoder, LocalSparkSession, SparkSession, SQLContext}\n+\n+class StreamingCheckpointSuite extends SparkFunSuite with LocalSparkSession {\n+\n+  test(\"temp checkpoint dir should stay local even if default filesystem is not local\") {",
+    "line": 30
+  }],
+  "prId": 23764
+}]

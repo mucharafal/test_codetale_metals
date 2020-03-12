@@ -1,0 +1,66 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "rxin"
+    },
+    "body": "is there a more descriptive name?\n",
+    "commit": "d7d70e67dbeaa456d8e0c308f0ddc13a9963b0cf",
+    "createdAt": "2016-07-27T20:48:24Z",
+    "diffHunk": "@@ -934,6 +934,159 @@ class LogicalPlanToSQLSuite extends SQLBuilderTest with SQLTestUtils {\n     }\n   }\n \n+  test(\"mapjoin_subquery\") {\n+    checkSQL(\n+      \"\"\"\n+        |SELECT subq.key1, z.value\n+        |FROM (SELECT x.key as key1, x.value as value1, y.key as key2, y.value as value2\n+        |      FROM src1 x JOIN src y ON (x.key = y.key)) subq\n+        |JOIN srcpart z ON (subq.key1 = z.key and z.ds='2008-04-08' and z.hr=11)\n+        |ORDER BY subq.key1, z.value\n+      \"\"\".stripMargin,\n+      \"mapjoin_subquery\")\n+  }\n+\n+  test(\"subq2\") {"
+  }, {
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "Sure. I actually just use the name from Hive suite for review.\nI'll review this.\n",
+    "commit": "d7d70e67dbeaa456d8e0c308f0ddc13a9963b0cf",
+    "createdAt": "2016-07-27T20:53:41Z",
+    "diffHunk": "@@ -934,6 +934,159 @@ class LogicalPlanToSQLSuite extends SQLBuilderTest with SQLTestUtils {\n     }\n   }\n \n+  test(\"mapjoin_subquery\") {\n+    checkSQL(\n+      \"\"\"\n+        |SELECT subq.key1, z.value\n+        |FROM (SELECT x.key as key1, x.value as value1, y.key as key2, y.value as value2\n+        |      FROM src1 x JOIN src y ON (x.key = y.key)) subq\n+        |JOIN srcpart z ON (subq.key1 = z.key and z.ds='2008-04-08' and z.hr=11)\n+        |ORDER BY subq.key1, z.value\n+      \"\"\".stripMargin,\n+      \"mapjoin_subquery\")\n+  }\n+\n+  test(\"subq2\") {"
+  }],
+  "prId": 14383
+}, {
+  "comments": [{
+    "author": {
+      "login": "rxin"
+    },
+    "body": "broadcast join\n",
+    "commit": "d7d70e67dbeaa456d8e0c308f0ddc13a9963b0cf",
+    "createdAt": "2016-07-27T20:48:31Z",
+    "diffHunk": "@@ -934,6 +934,159 @@ class LogicalPlanToSQLSuite extends SQLBuilderTest with SQLTestUtils {\n     }\n   }\n \n+  test(\"mapjoin_subquery\") {"
+  }, {
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "Sure!\n",
+    "commit": "d7d70e67dbeaa456d8e0c308f0ddc13a9963b0cf",
+    "createdAt": "2016-07-27T20:53:53Z",
+    "diffHunk": "@@ -934,6 +934,159 @@ class LogicalPlanToSQLSuite extends SQLBuilderTest with SQLTestUtils {\n     }\n   }\n \n+  test(\"mapjoin_subquery\") {"
+  }],
+  "prId": 14383
+}, {
+  "comments": [{
+    "author": {
+      "login": "rxin"
+    },
+    "body": "subquery_not_exists\n",
+    "commit": "d7d70e67dbeaa456d8e0c308f0ddc13a9963b0cf",
+    "createdAt": "2016-07-27T20:48:57Z",
+    "diffHunk": "@@ -934,6 +934,159 @@ class LogicalPlanToSQLSuite extends SQLBuilderTest with SQLTestUtils {\n     }\n   }\n \n+  test(\"mapjoin_subquery\") {\n+    checkSQL(\n+      \"\"\"\n+        |SELECT subq.key1, z.value\n+        |FROM (SELECT x.key as key1, x.value as value1, y.key as key2, y.value as value2\n+        |      FROM src1 x JOIN src y ON (x.key = y.key)) subq\n+        |JOIN srcpart z ON (subq.key1 = z.key and z.ds='2008-04-08' and z.hr=11)\n+        |ORDER BY subq.key1, z.value\n+      \"\"\".stripMargin,\n+      \"mapjoin_subquery\")\n+  }\n+\n+  test(\"subq2\") {\n+    checkSQL(\n+      \"\"\"\n+        |SELECT a.k, a.c\n+        |FROM (SELECT b.key as k, count(1) as c\n+        |      FROM src b\n+        |      GROUP BY b.key) a\n+        |WHERE a.k >= 90\n+      \"\"\".stripMargin,\n+      \"subq2\")\n+  }\n+\n+  test(\"subquery_exists\") {\n+    checkSQL(\n+      \"\"\"\n+        |select *\n+        |from src b\n+        |where exists (select a.key\n+        |              from src a\n+        |              where b.value = a.value and a.key = b.key and a.value > 'val_9')\n+      \"\"\".stripMargin,\n+      \"subquery_exists_1\")\n+\n+    checkSQL(\n+      \"\"\"\n+        |select *\n+        |from (select *\n+        |      from src b\n+        |      where exists (select a.key\n+        |                    from src a\n+        |                    where b.value = a.value and a.key = b.key and a.value > 'val_9')) a\n+      \"\"\".stripMargin,\n+      \"subquery_exists_2\")\n+  }\n+\n+  test(\"subquery_exists_having\") {\n+    checkSQL(\n+      \"\"\"\n+        |select b.key, count(*)\n+        |from src b\n+        |group by b.key\n+        |having exists (select a.key\n+        |               from src a\n+        |               where a.key = b.key and a.value > 'val_9')\n+      \"\"\".stripMargin,\n+      \"subquery_exists_having_1\")\n+\n+    checkSQL(\n+      \"\"\"\n+        |select *\n+        |from (select b.key, count(*)\n+        |      from src b\n+        |      group by b.key\n+        |      having exists (select a.key\n+        |                     from src a\n+        |                     where a.key = b.key and a.value > 'val_9')) a\n+      \"\"\".stripMargin,\n+      \"subquery_exists_having_2\")\n+\n+    checkSQL(\n+      \"\"\"\n+        |select b.key, min(b.value)\n+        |from src b\n+        |group by b.key\n+        |having exists (select a.key\n+        |               from src a\n+        |               where a.value > 'val_9' and a.value = min(b.value))\n+      \"\"\".stripMargin,\n+      \"subquery_exists_having_3\")\n+  }\n+\n+  test(\"subquery_notexists\") {"
+  }, {
+    "author": {
+      "login": "rxin"
+    },
+    "body": "same thing for the following few tests.\n",
+    "commit": "d7d70e67dbeaa456d8e0c308f0ddc13a9963b0cf",
+    "createdAt": "2016-07-27T20:49:10Z",
+    "diffHunk": "@@ -934,6 +934,159 @@ class LogicalPlanToSQLSuite extends SQLBuilderTest with SQLTestUtils {\n     }\n   }\n \n+  test(\"mapjoin_subquery\") {\n+    checkSQL(\n+      \"\"\"\n+        |SELECT subq.key1, z.value\n+        |FROM (SELECT x.key as key1, x.value as value1, y.key as key2, y.value as value2\n+        |      FROM src1 x JOIN src y ON (x.key = y.key)) subq\n+        |JOIN srcpart z ON (subq.key1 = z.key and z.ds='2008-04-08' and z.hr=11)\n+        |ORDER BY subq.key1, z.value\n+      \"\"\".stripMargin,\n+      \"mapjoin_subquery\")\n+  }\n+\n+  test(\"subq2\") {\n+    checkSQL(\n+      \"\"\"\n+        |SELECT a.k, a.c\n+        |FROM (SELECT b.key as k, count(1) as c\n+        |      FROM src b\n+        |      GROUP BY b.key) a\n+        |WHERE a.k >= 90\n+      \"\"\".stripMargin,\n+      \"subq2\")\n+  }\n+\n+  test(\"subquery_exists\") {\n+    checkSQL(\n+      \"\"\"\n+        |select *\n+        |from src b\n+        |where exists (select a.key\n+        |              from src a\n+        |              where b.value = a.value and a.key = b.key and a.value > 'val_9')\n+      \"\"\".stripMargin,\n+      \"subquery_exists_1\")\n+\n+    checkSQL(\n+      \"\"\"\n+        |select *\n+        |from (select *\n+        |      from src b\n+        |      where exists (select a.key\n+        |                    from src a\n+        |                    where b.value = a.value and a.key = b.key and a.value > 'val_9')) a\n+      \"\"\".stripMargin,\n+      \"subquery_exists_2\")\n+  }\n+\n+  test(\"subquery_exists_having\") {\n+    checkSQL(\n+      \"\"\"\n+        |select b.key, count(*)\n+        |from src b\n+        |group by b.key\n+        |having exists (select a.key\n+        |               from src a\n+        |               where a.key = b.key and a.value > 'val_9')\n+      \"\"\".stripMargin,\n+      \"subquery_exists_having_1\")\n+\n+    checkSQL(\n+      \"\"\"\n+        |select *\n+        |from (select b.key, count(*)\n+        |      from src b\n+        |      group by b.key\n+        |      having exists (select a.key\n+        |                     from src a\n+        |                     where a.key = b.key and a.value > 'val_9')) a\n+      \"\"\".stripMargin,\n+      \"subquery_exists_having_2\")\n+\n+    checkSQL(\n+      \"\"\"\n+        |select b.key, min(b.value)\n+        |from src b\n+        |group by b.key\n+        |having exists (select a.key\n+        |               from src a\n+        |               where a.value > 'val_9' and a.value = min(b.value))\n+      \"\"\".stripMargin,\n+      \"subquery_exists_having_3\")\n+  }\n+\n+  test(\"subquery_notexists\") {"
+  }, {
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "Yep. For the naming, I will revise all according to the test context.\n",
+    "commit": "d7d70e67dbeaa456d8e0c308f0ddc13a9963b0cf",
+    "createdAt": "2016-07-27T20:54:25Z",
+    "diffHunk": "@@ -934,6 +934,159 @@ class LogicalPlanToSQLSuite extends SQLBuilderTest with SQLTestUtils {\n     }\n   }\n \n+  test(\"mapjoin_subquery\") {\n+    checkSQL(\n+      \"\"\"\n+        |SELECT subq.key1, z.value\n+        |FROM (SELECT x.key as key1, x.value as value1, y.key as key2, y.value as value2\n+        |      FROM src1 x JOIN src y ON (x.key = y.key)) subq\n+        |JOIN srcpart z ON (subq.key1 = z.key and z.ds='2008-04-08' and z.hr=11)\n+        |ORDER BY subq.key1, z.value\n+      \"\"\".stripMargin,\n+      \"mapjoin_subquery\")\n+  }\n+\n+  test(\"subq2\") {\n+    checkSQL(\n+      \"\"\"\n+        |SELECT a.k, a.c\n+        |FROM (SELECT b.key as k, count(1) as c\n+        |      FROM src b\n+        |      GROUP BY b.key) a\n+        |WHERE a.k >= 90\n+      \"\"\".stripMargin,\n+      \"subq2\")\n+  }\n+\n+  test(\"subquery_exists\") {\n+    checkSQL(\n+      \"\"\"\n+        |select *\n+        |from src b\n+        |where exists (select a.key\n+        |              from src a\n+        |              where b.value = a.value and a.key = b.key and a.value > 'val_9')\n+      \"\"\".stripMargin,\n+      \"subquery_exists_1\")\n+\n+    checkSQL(\n+      \"\"\"\n+        |select *\n+        |from (select *\n+        |      from src b\n+        |      where exists (select a.key\n+        |                    from src a\n+        |                    where b.value = a.value and a.key = b.key and a.value > 'val_9')) a\n+      \"\"\".stripMargin,\n+      \"subquery_exists_2\")\n+  }\n+\n+  test(\"subquery_exists_having\") {\n+    checkSQL(\n+      \"\"\"\n+        |select b.key, count(*)\n+        |from src b\n+        |group by b.key\n+        |having exists (select a.key\n+        |               from src a\n+        |               where a.key = b.key and a.value > 'val_9')\n+      \"\"\".stripMargin,\n+      \"subquery_exists_having_1\")\n+\n+    checkSQL(\n+      \"\"\"\n+        |select *\n+        |from (select b.key, count(*)\n+        |      from src b\n+        |      group by b.key\n+        |      having exists (select a.key\n+        |                     from src a\n+        |                     where a.key = b.key and a.value > 'val_9')) a\n+      \"\"\".stripMargin,\n+      \"subquery_exists_having_2\")\n+\n+    checkSQL(\n+      \"\"\"\n+        |select b.key, min(b.value)\n+        |from src b\n+        |group by b.key\n+        |having exists (select a.key\n+        |               from src a\n+        |               where a.value > 'val_9' and a.value = min(b.value))\n+      \"\"\".stripMargin,\n+      \"subquery_exists_having_3\")\n+  }\n+\n+  test(\"subquery_notexists\") {"
+  }],
+  "prId": 14383
+}]

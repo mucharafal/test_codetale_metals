@@ -1,0 +1,83 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "tdas"
+    },
+    "body": "@marmbrus the dot is in the key. Does this mean that when parsing using our json DF, we may have to refer to the column as \r\n```\r\nprogress.queryTimestamps.`eventTime.max`\r\n```",
+    "commit": "b59ab8083de3f2441133fed35658dea39cd4a759",
+    "createdAt": "2016-12-12T23:39:33Z",
+    "diffHunk": "@@ -38,13 +38,18 @@ class StreamingQueryStatusAndProgressSuite extends SparkFunSuite {\n         |  \"id\" : \"${testProgress1.id.toString}\",\n         |  \"runId\" : \"${testProgress1.runId.toString}\",\n         |  \"name\" : \"myName\",\n-        |  \"timestamp\" : \"2016-12-05T20:54:20.827Z\",\n+        |  \"triggerTimestamp\" : \"2016-12-05T20:54:20.827Z\",\n         |  \"numInputRows\" : 678,\n         |  \"inputRowsPerSecond\" : 10.0,\n         |  \"durationMs\" : {\n         |    \"total\" : 0\n         |  },\n-        |  \"currentWatermark\" : 3,\n+        |  \"queryTimestamps\" : {\n+        |    \"eventTime.avg\" : \"2016-12-05T20:54:20.827Z\","
+  }, {
+    "author": {
+      "login": "marmbrus"
+    },
+    "body": "One option is we could use dashes instead, but honestly I'm getting a little confused by all these timestamps.  In particular, I'm not sure what is the difference between `triggerTimestamp` and `processingTime` (and, I think that having `processingTime` mean anything different than `System.currentTimeMillis` will be confusing to users coming from other systems).\r\n\r\nThe two things that I think you really want to be able to track from the metrics feed are:\r\n - the actual timestamp when this progress update was produced.  I think this should remain top level and be called `timestamp`.\r\n - Stats about the event time, so that I can know roughly what data is present in this batch.  This can be useful for several reasons, including finding other problems upstream.  The more I think about this, I think you just want to see this as `\"eventTime\": { \"min\": ..., \"max\": ..., \"watermark\": ... }`\r\n\r\nIts actually not clear to me why you need to know the original batch start time.  In 99% of cases this is the same as the `timestamp`.  If you are executing, a batch due to a failure, it will be different.  But, why does an outside monitoring job care?  I can't come up with any interesting graphs that you would make with this extra field.",
+    "commit": "b59ab8083de3f2441133fed35658dea39cd4a759",
+    "createdAt": "2016-12-12T23:56:14Z",
+    "diffHunk": "@@ -38,13 +38,18 @@ class StreamingQueryStatusAndProgressSuite extends SparkFunSuite {\n         |  \"id\" : \"${testProgress1.id.toString}\",\n         |  \"runId\" : \"${testProgress1.runId.toString}\",\n         |  \"name\" : \"myName\",\n-        |  \"timestamp\" : \"2016-12-05T20:54:20.827Z\",\n+        |  \"triggerTimestamp\" : \"2016-12-05T20:54:20.827Z\",\n         |  \"numInputRows\" : 678,\n         |  \"inputRowsPerSecond\" : 10.0,\n         |  \"durationMs\" : {\n         |    \"total\" : 0\n         |  },\n-        |  \"currentWatermark\" : 3,\n+        |  \"queryTimestamps\" : {\n+        |    \"eventTime.avg\" : \"2016-12-05T20:54:20.827Z\","
+  }, {
+    "author": {
+      "login": "tdas"
+    },
+    "body": "My view is that the `StreamingQueryProgress` class is not just for monitoring but for debugging as well. The batchProcessingTime may be important for debugging why a batch generate some results in that 1% of the case where trigger time is different from the processing time. And in those cases, there is no other way to expose what the batchProcessingTime was that batch was if not exposed through the Progress API. \r\n\r\nThat said, we could not expose batchProcessingTime now and expose only eventTime. But it may be more complex to add another new field in Progress to expose the processing time (as it cannot be added to the map once we name it `eventTime`).\r\n\r\n",
+    "commit": "b59ab8083de3f2441133fed35658dea39cd4a759",
+    "createdAt": "2016-12-13T00:21:33Z",
+    "diffHunk": "@@ -38,13 +38,18 @@ class StreamingQueryStatusAndProgressSuite extends SparkFunSuite {\n         |  \"id\" : \"${testProgress1.id.toString}\",\n         |  \"runId\" : \"${testProgress1.runId.toString}\",\n         |  \"name\" : \"myName\",\n-        |  \"timestamp\" : \"2016-12-05T20:54:20.827Z\",\n+        |  \"triggerTimestamp\" : \"2016-12-05T20:54:20.827Z\",\n         |  \"numInputRows\" : 678,\n         |  \"inputRowsPerSecond\" : 10.0,\n         |  \"durationMs\" : {\n         |    \"total\" : 0\n         |  },\n-        |  \"currentWatermark\" : 3,\n+        |  \"queryTimestamps\" : {\n+        |    \"eventTime.avg\" : \"2016-12-05T20:54:20.827Z\","
+  }, {
+    "author": {
+      "login": "marmbrus"
+    },
+    "body": "It is available, it is stored in a human readable format in the offset log (BTW, is that a long or a timestamp?).  I think in the log run we'll want to open up another API that gives you access to this log, but I think that can come later.  For now, its still pretty easy to find.",
+    "commit": "b59ab8083de3f2441133fed35658dea39cd4a759",
+    "createdAt": "2016-12-13T00:27:08Z",
+    "diffHunk": "@@ -38,13 +38,18 @@ class StreamingQueryStatusAndProgressSuite extends SparkFunSuite {\n         |  \"id\" : \"${testProgress1.id.toString}\",\n         |  \"runId\" : \"${testProgress1.runId.toString}\",\n         |  \"name\" : \"myName\",\n-        |  \"timestamp\" : \"2016-12-05T20:54:20.827Z\",\n+        |  \"triggerTimestamp\" : \"2016-12-05T20:54:20.827Z\",\n         |  \"numInputRows\" : 678,\n         |  \"inputRowsPerSecond\" : 10.0,\n         |  \"durationMs\" : {\n         |    \"total\" : 0\n         |  },\n-        |  \"currentWatermark\" : 3,\n+        |  \"queryTimestamps\" : {\n+        |    \"eventTime.avg\" : \"2016-12-05T20:54:20.827Z\","
+  }, {
+    "author": {
+      "login": "tdas"
+    },
+    "body": "But the log gets cleaned up continuously, so will not be available if you are trying to debug it a day or an hour later. ",
+    "commit": "b59ab8083de3f2441133fed35658dea39cd4a759",
+    "createdAt": "2016-12-13T00:42:45Z",
+    "diffHunk": "@@ -38,13 +38,18 @@ class StreamingQueryStatusAndProgressSuite extends SparkFunSuite {\n         |  \"id\" : \"${testProgress1.id.toString}\",\n         |  \"runId\" : \"${testProgress1.runId.toString}\",\n         |  \"name\" : \"myName\",\n-        |  \"timestamp\" : \"2016-12-05T20:54:20.827Z\",\n+        |  \"triggerTimestamp\" : \"2016-12-05T20:54:20.827Z\",\n         |  \"numInputRows\" : 678,\n         |  \"inputRowsPerSecond\" : 10.0,\n         |  \"durationMs\" : {\n         |    \"total\" : 0\n         |  },\n-        |  \"currentWatermark\" : 3,\n+        |  \"queryTimestamps\" : {\n+        |    \"eventTime.avg\" : \"2016-12-05T20:54:20.827Z\","
+  }, {
+    "author": {
+      "login": "marmbrus"
+    },
+    "body": "Not any more... we keep 1000 now, right? This just really feels like we are reaching for a use case.  We can always add it, but I think the way it is done currently in this PR is very confusing and having `timestamp` and `eventTime` are very clear.",
+    "commit": "b59ab8083de3f2441133fed35658dea39cd4a759",
+    "createdAt": "2016-12-13T00:45:44Z",
+    "diffHunk": "@@ -38,13 +38,18 @@ class StreamingQueryStatusAndProgressSuite extends SparkFunSuite {\n         |  \"id\" : \"${testProgress1.id.toString}\",\n         |  \"runId\" : \"${testProgress1.runId.toString}\",\n         |  \"name\" : \"myName\",\n-        |  \"timestamp\" : \"2016-12-05T20:54:20.827Z\",\n+        |  \"triggerTimestamp\" : \"2016-12-05T20:54:20.827Z\",\n         |  \"numInputRows\" : 678,\n         |  \"inputRowsPerSecond\" : 10.0,\n         |  \"durationMs\" : {\n         |    \"total\" : 0\n         |  },\n-        |  \"currentWatermark\" : 3,\n+        |  \"queryTimestamps\" : {\n+        |    \"eventTime.avg\" : \"2016-12-05T20:54:20.827Z\","
+  }, {
+    "author": {
+      "login": "tdas"
+    },
+    "body": "1000 *  5 seconds batch is < 2 hours. Anyways, I think it will be equally or more confusing adding it later as a top-level field in Progress (e.g. `timestamp`, `eventTime`, `processingTime` ?). It may be better to have the top-level `timestamp`, and all other execution level detailed timestamps inside a single map. \r\n\r\nAnyways, I am updating the PR, but I think this is a little short-sighted.",
+    "commit": "b59ab8083de3f2441133fed35658dea39cd4a759",
+    "createdAt": "2016-12-13T00:57:45Z",
+    "diffHunk": "@@ -38,13 +38,18 @@ class StreamingQueryStatusAndProgressSuite extends SparkFunSuite {\n         |  \"id\" : \"${testProgress1.id.toString}\",\n         |  \"runId\" : \"${testProgress1.runId.toString}\",\n         |  \"name\" : \"myName\",\n-        |  \"timestamp\" : \"2016-12-05T20:54:20.827Z\",\n+        |  \"triggerTimestamp\" : \"2016-12-05T20:54:20.827Z\",\n         |  \"numInputRows\" : 678,\n         |  \"inputRowsPerSecond\" : 10.0,\n         |  \"durationMs\" : {\n         |    \"total\" : 0\n         |  },\n-        |  \"currentWatermark\" : 3,\n+        |  \"queryTimestamps\" : {\n+        |    \"eventTime.avg\" : \"2016-12-05T20:54:20.827Z\","
+  }],
+  "prId": 16258
+}, {
+  "comments": [{
+    "author": {
+      "login": "tdas"
+    },
+    "body": "@marmbrus One idea is to not have a top level timestamp, and merge this with the `queryTimestamps`. Then this would be a key `triggerStartTime` in the `queryTimestamps` map. In fact then we can rename `queryTimestamps` to `timestamps`.",
+    "commit": "b59ab8083de3f2441133fed35658dea39cd4a759",
+    "createdAt": "2016-12-12T23:41:50Z",
+    "diffHunk": "@@ -38,13 +38,18 @@ class StreamingQueryStatusAndProgressSuite extends SparkFunSuite {\n         |  \"id\" : \"${testProgress1.id.toString}\",\n         |  \"runId\" : \"${testProgress1.runId.toString}\",\n         |  \"name\" : \"myName\",\n-        |  \"timestamp\" : \"2016-12-05T20:54:20.827Z\",\n+        |  \"triggerTimestamp\" : \"2016-12-05T20:54:20.827Z\","
+  }],
+  "prId": 16258
+}, {
+  "comments": [{
+    "author": {
+      "login": "brkyvz"
+    },
+    "body": "awesome!",
+    "commit": "b59ab8083de3f2441133fed35658dea39cd4a759",
+    "createdAt": "2016-12-13T01:10:02Z",
+    "diffHunk": "@@ -44,7 +44,12 @@ class StreamingQueryStatusAndProgressSuite extends SparkFunSuite {\n         |  \"durationMs\" : {\n         |    \"total\" : 0\n         |  },\n-        |  \"currentWatermark\" : 3,\n+        |  \"eventTime\" : {",
+    "line": 5
+  }],
+  "prId": 16258
+}]

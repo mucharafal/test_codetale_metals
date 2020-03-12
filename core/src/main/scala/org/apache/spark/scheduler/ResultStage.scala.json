@@ -1,0 +1,126 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "Same here; I don't think this comment is necessary.\n",
+    "commit": "c248924b40fb5271e73949f75cf8add43ad47ff6",
+    "createdAt": "2015-02-23T06:27:34Z",
+    "diffHunk": "@@ -0,0 +1,41 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.scheduler\n+\n+import org.apache.spark.rdd.RDD\n+import org.apache.spark.util.CallSite\n+\n+/**\n+ * Define a class that represents the ResultStage to help clean up the DAGScheduler class "
+  }],
+  "prId": 4708
+}, {
+  "comments": [{
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "Now that this field is only present in the new ResultStage class, maybe we could update this comment to say something like \"Links to the active job for this result stage.\"\n",
+    "commit": "c248924b40fb5271e73949f75cf8add43ad47ff6",
+    "createdAt": "2015-02-23T06:28:59Z",
+    "diffHunk": "@@ -0,0 +1,41 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.scheduler\n+\n+import org.apache.spark.rdd.RDD\n+import org.apache.spark.util.CallSite\n+\n+/**\n+ * Define a class that represents the ResultStage to help clean up the DAGScheduler class \n+ */\n+private[spark] class ResultStage(\n+    override val id: Int,\n+    override val rdd: RDD[_],\n+    override val numTasks: Int,\n+    override val parents: List[Stage],\n+    override val jobId: Int,\n+    override val callSite: CallSite) \n+  extends Stage(id, rdd, numTasks, parents, jobId, callSite) {\n+\n+  /** For stages that are the final (consists of only ResultTasks), link to the ActiveJob. */"
+  }],
+  "prId": 4708
+}, {
+  "comments": [{
+    "author": {
+      "login": "kayousterhout"
+    },
+    "body": "Can you update this comment? It looks like it was copied from the old Stage.scala, but for resultStages, a resultOfJob should always be defined right?  Also, I wonder if it would make sense to just create the ActiveJob here, as part of constructing the ResultStage, rather than in DagScheduler.scala, so that this doesn't need to be an option (having the option is a little confusing, since it should always be defined)\n",
+    "commit": "c248924b40fb5271e73949f75cf8add43ad47ff6",
+    "createdAt": "2015-03-17T17:24:08Z",
+    "diffHunk": "@@ -0,0 +1,41 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.scheduler\n+\n+import org.apache.spark.rdd.RDD\n+import org.apache.spark.util.CallSite\n+\n+private[spark] class ResultStage(\n+    override val id: Int,\n+    override val rdd: RDD[_],\n+    override val numTasks: Int,\n+    override val parents: List[Stage],\n+    override val jobId: Int,\n+    override val callSite: CallSite)\n+  extends Stage(id, rdd, numTasks, parents, jobId, callSite) {\n+\n+  /**\n+   * For stages that are the final (consists of only ResultTasks), links to the active job for\n+   * this results stage."
+  }, {
+    "author": {
+      "login": "ilganeli"
+    },
+    "body": "I looked into eliminating this usage as an option but the code within markStageAsFinished seems to imply that it may be possible to have a ResultStage without a defined resultOfJob when \"the job has finished\". Is that the case?\n\nIt will involve a significant amount of refactoring to create it during the constructor rather than within the DagScheduler. This is because the ActiveJob class actually takes a Stage as an input parameter:\n\n<code> val job = new ActiveJob(jobId, finalStage, func, partitions, callSite, listener, properties) </code>\n\nDecoupling this would involve some extra work. I'm happy to do it but I suspect folks may want to avoid substantial modifications.\n",
+    "commit": "c248924b40fb5271e73949f75cf8add43ad47ff6",
+    "createdAt": "2015-03-17T20:17:23Z",
+    "diffHunk": "@@ -0,0 +1,41 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.scheduler\n+\n+import org.apache.spark.rdd.RDD\n+import org.apache.spark.util.CallSite\n+\n+private[spark] class ResultStage(\n+    override val id: Int,\n+    override val rdd: RDD[_],\n+    override val numTasks: Int,\n+    override val parents: List[Stage],\n+    override val jobId: Int,\n+    override val callSite: CallSite)\n+  extends Stage(id, rdd, numTasks, parents, jobId, callSite) {\n+\n+  /**\n+   * For stages that are the final (consists of only ResultTasks), links to the active job for\n+   * this results stage."
+  }, {
+    "author": {
+      "login": "kayousterhout"
+    },
+    "body": "That makes sense -- fine to leave as-is.\n",
+    "commit": "c248924b40fb5271e73949f75cf8add43ad47ff6",
+    "createdAt": "2015-03-17T20:25:25Z",
+    "diffHunk": "@@ -0,0 +1,41 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.scheduler\n+\n+import org.apache.spark.rdd.RDD\n+import org.apache.spark.util.CallSite\n+\n+private[spark] class ResultStage(\n+    override val id: Int,\n+    override val rdd: RDD[_],\n+    override val numTasks: Int,\n+    override val parents: List[Stage],\n+    override val jobId: Int,\n+    override val callSite: CallSite)\n+  extends Stage(id, rdd, numTasks, parents, jobId, callSite) {\n+\n+  /**\n+   * For stages that are the final (consists of only ResultTasks), links to the active job for\n+   * this results stage."
+  }, {
+    "author": {
+      "login": "kayousterhout"
+    },
+    "body": "So looking at this more, I think the correct comment would be something like: \"The active job for this result stage. Will be empty if the job has already finished (e.g., because the job was cancelled).\"\n",
+    "commit": "c248924b40fb5271e73949f75cf8add43ad47ff6",
+    "createdAt": "2015-03-17T20:33:33Z",
+    "diffHunk": "@@ -0,0 +1,41 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.scheduler\n+\n+import org.apache.spark.rdd.RDD\n+import org.apache.spark.util.CallSite\n+\n+private[spark] class ResultStage(\n+    override val id: Int,\n+    override val rdd: RDD[_],\n+    override val numTasks: Int,\n+    override val parents: List[Stage],\n+    override val jobId: Int,\n+    override val callSite: CallSite)\n+  extends Stage(id, rdd, numTasks, parents, jobId, callSite) {\n+\n+  /**\n+   * For stages that are the final (consists of only ResultTasks), links to the active job for\n+   * this results stage."
+  }],
+  "prId": 4708
+}, {
+  "comments": [{
+    "author": {
+      "login": "kayousterhout"
+    },
+    "body": "Other places in Spark, we typically make these just \"id: Int\" rather than using \"override val\", because \"override val\" is redundant with the \"extends Stage....\". Can you change this and ShuffleMapStage.scala, for consistency?\n",
+    "commit": "c248924b40fb5271e73949f75cf8add43ad47ff6",
+    "createdAt": "2015-03-17T17:25:41Z",
+    "diffHunk": "@@ -0,0 +1,41 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.scheduler\n+\n+import org.apache.spark.rdd.RDD\n+import org.apache.spark.util.CallSite\n+\n+private[spark] class ResultStage(\n+    override val id: Int,"
+  }, {
+    "author": {
+      "login": "ilganeli"
+    },
+    "body": "Could you please elaborate? The override seems necessary here unless I change the name of the variable since it shadows the constructor for Stage. \n",
+    "commit": "c248924b40fb5271e73949f75cf8add43ad47ff6",
+    "createdAt": "2015-03-17T20:23:49Z",
+    "diffHunk": "@@ -0,0 +1,41 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.scheduler\n+\n+import org.apache.spark.rdd.RDD\n+import org.apache.spark.util.CallSite\n+\n+private[spark] class ResultStage(\n+    override val id: Int,"
+  }, {
+    "author": {
+      "login": "kayousterhout"
+    },
+    "body": "This should work as long as you remove both override and val, in which case the parameters are used only as constructor parameters, and not as member variables (see, for example, ResultTask: https://github.com/apache/spark/blob/master/core/src/main/scala/org/apache/spark/scheduler/ResultTask.scala#L43 where stageId is the same as the name of the member variable in the super class Task.scala)\n",
+    "commit": "c248924b40fb5271e73949f75cf8add43ad47ff6",
+    "createdAt": "2015-03-17T20:30:29Z",
+    "diffHunk": "@@ -0,0 +1,41 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.scheduler\n+\n+import org.apache.spark.rdd.RDD\n+import org.apache.spark.util.CallSite\n+\n+private[spark] class ResultStage(\n+    override val id: Int,"
+  }, {
+    "author": {
+      "login": "ilganeli"
+    },
+    "body": "Awesome - had no idea that worked. Thanks!\n",
+    "commit": "c248924b40fb5271e73949f75cf8add43ad47ff6",
+    "createdAt": "2015-03-17T21:12:49Z",
+    "diffHunk": "@@ -0,0 +1,41 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.scheduler\n+\n+import org.apache.spark.rdd.RDD\n+import org.apache.spark.util.CallSite\n+\n+private[spark] class ResultStage(\n+    override val id: Int,"
+  }],
+  "prId": 4708
+}, {
+  "comments": [{
+    "author": {
+      "login": "kayousterhout"
+    },
+    "body": "It looks like isAvailable is only used for shuffleMapStages (and in one log statement, which can just be changed).  Make it a property only of ShuffleMapStage?\n",
+    "commit": "c248924b40fb5271e73949f75cf8add43ad47ff6",
+    "createdAt": "2015-03-17T17:29:21Z",
+    "diffHunk": "@@ -0,0 +1,41 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.scheduler\n+\n+import org.apache.spark.rdd.RDD\n+import org.apache.spark.util.CallSite\n+\n+private[spark] class ResultStage(\n+    override val id: Int,\n+    override val rdd: RDD[_],\n+    override val numTasks: Int,\n+    override val parents: List[Stage],\n+    override val jobId: Int,\n+    override val callSite: CallSite)\n+  extends Stage(id, rdd, numTasks, parents, jobId, callSite) {\n+\n+  /**\n+   * For stages that are the final (consists of only ResultTasks), links to the active job for\n+   * this results stage.\n+   */\n+  var resultOfJob: Option[ActiveJob] = None\n+\n+  override def toString: String = \"ResultStage \" + id\n+\n+  override def isAvailable: Boolean= true"
+  }],
+  "prId": 4708
+}, {
+  "comments": [{
+    "author": {
+      "login": "kayousterhout"
+    },
+    "body": "Can you add a doc string here, saying that ResultStage represents the final stage in a job?\n",
+    "commit": "c248924b40fb5271e73949f75cf8add43ad47ff6",
+    "createdAt": "2015-03-17T17:38:33Z",
+    "diffHunk": "@@ -0,0 +1,41 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.scheduler\n+\n+import org.apache.spark.rdd.RDD\n+import org.apache.spark.util.CallSite\n+\n+private[spark] class ResultStage("
+  }],
+  "prId": 4708
+}, {
+  "comments": [{
+    "author": {
+      "login": "kayousterhout"
+    },
+    "body": "remove quotation marks here and below\n",
+    "commit": "c248924b40fb5271e73949f75cf8add43ad47ff6",
+    "createdAt": "2015-03-17T21:33:32Z",
+    "diffHunk": "@@ -0,0 +1,40 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.scheduler\n+\n+import org.apache.spark.rdd.RDD\n+import org.apache.spark.util.CallSite\n+\n+/**\n+ * The ResultStage represents the final stage in a job.\n+ */\n+private[spark] class ResultStage(\n+    id: Int,\n+    rdd: RDD[_],\n+    numTasks: Int,\n+    parents: List[Stage],\n+    jobId: Int,\n+    callSite: CallSite)\n+  extends Stage(id, rdd, numTasks, parents, jobId, callSite) {\n+\n+  // \"The active job for this result stage. Will be empty if the job has already finished"
+  }],
+  "prId": 4708
+}]

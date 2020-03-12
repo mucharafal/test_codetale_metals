@@ -1,0 +1,181 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "nit: we can just do `child.output.head.isInstanceOf[ObjectType]`, this is guarantted in:\n\n```\ntrait ObjectConsumer extends UnaryNode {\n   assert(child.output.length == 1)\n   ...\n```\n",
+    "commit": "471d9ab43f6171c3844149ecf768b792c0482b0e",
+    "createdAt": "2016-04-22T06:41:16Z",
+    "diffHunk": "@@ -83,6 +83,16 @@ case class SerializeFromObject(\n     child: LogicalPlan) extends UnaryNode with ObjectConsumer {\n \n   override def output: Seq[Attribute] = serializer.map(_.toAttribute)\n+\n+  // We can't estimate the size of ObjectType. We implement statistics here to avoid\n+  // directly estimate any child plan which produces domain objects as output.\n+  override def statistics: Statistics = {\n+    if (child.output.find(_.dataType.isInstanceOf[ObjectType]).isDefined) {"
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "oh. yes.\n",
+    "commit": "471d9ab43f6171c3844149ecf768b792c0482b0e",
+    "createdAt": "2016-04-22T06:55:20Z",
+    "diffHunk": "@@ -83,6 +83,16 @@ case class SerializeFromObject(\n     child: LogicalPlan) extends UnaryNode with ObjectConsumer {\n \n   override def output: Seq[Attribute] = serializer.map(_.toAttribute)\n+\n+  // We can't estimate the size of ObjectType. We implement statistics here to avoid\n+  // directly estimate any child plan which produces domain objects as output.\n+  override def statistics: Statistics = {\n+    if (child.output.find(_.dataType.isInstanceOf[ObjectType]).isDefined) {"
+  }],
+  "prId": 12599
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "Not related to this PR, but why do we need to store the `sizeInBytes` not `numRows`? If we have the `numRows` info, we can still estimate the output size for this operator right?\n",
+    "commit": "471d9ab43f6171c3844149ecf768b792c0482b0e",
+    "createdAt": "2016-04-22T06:45:47Z",
+    "diffHunk": "@@ -83,6 +83,16 @@ case class SerializeFromObject(\n     child: LogicalPlan) extends UnaryNode with ObjectConsumer {\n \n   override def output: Seq[Attribute] = serializer.map(_.toAttribute)\n+\n+  // We can't estimate the size of ObjectType. We implement statistics here to avoid\n+  // directly estimate any child plan which produces domain objects as output.\n+  override def statistics: Statistics = {\n+    if (child.output.find(_.dataType.isInstanceOf[ObjectType]).isDefined) {\n+      Statistics(sizeInBytes = Long.MaxValue)"
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "But we still need to know row size?\n",
+    "commit": "471d9ab43f6171c3844149ecf768b792c0482b0e",
+    "createdAt": "2016-04-22T07:05:06Z",
+    "diffHunk": "@@ -83,6 +83,16 @@ case class SerializeFromObject(\n     child: LogicalPlan) extends UnaryNode with ObjectConsumer {\n \n   override def output: Seq[Attribute] = serializer.map(_.toAttribute)\n+\n+  // We can't estimate the size of ObjectType. We implement statistics here to avoid\n+  // directly estimate any child plan which produces domain objects as output.\n+  override def statistics: Statistics = {\n+    if (child.output.find(_.dataType.isInstanceOf[ObjectType]).isDefined) {\n+      Statistics(sizeInBytes = Long.MaxValue)"
+  }],
+  "prId": 12599
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "bring back this discussion: https://github.com/apache/spark/pull/12599#discussion_r60697122\n\nWe can calculate the row size by `this.output.map(_.dataType)`, can't we?\n",
+    "commit": "471d9ab43f6171c3844149ecf768b792c0482b0e",
+    "createdAt": "2016-04-22T07:41:18Z",
+    "diffHunk": "@@ -83,6 +83,16 @@ case class SerializeFromObject(\n     child: LogicalPlan) extends UnaryNode with ObjectConsumer {\n \n   override def output: Seq[Attribute] = serializer.map(_.toAttribute)\n+\n+  // We can't estimate the size of ObjectType. We implement statistics here to avoid\n+  // directly estimate any child plan which produces domain objects as output.\n+  override def statistics: Statistics = {\n+    if (child.output.head.dataType.isInstanceOf[ObjectType]) {\n+      Statistics(sizeInBytes = Long.MaxValue)"
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "So your point is to store `numRows` instead of `sizeInBytes` in `Statistics`? Is it any benefit?\n",
+    "commit": "471d9ab43f6171c3844149ecf768b792c0482b0e",
+    "createdAt": "2016-04-22T07:45:19Z",
+    "diffHunk": "@@ -83,6 +83,16 @@ case class SerializeFromObject(\n     child: LogicalPlan) extends UnaryNode with ObjectConsumer {\n \n   override def output: Seq[Attribute] = serializer.map(_.toAttribute)\n+\n+  // We can't estimate the size of ObjectType. We implement statistics here to avoid\n+  // directly estimate any child plan which produces domain objects as output.\n+  override def statistics: Statistics = {\n+    if (child.output.head.dataType.isInstanceOf[ObjectType]) {\n+      Statistics(sizeInBytes = Long.MaxValue)"
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "I can think is that we need to manipulate `sizeInBytes` directly in `statistics` method of some logical plans, such as summing up children's `sizeInBytes`. So it is more convenient?\n",
+    "commit": "471d9ab43f6171c3844149ecf768b792c0482b0e",
+    "createdAt": "2016-04-22T07:47:43Z",
+    "diffHunk": "@@ -83,6 +83,16 @@ case class SerializeFromObject(\n     child: LogicalPlan) extends UnaryNode with ObjectConsumer {\n \n   override def output: Seq[Attribute] = serializer.map(_.toAttribute)\n+\n+  // We can't estimate the size of ObjectType. We implement statistics here to avoid\n+  // directly estimate any child plan which produces domain objects as output.\n+  override def statistics: Statistics = {\n+    if (child.output.head.dataType.isInstanceOf[ObjectType]) {\n+      Statistics(sizeInBytes = Long.MaxValue)"
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "or should we go deeper to find the first child that doesn't output objects and take its statistic? Returning Long.max means we can't broadcast join a plan having object operators, which is bad for `Dataset`\n",
+    "commit": "471d9ab43f6171c3844149ecf768b792c0482b0e",
+    "createdAt": "2016-04-22T08:11:30Z",
+    "diffHunk": "@@ -83,6 +83,16 @@ case class SerializeFromObject(\n     child: LogicalPlan) extends UnaryNode with ObjectConsumer {\n \n   override def output: Seq[Attribute] = serializer.map(_.toAttribute)\n+\n+  // We can't estimate the size of ObjectType. We implement statistics here to avoid\n+  // directly estimate any child plan which produces domain objects as output.\n+  override def statistics: Statistics = {\n+    if (child.output.head.dataType.isInstanceOf[ObjectType]) {\n+      Statistics(sizeInBytes = Long.MaxValue)"
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "If the difference between estimated sizeInBytes is acceptable, I think we can do it.\n",
+    "commit": "471d9ab43f6171c3844149ecf768b792c0482b0e",
+    "createdAt": "2016-04-22T08:32:07Z",
+    "diffHunk": "@@ -83,6 +83,16 @@ case class SerializeFromObject(\n     child: LogicalPlan) extends UnaryNode with ObjectConsumer {\n \n   override def output: Seq[Attribute] = serializer.map(_.toAttribute)\n+\n+  // We can't estimate the size of ObjectType. We implement statistics here to avoid\n+  // directly estimate any child plan which produces domain objects as output.\n+  override def statistics: Statistics = {\n+    if (child.output.head.dataType.isInstanceOf[ObjectType]) {\n+      Statistics(sizeInBytes = Long.MaxValue)"
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "I updated the logic here. Now it looks for an underlying logical plan that can be used to construct useful statistics.\n",
+    "commit": "471d9ab43f6171c3844149ecf768b792c0482b0e",
+    "createdAt": "2016-04-22T09:16:48Z",
+    "diffHunk": "@@ -83,6 +83,16 @@ case class SerializeFromObject(\n     child: LogicalPlan) extends UnaryNode with ObjectConsumer {\n \n   override def output: Seq[Attribute] = serializer.map(_.toAttribute)\n+\n+  // We can't estimate the size of ObjectType. We implement statistics here to avoid\n+  // directly estimate any child plan which produces domain objects as output.\n+  override def statistics: Statistics = {\n+    if (child.output.head.dataType.isInstanceOf[ObjectType]) {\n+      Statistics(sizeInBytes = Long.MaxValue)"
+  }],
+  "prId": 12599
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "After rethink about it, this can be very complex, e.g. `MapGroups`. Maybe we can just return Long.max and add a TODO here.\n\ncc @marmbrus @davies \n",
+    "commit": "471d9ab43f6171c3844149ecf768b792c0482b0e",
+    "createdAt": "2016-04-22T10:33:57Z",
+    "diffHunk": "@@ -83,6 +83,28 @@ case class SerializeFromObject(\n     child: LogicalPlan) extends UnaryNode with ObjectConsumer {\n \n   override def output: Seq[Attribute] = serializer.map(_.toAttribute)\n+\n+  // We can't estimate the size of ObjectType. We implement statistics here to avoid\n+  // directly estimate any child plan which produces domain objects as output.\n+  override def statistics: Statistics = {\n+    if (child.output.head.dataType.isInstanceOf[ObjectType]) {\n+      val underlyingPlan = child.find { p =>"
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "Sure.\n",
+    "commit": "471d9ab43f6171c3844149ecf768b792c0482b0e",
+    "createdAt": "2016-04-22T10:42:12Z",
+    "diffHunk": "@@ -83,6 +83,28 @@ case class SerializeFromObject(\n     child: LogicalPlan) extends UnaryNode with ObjectConsumer {\n \n   override def output: Seq[Attribute] = serializer.map(_.toAttribute)\n+\n+  // We can't estimate the size of ObjectType. We implement statistics here to avoid\n+  // directly estimate any child plan which produces domain objects as output.\n+  override def statistics: Statistics = {\n+    if (child.output.head.dataType.isInstanceOf[ObjectType]) {\n+      val underlyingPlan = child.find { p =>"
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "Actually, for the case of `MapGroups`, I use the default way to calculate the `sizeInBytes`.\n",
+    "commit": "471d9ab43f6171c3844149ecf768b792c0482b0e",
+    "createdAt": "2016-04-22T10:45:20Z",
+    "diffHunk": "@@ -83,6 +83,28 @@ case class SerializeFromObject(\n     child: LogicalPlan) extends UnaryNode with ObjectConsumer {\n \n   override def output: Seq[Attribute] = serializer.map(_.toAttribute)\n+\n+  // We can't estimate the size of ObjectType. We implement statistics here to avoid\n+  // directly estimate any child plan which produces domain objects as output.\n+  override def statistics: Statistics = {\n+    if (child.output.head.dataType.isInstanceOf[ObjectType]) {\n+      val underlyingPlan = child.find { p =>"
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "I would not revert to Long.max immediately and see others comments first.\n",
+    "commit": "471d9ab43f6171c3844149ecf768b792c0482b0e",
+    "createdAt": "2016-04-22T10:48:24Z",
+    "diffHunk": "@@ -83,6 +83,28 @@ case class SerializeFromObject(\n     child: LogicalPlan) extends UnaryNode with ObjectConsumer {\n \n   override def output: Seq[Attribute] = serializer.map(_.toAttribute)\n+\n+  // We can't estimate the size of ObjectType. We implement statistics here to avoid\n+  // directly estimate any child plan which produces domain objects as output.\n+  override def statistics: Statistics = {\n+    if (child.output.head.dataType.isInstanceOf[ObjectType]) {\n+      val underlyingPlan = child.find { p =>"
+  }, {
+    "author": {
+      "login": "davies"
+    },
+    "body": "Can we just have a default size (for example, 4k) for ObjectType ?\n\nSince we will have better estimation on ObjectConsumer, the default size of ObjectType does not matter.\n",
+    "commit": "471d9ab43f6171c3844149ecf768b792c0482b0e",
+    "createdAt": "2016-04-22T17:18:35Z",
+    "diffHunk": "@@ -83,6 +83,28 @@ case class SerializeFromObject(\n     child: LogicalPlan) extends UnaryNode with ObjectConsumer {\n \n   override def output: Seq[Attribute] = serializer.map(_.toAttribute)\n+\n+  // We can't estimate the size of ObjectType. We implement statistics here to avoid\n+  // directly estimate any child plan which produces domain objects as output.\n+  override def statistics: Statistics = {\n+    if (child.output.head.dataType.isInstanceOf[ObjectType]) {\n+      val underlyingPlan = child.find { p =>"
+  }, {
+    "author": {
+      "login": "marmbrus"
+    },
+    "body": "+1 to Davies suggestion\nOn Apr 22, 2016 10:19 AM, \"Davies Liu\" notifications@github.com wrote:\n\n> In\n> sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/plans/logical/object.scala\n> https://github.com/apache/spark/pull/12599#discussion_r60772736:\n> \n> > @@ -83,6 +83,28 @@ case class SerializeFromObject(\n> >      child: LogicalPlan) extends UnaryNode with ObjectConsumer {\n> > \n> >    override def output: Seq[Attribute] = serializer.map(_.toAttribute)\n> > +\n> > -  // We can't estimate the size of ObjectType. We implement statistics here to avoid\n> > -  // directly estimate any child plan which produces domain objects as output.\n> > -  override def statistics: Statistics = {\n> > -    if (child.output.head.dataType.isInstanceOf[ObjectType]) {\n> > -      val underlyingPlan = child.find { p =>\n> \n> Can we just have a default size (for example, 4k) for ObjectType ?\n> \n> —\n> You are receiving this because you were mentioned.\n> Reply to this email directly or view it on GitHub\n> https://github.com/apache/spark/pull/12599/files/3ff11a12b6a148b08f6dfc7677be37d4de4a703b#r60772736\n",
+    "commit": "471d9ab43f6171c3844149ecf768b792c0482b0e",
+    "createdAt": "2016-04-22T19:17:07Z",
+    "diffHunk": "@@ -83,6 +83,28 @@ case class SerializeFromObject(\n     child: LogicalPlan) extends UnaryNode with ObjectConsumer {\n \n   override def output: Seq[Attribute] = serializer.map(_.toAttribute)\n+\n+  // We can't estimate the size of ObjectType. We implement statistics here to avoid\n+  // directly estimate any child plan which produces domain objects as output.\n+  override def statistics: Statistics = {\n+    if (child.output.head.dataType.isInstanceOf[ObjectType]) {\n+      val underlyingPlan = child.find { p =>"
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "The danger of default size for ObjectType is to underestimate the size of domain object output. Then we might broadcast a big size plan.\n",
+    "commit": "471d9ab43f6171c3844149ecf768b792c0482b0e",
+    "createdAt": "2016-04-22T23:58:15Z",
+    "diffHunk": "@@ -83,6 +83,28 @@ case class SerializeFromObject(\n     child: LogicalPlan) extends UnaryNode with ObjectConsumer {\n \n   override def output: Seq[Attribute] = serializer.map(_.toAttribute)\n+\n+  // We can't estimate the size of ObjectType. We implement statistics here to avoid\n+  // directly estimate any child plan which produces domain objects as output.\n+  override def statistics: Statistics = {\n+    if (child.output.head.dataType.isInstanceOf[ObjectType]) {\n+      val underlyingPlan = child.find { p =>"
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "I may not understand what `we will have better estimation on ObjectConsumer` means.\n",
+    "commit": "471d9ab43f6171c3844149ecf768b792c0482b0e",
+    "createdAt": "2016-04-23T00:02:45Z",
+    "diffHunk": "@@ -83,6 +83,28 @@ case class SerializeFromObject(\n     child: LogicalPlan) extends UnaryNode with ObjectConsumer {\n \n   override def output: Seq[Attribute] = serializer.map(_.toAttribute)\n+\n+  // We can't estimate the size of ObjectType. We implement statistics here to avoid\n+  // directly estimate any child plan which produces domain objects as output.\n+  override def statistics: Statistics = {\n+    if (child.output.head.dataType.isInstanceOf[ObjectType]) {\n+      val underlyingPlan = child.find { p =>"
+  }, {
+    "author": {
+      "login": "davies"
+    },
+    "body": "The ObjectProducer always sit in the middle of query plan (especially for join), the direct children of join can't be ObjectProducer.\n\nThinking of three operators:  SQL operator -> ObjectProducer -> ObjectConsumer (produce UnsafeRow). The data size of logical plan depends on the number of rows and the size of each row, the default size of Object only affect size of row.  The estimation of ObjectConsumer only depends on number of rows from ObjectProducer and the size of row produced by it self, this means the size of object will NOT change the size of ObjectConsumer.\n\nSince we can have better estimation on ObjectConsumer, so the estimation of ObjectProducer do not matter (the number of rows matter, but size of row do not matter).\n",
+    "commit": "471d9ab43f6171c3844149ecf768b792c0482b0e",
+    "createdAt": "2016-04-23T00:16:46Z",
+    "diffHunk": "@@ -83,6 +83,28 @@ case class SerializeFromObject(\n     child: LogicalPlan) extends UnaryNode with ObjectConsumer {\n \n   override def output: Seq[Attribute] = serializer.map(_.toAttribute)\n+\n+  // We can't estimate the size of ObjectType. We implement statistics here to avoid\n+  // directly estimate any child plan which produces domain objects as output.\n+  override def statistics: Statistics = {\n+    if (child.output.head.dataType.isInstanceOf[ObjectType]) {\n+      val underlyingPlan = child.find { p =>"
+  }, {
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "+1 for the 4k default size\n",
+    "commit": "471d9ab43f6171c3844149ecf768b792c0482b0e",
+    "createdAt": "2016-04-23T04:38:31Z",
+    "diffHunk": "@@ -83,6 +83,28 @@ case class SerializeFromObject(\n     child: LogicalPlan) extends UnaryNode with ObjectConsumer {\n \n   override def output: Seq[Attribute] = serializer.map(_.toAttribute)\n+\n+  // We can't estimate the size of ObjectType. We implement statistics here to avoid\n+  // directly estimate any child plan which produces domain objects as output.\n+  override def statistics: Statistics = {\n+    if (child.output.head.dataType.isInstanceOf[ObjectType]) {\n+      val underlyingPlan = child.find { p =>"
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "@davies Thanks. That makes sense.\n",
+    "commit": "471d9ab43f6171c3844149ecf768b792c0482b0e",
+    "createdAt": "2016-04-23T23:42:20Z",
+    "diffHunk": "@@ -83,6 +83,28 @@ case class SerializeFromObject(\n     child: LogicalPlan) extends UnaryNode with ObjectConsumer {\n \n   override def output: Seq[Attribute] = serializer.map(_.toAttribute)\n+\n+  // We can't estimate the size of ObjectType. We implement statistics here to avoid\n+  // directly estimate any child plan which produces domain objects as output.\n+  override def statistics: Statistics = {\n+    if (child.output.head.dataType.isInstanceOf[ObjectType]) {\n+      val underlyingPlan = child.find { p =>"
+  }],
+  "prId": 12599
+}]

@@ -1,0 +1,13 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "mingyukim"
+    },
+    "body": "Calling hasNext multiple times will advance the iterator. You should do something similar to what Spark's own NextIterator does or extend NextIterator.\n",
+    "commit": "2a2f2139b254fd754a3881dee872e652dfdde3cd",
+    "createdAt": "2015-04-23T17:50:54Z",
+    "diffHunk": "@@ -0,0 +1,84 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.rdd\n+\n+import scala.reflect.ClassTag\n+import scala.util.control.NonFatal\n+\n+import org.apache.spark.{Logging, TaskContext, Partition, SparkContext}\n+import org.apache.spark.io.{InputPartition, InputSource}\n+\n+\n+private final class InputSourcePartition(val underlying: InputPartition, override val index: Int)\n+  extends Partition\n+\n+\n+private[spark] class InputSourceRDD[T: ClassTag](sc: SparkContext, inputSource: InputSource[T])\n+  extends RDD[T](sc, Nil) with Logging {\n+\n+  override def compute(split: Partition, context: TaskContext): Iterator[T] = {\n+    val p = split.asInstanceOf[InputSourcePartition].underlying.asInstanceOf[InputPartition]\n+    val reader = inputSource.createRecordReader(p, context)\n+\n+    new Iterator[T] {\n+\n+      // Used to check whether we are done and make sure we only call underlying.close() once.\n+      private[this] var finished = false\n+\n+      context.addTaskCompletionListener(_ => close())\n+\n+      override def hasNext: Boolean = {\n+        if (!finished) {\n+          finished = !reader.fetchNext()",
+    "line": 47
+  }],
+  "prId": 5603
+}]

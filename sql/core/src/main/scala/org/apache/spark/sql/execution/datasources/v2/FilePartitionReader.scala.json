@@ -1,0 +1,46 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "please use `def` over `val` when the computation is cheap.",
+    "commit": "6e875323a430cee190a458b8842adea44bb4e0b7",
+    "createdAt": "2019-01-04T11:52:31Z",
+    "diffHunk": "@@ -0,0 +1,75 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+package org.apache.spark.sql.execution.datasources.v2\n+\n+import java.io.{FileNotFoundException, IOException}\n+\n+import org.apache.spark.internal.Logging\n+import org.apache.spark.sql.internal.SQLConf\n+import org.apache.spark.sql.sources.v2.reader.PartitionReader\n+\n+class FilePartitionReader[T](\n+    readers: Iterator[PartitionReader[T]]) extends PartitionReader[T] with Logging {\n+  private var currentFile: PartitionReader[T] = null\n+\n+  private val sqlConf = SQLConf.get\n+  private val ignoreMissingFiles = sqlConf.ignoreMissingFiles\n+  private val ignoreCorruptFiles = sqlConf.ignoreCorruptFiles"
+  }],
+  "prId": 23383
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "`currentReader`?",
+    "commit": "6e875323a430cee190a458b8842adea44bb4e0b7",
+    "createdAt": "2019-01-04T11:52:58Z",
+    "diffHunk": "@@ -0,0 +1,75 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+package org.apache.spark.sql.execution.datasources.v2\n+\n+import java.io.{FileNotFoundException, IOException}\n+\n+import org.apache.spark.internal.Logging\n+import org.apache.spark.sql.internal.SQLConf\n+import org.apache.spark.sql.sources.v2.reader.PartitionReader\n+\n+class FilePartitionReader[T](\n+    readers: Iterator[PartitionReader[T]]) extends PartitionReader[T] with Logging {\n+  private var currentFile: PartitionReader[T] = null"
+  }],
+  "prId": 23383
+}, {
+  "comments": [{
+    "author": {
+      "login": "cloud-fan"
+    },
+    "body": "nit\r\n```\r\nif (currentFile.next()) {\r\n  true\r\n} else {\r\n  currentFile.close()\r\n  currentFile = null\r\n  next()\r\n}\r\n```",
+    "commit": "6e875323a430cee190a458b8842adea44bb4e0b7",
+    "createdAt": "2019-01-04T11:57:27Z",
+    "diffHunk": "@@ -0,0 +1,75 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+package org.apache.spark.sql.execution.datasources.v2\n+\n+import java.io.{FileNotFoundException, IOException}\n+\n+import org.apache.spark.internal.Logging\n+import org.apache.spark.sql.internal.SQLConf\n+import org.apache.spark.sql.sources.v2.reader.PartitionReader\n+\n+class FilePartitionReader[T](\n+    readers: Iterator[PartitionReader[T]]) extends PartitionReader[T] with Logging {\n+  private var currentFile: PartitionReader[T] = null\n+\n+  private val sqlConf = SQLConf.get\n+  private val ignoreMissingFiles = sqlConf.ignoreMissingFiles\n+  private val ignoreCorruptFiles = sqlConf.ignoreCorruptFiles\n+\n+  override def next(): Boolean = {\n+    if (currentFile == null) {\n+      if (readers.hasNext) {\n+        if (ignoreMissingFiles || ignoreCorruptFiles) {\n+          try {\n+            currentFile = readers.next()\n+          } catch {\n+            case e: FileNotFoundException if ignoreMissingFiles =>\n+              logWarning(s\"Skipped missing file: $currentFile\", e)\n+              currentFile = null\n+              return false\n+            // Throw FileNotFoundException even if `ignoreCorruptFiles` is true\n+            case e: FileNotFoundException if !ignoreMissingFiles => throw e\n+            case e @ (_: RuntimeException | _: IOException) if ignoreCorruptFiles =>\n+              logWarning(\n+                s\"Skipped the rest of the content in the corrupted file: $currentFile\", e)\n+              currentFile = null\n+              return false\n+          }\n+        } else {\n+          currentFile = readers.next()\n+        }\n+      } else {\n+        return false\n+      }\n+    }\n+    if (currentFile.next()) {\n+      return true\n+    } else {\n+      close()\n+      currentFile = null\n+    }\n+    next()"
+  }],
+  "prId": 23383
+}, {
+  "comments": [{
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "Ur, do we have a reading file log? If not, it seems that we had less log information in DSv2. Can we add a corresponding DSv2 log here or somewhere in DSv2?\r\n```scala\r\nlogInfo(s\"Reading File ...\")\r\n```",
+    "commit": "6e875323a430cee190a458b8842adea44bb4e0b7",
+    "createdAt": "2019-01-11T07:54:19Z",
+    "diffHunk": "@@ -0,0 +1,75 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+package org.apache.spark.sql.execution.datasources.v2\n+\n+import java.io.{FileNotFoundException, IOException}\n+\n+import org.apache.spark.internal.Logging\n+import org.apache.spark.sql.internal.SQLConf\n+import org.apache.spark.sql.sources.v2.reader.PartitionReader\n+\n+class FilePartitionReader[T](\n+    readers: Iterator[PartitionReader[T]]) extends PartitionReader[T] with Logging {\n+  private var currentReader: PartitionReader[T] = null\n+\n+  private val sqlConf = SQLConf.get\n+  private def ignoreMissingFiles = sqlConf.ignoreMissingFiles\n+  private def ignoreCorruptFiles = sqlConf.ignoreCorruptFiles\n+\n+  override def next(): Boolean = {\n+    if (currentReader == null) {\n+      if (readers.hasNext) {",
+    "line": 35
+  }],
+  "prId": 23383
+}]

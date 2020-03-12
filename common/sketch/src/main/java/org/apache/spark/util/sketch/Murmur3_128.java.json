@@ -1,0 +1,52 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Could you explain why we need to add a custom murmurhash implementation? it seems like conceptually we're just swapping bitmaps for bitmapss. What's the license of this code?\n",
+    "commit": "487da8fbd23f2d861ab10a1faf701696e9ca3967",
+    "createdAt": "2016-11-17T11:25:50Z",
+    "diffHunk": "@@ -0,0 +1,135 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.util.sketch;\n+\n+/**\n+ * 128-bit Murmur3 hasher.\n+ * Best perfomance is on x86_64 platform\n+ * Based on implementation https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp\n+ */\n+final class Murmur3_128 {"
+  }, {
+    "author": {
+      "login": "ponkin"
+    },
+    "body": "This decision came from fact that RoaringBitmap supports only int indexes(and can have only Int.MaxValue bits), since we use RoaringBitmap[] to represent vector way larger than Int.MaxValue, we need good hash function to generate long hash values. This implementation is based on [smhasher](https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp)  and [solr implementation](https://github.com/yonik/java_util/blob/master/src/util/hash/MurmurHash3.java) which are both freely available I suppose. Also this implementation must be way faster on 64 bit platform than Murmur3_x86_32\n",
+    "commit": "487da8fbd23f2d861ab10a1faf701696e9ca3967",
+    "createdAt": "2016-11-17T12:15:08Z",
+    "diffHunk": "@@ -0,0 +1,135 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.util.sketch;\n+\n+/**\n+ * 128-bit Murmur3 hasher.\n+ * Best perfomance is on x86_64 platform\n+ * Based on implementation https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp\n+ */\n+final class Murmur3_128 {"
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Rather than make a new implementation, use Guava's Hashing? Scala and Spark itself already have murmur hash impls but they seem 32-bit only\n",
+    "commit": "487da8fbd23f2d861ab10a1faf701696e9ca3967",
+    "createdAt": "2016-11-17T12:18:54Z",
+    "diffHunk": "@@ -0,0 +1,135 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.util.sketch;\n+\n+/**\n+ * 128-bit Murmur3 hasher.\n+ * Best perfomance is on x86_64 platform\n+ * Based on implementation https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp\n+ */\n+final class Murmur3_128 {"
+  }, {
+    "author": {
+      "login": "ponkin"
+    },
+    "body": "Well Guava`s implementation is allocating a lot of temp objects(works only with ByteBuffer [source](https://github.com/google/guava/blob/d330fc7f880b49e9d45a44e7650d95a6f7afbe23/guava/src/com/google/common/hash/Murmur3_128HashFunction.java)). So I decided to do standalone implementation - all tests for Hasher are taken from Guava lib.\n",
+    "commit": "487da8fbd23f2d861ab10a1faf701696e9ca3967",
+    "createdAt": "2016-11-17T12:23:16Z",
+    "diffHunk": "@@ -0,0 +1,135 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.util.sketch;\n+\n+/**\n+ * 128-bit Murmur3 hasher.\n+ * Best perfomance is on x86_64 platform\n+ * Based on implementation https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp\n+ */\n+final class Murmur3_128 {"
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "OK, maybe that makes sense. If bothering with a custom impl, why not 64 bits instead of 128? it would avoid needing a long[2] to take the result?\n",
+    "commit": "487da8fbd23f2d861ab10a1faf701696e9ca3967",
+    "createdAt": "2016-11-17T14:05:55Z",
+    "diffHunk": "@@ -0,0 +1,135 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.util.sketch;\n+\n+/**\n+ * 128-bit Murmur3 hasher.\n+ * Best perfomance is on x86_64 platform\n+ * Based on implementation https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp\n+ */\n+final class Murmur3_128 {"
+  }, {
+    "author": {
+      "login": "ponkin"
+    },
+    "body": "In fact the is Murmur hash version which produces 64 - it is called Murmur 2 [Wiki](https://en.wikipedia.org/wiki/MurmurHash), but it is previous version of Murmur, current is Murmur 3 which is faster and give better distribution(Murmur2 has some flaws). Since in bloom filter we always need 1 or more hash functions, creating 128 bit hash(two longs) is pretty good I suppose.\n",
+    "commit": "487da8fbd23f2d861ab10a1faf701696e9ca3967",
+    "createdAt": "2016-11-17T14:18:11Z",
+    "diffHunk": "@@ -0,0 +1,135 @@\n+/*\n+ * Licensed to the Apache Software Foundation (ASF) under one or more\n+ * contributor license agreements.  See the NOTICE file distributed with\n+ * this work for additional information regarding copyright ownership.\n+ * The ASF licenses this file to You under the Apache License, Version 2.0\n+ * (the \"License\"); you may not use this file except in compliance with\n+ * the License.  You may obtain a copy of the License at\n+ *\n+ *    http://www.apache.org/licenses/LICENSE-2.0\n+ *\n+ * Unless required by applicable law or agreed to in writing, software\n+ * distributed under the License is distributed on an \"AS IS\" BASIS,\n+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n+ * See the License for the specific language governing permissions and\n+ * limitations under the License.\n+ */\n+\n+package org.apache.spark.util.sketch;\n+\n+/**\n+ * 128-bit Murmur3 hasher.\n+ * Best perfomance is on x86_64 platform\n+ * Based on implementation https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp\n+ */\n+final class Murmur3_128 {"
+  }],
+  "prId": 15917
+}]

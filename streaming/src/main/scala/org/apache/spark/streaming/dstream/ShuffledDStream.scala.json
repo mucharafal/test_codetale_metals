@@ -1,0 +1,28 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "jerryshao"
+    },
+    "body": "Hi @guowei2 , two quick questions:\n1. Is there any situation where partitions will be 0?\n2. I don't think `numPartitions` can be set to 0, since HashPartitioner will be failed if `Mod 0`.\n",
+    "commit": "13e435c01f44f603dafb7eebbe29172e535f1e4c",
+    "createdAt": "2014-07-03T05:59:54Z",
+    "diffHunk": "@@ -39,8 +39,10 @@ class ShuffledDStream[K: ClassTag, V: ClassTag, C: ClassTag](\n \n   override def compute(validTime: Time): Option[RDD[(K,C)]] = {\n     parent.getOrCompute(validTime) match {\n-      case Some(rdd) => Some(rdd.combineByKey[C](\n-          createCombiner, mergeValue, mergeCombiner, partitioner, mapSideCombine))\n+      case Some(rdd) => {\n+        Some(if (rdd.partitions.length==0) rdd.combineByKey(createCombiner, mergeValue, mergeCombiner,0)"
+  }, {
+    "author": {
+      "login": "guowei2"
+    },
+    "body": "1、for example:\nu use NetworkInputDStream to receive data to generate BlockRDD.  when it receive no blocks in validtime, then partitions will be 0\n\nNetworkInputDStream's code here \n\n  override def compute(validTime: Time): Option[RDD[T]] = {\n    // If this is called for any time before the start time of the context,\n    // then this returns an empty RDD. This may happen when recovering from a\n    // master failure\n    if (validTime >= graph.startTime) {\n      val blockIds = ssc.scheduler.networkInputTracker.getBlockIds(id, validTime)\n      Some(new BlockRDD (ssc.sc, blockIds))\n    } else {\n      Some(new BlockRDD  (ssc.sc, Array[BlockId]()))\n    }\n  }\n\n2、  when parent RDD partition num  is 0 ,but  ShuffledDStream also change into muti-partitions ,\nthen emtpy job will be running.\n\n```\n  what i do is when this happen ShuffledDStream also out 0 partition\n```\n",
+    "commit": "13e435c01f44f603dafb7eebbe29172e535f1e4c",
+    "createdAt": "2014-07-03T06:28:13Z",
+    "diffHunk": "@@ -39,8 +39,10 @@ class ShuffledDStream[K: ClassTag, V: ClassTag, C: ClassTag](\n \n   override def compute(validTime: Time): Option[RDD[(K,C)]] = {\n     parent.getOrCompute(validTime) match {\n-      case Some(rdd) => Some(rdd.combineByKey[C](\n-          createCombiner, mergeValue, mergeCombiner, partitioner, mapSideCombine))\n+      case Some(rdd) => {\n+        Some(if (rdd.partitions.length==0) rdd.combineByKey(createCombiner, mergeValue, mergeCombiner,0)"
+  }, {
+    "author": {
+      "login": "tdas"
+    },
+    "body": "I agree with @jerryshao , if numPartitioner is set to 0, then partitioning will fail as partitions are calculated by doing (hashcode % numPartitions) and anything % 0  gives \"java.lang.ArithmeticException: / by zero\" error.\n",
+    "commit": "13e435c01f44f603dafb7eebbe29172e535f1e4c",
+    "createdAt": "2014-07-04T01:01:13Z",
+    "diffHunk": "@@ -39,8 +39,10 @@ class ShuffledDStream[K: ClassTag, V: ClassTag, C: ClassTag](\n \n   override def compute(validTime: Time): Option[RDD[(K,C)]] = {\n     parent.getOrCompute(validTime) match {\n-      case Some(rdd) => Some(rdd.combineByKey[C](\n-          createCombiner, mergeValue, mergeCombiner, partitioner, mapSideCombine))\n+      case Some(rdd) => {\n+        Some(if (rdd.partitions.length==0) rdd.combineByKey(createCombiner, mergeValue, mergeCombiner,0)"
+  }],
+  "prId": 1291
+}]

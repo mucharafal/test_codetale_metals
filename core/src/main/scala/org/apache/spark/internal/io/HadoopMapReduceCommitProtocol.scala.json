@@ -1,0 +1,69 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "rxin"
+    },
+    "body": "document this\n",
+    "commit": "63f7f2ee65a93de7f87f99b9fc46a71deefa5ea5",
+    "createdAt": "2016-11-08T21:50:03Z",
+    "diffHunk": "@@ -42,17 +44,21 @@ class HadoopMapReduceCommitProtocol(jobId: String, path: String)\n   /** OutputCommitter from Hadoop is not serializable so marking it transient. */\n   @transient private var committer: OutputCommitter = _\n \n+  /**\n+   * Tracks files staged by this task for absolute output paths. These outputs are not managed by\n+   * the Hadoop OutputCommitter, so we must move these to their final locations on job commit.\n+   */\n+  @transient private var addedAbsPathFiles: mutable.Map[String, String] = null\n+\n+  private def absPathStagingDir: Path = new Path(path, \"_temporary-\" + jobId)"
+  }, {
+    "author": {
+      "login": "ericl"
+    },
+    "body": "Done\n",
+    "commit": "63f7f2ee65a93de7f87f99b9fc46a71deefa5ea5",
+    "createdAt": "2016-11-09T00:02:27Z",
+    "diffHunk": "@@ -42,17 +44,21 @@ class HadoopMapReduceCommitProtocol(jobId: String, path: String)\n   /** OutputCommitter from Hadoop is not serializable so marking it transient. */\n   @transient private var committer: OutputCommitter = _\n \n+  /**\n+   * Tracks files staged by this task for absolute output paths. These outputs are not managed by\n+   * the Hadoop OutputCommitter, so we must move these to their final locations on job commit.\n+   */\n+  @transient private var addedAbsPathFiles: mutable.Map[String, String] = null\n+\n+  private def absPathStagingDir: Path = new Path(path, \"_temporary-\" + jobId)"
+  }],
+  "prId": 15814
+}, {
+  "comments": [{
+    "author": {
+      "login": "rxin"
+    },
+    "body": "we should document whether the strings are path to files, or just path to directories. I think they are just directories right? The naming suggests that they are files.\n",
+    "commit": "63f7f2ee65a93de7f87f99b9fc46a71deefa5ea5",
+    "createdAt": "2016-11-08T21:52:31Z",
+    "diffHunk": "@@ -42,17 +44,21 @@ class HadoopMapReduceCommitProtocol(jobId: String, path: String)\n   /** OutputCommitter from Hadoop is not serializable so marking it transient. */\n   @transient private var committer: OutputCommitter = _\n \n+  /**\n+   * Tracks files staged by this task for absolute output paths. These outputs are not managed by\n+   * the Hadoop OutputCommitter, so we must move these to their final locations on job commit.\n+   */\n+  @transient private var addedAbsPathFiles: mutable.Map[String, String] = null"
+  }, {
+    "author": {
+      "login": "ericl"
+    },
+    "body": "They are files. We need to track the unique output location of each file here in order to know where to place it. We could use directories, but they would end up with one file each anyways.\n",
+    "commit": "63f7f2ee65a93de7f87f99b9fc46a71deefa5ea5",
+    "createdAt": "2016-11-09T00:01:13Z",
+    "diffHunk": "@@ -42,17 +44,21 @@ class HadoopMapReduceCommitProtocol(jobId: String, path: String)\n   /** OutputCommitter from Hadoop is not serializable so marking it transient. */\n   @transient private var committer: OutputCommitter = _\n \n+  /**\n+   * Tracks files staged by this task for absolute output paths. These outputs are not managed by\n+   * the Hadoop OutputCommitter, so we must move these to their final locations on job commit.\n+   */\n+  @transient private var addedAbsPathFiles: mutable.Map[String, String] = null"
+  }],
+  "prId": 15814
+}, {
+  "comments": [{
+    "author": {
+      "login": "viirya"
+    },
+    "body": "Why don't we just rename temp files to dest files in commitTask?\n",
+    "commit": "63f7f2ee65a93de7f87f99b9fc46a71deefa5ea5",
+    "createdAt": "2016-11-09T06:20:41Z",
+    "diffHunk": "@@ -87,25 +120,40 @@ class HadoopMapReduceCommitProtocol(jobId: String, path: String)\n \n   override def commitJob(jobContext: JobContext, taskCommits: Seq[TaskCommitMessage]): Unit = {\n     committer.commitJob(jobContext)\n+    val filesToMove = taskCommits.map(_.obj.asInstanceOf[Map[String, String]]).reduce(_ ++ _)\n+    logDebug(s\"Committing files staged for absolute locations $filesToMove\")\n+    val fs = absPathStagingDir.getFileSystem(jobContext.getConfiguration)\n+    for ((src, dst) <- filesToMove) {\n+      fs.rename(new Path(src), new Path(dst))\n+    }\n+    fs.delete(absPathStagingDir, true)\n   }\n \n   override def abortJob(jobContext: JobContext): Unit = {\n     committer.abortJob(jobContext, JobStatus.State.FAILED)\n+    val fs = absPathStagingDir.getFileSystem(jobContext.getConfiguration)\n+    fs.delete(absPathStagingDir, true)\n   }\n \n   override def setupTask(taskContext: TaskAttemptContext): Unit = {\n     committer = setupCommitter(taskContext)\n     committer.setupTask(taskContext)\n+    addedAbsPathFiles = mutable.Map[String, String]()\n   }\n \n   override def commitTask(taskContext: TaskAttemptContext): TaskCommitMessage = {\n     val attemptId = taskContext.getTaskAttemptID\n     SparkHadoopMapRedUtil.commitTask(\n       committer, taskContext, attemptId.getJobID.getId, attemptId.getTaskID.getId)\n-    EmptyTaskCommitMessage\n+    new TaskCommitMessage(addedAbsPathFiles.toMap)",
+    "line": 104
+  }, {
+    "author": {
+      "login": "rxin"
+    },
+    "body": "Yea it can go either way. Unclear which one is better. Renaming on job commit gives higher chance of corrupting data, whereas renaming in task commit is slightly more performant.\n",
+    "commit": "63f7f2ee65a93de7f87f99b9fc46a71deefa5ea5",
+    "createdAt": "2016-11-09T06:22:11Z",
+    "diffHunk": "@@ -87,25 +120,40 @@ class HadoopMapReduceCommitProtocol(jobId: String, path: String)\n \n   override def commitJob(jobContext: JobContext, taskCommits: Seq[TaskCommitMessage]): Unit = {\n     committer.commitJob(jobContext)\n+    val filesToMove = taskCommits.map(_.obj.asInstanceOf[Map[String, String]]).reduce(_ ++ _)\n+    logDebug(s\"Committing files staged for absolute locations $filesToMove\")\n+    val fs = absPathStagingDir.getFileSystem(jobContext.getConfiguration)\n+    for ((src, dst) <- filesToMove) {\n+      fs.rename(new Path(src), new Path(dst))\n+    }\n+    fs.delete(absPathStagingDir, true)\n   }\n \n   override def abortJob(jobContext: JobContext): Unit = {\n     committer.abortJob(jobContext, JobStatus.State.FAILED)\n+    val fs = absPathStagingDir.getFileSystem(jobContext.getConfiguration)\n+    fs.delete(absPathStagingDir, true)\n   }\n \n   override def setupTask(taskContext: TaskAttemptContext): Unit = {\n     committer = setupCommitter(taskContext)\n     committer.setupTask(taskContext)\n+    addedAbsPathFiles = mutable.Map[String, String]()\n   }\n \n   override def commitTask(taskContext: TaskAttemptContext): TaskCommitMessage = {\n     val attemptId = taskContext.getTaskAttemptID\n     SparkHadoopMapRedUtil.commitTask(\n       committer, taskContext, attemptId.getJobID.getId, attemptId.getTaskID.getId)\n-    EmptyTaskCommitMessage\n+    new TaskCommitMessage(addedAbsPathFiles.toMap)",
+    "line": 104
+  }, {
+    "author": {
+      "login": "viirya"
+    },
+    "body": "I'd prefer renaming in task commit.\n",
+    "commit": "63f7f2ee65a93de7f87f99b9fc46a71deefa5ea5",
+    "createdAt": "2016-11-10T01:48:20Z",
+    "diffHunk": "@@ -87,25 +120,40 @@ class HadoopMapReduceCommitProtocol(jobId: String, path: String)\n \n   override def commitJob(jobContext: JobContext, taskCommits: Seq[TaskCommitMessage]): Unit = {\n     committer.commitJob(jobContext)\n+    val filesToMove = taskCommits.map(_.obj.asInstanceOf[Map[String, String]]).reduce(_ ++ _)\n+    logDebug(s\"Committing files staged for absolute locations $filesToMove\")\n+    val fs = absPathStagingDir.getFileSystem(jobContext.getConfiguration)\n+    for ((src, dst) <- filesToMove) {\n+      fs.rename(new Path(src), new Path(dst))\n+    }\n+    fs.delete(absPathStagingDir, true)\n   }\n \n   override def abortJob(jobContext: JobContext): Unit = {\n     committer.abortJob(jobContext, JobStatus.State.FAILED)\n+    val fs = absPathStagingDir.getFileSystem(jobContext.getConfiguration)\n+    fs.delete(absPathStagingDir, true)\n   }\n \n   override def setupTask(taskContext: TaskAttemptContext): Unit = {\n     committer = setupCommitter(taskContext)\n     committer.setupTask(taskContext)\n+    addedAbsPathFiles = mutable.Map[String, String]()\n   }\n \n   override def commitTask(taskContext: TaskAttemptContext): TaskCommitMessage = {\n     val attemptId = taskContext.getTaskAttemptID\n     SparkHadoopMapRedUtil.commitTask(\n       committer, taskContext, attemptId.getJobID.getId, attemptId.getTaskID.getId)\n-    EmptyTaskCommitMessage\n+    new TaskCommitMessage(addedAbsPathFiles.toMap)",
+    "line": 104
+  }],
+  "prId": 15814
+}]

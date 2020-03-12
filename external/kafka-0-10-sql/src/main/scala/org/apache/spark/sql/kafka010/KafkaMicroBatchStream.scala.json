@@ -1,0 +1,28 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "- Is `private val` required for `Use CaseInsensitiveMap for KafkaOffsetReader`?\r\n- Is the renaming from `kafkaOffsetReader` to `offsetReader` required for `Use CaseInsensitiveMap for KafkaOffsetReader`?",
+    "commit": "e0e8a8851f975311be990c5a4889d4c9870c3bea",
+    "createdAt": "2019-07-08T17:03:30Z",
+    "diffHunk": "@@ -56,7 +56,7 @@ import org.apache.spark.util.UninterruptibleThread\n  * and not use wrong broker addresses.\n  */\n private[kafka010] class KafkaMicroBatchStream(\n-    kafkaOffsetReader: KafkaOffsetReader,\n+    private val offsetReader: KafkaOffsetReader,"
+  }, {
+    "author": {
+      "login": "gaborgsomogyi"
+    },
+    "body": "> Is private val required for Use CaseInsensitiveMap for KafkaOffsetReader?\r\n\r\nYeah, please see my previous comment. Same applies here.\r\n\r\n> Is the renaming from kafkaOffsetReader to offsetReader required for Use CaseInsensitiveMap for KafkaOffsetReader?\r\n \r\nIn short, no. A little bit detailed if not renamed then the test requires something like this:\r\n```\r\n  private val offsetReaderMicroBatchMethod = PrivateMethod[KafkaOffsetReader]('kafkaOffsetReader)\r\n  private val offsetReaderContinuousMethod = PrivateMethod[KafkaOffsetReader]('offsetReader)\r\n...\r\n    verifyFieldsInMicroBatchStream(KafkaSourceProvider.FETCH_OFFSET_NUM_RETRY, expected, stream => {\r\n      val kafkaOffsetReader = getField(stream, offsetReaderMicroBatchMethod)\r\n      assert(expected.toInt === getField(kafkaOffsetReader, fetchOffsetNumRetriesMethod))\r\n    })\r\n...\r\n```\r\nGeneral considerations why I've renamed couple of variables:\r\n* Exact same parameters are named sometimes 2-4 different ways which is hard to track\r\n* Not renaming them would cause similar situation in the test code\r\n* Sometimes a `SparkConf` config name and it's internal scala variable has different name\r\n* Renamed only Spark internal variables which shouldn't matter for users\r\n\r\nWe can roll back renamings, the code will work properly but I think these changes increase readability.\r\n",
+    "commit": "e0e8a8851f975311be990c5a4889d4c9870c3bea",
+    "createdAt": "2019-07-08T19:03:38Z",
+    "diffHunk": "@@ -56,7 +56,7 @@ import org.apache.spark.util.UninterruptibleThread\n  * and not use wrong broker addresses.\n  */\n private[kafka010] class KafkaMicroBatchStream(\n-    kafkaOffsetReader: KafkaOffsetReader,\n+    private val offsetReader: KafkaOffsetReader,"
+  }, {
+    "author": {
+      "login": "gaborgsomogyi"
+    },
+    "body": "The rename rolled back.\r\n`private val` I think is essential.",
+    "commit": "e0e8a8851f975311be990c5a4889d4c9870c3bea",
+    "createdAt": "2019-07-09T12:14:49Z",
+    "diffHunk": "@@ -56,7 +56,7 @@ import org.apache.spark.util.UninterruptibleThread\n  * and not use wrong broker addresses.\n  */\n private[kafka010] class KafkaMicroBatchStream(\n-    kafkaOffsetReader: KafkaOffsetReader,\n+    private val offsetReader: KafkaOffsetReader,"
+  }],
+  "prId": 24967
+}]

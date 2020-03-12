@@ -1,0 +1,23 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "Maybe check for `part-` before getting a file system or checking if the file exists. This saves RPCs.\nDid you mean `> 0` in the sense of `contains`? that's not quite correct if so, since the condition should be `>= 0`. But then `contains` would be simpler anyway.\nFinally, duplicat -> duplicate\n",
+    "commit": "d4f145e616e0fd6ca206ac4d796ecc9ec7edd9e6",
+    "createdAt": "2015-04-15T12:28:23Z",
+    "diffHunk": "@@ -234,7 +234,13 @@ private[spark] class SparkHiveDynamicPartitionWriterContainer(\n         val outputPath = FileOutputFormat.getOutputPath(conf.value)\n         assert(outputPath != null, \"Undefined job output-path\")\n         val workPath = new Path(outputPath, dynamicPartPath.stripPrefix(\"/\"))\n-        new Path(workPath, getOutputName)\n+        val path = new Path(workPath, getOutputName)\n+        val fs = path.getFileSystem(conf.value)\n+        // this judgement is added for SPARK-6067\n+        if (fs.exists(path) && path.toUri.toString.indexOf(\"part-\") > 0) {"
+  }],
+  "prId": 4980
+}, {
+  "comments": [{
+    "author": {
+      "login": "liancheng"
+    },
+    "body": "As @srowen mentioned, please check \"part-\" first, and then check existence, to save NameNode RPC.\n",
+    "commit": "d4f145e616e0fd6ca206ac4d796ecc9ec7edd9e6",
+    "createdAt": "2015-04-29T02:43:52Z",
+    "diffHunk": "@@ -234,7 +234,13 @@ private[spark] class SparkHiveDynamicPartitionWriterContainer(\n         val outputPath = FileOutputFormat.getOutputPath(conf.value)\n         assert(outputPath != null, \"Undefined job output-path\")\n         val workPath = new Path(outputPath, dynamicPartPath.stripPrefix(\"/\"))\n-        new Path(workPath, getOutputName)\n+        val path = new Path(workPath, getOutputName)\n+        val fs = path.getFileSystem(conf.value)\n+        // this judgement is added for SPARK-6067\n+        if (fs.exists(path) && path.toUri.toString.contains(\"part-\")) {"
+  }],
+  "prId": 4980
+}]

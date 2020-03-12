@@ -1,0 +1,52 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "srowen"
+    },
+    "body": "I don't think you can hard-code `withScope` here right? it is not necessarily the first method after `getStackTrace`. Is it not more straightforward to drop calls while the name starts with `getStackTrace`?\n",
+    "commit": "13ce390e79cc67e9719ef2779134629367a34bda",
+    "createdAt": "2015-06-10T09:47:38Z",
+    "diffHunk": "@@ -95,17 +95,17 @@ private[spark] object RDDOperationScope extends Logging {\n   private[spark] def withScope[T](\n       sc: SparkContext,\n       allowNesting: Boolean = false)(body: => T): T = {\n-    val stackTrace = Thread.currentThread.getStackTrace().tail // ignore \"Thread#getStackTrace\"\n-    val ourMethodName = stackTrace(1).getMethodName // i.e. withScope\n-    // Climb upwards to find the first method that's called something different\n-    val callerMethodName = stackTrace\n-      .find(_.getMethodName != ourMethodName)\n+\n+    val callerMethodName = Thread.currentThread.getStackTrace()\n+      .dropWhile(! _.getMethodName().equals(\"withScope\"))"
+  }, {
+    "author": {
+      "login": "a-roberts"
+    },
+    "body": "The original code captures the stack trace within this method - at line 99, this will always contain `withScope` as the code comment suggests (unless this method name changes). \nThe new code is dropping elements in the stack trace until we see `withScope` and follows the same logic henceforth. \n",
+    "commit": "13ce390e79cc67e9719ef2779134629367a34bda",
+    "createdAt": "2015-06-10T10:12:57Z",
+    "diffHunk": "@@ -95,17 +95,17 @@ private[spark] object RDDOperationScope extends Logging {\n   private[spark] def withScope[T](\n       sc: SparkContext,\n       allowNesting: Boolean = false)(body: => T): T = {\n-    val stackTrace = Thread.currentThread.getStackTrace().tail // ignore \"Thread#getStackTrace\"\n-    val ourMethodName = stackTrace(1).getMethodName // i.e. withScope\n-    // Climb upwards to find the first method that's called something different\n-    val callerMethodName = stackTrace\n-      .find(_.getMethodName != ourMethodName)\n+\n+    val callerMethodName = Thread.currentThread.getStackTrace()\n+      .dropWhile(! _.getMethodName().equals(\"withScope\"))"
+  }, {
+    "author": {
+      "login": "srowen"
+    },
+    "body": "I get it, I'm reading it correctly at last now. Minor: you have two different ways of expressing the same check in these two lines; can they both be `_.getMethodName != \"withScope\"`?\n",
+    "commit": "13ce390e79cc67e9719ef2779134629367a34bda",
+    "createdAt": "2015-06-10T10:21:26Z",
+    "diffHunk": "@@ -95,17 +95,17 @@ private[spark] object RDDOperationScope extends Logging {\n   private[spark] def withScope[T](\n       sc: SparkContext,\n       allowNesting: Boolean = false)(body: => T): T = {\n-    val stackTrace = Thread.currentThread.getStackTrace().tail // ignore \"Thread#getStackTrace\"\n-    val ourMethodName = stackTrace(1).getMethodName // i.e. withScope\n-    // Climb upwards to find the first method that's called something different\n-    val callerMethodName = stackTrace\n-      .find(_.getMethodName != ourMethodName)\n+\n+    val callerMethodName = Thread.currentThread.getStackTrace()\n+      .dropWhile(! _.getMethodName().equals(\"withScope\"))"
+  }],
+  "prId": 6740
+}, {
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "can you remove these stray blank lines\n",
+    "commit": "13ce390e79cc67e9719ef2779134629367a34bda",
+    "createdAt": "2015-06-10T18:42:26Z",
+    "diffHunk": "@@ -95,17 +95,17 @@ private[spark] object RDDOperationScope extends Logging {\n   private[spark] def withScope[T](\n       sc: SparkContext,\n       allowNesting: Boolean = false)(body: => T): T = {\n-    val stackTrace = Thread.currentThread.getStackTrace().tail // ignore \"Thread#getStackTrace\"\n-    val ourMethodName = stackTrace(1).getMethodName // i.e. withScope\n-    // Climb upwards to find the first method that's called something different\n-    val callerMethodName = stackTrace\n-      .find(_.getMethodName != ourMethodName)\n+",
+    "line": 9
+  }],
+  "prId": 6740
+}, {
+  "comments": [{
+    "author": {
+      "login": "andrewor14"
+    },
+    "body": "could you put these in a `val ourMethodName = \"withScope\"`? A typo here will be difficult to catch.\n",
+    "commit": "13ce390e79cc67e9719ef2779134629367a34bda",
+    "createdAt": "2015-06-10T18:43:03Z",
+    "diffHunk": "@@ -95,17 +95,17 @@ private[spark] object RDDOperationScope extends Logging {\n   private[spark] def withScope[T](\n       sc: SparkContext,\n       allowNesting: Boolean = false)(body: => T): T = {\n-    val stackTrace = Thread.currentThread.getStackTrace().tail // ignore \"Thread#getStackTrace\"\n-    val ourMethodName = stackTrace(1).getMethodName // i.e. withScope\n-    // Climb upwards to find the first method that's called something different\n-    val callerMethodName = stackTrace\n-      .find(_.getMethodName != ourMethodName)\n+\n+    val callerMethodName = Thread.currentThread.getStackTrace()\n+      .dropWhile(_.getMethodName != \"withScope\")\n+      .find(_.getMethodName != \"withScope\")",
+    "line": 12
+  }],
+  "prId": 6740
+}]

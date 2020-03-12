@@ -1,0 +1,56 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "Since we need this setter to be in the concrete classes for Java compatibility, don't bother putting it here.",
+    "commit": "532f0d8a873032a87eb73e1e585e322275cb1678",
+    "createdAt": "2018-05-07T22:44:12Z",
+    "diffHunk": "@@ -497,6 +498,9 @@ private[ml] trait GBTParams extends TreeEnsembleParams with HasMaxIter with HasS\n   @deprecated(\"This method is deprecated and will be removed in 3.0.0.\", \"2.1.0\")\n   def setStepSize(value: Double): this.type = set(stepSize, value)\n \n+  /** @group setParam */\n+  def setValidationIndicatorCol(value: String): this.type = set(validationIndicatorCol, value)"
+  }],
+  "prId": 21129
+}, {
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "I forget why we chose 1e-5 (which is different from spark.mllib).  What do you think about using 0.01 to match the sklearn docs here? http://scikit-learn.org/dev/auto_examples/ensemble/plot_gradient_boosting_early_stopping.html  (I also checked xgboost, but they use a different approach based on x number of steps without improvement.  We may want to add that at some point since it sounds more robust.)",
+    "commit": "532f0d8a873032a87eb73e1e585e322275cb1678",
+    "createdAt": "2018-05-09T17:18:36Z",
+    "diffHunk": "@@ -460,18 +461,29 @@ private[ml] trait RandomForestRegressorParams\n  *\n  * Note: Marked as private and DeveloperApi since this may be made public in the future.\n  */\n-private[ml] trait GBTParams extends TreeEnsembleParams with HasMaxIter with HasStepSize {\n+private[ml] trait GBTParams extends TreeEnsembleParams with HasMaxIter with HasStepSize\n+  with HasValidationIndicatorCol {\n \n-  /* TODO: Add this doc when we add this param.  SPARK-7132\n-   * Threshold for stopping early when runWithValidation is used.\n+  /**\n+   * Threshold for stopping early when fit with validation is used.\n    * If the error rate on the validation input changes by less than the validationTol,\n-   * then learning will stop early (before [[numIterations]]).\n-   * This parameter is ignored when run is used.\n+   * then learning will stop early (before [[maxIter]]).\n+   * This parameter is ignored when fit without validation is used.\n    * (default = 1e-5)"
+  }],
+  "prId": 21129
+}, {
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "Let's add a `@see` validationIndicatorCol",
+    "commit": "532f0d8a873032a87eb73e1e585e322275cb1678",
+    "createdAt": "2018-05-09T17:23:23Z",
+    "diffHunk": "@@ -460,18 +461,29 @@ private[ml] trait RandomForestRegressorParams\n  *\n  * Note: Marked as private and DeveloperApi since this may be made public in the future.\n  */\n-private[ml] trait GBTParams extends TreeEnsembleParams with HasMaxIter with HasStepSize {\n+private[ml] trait GBTParams extends TreeEnsembleParams with HasMaxIter with HasStepSize\n+  with HasValidationIndicatorCol {\n \n-  /* TODO: Add this doc when we add this param.  SPARK-7132\n-   * Threshold for stopping early when runWithValidation is used.\n+  /**\n+   * Threshold for stopping early when fit with validation is used.\n    * If the error rate on the validation input changes by less than the validationTol,\n-   * then learning will stop early (before [[numIterations]]).\n-   * This parameter is ignored when run is used.\n+   * then learning will stop early (before [[maxIter]]).\n+   * This parameter is ignored when fit without validation is used.\n    * (default = 1e-5)\n    * @group param"
+  }],
+  "prId": 21129
+}, {
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "Let's add the more precise description from the old BoostingStrategy for this Param.",
+    "commit": "532f0d8a873032a87eb73e1e585e322275cb1678",
+    "createdAt": "2018-05-09T17:23:51Z",
+    "diffHunk": "@@ -460,18 +461,29 @@ private[ml] trait RandomForestRegressorParams\n  *\n  * Note: Marked as private and DeveloperApi since this may be made public in the future.\n  */\n-private[ml] trait GBTParams extends TreeEnsembleParams with HasMaxIter with HasStepSize {\n+private[ml] trait GBTParams extends TreeEnsembleParams with HasMaxIter with HasStepSize\n+  with HasValidationIndicatorCol {\n \n-  /* TODO: Add this doc when we add this param.  SPARK-7132\n-   * Threshold for stopping early when runWithValidation is used.\n+  /**\n+   * Threshold for stopping early when fit with validation is used.\n    * If the error rate on the validation input changes by less than the validationTol,"
+  }],
+  "prId": 21129
+}, {
+  "comments": [{
+    "author": {
+      "login": "jkbradley"
+    },
+    "body": "This combined doc is not quite accurate.  Can you please update it to:\r\n```\r\nThreshold for stopping early when fit with validation is used.\r\n(This parameter is ignored when fit without validation is used.)\r\nThe decision to stop early is decided based on this logic:\r\nIf the current loss on the validation set is greater than 0.01, the diff\r\nof validation error is compared to relative tolerance which is\r\nvalidationTol * (current loss on the validation set).\r\nIf the current loss on the validation set is less than or equal to 0.01,\r\nthe diff of validation error is compared to absolute tolerance which is\r\nvalidationTol * 0.01.\r\n```",
+    "commit": "532f0d8a873032a87eb73e1e585e322275cb1678",
+    "createdAt": "2018-05-17T18:12:11Z",
+    "diffHunk": "@@ -460,18 +461,37 @@ private[ml] trait RandomForestRegressorParams\n  *\n  * Note: Marked as private and DeveloperApi since this may be made public in the future.\n  */\n-private[ml] trait GBTParams extends TreeEnsembleParams with HasMaxIter with HasStepSize {\n+private[ml] trait GBTParams extends TreeEnsembleParams with HasMaxIter with HasStepSize\n+  with HasValidationIndicatorCol {\n \n-  /* TODO: Add this doc when we add this param.  SPARK-7132\n-   * Threshold for stopping early when runWithValidation is used.\n+  /**\n+   * Threshold for stopping early when fit with validation is used.\n    * If the error rate on the validation input changes by less than the validationTol,"
+  }],
+  "prId": 21129
+}]

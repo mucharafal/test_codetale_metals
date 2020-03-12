@@ -1,0 +1,25 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "nit: ordering\n",
+    "commit": "7368c7eb16752611230df77a69d82170d68afb35",
+    "createdAt": "2015-07-23T18:21:06Z",
+    "diffHunk": "@@ -19,6 +19,8 @@ package org.apache.spark.scheduler.cluster\n \n import java.net.NetworkInterface\n \n+import org.apache.hadoop.yarn.api.ApplicationConstants.Environment",
+    "line": 4
+  }],
+  "prId": 7624
+}, {
+  "comments": [{
+    "author": {
+      "login": "vanzin"
+    },
+    "body": "It doesn't seem like there's any exception that can be thrown anymore.\n",
+    "commit": "7368c7eb16752611230df77a69d82170d68afb35",
+    "createdAt": "2015-07-23T19:54:23Z",
+    "diffHunk": "@@ -64,68 +66,29 @@ private[spark] class YarnClusterSchedulerBackend(\n     }\n \n   override def getDriverLogUrls: Option[Map[String, String]] = {\n-    var yarnClientOpt: Option[YarnClient] = None\n     var driverLogs: Option[Map[String, String]] = None\n     try {\n       val yarnConf = new YarnConfiguration(sc.hadoopConfiguration)\n       val containerId = YarnSparkHadoopUtil.get.getContainerId\n-      yarnClientOpt = Some(YarnClient.createYarnClient())\n-      yarnClientOpt.foreach { yarnClient =>\n-        yarnClient.init(yarnConf)\n-        yarnClient.start()\n-\n-        // For newer versions of YARN, we can find the HTTP address for a given node by getting a\n-        // container report for a given container. But container reports came only in Hadoop 2.4,\n-        // so we basically have to get the node reports for all nodes and find the one which runs\n-        // this container. For that we have to compare the node's host against the current host.\n-        // Since the host can have multiple addresses, we need to compare against all of them to\n-        // find out if one matches.\n-\n-        // Get all the addresses of this node.\n-        val addresses =\n-          NetworkInterface.getNetworkInterfaces.asScala\n-            .flatMap(_.getInetAddresses.asScala)\n-            .toSeq\n-\n-        // Find a node report that matches one of the addresses\n-        val nodeReport =\n-          yarnClient.getNodeReports(NodeState.RUNNING).asScala.find { x =>\n-            val host = x.getNodeId.getHost\n-            addresses.exists { address =>\n-              address.getHostAddress == host ||\n-                address.getHostName == host ||\n-                address.getCanonicalHostName == host\n-            }\n-          }\n \n-        // Now that we have found the report for the Node Manager that the AM is running on, we\n-        // can get the base HTTP address for the Node manager from the report.\n-        // The format used for the logs for each container is well-known and can be constructed\n-        // using the NM's HTTP address and the container ID.\n-        // The NM may be running several containers, but we can build the URL for the AM using\n-        // the AM's container ID, which we already know.\n-        nodeReport.foreach { report =>\n-          val httpAddress = report.getHttpAddress\n-          // lookup appropriate http scheme for container log urls\n-          val yarnHttpPolicy = yarnConf.get(\n-            YarnConfiguration.YARN_HTTP_POLICY_KEY,\n-            YarnConfiguration.YARN_HTTP_POLICY_DEFAULT\n-          )\n-          val user = Utils.getCurrentUserName()\n-          val httpScheme = if (yarnHttpPolicy == \"HTTPS_ONLY\") \"https://\" else \"http://\"\n-          val baseUrl = s\"$httpScheme$httpAddress/node/containerlogs/$containerId/$user\"\n-          logDebug(s\"Base URL for logs: $baseUrl\")\n-          driverLogs = Some(Map(\n-            \"stderr\" -> s\"$baseUrl/stderr?start=-4096\",\n-            \"stdout\" -> s\"$baseUrl/stdout?start=-4096\"))\n-        }\n-      }\n+      val httpAddress = System.getenv(Environment.NM_HOST.name()) +\n+        \":\" + System.getenv(Environment.NM_HTTP_PORT.name())\n+      // lookup appropriate http scheme for container log urls\n+      val yarnHttpPolicy = yarnConf.get(\n+        YarnConfiguration.YARN_HTTP_POLICY_KEY,\n+        YarnConfiguration.YARN_HTTP_POLICY_DEFAULT\n+      )\n+      val user = Utils.getCurrentUserName()\n+      val httpScheme = if (yarnHttpPolicy == \"HTTPS_ONLY\") \"https://\" else \"http://\"\n+      val baseUrl = s\"$httpScheme$httpAddress/node/containerlogs/$containerId/$user\"\n+      logDebug(s\"Base URL for logs: $baseUrl\")\n+      driverLogs = Some(Map(\n+        \"stderr\" -> s\"$baseUrl/stderr?start=-4096\",\n+        \"stdout\" -> s\"$baseUrl/stdout?start=-4096\"))\n     } catch {\n       case e: Exception =>",
+    "line": 84
+  }],
+  "prId": 7624
+}]

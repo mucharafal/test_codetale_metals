@@ -1,0 +1,31 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "ChenjunZou"
+    },
+    "body": "@szhem \r\nhi,\r\nIn your comment:\r\n \" reassign the reference of its sub-iterator to the empty iterator ...\"\r\n\r\nI don't understand why reassigning iter would take effect on original sub-iterator\r\ncan you explain it more?",
+    "commit": "17238196719de1e68cbcb1eb930cb3176308e437",
+    "createdAt": "2019-08-11T04:35:24Z",
+    "diffHunk": "@@ -25,11 +25,14 @@ private[spark]\n abstract class CompletionIterator[ +A, +I <: Iterator[A]](sub: I) extends Iterator[A] {\n \n   private[this] var completed = false\n-  def next(): A = sub.next()\n+  private[this] var iter = sub\n+  def next(): A = iter.next()\n   def hasNext: Boolean = {\n-    val r = sub.hasNext\n+    val r = iter.hasNext\n     if (!r && !completed) {\n       completed = true\n+      // reassign to release resources of highly resource consuming iterators early\n+      iter = Iterator.empty.asInstanceOf[I]",
+    "line": 13
+  }, {
+    "author": {
+      "login": "szhem"
+    },
+    "body": "@ChenjunZou, you can find the details in this [message](https://github.com/apache/spark/pull/23083#discussion_r236057101)",
+    "commit": "17238196719de1e68cbcb1eb930cb3176308e437",
+    "createdAt": "2019-08-11T07:36:24Z",
+    "diffHunk": "@@ -25,11 +25,14 @@ private[spark]\n abstract class CompletionIterator[ +A, +I <: Iterator[A]](sub: I) extends Iterator[A] {\n \n   private[this] var completed = false\n-  def next(): A = sub.next()\n+  private[this] var iter = sub\n+  def next(): A = iter.next()\n   def hasNext: Boolean = {\n-    val r = sub.hasNext\n+    val r = iter.hasNext\n     if (!r && !completed) {\n       completed = true\n+      // reassign to release resources of highly resource consuming iterators early\n+      iter = Iterator.empty.asInstanceOf[I]",
+    "line": 13
+  }, {
+    "author": {
+      "login": "ChenjunZou"
+    },
+    "body": "Thanks, szhem :)\r\nyour UT explains all. \r\nat first I misunderstand sub as CompletionIterator(val sub)\r\nHided, well done!\r\n",
+    "commit": "17238196719de1e68cbcb1eb930cb3176308e437",
+    "createdAt": "2019-08-12T02:59:29Z",
+    "diffHunk": "@@ -25,11 +25,14 @@ private[spark]\n abstract class CompletionIterator[ +A, +I <: Iterator[A]](sub: I) extends Iterator[A] {\n \n   private[this] var completed = false\n-  def next(): A = sub.next()\n+  private[this] var iter = sub\n+  def next(): A = iter.next()\n   def hasNext: Boolean = {\n-    val r = sub.hasNext\n+    val r = iter.hasNext\n     if (!r && !completed) {\n       completed = true\n+      // reassign to release resources of highly resource consuming iterators early\n+      iter = Iterator.empty.asInstanceOf[I]",
+    "line": 13
+  }],
+  "prId": 23083
+}]

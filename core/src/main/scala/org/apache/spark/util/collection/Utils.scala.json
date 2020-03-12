@@ -1,0 +1,20 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "squito"
+    },
+    "body": "The test failures seem to be real (I get failures in `FileSuite` locally at least), and I can't completely figure out why, but I'm pretty sure its the interaction between this and the way `NextIterator` is used in `HadoopRDD`.  I will try to look at it some more but not super-obvious to me so you should probabbly take a look too.\n",
+    "commit": "59db4af635fd53e2723d187b60dee6856af74df4",
+    "createdAt": "2016-03-16T20:19:33Z",
+    "diffHunk": "@@ -36,4 +36,21 @@ private[spark] object Utils {\n     }\n     ordering.leastOf(input.asJava, num).iterator.asScala\n   }\n+\n+  /**\n+   * Signal when empty.\n+   * Wraps an iterator and calls the provided call back when the iterator is consumed. If provided\n+   * iterator is empty when, calls func right away.\n+   */\n+  def signalWhenEmpty[T](itr: Iterator[T], func: () => Unit): Iterator[T] = {\n+    if (itr.isEmpty) {\n+      func()\n+    }\n+    itr.map{x =>\n+      if (itr.isEmpty) {\n+        func()\n+      }\n+      x"
+  }, {
+    "author": {
+      "login": "squito"
+    },
+    "body": "looks like its something weird w/ `itr.map` -- this seems to work:\n\n``` scala\n  def signalWhenEmpty[T](itr: Iterator[T], func: () => Unit): Iterator[T] = {\n   new SignalWhenEmptyIterator(itr, func)\n  }\n\n  private class SignalWhenEmptyIterator[T](sub: Iterator[T], func: () => Unit) extends Iterator[T] {\n    def hasNext: Boolean = {\n      val r = sub.hasNext\n      if (!r) {\n        func()\n      }\n      r\n    }\n    def next(): T = {\n      sub.next()\n    }\n\n  }\n```\n",
+    "commit": "59db4af635fd53e2723d187b60dee6856af74df4",
+    "createdAt": "2016-03-16T20:33:55Z",
+    "diffHunk": "@@ -36,4 +36,21 @@ private[spark] object Utils {\n     }\n     ordering.leastOf(input.asJava, num).iterator.asScala\n   }\n+\n+  /**\n+   * Signal when empty.\n+   * Wraps an iterator and calls the provided call back when the iterator is consumed. If provided\n+   * iterator is empty when, calls func right away.\n+   */\n+  def signalWhenEmpty[T](itr: Iterator[T], func: () => Unit): Iterator[T] = {\n+    if (itr.isEmpty) {\n+      func()\n+    }\n+    itr.map{x =>\n+      if (itr.isEmpty) {\n+        func()\n+      }\n+      x"
+  }],
+  "prId": 11105
+}]

@@ -1,0 +1,20 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "dongjoon-hyun"
+    },
+    "body": "This is removed eventually. To pass the test, we need to remove `where(Literal.TrueLiteral)` here.",
+    "commit": "e1da1992cddc07d563df36ab599d69bb45978bdc",
+    "createdAt": "2018-12-21T20:36:14Z",
+    "diffHunk": "@@ -92,4 +93,33 @@ class BinaryComparisonSimplificationSuite extends PlanTest with PredicateHelper\n     val correctAnswer = nonNullableRelation.analyze\n     comparePlans(actual, correctAnswer)\n   }\n+\n+  test(\"SPARK-26402: accessing nested fields with different cases in case insensitive mode\") {\n+    val expId = NamedExpression.newExprId\n+    val qualifier = Seq.empty[String]\n+    val structType = StructType(\n+      StructField(\"a\", StructType(StructField(\"b\", IntegerType, false) :: Nil), false) :: Nil)\n+\n+    val fieldA1 = GetStructField(\n+      GetStructField(\n+        AttributeReference(\"data1\", structType, false)(expId, qualifier),\n+        0, Some(\"a1\")),\n+      0, Some(\"b1\"))\n+    val fieldA2 = GetStructField(\n+      GetStructField(\n+        AttributeReference(\"data2\", structType, false)(expId, qualifier),\n+        0, Some(\"a2\")),\n+      0, Some(\"b2\"))\n+\n+    // GetStructField with different names are semantically equal; thus, `EqualTo(fieldA1, fieldA2)`\n+    // will be optimized to `TrueLiteral` by `SimplifyBinaryComparison`.\n+    val originalQuery = nonNullableRelation\n+        .where(EqualTo(fieldA1, fieldA2))\n+        .analyze\n+\n+    val optimized = Optimize.execute(originalQuery)\n+    val correctAnswer = nonNullableRelation.where(Literal.TrueLiteral).analyze"
+  }, {
+    "author": {
+      "login": "dbtsai"
+    },
+    "body": "Oh, this has `BooleanSimplification`. Removed it.",
+    "commit": "e1da1992cddc07d563df36ab599d69bb45978bdc",
+    "createdAt": "2018-12-21T21:04:52Z",
+    "diffHunk": "@@ -92,4 +93,33 @@ class BinaryComparisonSimplificationSuite extends PlanTest with PredicateHelper\n     val correctAnswer = nonNullableRelation.analyze\n     comparePlans(actual, correctAnswer)\n   }\n+\n+  test(\"SPARK-26402: accessing nested fields with different cases in case insensitive mode\") {\n+    val expId = NamedExpression.newExprId\n+    val qualifier = Seq.empty[String]\n+    val structType = StructType(\n+      StructField(\"a\", StructType(StructField(\"b\", IntegerType, false) :: Nil), false) :: Nil)\n+\n+    val fieldA1 = GetStructField(\n+      GetStructField(\n+        AttributeReference(\"data1\", structType, false)(expId, qualifier),\n+        0, Some(\"a1\")),\n+      0, Some(\"b1\"))\n+    val fieldA2 = GetStructField(\n+      GetStructField(\n+        AttributeReference(\"data2\", structType, false)(expId, qualifier),\n+        0, Some(\"a2\")),\n+      0, Some(\"b2\"))\n+\n+    // GetStructField with different names are semantically equal; thus, `EqualTo(fieldA1, fieldA2)`\n+    // will be optimized to `TrueLiteral` by `SimplifyBinaryComparison`.\n+    val originalQuery = nonNullableRelation\n+        .where(EqualTo(fieldA1, fieldA2))\n+        .analyze\n+\n+    val optimized = Optimize.execute(originalQuery)\n+    val correctAnswer = nonNullableRelation.where(Literal.TrueLiteral).analyze"
+  }],
+  "prId": 23353
+}]

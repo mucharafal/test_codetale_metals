@@ -1,0 +1,23 @@
+[{
+  "comments": [{
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "Minor nit: we don't need this `bytesToTransfer` anymore. We can remove this mutable variable and just use `partitionLengthInSpill` in its place.",
+    "commit": "c79de072fd4c0e32f5a62d15f8d921095d4e3bf0",
+    "createdAt": "2017-05-24T20:13:46Z",
+    "diffHunk": "@@ -425,14 +425,8 @@ void forceSorterToSpill() throws IOException {\n           long bytesToTransfer = partitionLengthInSpill;"
+  }],
+  "prId": 18091
+}, {
+  "comments": [{
+    "author": {
+      "login": "JoshRosen"
+    },
+    "body": "This is not equivalent to the old code. The `copyFileStreamNIO` method is assuming that you're starting to transfer from position 0 in the input channel, which is only true on the first iteration of the outer loop.\r\n\r\nI think you need to add a fourth argument to `copyFileStreamNIO` to specify the starting position of the input channel.",
+    "commit": "c79de072fd4c0e32f5a62d15f8d921095d4e3bf0",
+    "createdAt": "2017-05-24T20:45:02Z",
+    "diffHunk": "@@ -425,14 +425,8 @@ void forceSorterToSpill() throws IOException {\n           long bytesToTransfer = partitionLengthInSpill;\n           final FileChannel spillInputChannel = spillInputChannels[i];\n           final long writeStartTime = System.nanoTime();\n-          while (bytesToTransfer > 0) {\n-            final long actualBytesTransferred = spillInputChannel.transferTo(\n-              spillInputChannelPositions[i],\n-              bytesToTransfer,\n-              mergedFileOutputChannel);\n-            spillInputChannelPositions[i] += actualBytesTransferred;\n-            bytesToTransfer -= actualBytesTransferred;\n-          }\n+          Utils.copyFileStreamNIO(spillInputChannel, mergedFileOutputChannel, bytesToTransfer);"
+  }],
+  "prId": 18091
+}]
