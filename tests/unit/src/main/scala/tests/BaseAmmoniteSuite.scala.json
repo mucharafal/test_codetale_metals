@@ -1,0 +1,286 @@
+[
+  {
+    "id" : "73e74e52-203a-46ba-b427-91ef394e6c52",
+    "prId" : 1538,
+    "comments" : [
+      {
+        "id" : "dac95643-7ad4-4366-8cbc-fd8a01b53cdd",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Maybe we can include those as comments in the file? Similar to how we do a lot of the expected suites like `DefinitionLspSuite`?",
+        "createdAt" : "2020-03-31T17:30:46Z",
+        "updatedAt" : "2020-05-21T11:17:43Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6273187a-6238-4f00-8eca-8ae4a528e2c3",
+        "parentId" : "dac95643-7ad4-4366-8cbc-fd8a01b53cdd",
+        "author" : {
+          "login" : "alexarchambault",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/7063723?u=d5befca0ebfec0042dad7ef93973490eef750ff4&v=4"
+        },
+        "body" : "I slightly changed `assertDefinitionAtLocation`, so that it infers the exact line / char itself. That should make the resulting code more maintainable.\r\n\r\nI didn't inline that like in `DefinitionLspSuite`, for fear the resulting output would change in the future (there are still some definitions, like `import $file.foo, foo.Something`, that don't work as expected yet).",
+        "createdAt" : "2020-04-05T22:17:09Z",
+        "updatedAt" : "2020-05-21T11:17:44Z",
+        "lastEditedBy" : {
+          "login" : "alexarchambault",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/7063723?u=d5befca0ebfec0042dad7ef93973490eef750ff4&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "0681fa0b1417b7ac622101d279667c6900a2506e",
+    "line" : 70,
+    "diffHunk" : "@@ -0,0 +1,238 @@\n+package tests\n+\n+import org.eclipse.lsp4j.MessageActionItem\n+import scala.meta.internal.metals.Messages\n+\n+abstract class BaseAmmoniteSuite(scalaVersion: String)\n+    extends BaseLspSuite(\"ammonite\") {\n+\n+  override def munitIgnore: Boolean =\n+    !isValidScalaVersionForEnv(scalaVersion) ||\n+      // temporary, remove once Ammonite is available for 2.12.11\n+      scalaVersion == \"2.12.11\"\n+\n+  override def newServer(workspaceName: String): Unit = {\n+    super.newServer(workspaceName)\n+    server.client.showMessageRequestHandler = { params =>\n+      if (params == Messages.ImportAmmoniteScript.params())\n+        Some(new MessageActionItem(Messages.ImportAmmoniteScript.dismiss))\n+      else\n+        None\n+    }\n+  }\n+\n+  test(\"simple script\") {\n+    // single script with import $ivy-s\n+    for {\n+      _ <- server.initialize(\n+        s\"\"\"\n+           |/metals.json\n+           |{\n+           |  \"a\": {\n+           |    \"scalaVersion\": \"$scalaVersion\"\n+           |  }\n+           |}\n+           |/main.sc\n+           | // scala $scalaVersion\n+           |import $$ivy.`io.circe::circe-core:0.12.3`\n+           |import $$ivy.`io.circe::circe-generic:0.12.3`\n+           |import $$ivy.`io.circe::circe-parser:0.12.3`\n+           |import io.circe._, io.circe.generic.auto._, io.circe.parser._, io.circe.syntax._\n+           |\n+           |sealed trait Foo\n+           |case class Bar(xs: Vector[String]) extends Foo\n+           |case class Qux(i: Int, d: Option[Double]) extends Foo\n+           |\n+           |val foo: Foo = Qux(13, Some(14.0))\n+           |\n+           |val json = foo.asJson.noSpaces\n+           |\n+           |val decodedFoo = decode[Foo](json)\n+           |\"\"\".stripMargin\n+      )\n+      _ <- server.didOpen(\"main.sc\")\n+      _ <- server.didSave(\"main.sc\")(identity)\n+      _ <- server.executeCommand(\"ammonite-start\")\n+\n+      // asJson\n+      // via Ammonite-generated Semantic DB\n+      _ <- server.assertDefinitionAtLocation(\n+        \"main.sc\",\n+        12,\n+        18,\n+        \".metals/readonly/io/circe/syntax/package.scala\""
+  },
+  {
+    "id" : "d2a22733-ed04-408a-a334-117e6ed1d78e",
+    "prId" : 1538,
+    "comments" : [
+      {
+        "id" : "84d113dc-833b-4467-8211-f0af496acaf2",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Would be nice to do it the same way as in `HoverLspSuite`",
+        "createdAt" : "2020-03-31T17:32:19Z",
+        "updatedAt" : "2020-05-21T11:17:43Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "012854da-2bc9-4825-8a26-9a76315383a9",
+        "parentId" : "84d113dc-833b-4467-8211-f0af496acaf2",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "This can also be a separate test case I think. It could be in a method `checkHovers`",
+        "createdAt" : "2020-04-09T11:34:00Z",
+        "updatedAt" : "2020-05-21T11:17:44Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "0681fa0b1417b7ac622101d279667c6900a2506e",
+    "line" : 130,
+    "diffHunk" : "@@ -0,0 +1,238 @@\n+package tests\n+\n+import org.eclipse.lsp4j.MessageActionItem\n+import scala.meta.internal.metals.Messages\n+\n+abstract class BaseAmmoniteSuite(scalaVersion: String)\n+    extends BaseLspSuite(\"ammonite\") {\n+\n+  override def munitIgnore: Boolean =\n+    !isValidScalaVersionForEnv(scalaVersion) ||\n+      // temporary, remove once Ammonite is available for 2.12.11\n+      scalaVersion == \"2.12.11\"\n+\n+  override def newServer(workspaceName: String): Unit = {\n+    super.newServer(workspaceName)\n+    server.client.showMessageRequestHandler = { params =>\n+      if (params == Messages.ImportAmmoniteScript.params())\n+        Some(new MessageActionItem(Messages.ImportAmmoniteScript.dismiss))\n+      else\n+        None\n+    }\n+  }\n+\n+  test(\"simple script\") {\n+    // single script with import $ivy-s\n+    for {\n+      _ <- server.initialize(\n+        s\"\"\"\n+           |/metals.json\n+           |{\n+           |  \"a\": {\n+           |    \"scalaVersion\": \"$scalaVersion\"\n+           |  }\n+           |}\n+           |/main.sc\n+           | // scala $scalaVersion\n+           |import $$ivy.`io.circe::circe-core:0.12.3`\n+           |import $$ivy.`io.circe::circe-generic:0.12.3`\n+           |import $$ivy.`io.circe::circe-parser:0.12.3`\n+           |import io.circe._, io.circe.generic.auto._, io.circe.parser._, io.circe.syntax._\n+           |\n+           |sealed trait Foo\n+           |case class Bar(xs: Vector[String]) extends Foo\n+           |case class Qux(i: Int, d: Option[Double]) extends Foo\n+           |\n+           |val foo: Foo = Qux(13, Some(14.0))\n+           |\n+           |val json = foo.asJson.noSpaces\n+           |\n+           |val decodedFoo = decode[Foo](json)\n+           |\"\"\".stripMargin\n+      )\n+      _ <- server.didOpen(\"main.sc\")\n+      _ <- server.didSave(\"main.sc\")(identity)\n+      _ <- server.executeCommand(\"ammonite-start\")\n+\n+      // asJson\n+      // via Ammonite-generated Semantic DB\n+      _ <- server.assertDefinitionAtLocation(\n+        \"main.sc\",\n+        12,\n+        18,\n+        \".metals/readonly/io/circe/syntax/package.scala\"\n+      )\n+\n+      // noSpaces\n+      // via Ammonite-generated Semantic DB\n+      _ <- server.assertDefinitionAtLocation(\n+        \"main.sc\",\n+        12,\n+        27,\n+        \".metals/readonly/io/circe/Json.scala\"\n+      )\n+\n+      // Second 'noSpaces' in\n+      //   final def noSpaces: String = Printer.noSpaces.print(this)\n+      // via presentation compiler, using the Ammonite build target classpath\n+      _ <- server.assertDefinitionAtLocation(\n+        \".metals/readonly/io/circe/Json.scala\",\n+        122,\n+        45,\n+        \".metals/readonly/io/circe/Printer.scala\"\n+      )\n+\n+      // Foo\n+      // via Ammonite-generated Semantic DB and indexing of Ammonite-generated source of $file dependencies\n+      _ <- server.assertDefinitionAtLocation(\"main.sc\", 14, 25, \"main.sc\", 6)\n+\n+      expectedHoverRes = \"\"\"```scala"
+  },
+  {
+    "id" : "ff073020-7f47-4eba-8903-ee20f0eb4ac8",
+    "prId" : 1538,
+    "comments" : [
+      {
+        "id" : "4ffd3c84-fc75-491a-91b5-6bfc0819dc85",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Let's use `@@` instead of `|`. That's how we mark the cursor position in the workspace.",
+        "createdAt" : "2020-04-09T11:09:19Z",
+        "updatedAt" : "2020-05-21T11:17:44Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "0e4eb7ba-c148-4d98-97af-69ee1a385f5f",
+        "parentId" : "4ffd3c84-fc75-491a-91b5-6bfc0819dc85",
+        "author" : {
+          "login" : "alexarchambault",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/7063723?u=d5befca0ebfec0042dad7ef93973490eef750ff4&v=4"
+        },
+        "body" : "Just changed that.",
+        "createdAt" : "2020-04-11T15:36:59Z",
+        "updatedAt" : "2020-05-21T11:17:44Z",
+        "lastEditedBy" : {
+          "login" : "alexarchambault",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/7063723?u=d5befca0ebfec0042dad7ef93973490eef750ff4&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "0681fa0b1417b7ac622101d279667c6900a2506e",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,287 @@\n+package tests\n+\n+import org.eclipse.lsp4j.MessageActionItem\n+import scala.collection.JavaConverters._\n+import scala.meta.internal.metals.Messages\n+\n+abstract class BaseAmmoniteSuite(scalaVersion: String)\n+    extends BaseLspSuite(\"ammonite\") {\n+\n+  override def munitIgnore: Boolean =\n+    !isValidScalaVersionForEnv(scalaVersion) ||\n+      // temporary, remove once Ammonite is available for 2.12.11\n+      scalaVersion == \"2.12.11\"\n+\n+  override def newServer(workspaceName: String): Unit = {\n+    super.newServer(workspaceName)\n+    server.client.showMessageRequestHandler = { params =>\n+      if (params == Messages.ImportAmmoniteScript.params())\n+        Some(new MessageActionItem(Messages.ImportAmmoniteScript.dismiss))\n+      else\n+        None\n+    }\n+  }\n+\n+  test(\"simple script\") {\n+    // single script with import $ivy-s\n+    for {\n+      _ <- server.initialize(\n+        s\"\"\"\n+           |/metals.json\n+           |{\n+           |  \"a\": {\n+           |    \"scalaVersion\": \"$scalaVersion\"\n+           |  }\n+           |}\n+           |/main.sc\n+           | // scala $scalaVersion\n+           |import $$ivy.`io.circe::circe-core:0.12.3`\n+           |import $$ivy.`io.circe::circe-generic:0.12.3`\n+           |import $$ivy.`io.circe::circe-parser:0.12.3`\n+           |import io.circe._, io.circe.generic.auto._, io.circe.parser._, io.circe.syntax._\n+           |\n+           |sealed trait Foo\n+           |case class Bar(xs: Vector[String]) extends Foo\n+           |case class Qux(i: Int, d: Option[Double]) extends Foo\n+           |\n+           |val foo: Foo = Qux(13, Some(14.0))\n+           |\n+           |val json = foo.asJson.noSpaces\n+           |\n+           |val decodedFoo = decode[Foo](json)\n+           |\"\"\".stripMargin\n+      )\n+      _ <- server.didOpen(\"main.sc\")\n+      _ <- server.didSave(\"main.sc\")(identity)\n+      _ <- server.executeCommand(\"ammonite-start\")\n+\n+      // via Ammonite-generated Semantic DB\n+      _ <- server.assertDefinitionAtLocation(\n+        \"main.sc\",\n+        \"foo.as|Json.noSpaces\",\n+        \".metals/readonly/io/circe/syntax/package.scala\"\n+      )\n+\n+      // via Ammonite-generated Semantic DB\n+      _ <- server.assertDefinitionAtLocation(\n+        \"main.sc\",\n+        \"foo.asJson.no|Spaces\","
+  },
+  {
+    "id" : "ff991c67-2efb-4ac9-977c-060d3c145d1b",
+    "prId" : 1538,
+    "comments" : [
+      {
+        "id" : "beaf890f-5810-4d9f-ad29-3fdc1e3b94c3",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "I would rather do something like\r\n```scala\r\ncheckDefinition(\r\ns\"\"\"|/main.sc\r\n    |$circeImports\r\n    |val foo: Foo = Qux(13, Some(14.0))\r\n    |\r\n    |val json = foo.asJson.no@@Spaces\r\n    |\r\n    |val decodedFoo = decode[Foo](json)\r\n\"\"\",\r\nexternalDefinition = Some(\".metals/readonly/io/circe/syntax/package.scala\")\r\n)\r\n```\r\n\r\nand if we have a definition in any of local files I would do:\r\n\r\n```scala\r\ncheckDefinition(\r\ns\"\"\"|/main.sc\r\n    |$circeImports\r\n    |val <<foo>>: Foo = Qux(13, Some(14.0))\r\n    |\r\n    |val json = fo@@o.asJson.noSpaces \r\n    |\r\n    |val decodedFoo = decode[Foo](json)\r\n\"\"\"\r\n)\r\n```\r\nWe could most likely reuse some existing method for that. Especially for the second case.\r\n\r\nI don't mind having separate tests for each case.",
+        "createdAt" : "2020-04-09T11:29:29Z",
+        "updatedAt" : "2020-05-21T11:17:44Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "55aba66e-85e6-4ace-9f71-e4715533f01e",
+        "parentId" : "beaf890f-5810-4d9f-ad29-3fdc1e3b94c3",
+        "author" : {
+          "login" : "alexarchambault",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/7063723?u=d5befca0ebfec0042dad7ef93973490eef750ff4&v=4"
+        },
+        "body" : "I'm not sure about that. Sometimes we go-to-definition from `.metals/readonly` files, that wouldn't work with this way of doing it. Also, if we pass files at that point, we would need to (re)import them, so stop / start Ammonite, which I fear would significantly slow things.",
+        "createdAt" : "2020-04-11T14:30:20Z",
+        "updatedAt" : "2020-05-21T11:17:44Z",
+        "lastEditedBy" : {
+          "login" : "alexarchambault",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/7063723?u=d5befca0ebfec0042dad7ef93973490eef750ff4&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "0681fa0b1417b7ac622101d279667c6900a2506e",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,287 @@\n+package tests\n+\n+import org.eclipse.lsp4j.MessageActionItem\n+import scala.collection.JavaConverters._\n+import scala.meta.internal.metals.Messages\n+\n+abstract class BaseAmmoniteSuite(scalaVersion: String)\n+    extends BaseLspSuite(\"ammonite\") {\n+\n+  override def munitIgnore: Boolean =\n+    !isValidScalaVersionForEnv(scalaVersion) ||\n+      // temporary, remove once Ammonite is available for 2.12.11\n+      scalaVersion == \"2.12.11\"\n+\n+  override def newServer(workspaceName: String): Unit = {\n+    super.newServer(workspaceName)\n+    server.client.showMessageRequestHandler = { params =>\n+      if (params == Messages.ImportAmmoniteScript.params())\n+        Some(new MessageActionItem(Messages.ImportAmmoniteScript.dismiss))\n+      else\n+        None\n+    }\n+  }\n+\n+  test(\"simple script\") {\n+    // single script with import $ivy-s\n+    for {\n+      _ <- server.initialize(\n+        s\"\"\"\n+           |/metals.json\n+           |{\n+           |  \"a\": {\n+           |    \"scalaVersion\": \"$scalaVersion\"\n+           |  }\n+           |}\n+           |/main.sc\n+           | // scala $scalaVersion\n+           |import $$ivy.`io.circe::circe-core:0.12.3`\n+           |import $$ivy.`io.circe::circe-generic:0.12.3`\n+           |import $$ivy.`io.circe::circe-parser:0.12.3`\n+           |import io.circe._, io.circe.generic.auto._, io.circe.parser._, io.circe.syntax._\n+           |\n+           |sealed trait Foo\n+           |case class Bar(xs: Vector[String]) extends Foo\n+           |case class Qux(i: Int, d: Option[Double]) extends Foo\n+           |\n+           |val foo: Foo = Qux(13, Some(14.0))\n+           |\n+           |val json = foo.asJson.noSpaces\n+           |\n+           |val decodedFoo = decode[Foo](json)\n+           |\"\"\".stripMargin\n+      )\n+      _ <- server.didOpen(\"main.sc\")\n+      _ <- server.didSave(\"main.sc\")(identity)\n+      _ <- server.executeCommand(\"ammonite-start\")\n+\n+      // via Ammonite-generated Semantic DB\n+      _ <- server.assertDefinitionAtLocation(\n+        \"main.sc\",\n+        \"foo.as|Json.noSpaces\",\n+        \".metals/readonly/io/circe/syntax/package.scala\"\n+      )\n+\n+      // via Ammonite-generated Semantic DB\n+      _ <- server.assertDefinitionAtLocation(\n+        \"main.sc\",\n+        \"foo.asJson.no|Spaces\",\n+        \".metals/readonly/io/circe/Json.scala\"\n+      )\n+\n+      // via presentation compiler, using the Ammonite build target classpath\n+      _ <- server.assertDefinitionAtLocation(\n+        \".metals/readonly/io/circe/Json.scala\",\n+        \"final def noSpaces: String = Printer.no|Spaces.print(this)\",\n+        \".metals/readonly/io/circe/Printer.scala\"\n+      )\n+\n+      // via Ammonite-generated Semantic DB and indexing of Ammonite-generated source of $file dependencies\n+      _ <- server.assertDefinitionAtLocation(\n+        \"main.sc\",\n+        \"decode[F|oo](json)\",\n+        \"main.sc\",\n+        6\n+      )\n+\n+      expectedHoverRes = \"\"\"```scala\n+                           |val foo: Foo\n+                           |```\n+                           |```range\n+                           |val foo: Foo = Qux(13, Some(14.0))\n+                           |```\"\"\".stripMargin\n+      hoverRes <- server.assertHoverAtPos(\"main.sc\", 10, 5)\n+      _ = assert(hoverRes == expectedHoverRes)\n+\n+      expectedCompletionList = \"\"\"noSpaces: String\n+                                 |noSpacesSortKeys: String\"\"\".stripMargin\n+      completionList <- server.completion(\"main.sc\", \"noSpaces@@\")\n+      _ = assert(completionList == expectedCompletionList)\n+\n+    } yield ()\n+  }\n+\n+  test(\"simple errored script\") {\n+    val expectedDiagnostics =\n+      \"\"\"main.sc:15:25: error: not found: type Fooz\n+        |val decodedFoo = decode[Fooz](json)\n+        |                        ^^^^\n+        |\"\"\".stripMargin\n+    for {\n+      _ <- server.initialize(\n+        s\"\"\"\n+           |/metals.json\n+           |{\n+           |  \"a\": {\n+           |    \"scalaVersion\": \"$scalaVersion\"\n+           |  }\n+           |}\n+           |/main.sc\n+           | // scala $scalaVersion\n+           |import $$ivy.`io.circe::circe-core:0.12.3`\n+           |import $$ivy.`io.circe::circe-generic:0.12.3`\n+           |import $$ivy.`io.circe::circe-parser:0.12.3`\n+           |import io.circe._, io.circe.generic.auto._, io.circe.parser._, io.circe.syntax._\n+           |\n+           |sealed trait Foo\n+           |case class Bar(xs: Vector[String]) extends Foo\n+           |case class Qux(i: Int, d: Option[Double]) extends Foo\n+           |\n+           |val foo: Foo = Qux(13, Some(14.0))\n+           |\n+           |val json = foo.asJson.noSpaces\n+           |\n+           |val decodedFoo = decode[Fooz](json)\n+           |\n+           |// no val, column of diagnostics must be correct too\n+           |decode[Foozz](json)\n+           |\"\"\".stripMargin\n+      )\n+      _ <- server.didOpen(\"main.sc\")\n+      _ <- server.didSave(\"main.sc\")(identity)\n+      _ <- server.executeCommand(\"ammonite-start\")\n+\n+      _ = server.expectDiagnostics(\"main.sc\", expectedDiagnostics)\n+\n+    } yield ()\n+  }\n+\n+  test(\"multi script\") {\n+    // multiple scripts with mixed import $file-s and $ivy-s\n+    for {\n+      _ <- server.initialize(\n+        s\"\"\"\n+           |/metals.json\n+           |{\n+           |  \"a\": {\n+           |    \"scalaVersion\": \"$scalaVersion\"\n+           |  }\n+           |}\n+           |/lib1.sc\n+           |trait HasFoo {\n+           |  def foo: String = \"foo\"\n+           |}\n+           |\n+           |/lib2.sc\n+           |import $$ivy.`io.circe::circe-core:0.12.3`\n+           |import $$ivy.`io.circe::circe-generic:0.12.3`\n+           |import $$ivy.`io.circe::circe-parser:0.12.3`\n+           |import $$file.lib1, lib1.HasFoo\n+           |\n+           |trait HasReallyFoo extends HasFoo\n+           |\n+           |/main.sc\n+           | // scala $scalaVersion\n+           |import $$file.lib2, lib2.HasReallyFoo\n+           |import io.circe._, io.circe.generic.auto._, io.circe.parser._, io.circe.syntax._\n+           |\n+           |sealed trait Foo extends HasReallyFoo\n+           |case class Bar(xs: Vector[String]) extends Foo\n+           |case class Qux(i: Int, d: Option[Double]) extends Foo\n+           |\n+           |val foo: Foo = Qux(13, Some(14.0))\n+           |\n+           |val json = foo.asJson.noSpaces\n+           |\n+           |val decodedFoo = decode[Foo](json)\n+           |\"\"\".stripMargin\n+      )\n+      _ <- server.didOpen(\"main.sc\")\n+      _ <- server.didSave(\"main.sc\")(identity)\n+      _ <- server.executeCommand(\"ammonite-start\")\n+\n+      // via Ammonite-generated Semantic DB\n+      _ <- server.assertDefinitionAtLocation("
+  },
+  {
+    "id" : "e4f7df14-1354-4c61-bc06-2abd560881a1",
+    "prId" : 1819,
+    "comments" : [
+      {
+        "id" : "cf520803-2ac9-4b0b-9b43-16d851c2498f",
+        "parentId" : null,
+        "author" : {
+          "login" : "ckipp01",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/13974112?u=7b6a2ddab8eec6f99e4e40ae9b81f71cb5ba92e5&v=4"
+        },
+        "body" : "I'm assuming this is leftover?",
+        "createdAt" : "2020-06-12T19:26:46Z",
+        "updatedAt" : "2020-06-12T22:11:45Z",
+        "lastEditedBy" : {
+          "login" : "ckipp01",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/13974112?u=7b6a2ddab8eec6f99e4e40ae9b81f71cb5ba92e5&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "0972d8c6-dfa3-4a4f-8412-3b98d7ad6976",
+        "parentId" : "cf520803-2ac9-4b0b-9b43-16d851c2498f",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "yes :O I did it again!\r\n",
+        "createdAt" : "2020-06-12T19:36:02Z",
+        "updatedAt" : "2020-06-12T22:11:45Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "70d157f581917617dd4357f2e1cf06a8aceb8635",
+    "line" : null,
+    "diffHunk" : "@@ -139,6 +139,7 @@ abstract class BaseAmmoniteSuite(scalaVersion: String)\n       refreshedPromise = {\n         val promise = Promise[Unit]()\n         server.client.refreshBuildHandler = { () =>\n+          println(\"hello\")"
+  },
+  {
+    "id" : "85a33539-4da9-482b-ad15-cb4134cb0b1e",
+    "prId" : 1819,
+    "comments" : [
+      {
+        "id" : "26d04e87-f69b-4caa-b78f-8f13fff8e270",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "I added a retry, because it can't figure out why is this happening. We've been having issues with hover anyway, so it can be just that, but more prominent in this situation. I also added additional logging that can help investigate. ",
+        "createdAt" : "2020-06-12T19:38:22Z",
+        "updatedAt" : "2020-06-12T22:11:45Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "70d157f581917617dd4357f2e1cf06a8aceb8635",
+    "line" : null,
+    "diffHunk" : "@@ -469,8 +470,21 @@ abstract class BaseAmmoniteSuite(scalaVersion: String)\n         )\n       )\n       .asScala\n-      .map { res =>\n+      .flatMap { res =>\n         val code = server.textContents(path)\n-        TestHovers.renderAsString(code, Option(res), includeRange = true)\n+        val result ="
+  }
+]

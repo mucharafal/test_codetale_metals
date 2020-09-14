@@ -1,0 +1,174 @@
+[
+  {
+    "id" : "26d536c7-30a9-48c8-9b82-62a5b0e35218",
+    "prId" : 1728,
+    "comments" : [
+      {
+        "id" : "fa7aeec5-9ad6-471f-b399-fc4906b76542",
+        "parentId" : null,
+        "author" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "body" : "no longer only bloopInstall",
+        "createdAt" : "2020-05-14T08:00:45Z",
+        "updatedAt" : "2020-06-15T12:58:29Z",
+        "lastEditedBy" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "0abc9500-ff41-4416-97a8-b78525b14896",
+        "parentId" : "fa7aeec5-9ad6-471f-b399-fc4906b76542",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Right, fixed it.",
+        "createdAt" : "2020-06-03T14:06:38Z",
+        "updatedAt" : "2020-06-15T12:58:29Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "b8fc594e56a5aefca5b9a80fb273aca01de04ede",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,108 @@\n+package scala.meta.internal.builds\n+\n+import scala.concurrent.Future\n+import scala.meta.internal.metals.Timer\n+import scala.meta.internal.process.ProcessHandler\n+import com.zaxxer.nuprocess.NuProcessBuilder\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.io.AbsolutePath\n+import scala.meta.internal.metals.MetalsLanguageClient\n+import scala.meta.internal.process.ExitCodes\n+import scala.meta.internal.metals.UserConfiguration\n+import scala.meta.internal.metals.Time\n+import scala.meta.internal.metals.StatusBar\n+import scala.meta.internal.metals.MetalsSlowTaskParams\n+import scala.meta.internal.metals.JavaBinary\n+import scala.meta.internal.metals.Cancelable\n+import scala.meta.internal.metals.MutableCancelable\n+import coursierapi._\n+\n+class ShellRunner(\n+    languageClient: MetalsLanguageClient,\n+    userConfig: () => UserConfiguration,\n+    time: Time,\n+    statusBar: StatusBar\n+)(\n+    implicit executionContext: scala.concurrent.ExecutionContext\n+) extends Cancelable {\n+\n+  private val cancelables = new MutableCancelable()\n+  override def cancel(): Unit = {\n+    cancelables.cancel()\n+  }\n+\n+  def runJava(\n+      dependency: Dependency,\n+      main: String,\n+      dir: AbsolutePath,\n+      arguments: List[String]\n+  ): Future[Int] = {\n+\n+    val classpath = Fetch\n+      .create()\n+      .withDependencies(dependency)\n+      .fetch()\n+      .asScala\n+      .mkString(\":\")\n+\n+    val cmd = List(\n+      JavaBinary(userConfig().javaHome),\n+      \"-classpath\",\n+      classpath,\n+      main\n+    ) ::: arguments\n+    run(main, cmd, dir, redirectErrorOutput = false)\n+  }\n+\n+  def run(\n+      running: String,\n+      args: List[String],\n+      directory: AbsolutePath,\n+      redirectErrorOutput: Boolean,\n+      additionalEnv: Map[String, String] = Map.empty\n+  ): Future[Int] = {\n+    val elapsed = new Timer(time)\n+    val handler = ProcessHandler(\n+      joinErrorWithInfo = redirectErrorOutput\n+    )\n+    val pb = new NuProcessBuilder(handler, args.asJava)\n+    pb.setCwd(directory.toNIO)\n+    userConfig().javaHome.foreach(pb.environment().put(\"JAVA_HOME\", _))\n+    additionalEnv.foreach {\n+      case (key, value) =>\n+        pb.environment().put(key, value)\n+    }\n+    val runningProcess = pb.start()\n+    // NOTE(olafur): older versions of VS Code don't respect cancellation of\n+    // window/showMessageRequest, meaning the \"cancel build import\" button\n+    // stays forever in view even after successful build import. In newer\n+    // VS Code versions the message is hidden after a delay.\n+    val taskResponse =\n+      languageClient.metalsSlowTask(\n+        new MetalsSlowTaskParams(running)\n+      )\n+    handler.response = Some(taskResponse)\n+    val processFuture = handler.completeProcess.future.map { result =>\n+      taskResponse.cancel(false)\n+      scribe.info(\n+        s\"time: ran '$running' in $elapsed\"\n+      )\n+      result\n+    }\n+    statusBar.trackFuture(\n+      s\"Running $running bloopInstall\","
+  },
+  {
+    "id" : "ce965d28-521a-49cc-a150-d65e2a0e76f3",
+    "prId" : 1728,
+    "comments" : [
+      {
+        "id" : "c9de30ef-fcf3-4c40-89cf-27cb9f311f0d",
+        "parentId" : null,
+        "author" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "body" : "the same? I start to have doubts :P",
+        "createdAt" : "2020-05-14T08:05:11Z",
+        "updatedAt" : "2020-06-15T12:58:29Z",
+        "lastEditedBy" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "bf2615b5-fb79-4bd8-97d8-a2bed26228ff",
+        "parentId" : "c9de30ef-fcf3-4c40-89cf-27cb9f311f0d",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Also, forgot about it. Thanks!",
+        "createdAt" : "2020-06-03T14:06:52Z",
+        "updatedAt" : "2020-06-15T12:58:29Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "b8fc594e56a5aefca5b9a80fb273aca01de04ede",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,108 @@\n+package scala.meta.internal.builds\n+\n+import scala.concurrent.Future\n+import scala.meta.internal.metals.Timer\n+import scala.meta.internal.process.ProcessHandler\n+import com.zaxxer.nuprocess.NuProcessBuilder\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.io.AbsolutePath\n+import scala.meta.internal.metals.MetalsLanguageClient\n+import scala.meta.internal.process.ExitCodes\n+import scala.meta.internal.metals.UserConfiguration\n+import scala.meta.internal.metals.Time\n+import scala.meta.internal.metals.StatusBar\n+import scala.meta.internal.metals.MetalsSlowTaskParams\n+import scala.meta.internal.metals.JavaBinary\n+import scala.meta.internal.metals.Cancelable\n+import scala.meta.internal.metals.MutableCancelable\n+import coursierapi._\n+\n+class ShellRunner(\n+    languageClient: MetalsLanguageClient,\n+    userConfig: () => UserConfiguration,\n+    time: Time,\n+    statusBar: StatusBar\n+)(\n+    implicit executionContext: scala.concurrent.ExecutionContext\n+) extends Cancelable {\n+\n+  private val cancelables = new MutableCancelable()\n+  override def cancel(): Unit = {\n+    cancelables.cancel()\n+  }\n+\n+  def runJava(\n+      dependency: Dependency,\n+      main: String,\n+      dir: AbsolutePath,\n+      arguments: List[String]\n+  ): Future[Int] = {\n+\n+    val classpath = Fetch\n+      .create()\n+      .withDependencies(dependency)\n+      .fetch()\n+      .asScala\n+      .mkString(\":\")\n+\n+    val cmd = List(\n+      JavaBinary(userConfig().javaHome),\n+      \"-classpath\",\n+      classpath,\n+      main\n+    ) ::: arguments\n+    run(main, cmd, dir, redirectErrorOutput = false)\n+  }\n+\n+  def run(\n+      running: String,\n+      args: List[String],\n+      directory: AbsolutePath,\n+      redirectErrorOutput: Boolean,\n+      additionalEnv: Map[String, String] = Map.empty\n+  ): Future[Int] = {\n+    val elapsed = new Timer(time)\n+    val handler = ProcessHandler(\n+      joinErrorWithInfo = redirectErrorOutput\n+    )\n+    val pb = new NuProcessBuilder(handler, args.asJava)\n+    pb.setCwd(directory.toNIO)\n+    userConfig().javaHome.foreach(pb.environment().put(\"JAVA_HOME\", _))\n+    additionalEnv.foreach {\n+      case (key, value) =>\n+        pb.environment().put(key, value)\n+    }\n+    val runningProcess = pb.start()\n+    // NOTE(olafur): older versions of VS Code don't respect cancellation of\n+    // window/showMessageRequest, meaning the \"cancel build import\" button\n+    // stays forever in view even after successful build import. In newer\n+    // VS Code versions the message is hidden after a delay.\n+    val taskResponse =\n+      languageClient.metalsSlowTask(\n+        new MetalsSlowTaskParams(running)\n+      )\n+    handler.response = Some(taskResponse)\n+    val processFuture = handler.completeProcess.future.map { result =>\n+      taskResponse.cancel(false)\n+      scribe.info(\n+        s\"time: ran '$running' in $elapsed\"\n+      )\n+      result\n+    }\n+    statusBar.trackFuture(\n+      s\"Running $running bloopInstall\",\n+      processFuture\n+    )\n+    taskResponse.asScala.foreach { item =>\n+      if (item.cancel) {\n+        scribe.info(\"user cancelled build import\")"
+  },
+  {
+    "id" : "85ad740a-ead0-4084-b172-55c42cd7fe3f",
+    "prId" : 1840,
+    "comments" : [
+      {
+        "id" : "179a9bd5-eb39-4dc1-91f3-76ba39c197a6",
+        "parentId" : null,
+        "author" : {
+          "login" : "ckipp01",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/13974112?u=7b6a2ddab8eec6f99e4e40ae9b81f71cb5ba92e5&v=4"
+        },
+        "body" : "Personally I'm a bit torn by this. I don't like having custom settings for scalafmt. The closer to vanilla the better. Howerver, I also dislike the way the implicit is for this. \r\n\r\n```\r\nnewlines.implicitParamListModifierPrefer   = before\r\n```\r\nI prefer that setting above, but then it adds another setting. Any preference on this? Again, I don't have a strong feeling, because my desire to not add another setting is the same as my dislike for this formatting.",
+        "createdAt" : "2020-06-18T17:33:58Z",
+        "updatedAt" : "2020-06-19T09:40:38Z",
+        "lastEditedBy" : {
+          "login" : "ckipp01",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/13974112?u=7b6a2ddab8eec6f99e4e40ae9b81f71cb5ba92e5&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7ac56834-71d1-45f7-bcab-50769d48581d",
+        "parentId" : "179a9bd5-eb39-4dc1-91f3-76ba39c197a6",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Let's leave the default in my opinion. I think it's better what was before. ",
+        "createdAt" : "2020-06-18T18:01:32Z",
+        "updatedAt" : "2020-06-19T09:40:38Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "83a1bb75-4ad9-4664-92b0-34316c816803",
+        "parentId" : "179a9bd5-eb39-4dc1-91f3-76ba39c197a6",
+        "author" : {
+          "login" : "ckipp01",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/13974112?u=7b6a2ddab8eec6f99e4e40ae9b81f71cb5ba92e5&v=4"
+        },
+        "body" : "👍 sounds good.",
+        "createdAt" : "2020-06-18T18:03:17Z",
+        "updatedAt" : "2020-06-19T09:40:38Z",
+        "lastEditedBy" : {
+          "login" : "ckipp01",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/13974112?u=7b6a2ddab8eec6f99e4e40ae9b81f71cb5ba92e5&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "961d6ddc05eac5a93c79be85a06377fe25b9317c",
+    "line" : 6,
+    "diffHunk" : "@@ -25,8 +25,8 @@ class ShellRunner(\n     userConfig: () => UserConfiguration,\n     time: Time,\n     statusBar: StatusBar\n-)(\n-    implicit executionContext: scala.concurrent.ExecutionContext\n+)(implicit"
+  }
+]

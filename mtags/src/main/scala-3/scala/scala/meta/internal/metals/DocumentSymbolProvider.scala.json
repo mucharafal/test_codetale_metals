@@ -1,0 +1,58 @@
+[
+  {
+    "id" : "8f7bf64a-8cbb-413e-b839-4cc717b6f2a5",
+    "prId" : 1639,
+    "comments" : [
+      {
+        "id" : "9c9e5dc6-3c70-4a11-8b76-2a0b09f60edc",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "I still need to finish this ",
+        "createdAt" : "2020-04-17T16:00:46Z",
+        "updatedAt" : "2020-04-17T16:01:05Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9e51f1e24fcfd8adefc5bbaf256dfd74a42b7a7d",
+    "line" : 98,
+    "diffHunk" : "@@ -0,0 +1,176 @@\n+package scala.meta.internal.metals\n+\n+import java.util\n+import org.eclipse.lsp4j.DocumentSymbol\n+import org.eclipse.lsp4j.SymbolKind\n+import org.eclipse.{lsp4j => l}\n+import scala.meta.internal.mtags.MtagsEnrichments._\n+import scala.meta.internal.jdk.CollectionConverters._\n+import java.net.URI\n+import dotty.tools.dotc.core.Contexts.Context\n+import dotty.tools.dotc.util.SourceFile\n+import dotty.tools.dotc.util.SourcePosition\n+import dotty.tools.dotc.parsing.Parsers.Parser\n+import dotty.tools.dotc.ast.untpd._\n+import dotty.tools.dotc.printing.Showable\n+import dotty.tools.dotc.core.{Flags => f}\n+import java.{util => ju}\n+\n+/**\n+ *  Retrieves all the symbols defined in a document\n+ */\n+class DocumentSymbolProvider() {\n+\n+  def documentSymbols()(implicit ctx: Context): util.List[DocumentSymbol] = {\n+    val tree = ctx.run.units.head.untpdTree\n+    new SymbolTraverser().symbols(tree)\n+  }\n+\n+  class SymbolTraverser extends UntypedTreeTraverser {\n+    var owner: DocumentSymbol = new DocumentSymbol(\n+      \"root\",\n+      SymbolKind.Namespace,\n+      new l.Range(new l.Position(0, 0), new l.Position(0, 0)),\n+      new l.Range(new l.Position(0, 0), new l.Position(0, 0)),\n+      \"\",\n+      new ju.ArrayList[DocumentSymbol]()\n+    )\n+    def symbols(\n+        tree: Tree\n+    )(implicit ctx: Context): ju.List[DocumentSymbol] = {\n+      traverse(tree)\n+      owner.getChildren\n+    }\n+\n+    def addChild(\n+        name: String,\n+        kind: SymbolKind,\n+        range: SourcePosition,\n+        selection: SourcePosition,\n+        detail: String\n+    ): Unit = {\n+      owner.getChildren.add(\n+        new DocumentSymbol(\n+          name,\n+          kind,\n+          range.toLSP,\n+          selection.toLSP,\n+          detail,\n+          new ju.ArrayList[DocumentSymbol]()\n+        )\n+      )\n+    }\n+    override def traverse(tree: Tree)(implicit ctx: Context): Unit = {\n+\n+      def continue(withNewOwner: Boolean = false): Unit = {\n+        val oldRoot = owner\n+        val children = owner.getChildren.asScala\n+        val hasChildren = children.nonEmpty\n+        if (withNewOwner && hasChildren) owner = children.last\n+        super.traverseChildren(tree)\n+        owner = oldRoot\n+      }\n+\n+      def newOwner(): Unit = {\n+        continue(withNewOwner = true)\n+      }\n+\n+      def show(s: Showable): String =\n+        s match {\n+          case t: Tree if t.isEmpty => \"\"\n+          case _ => s.show\n+        }\n+\n+      tree match {\n+        case t: PackageDef =>\n+          addChild(t.pid.show, SymbolKind.Package, t.sourcePos, t.sourcePos, \"\")\n+          newOwner()\n+        case n @ New(t: Template) =>\n+          // val (name, selection) = (t.constr, t.parents) match {\n+          //   case (t, Nil => (\"(anonymous)\", t.sourcePos)\n+          //   case inits =>\n+          //     (inits.map(_.tpe.syntax).mkString(\" with \"), inits.head.pos)\n+          // }\n+          // if (t.templ.stats.nonEmpty) {\n+          //   addChild(s\"new $name\", SymbolKind.Interface, t.pos, selection, \"\")\n+          //   newOwner()\n+          // } else continue()\n+          continue() // TODO(gabro)"
+  },
+  {
+    "id" : "a970c9c9-7af9-4184-87e4-70cc7be0281e",
+    "prId" : 1639,
+    "comments" : [
+      {
+        "id" : "92380a66-5ef6-467f-b74c-f1161e5b880d",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "This isn't working, yet",
+        "createdAt" : "2020-04-17T16:01:01Z",
+        "updatedAt" : "2020-04-17T16:01:05Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9e51f1e24fcfd8adefc5bbaf256dfd74a42b7a7d",
+    "line" : 131,
+    "diffHunk" : "@@ -0,0 +1,176 @@\n+package scala.meta.internal.metals\n+\n+import java.util\n+import org.eclipse.lsp4j.DocumentSymbol\n+import org.eclipse.lsp4j.SymbolKind\n+import org.eclipse.{lsp4j => l}\n+import scala.meta.internal.mtags.MtagsEnrichments._\n+import scala.meta.internal.jdk.CollectionConverters._\n+import java.net.URI\n+import dotty.tools.dotc.core.Contexts.Context\n+import dotty.tools.dotc.util.SourceFile\n+import dotty.tools.dotc.util.SourcePosition\n+import dotty.tools.dotc.parsing.Parsers.Parser\n+import dotty.tools.dotc.ast.untpd._\n+import dotty.tools.dotc.printing.Showable\n+import dotty.tools.dotc.core.{Flags => f}\n+import java.{util => ju}\n+\n+/**\n+ *  Retrieves all the symbols defined in a document\n+ */\n+class DocumentSymbolProvider() {\n+\n+  def documentSymbols()(implicit ctx: Context): util.List[DocumentSymbol] = {\n+    val tree = ctx.run.units.head.untpdTree\n+    new SymbolTraverser().symbols(tree)\n+  }\n+\n+  class SymbolTraverser extends UntypedTreeTraverser {\n+    var owner: DocumentSymbol = new DocumentSymbol(\n+      \"root\",\n+      SymbolKind.Namespace,\n+      new l.Range(new l.Position(0, 0), new l.Position(0, 0)),\n+      new l.Range(new l.Position(0, 0), new l.Position(0, 0)),\n+      \"\",\n+      new ju.ArrayList[DocumentSymbol]()\n+    )\n+    def symbols(\n+        tree: Tree\n+    )(implicit ctx: Context): ju.List[DocumentSymbol] = {\n+      traverse(tree)\n+      owner.getChildren\n+    }\n+\n+    def addChild(\n+        name: String,\n+        kind: SymbolKind,\n+        range: SourcePosition,\n+        selection: SourcePosition,\n+        detail: String\n+    ): Unit = {\n+      owner.getChildren.add(\n+        new DocumentSymbol(\n+          name,\n+          kind,\n+          range.toLSP,\n+          selection.toLSP,\n+          detail,\n+          new ju.ArrayList[DocumentSymbol]()\n+        )\n+      )\n+    }\n+    override def traverse(tree: Tree)(implicit ctx: Context): Unit = {\n+\n+      def continue(withNewOwner: Boolean = false): Unit = {\n+        val oldRoot = owner\n+        val children = owner.getChildren.asScala\n+        val hasChildren = children.nonEmpty\n+        if (withNewOwner && hasChildren) owner = children.last\n+        super.traverseChildren(tree)\n+        owner = oldRoot\n+      }\n+\n+      def newOwner(): Unit = {\n+        continue(withNewOwner = true)\n+      }\n+\n+      def show(s: Showable): String =\n+        s match {\n+          case t: Tree if t.isEmpty => \"\"\n+          case _ => s.show\n+        }\n+\n+      tree match {\n+        case t: PackageDef =>\n+          addChild(t.pid.show, SymbolKind.Package, t.sourcePos, t.sourcePos, \"\")\n+          newOwner()\n+        case n @ New(t: Template) =>\n+          // val (name, selection) = (t.constr, t.parents) match {\n+          //   case (t, Nil => (\"(anonymous)\", t.sourcePos)\n+          //   case inits =>\n+          //     (inits.map(_.tpe.syntax).mkString(\" with \"), inits.head.pos)\n+          // }\n+          // if (t.templ.stats.nonEmpty) {\n+          //   addChild(s\"new $name\", SymbolKind.Interface, t.pos, selection, \"\")\n+          //   newOwner()\n+          // } else continue()\n+          continue() // TODO(gabro)\n+        case t: Template =>\n+          continue()\n+        case t: Block =>\n+          if (owner.getName() == \"try\") {\n+            if (owner.getChildren().isEmpty()) {\n+              continue()\n+            } else {\n+              val blockPos = t.stats.head.sourcePos\n+              addChild(\n+                \"finally\",\n+                SymbolKind.Struct,\n+                t.sourcePos,\n+                t.sourcePos,\n+                \"\"\n+              )\n+              newOwner()\n+            }\n+          } else {\n+            continue()\n+          }\n+        case t: CaseDef =>\n+          if (owner.getName() == \"try\" && owner\n+              .getChildren()\n+              .asScala\n+              .forall(_.getName() != \"catch\"))\n+            addChild(\"catch\", SymbolKind.Struct, t.sourcePos, t.sourcePos, \"\")\n+        case t: Try =>\n+          if (t.cases.nonEmpty) {\n+            addChild(\"try\", SymbolKind.Struct, t.sourcePos, t.sourcePos, \"\")\n+            newOwner()\n+          } else {\n+            continue()\n+          }"
+  }
+]

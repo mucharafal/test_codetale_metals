@@ -1,0 +1,68 @@
+[
+  {
+    "id" : "47ac4074-fdd2-40c7-b26c-a9fc184c47ab",
+    "prId" : 1163,
+    "comments" : [
+      {
+        "id" : "f166c2b1-f158-461e-b209-a494b30d7110",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Can we add a test case with symbolic identifiers? I noticed that `::` was displayed as `$colon$colon` in the variable view\r\n\r\n<img width=\"389\" alt=\"Screenshot 2019-12-16 at 11 03 07\" src=\"https://user-images.githubusercontent.com/1408093/70903058-f836a200-1ff5-11ea-9732-cb89f65bb37c.png\">\r\n\r\nNo need to change the current behavior, just document it with a test case.",
+        "createdAt" : "2019-12-16T11:20:15Z",
+        "updatedAt" : "2019-12-18T11:36:11Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e826b026-0c27-43dd-8ea1-8b211892124c",
+        "parentId" : "f166c2b1-f158-461e-b209-a494b30d7110",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Did we add a test case with symbolic identifier?",
+        "createdAt" : "2019-12-18T10:25:17Z",
+        "updatedAt" : "2019-12-18T11:36:11Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5db5ff9b-9fdf-482e-b7b4-29a6a47f4573",
+        "parentId" : "f166c2b1-f158-461e-b209-a494b30d7110",
+        "author" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "body" : "Yup: https://github.com/scalameta/metals/pull/1163/files#diff-e39244aad5f9193c28b3779716ed886bR124",
+        "createdAt" : "2019-12-18T11:30:13Z",
+        "updatedAt" : "2019-12-18T11:36:11Z",
+        "lastEditedBy" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "04ef30f47759c2620cd886265e4c50169245a539",
+    "line" : 148,
+    "diffHunk" : "@@ -0,0 +1,159 @@\n+package tests.debug\n+\n+import tests.BaseDapSuite\n+import scala.meta.internal.metals.debug.DebugFileLayout\n+import scala.meta.internal.metals.debug.Scope\n+import scala.meta.internal.metals.debug.StackFrameCollector\n+import scala.meta.internal.metals.debug.Variable\n+import scala.meta.internal.metals.debug.Variables\n+\n+object StackFrameDapSuite extends BaseDapSuite(\"debug-stack-frame\") {\n+  assertStackFrame(\"foreach\")(\n+    source = \"\"\"|a/src/main/scala/Main.scala\n+                |object Main {\n+                |  def main(args: Array[String]) = {\n+                |    List(1, 2).foreach { value =>\n+                |>>      println(value)\n+                |    }\n+                |  }\n+                |}\"\"\".stripMargin,\n+    expectedFrames = List(\n+      Variables(Scope.local(Variable(\"value: int = 1\"))),\n+      Variables(Scope.local(Variable(\"value: int = 2\")))\n+    )\n+  )\n+\n+  assertStackFrame(\"method-parameters\")(\n+    source = \"\"\"|a/src/main/scala/Main.scala\n+                |object Main {\n+                |  def main(args: Array[String]): Unit = {\n+                |>>  println()\n+                |  }\n+                |}\n+                |\"\"\".stripMargin,\n+    expectedFrames = List(\n+      Variables(\n+        Scope.local(Variable(\"this: Main$\"), Variable(\"args: String[]\"))\n+      )\n+    )\n+  )\n+\n+  assertStackFrame(\"primitives\")(\n+    source = \"\"\"|a/src/main/scala/Main.scala\n+                |object Main {\n+                |  def main(args: Array[String]): Unit = {\n+                |    foo()\n+                |  }\n+                |\n+                |  def foo(): Unit = {\n+                |    val aByte = 1.toByte\n+                |    val aShort = 1.toShort\n+                |    val anInt  = 1\n+                |    val aLong  = 1L\n+                |    val aFloat = 1.0f\n+                |    val aDouble = 1.0\n+                |    val bool = true\n+                |    val aChar = 'a'\n+                |>>  println()\n+                |  }\n+                |}\n+                |\"\"\".stripMargin,\n+    expectedFrames = List(\n+      Variables(\n+        Scope.local(\n+          Variable(\"aByte: byte = 1\"),\n+          Variable(\"aShort: short = 1\"),\n+          Variable(\"anInt: int = 1\"),\n+          Variable(\"aLong: long = 1\"),\n+          Variable(\"aFloat: float = 1.000000\"),\n+          Variable(\"aDouble: double = 1.000000\"),\n+          Variable(\"bool: boolean = true\"),\n+          Variable(\"aChar: char = a\"),\n+          Variable(\"this: Main$\")\n+        )\n+      )\n+    )\n+  )\n+\n+  assertStackFrame(\"for-comprehension\")(\n+    source = \"\"\"|a/src/main/scala/Main.scala\n+                |object Main {\n+                |  def main(args: Array[String]): Unit = {\n+                |    for {\n+                |      x <- List(1)\n+                |>>    z = x + 2\n+                |    } println(z)\n+                |  }\n+                |}\n+                |\"\"\".stripMargin,\n+    expectedFrames = List(\n+      Variables( // before calculating `z`\n+        Scope.local(Variable(\"x: int = 1\"))\n+      ),\n+      Variables( // after calculating `z`\n+        Scope.local(Variable(\"x: int = 1\"), Variable(\"z: int = 3\"))\n+      ),\n+      Variables(Scope.local(Variable(\"x$1: Tuple2$mcII$sp\")))\n+    )\n+  )\n+\n+  assertStackFrame(\"overridden-toString\")(\n+    source = \"\"\"|a/src/main/scala/Main.scala\n+                |object Main {\n+                |  def main(args: Array[String]): Unit = {\n+                |    val foo = new Foo\n+                |>>  println()\n+                |  }\n+                |}\n+                |\n+                |class Foo {\n+                |  override def toString = \"foo\"\n+                |}\n+                |\"\"\".stripMargin,\n+    expectedFrames = List(\n+      Variables(\n+        Scope.local(\n+          Variable(\"this: Main$\"),\n+          Variable(\"args: String[]\"),\n+          Variable(\"foo: Foo\")\n+        )\n+      )\n+    )\n+  )\n+\n+  def assertStackFrame("
+  }
+]

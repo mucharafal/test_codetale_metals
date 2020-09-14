@@ -1,0 +1,49 @@
+[
+  {
+    "id" : "703434d0-62f1-494f-811c-58bd9ad73300",
+    "prId" : 23,
+    "comments" : [
+      {
+        "id" : "4b9ec8fd-3872-46fb-ad67-4b931f334fcd",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "what would it take to index `.sbt` files?",
+        "createdAt" : "2017-11-14T09:59:55Z",
+        "updatedAt" : "2017-11-14T20:08:40Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "eab7638b-988b-477a-b841-f2d5ddd70f14",
+        "parentId" : "4b9ec8fd-3872-46fb-ad67-4b931f334fcd",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Not much really, I can give some pointers if you open an issue 😉 ",
+        "createdAt" : "2017-11-14T19:40:19Z",
+        "updatedAt" : "2017-11-14T20:08:40Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5e9272f240feb4f00bdea5ee50e2808699cd0d0e",
+    "line" : 144,
+    "diffHunk" : "@@ -0,0 +1,257 @@\n+package scala.meta.languageserver.ctags\n+\n+import java.io.IOException\n+import java.net.URI\n+import java.nio.charset.StandardCharsets\n+import java.nio.file.FileVisitResult\n+import java.nio.file.Files\n+import java.nio.file.Path\n+import java.nio.file.SimpleFileVisitor\n+import java.nio.file.attribute.BasicFileAttributes\n+import java.text.DecimalFormat\n+import java.text.NumberFormat\n+import java.util.concurrent.TimeUnit\n+import java.util.concurrent.atomic.AtomicInteger\n+import java.util.zip.ZipInputStream\n+import scala.collection.GenSeq\n+import scala.collection.parallel.mutable.ParArray\n+import scala.meta.parsers.ParseException\n+import com.thoughtworks.qdox.parser.{ParseException => QParseException}\n+import scala.reflect.ClassTag\n+import scala.util.Sorting\n+import scala.util.control.NonFatal\n+import com.typesafe.scalalogging.LazyLogging\n+import org.langmeta.inputs.Input\n+import org.langmeta.internal.io.FileIO\n+import org.langmeta.internal.io.PathIO\n+import org.langmeta.io.AbsolutePath\n+import org.langmeta.io.Fragment\n+import org.langmeta.io.RelativePath\n+import org.langmeta.semanticdb.Database\n+import org.langmeta.semanticdb.Document\n+\n+/**\n+ * Syntactically build a semanticdb index containing only global symbol definition.\n+ *\n+ * The purpose of this module is to provide \"Go to definition\" from\n+ * project sources to dependency sources without indexing classfiles or\n+ * requiring dependencies to publish semanticdbs alongside their artifacts.\n+ *\n+ * One other use-case for this module is to implement \"Workspace symbol provider\"\n+ * without any build-tool or compiler integration. Essentially, ctags.\n+ */\n+object Ctags extends LazyLogging {\n+\n+  /**\n+   * Build an index from a classpath of -sources.jar\n+   *\n+   * @param shouldIndex An optional filter to skip particular relative filenames.\n+   * @param callback A callback that is called as soon as a document has been\n+   *                 indexed.\n+   */\n+  def index(\n+      classpath: List[AbsolutePath],\n+      shouldIndex: RelativePath => Boolean = _ => true\n+  )(callback: Document => Unit): Unit = {\n+    val fragments = allClasspathFragments(classpath)\n+    val totalIndexedFiles = new AtomicInteger()\n+    val totalIndexedLines = new AtomicInteger()\n+    val start = System.nanoTime()\n+    def elapsed: Long = {\n+      val result = TimeUnit.SECONDS.convert(\n+        System.nanoTime() - start,\n+        TimeUnit.NANOSECONDS\n+      )\n+      if (result == 0) 1 // prevent divide by zero\n+      else result\n+    }\n+    val decimal = new DecimalFormat(\"###,###\")\n+    val N = fragments.length\n+    def updateTotalLines(doc: Document): Unit = doc.input match {\n+      case Input.VirtualFile(_, contents) =>\n+        // NOTE(olafur) it would be interesting to have separate statistics for\n+        // Java/Scala lines/s but that would require a more sophisticated setup.\n+        totalIndexedLines.addAndGet(countLines(contents))\n+      case _ =>\n+    }\n+    def reportProgress(indexedFiles: Int): Unit = {\n+      val percentage = ((indexedFiles / N.toDouble) * 100).toInt\n+      val loc = decimal.format(totalIndexedLines.get() / elapsed)\n+      logger.info(\n+        s\"Progress $percentage%, ${decimal.format(indexedFiles)} files indexed \" +\n+          s\"out of total ${decimal.format(fragments.length)} ($loc loc/s)\"\n+      )\n+    }\n+    logger.info(s\"Indexing $N source files\")\n+    fragments.foreach { fragment =>\n+      try {\n+        val indexedFiles = totalIndexedFiles.incrementAndGet()\n+        if (indexedFiles % 200 == 0) {\n+          reportProgress(indexedFiles)\n+        }\n+        if (shouldIndex(fragment.name)) {\n+          val doc = index(fragment)\n+          updateTotalLines(doc)\n+          callback(doc)\n+        }\n+      } catch {\n+        case _: ParseException | _: QParseException => // nothing\n+        case NonFatal(e) =>\n+          logger.error(s\"Error indexing ${fragment.syntax}\", e)\n+      }\n+    }\n+    reportProgress(totalIndexedFiles.get)\n+    logger.info(\n+      s\"Completed indexing ${decimal.format(totalIndexedFiles.get)} files with \" +\n+        s\"total ${decimal.format(totalIndexedLines.get())} lines of code\"\n+    )\n+  }\n+\n+  /** Index all documents into a single scala.meta.Database. */\n+  def indexDatabase(\n+      classpath: List[AbsolutePath],\n+      shouldIndex: RelativePath => Boolean = _ => true\n+  ): Database = {\n+    val buffer = List.newBuilder[Document]\n+    index(classpath, shouldIndex) { doc =>\n+      buffer += doc\n+    }\n+    Database(buffer.result())\n+  }\n+\n+  /** Index single Scala or Java source file from memory */\n+  def index(filename: String, contents: String): Document =\n+    index(Input.VirtualFile(filename, contents))\n+\n+  /** Index single Scala or Java from disk or zip file. */\n+  def index(fragment: Fragment): Document = {\n+    val filename = fragment.uri.toString\n+    val uri = {\n+      // Need special handling because https://github.com/scalameta/scalameta/issues/1163\n+      if (isZip(fragment.base.toNIO.getFileName.toString))\n+        new URI(s\"jar:${fragment.base.toURI.normalize()}!/${fragment.name}\")\n+      else fragment.uri\n+    }\n+    val contents = new String(FileIO.readAllBytes(uri), StandardCharsets.UTF_8)\n+    index(Input.VirtualFile(uri.toString, contents))\n+  }\n+\n+  /** Index single Scala or Java source file from memory */\n+  def index(input: Input.VirtualFile): Document = {\n+    logger.trace(s\"Indexing ${input.path} with length ${input.value.length}\")\n+    val indexer: CtagsIndexer =\n+      if (isScala(input.path)) ScalaCtags.index(input)"
+  }
+]

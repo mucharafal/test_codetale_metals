@@ -1,0 +1,33 @@
+[
+  {
+    "id" : "be7a7b4d-c708-4519-abc4-be9fc3671c30",
+    "prId" : 923,
+    "comments" : [
+      {
+        "id" : "4cbd4b03-bd45-4eb3-a425-6de7c1a60208",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "TODO?",
+        "createdAt" : "2019-09-18T11:03:42Z",
+        "updatedAt" : "2019-09-24T10:49:11Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "34b736c65504efc71e34421317b1346d8671e0ea",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,129 @@\n+package tests.debug\n+\n+import java.net.InetSocketAddress\n+import java.net.Socket\n+import java.net.URI\n+import java.util.Collections\n+import java.util.concurrent.TimeUnit\n+\n+import org.eclipse.lsp4j.debug._\n+import org.eclipse.lsp4j.debug.services.IDebugProtocolClient\n+import tests.debug.TestDebugger.Prefix\n+\n+import scala.collection.mutable\n+import scala.concurrent.ExecutionContext\n+import scala.concurrent.ExecutionContextExecutorService\n+import scala.concurrent.Future\n+import scala.concurrent.Promise\n+import scala.meta.internal.metals.MetalsEnrichments._\n+\n+final class TestDebugger(connect: IDebugProtocolClient => ServerConnection)(\n+    implicit ec: ExecutionContext\n+) extends IDebugProtocolClient\n+    with AutoCloseable {\n+  @volatile protected var server: ServerConnection = connect(this)\n+\n+  private var terminationPromise = Promise[Unit]()\n+  private val outputs = mutable.Map.empty[String, StringBuilder]\n+  private val prefixes = mutable.Set.empty[Prefix]\n+\n+  def initialize: Future[Capabilities] = {\n+    val arguments = new InitializeRequestArguments\n+    arguments.setAdapterID(\"test-adapter\")\n+    server.initialize(arguments).asScala\n+  }\n+\n+  def launch: Future[Unit] = {\n+    for {\n+      _ <- server.launch(Collections.emptyMap()).asScala\n+      _ <- server.configurationDone(new ConfigurationDoneArguments).asScala\n+    } yield ()\n+  }\n+\n+  def restart: Future[Unit] = {\n+    val args = new DisconnectArguments\n+    args.setRestart(true)\n+    for {\n+      _ <- server.disconnect(args).asScala\n+      _ <- awaitCompletion\n+    } yield {\n+      terminationPromise = Promise()\n+      server = connect(this)\n+      outputs.clear()\n+    }\n+  }\n+\n+  def disconnect: Future[Unit] = {\n+    server.disconnect(new DisconnectArguments).asScala.ignoreValue\n+  }\n+\n+  /**\n+   * Not waiting for exited because TODO"
+  }
+]

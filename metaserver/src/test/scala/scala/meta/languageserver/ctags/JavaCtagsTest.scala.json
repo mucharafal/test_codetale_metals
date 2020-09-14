@@ -1,0 +1,33 @@
+[
+  {
+    "id" : "b7af36ce-750b-4a47-a679-66b05ebd57c0",
+    "prId" : 23,
+    "comments" : [
+      {
+        "id" : "f6f72ac4-6a36-48bd-b060-307b9bb65f60",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "same as above, can we group this in a `ci-slow` target?",
+        "createdAt" : "2017-11-14T09:28:09Z",
+        "updatedAt" : "2017-11-14T20:08:40Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "5e9272f240feb4f00bdea5ee50e2808699cd0d0e",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,162 @@\n+package scala.meta.languageserver.ctags\n+\n+import java.nio.file.Paths\n+import scala.meta.languageserver.CompilerConfig\n+\n+class JavaCtagsTest extends BaseCtagsTest {\n+  check(\n+    \"interface.java\",\n+    \"\"\"package a.b;\n+      |interface A {\n+      |  public String a();\n+      |}\n+      |\"\"\".stripMargin,\n+    \"\"\"\n+      |Language:\n+      |Java\n+      |\n+      |Names:\n+      |[8..9): a => _root_.a.\n+      |[10..11): b => _root_.a.b.\n+      |[23..24): A <= _root_.a.b.A.\n+      |[23..24): A <= _root_.a.b.A#\n+      |[43..44): a <= _root_.a.b.A#a.\n+      |\n+      |Symbols:\n+      |_root_.a. => package a\n+      |_root_.a.b. => package b\n+      |_root_.a.b.A# => trait A\n+      |_root_.a.b.A#a. => def a\n+      |_root_.a.b.A. => object A\n+      |\"\"\".stripMargin\n+  )\n+\n+  check(\n+    \"class.java\",\n+    \"\"\"\n+      |class B {\n+      |  public static void c() { }\n+      |  public int d() { }\n+      |  public class E {}\n+      |  public static class F {}\n+      |}\n+    \"\"\".stripMargin,\n+    \"\"\"\n+      |Language:\n+      |Java\n+      |\n+      |Names:\n+      |[7..8): B <= _root_.B.\n+      |[7..8): B <= _root_.B#\n+      |[18..19): c <= _root_.B.c.\n+      |[53..54): d <= _root_.B#d.\n+      |[76..77): E <= _root_.B#E.\n+      |[76..77): E <= _root_.B#E#\n+      |[103..104): F <= _root_.B.F.\n+      |[103..104): F <= _root_.B.F#\n+      |\n+      |Symbols:\n+      |_root_.B# => class B\n+      |_root_.B#E# => class E\n+      |_root_.B#E. => object E\n+      |_root_.B#d. => def d\n+      |_root_.B. => object B\n+      |_root_.B.F# => class F\n+      |_root_.B.F. => object F\n+      |_root_.B.c. => def c\n+    \"\"\".stripMargin\n+  )\n+\n+  check(\n+    \"enum.java\",\n+    \"\"\"\n+      |enum G {\n+      |  H,\n+      |  I\n+      |}\n+    \"\"\".stripMargin,\n+    \"\"\"\n+      |\n+      |Language:\n+      |Java\n+      |\n+      |Names:\n+      |[6..7): G <= _root_.G.\n+      |[12..13): H <= _root_.G.H.\n+      |[12..13): H <= _root_.G.H.\n+      |[17..18): I <= _root_.G.I.\n+      |[17..18): I <= _root_.G.I.\n+      |\n+      |Symbols:\n+      |_root_.G. => object G\n+      |_root_.G.H. => val H\n+      |_root_.G.H. => val H\n+      |_root_.G.I. => val I\n+      |_root_.G.I. => val I\n+      |\"\"\".stripMargin\n+  )\n+\n+  check(\n+    \"field.java\",\n+    \"\"\"\n+      |public class J {\n+      |    public static final int FIELD = 1;\n+      |}\n+    \"\"\".stripMargin,\n+    \"\"\"\n+      |Language:\n+      |Java\n+      |\n+      |Names:\n+      |[14..15): J <= _root_.J.\n+      |[14..15): J <= _root_.J#\n+      |[46..51): FIELD <= _root_.J.FIELD.\n+      |\n+      |Symbols:\n+      |_root_.J# => class J\n+      |_root_.J. => object J\n+      |_root_.J.FIELD. => val FIELD\n+    \"\"\".stripMargin\n+  )\n+\n+  test(\"index jdk sources\") {\n+    val jdk = CompilerConfig.jdkSources.get\n+    val DefaultFileSystem =\n+      Paths.get(\"java\").resolve(\"io\").resolve(\"DefaultFileSystem.java\")\n+    val db = Ctags.indexDatabase(jdk :: Nil, shouldIndex = { path =>\n+      path.toNIO.endsWith(DefaultFileSystem)\n+    })\n+    val obtained = db.syntax\n+      .replace(jdk.toString(), \"JAVA_HOME\")\n+      .replace(\"-\" * jdk.toString().length, \"-\" * \"JAVA_HOME\".length)\n+    val expected =\n+      \"\"\"\n+        |jar:file://JAVA_HOME!/java/io/DefaultFileSystem.java\n+        |----------------------------------------------------\n+        |Language:\n+        |Java\n+        |\n+        |Names:\n+        |[219..223): java => _root_.java.\n+        |[224..226): io => _root_.java.io.\n+        |[260..277): DefaultFileSystem <= _root_.java.io.DefaultFileSystem.\n+        |[260..277): DefaultFileSystem <= _root_.java.io.DefaultFileSystem#\n+        |[387..400): getFileSystem <= _root_.java.io.DefaultFileSystem.getFileSystem.\n+        |\n+        |Symbols:\n+        |_root_.java. => package java\n+        |_root_.java.io. => package io\n+        |_root_.java.io.DefaultFileSystem# => class DefaultFileSystem\n+        |_root_.java.io.DefaultFileSystem. => object DefaultFileSystem\n+        |_root_.java.io.DefaultFileSystem.getFileSystem. => def getFileSystem\n+      \"\"\".stripMargin\n+    println(obtained)\n+    assertNoDiff(obtained, expected)\n+  }\n+\n+  // Uncomment to run indexer on full JDK (~2.5M loc)\n+  ignore(\"jdk all\") {"
+  }
+]

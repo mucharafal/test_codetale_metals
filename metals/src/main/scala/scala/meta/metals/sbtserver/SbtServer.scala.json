@@ -1,0 +1,333 @@
+[
+  {
+    "id" : "c50da611-2b7c-4815-8448-384747979b47",
+    "prId" : 278,
+    "comments" : [
+      {
+        "id" : "cb93bb3d-bf4c-46dd-8101-68856cc34050",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "What if the file does not exist?",
+        "createdAt" : "2018-04-11T10:56:44Z",
+        "updatedAt" : "2018-04-12T16:12:17Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "b5c951dd-602f-4c42-8670-2d025e65cce4",
+        "parentId" : "cb93bb3d-bf4c-46dd-8101-68856cc34050",
+        "author" : {
+          "login" : "laughedelic",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/766656?v=4"
+        },
+        "body" : "Fixed in 40b1da5. I got a bit confused, thinking that this case will get swallowed by `Try { props.load(...) }`. \r\n\r\nBy the way, recent versions of sbt (even 0.13.17) create `build.properties` if it doesn't exist. ",
+        "createdAt" : "2018-04-11T12:57:58Z",
+        "updatedAt" : "2018-04-12T16:12:17Z",
+        "lastEditedBy" : {
+          "login" : "laughedelic",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/766656?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "d7eb53335ae7b0a1e1003d93d1df9d89acb3a2bf",
+    "line" : null,
+    "diffHunk" : "@@ -30,19 +33,29 @@ import org.scalasbt.ipcsocket.UnixDomainSocket\n  * @param client client that can send requests and notifications\n  *               to the sbt server.\n  * @param runningServer The running client listening for requests from the server.\n- *               Use runningServer.cancel() to stop disconnect to this server.\n  *               Use runningServer.onComplete to attach callbacks on\n  *               disconnect.\n  *\n  */\n case class SbtServer(\n     client: JsonRpcClient,\n     runningServer: CancelableFuture[Unit]\n-)\n+) {\n+  def disconnect(): Unit = runningServer.cancel()\n+}\n \n object SbtServer extends LazyLogging {\n   private def fail(message: String) = Task.now(Left(message))\n \n+  def readVersion(cwd: AbsolutePath): Option[String] = {\n+    val path = cwd.resolve(\"project\").resolve(\"build.properties\")\n+    val input = Files.newInputStream(path.toNIO)"
+  },
+  {
+    "id" : "8d0781ec-e3a8-4bc7-9351-5c16a530f4f8",
+    "prId" : 278,
+    "comments" : [
+      {
+        "id" : "51667c9d-8f6a-444e-b8c9-429e4a6316ef",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "You can simply do `path.isFile`.\r\n\r\n`isFile` uses [`Files.isRegularFile`](https://docs.oracle.com/javase/7/docs/api/java/nio/file/Files.html#isRegularFile(java.nio.file.Path,%20java.nio.file.LinkOption...)) (on the JVM) to determine validate it's a regular file and it exists.",
+        "createdAt" : "2018-04-12T08:40:40Z",
+        "updatedAt" : "2018-04-12T16:12:17Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "ec89300e-fff7-4935-a4ff-dfb1959bb63d",
+        "parentId" : "51667c9d-8f6a-444e-b8c9-429e4a6316ef",
+        "author" : {
+          "login" : "laughedelic",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/766656?v=4"
+        },
+        "body" : "OK, didn't know about it.",
+        "createdAt" : "2018-04-12T14:58:48Z",
+        "updatedAt" : "2018-04-12T16:12:17Z",
+        "lastEditedBy" : {
+          "login" : "laughedelic",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/766656?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "d7eb53335ae7b0a1e1003d93d1df9d89acb3a2bf",
+    "line" : null,
+    "diffHunk" : "@@ -48,11 +48,13 @@ object SbtServer extends LazyLogging {\n   private def fail(message: String) = Task.now(Left(message))\n \n   def readVersion(cwd: AbsolutePath): Option[String] = {\n-    val path = cwd.resolve(\"project\").resolve(\"build.properties\")\n-    val input = Files.newInputStream(path.toNIO)\n     val props = new Properties()\n-    Try { props.load(input) }\n-    input.close()\n+    val path = cwd.resolve(\"project\").resolve(\"build.properties\")\n+    if (path.toFile.exists) {"
+  },
+  {
+    "id" : "244b9142-0fe7-4648-b6ed-0eef30a8ff0c",
+    "prId" : 278,
+    "comments" : [
+      {
+        "id" : "1976b4d5-3618-4574-9578-67e5a06f58f2",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "nitpick, `Try` returns a value you're then discarding. I feel this would be more \"true to its spirit\" if written as:\r\n\r\n```scala\r\ntry {\r\n  props.load(input)\r\n} finally {\r\n  input.close()\r\n}\r\n```",
+        "createdAt" : "2018-04-12T08:44:09Z",
+        "updatedAt" : "2018-04-12T16:12:17Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "b69f29fd-1678-4fdd-87da-ee1eb7c9f6a3",
+        "parentId" : "1976b4d5-3618-4574-9578-67e5a06f58f2",
+        "author" : {
+          "login" : "laughedelic",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/766656?v=4"
+        },
+        "body" : "`props.load(..)` returns `Unit`, so we actually want to ignore the result or any failure. Also I thought that `Try` is more Scala-idiomatic and these two snippets have the same outcome. But I can change it if you think it's clearer.",
+        "createdAt" : "2018-04-12T14:57:20Z",
+        "updatedAt" : "2018-04-12T16:12:17Z",
+        "lastEditedBy" : {
+          "login" : "laughedelic",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/766656?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "3a4c0bca-a2c1-4deb-8d45-531edad1e4b0",
+        "parentId" : "1976b4d5-3618-4574-9578-67e5a06f58f2",
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "I tend not to use `Try` in place of `try` because `Try` to me means that I'm interested in the value of a computation that can fail, which is not the case here.\r\n\r\nI also suspect `try` is cheaper since it doesn't require an allocation, but that's not really the concern here.\r\n\r\nAnyway, feel free to merge like this :)",
+        "createdAt" : "2018-04-12T15:16:32Z",
+        "updatedAt" : "2018-04-12T16:12:17Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "68b6840d-facc-493c-9a7f-92a796f6554b",
+        "parentId" : "1976b4d5-3618-4574-9578-67e5a06f58f2",
+        "author" : {
+          "login" : "laughedelic",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/766656?v=4"
+        },
+        "body" : "OK, I changed it",
+        "createdAt" : "2018-04-12T16:04:00Z",
+        "updatedAt" : "2018-04-12T16:12:17Z",
+        "lastEditedBy" : {
+          "login" : "laughedelic",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/766656?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "d7eb53335ae7b0a1e1003d93d1df9d89acb3a2bf",
+    "line" : null,
+    "diffHunk" : "@@ -48,11 +48,13 @@ object SbtServer extends LazyLogging {\n   private def fail(message: String) = Task.now(Left(message))\n \n   def readVersion(cwd: AbsolutePath): Option[String] = {\n-    val path = cwd.resolve(\"project\").resolve(\"build.properties\")\n-    val input = Files.newInputStream(path.toNIO)\n     val props = new Properties()\n-    Try { props.load(input) }\n-    input.close()\n+    val path = cwd.resolve(\"project\").resolve(\"build.properties\")\n+    if (path.toFile.exists) {\n+      val input = Files.newInputStream(path.toNIO)\n+      Try { props.load(input) }\n+      input.close()"
+  },
+  {
+    "id" : "fc20f617-01d6-4e6a-8117-706ce69e872f",
+    "prId" : 278,
+    "comments" : [
+      {
+        "id" : "e49d08a9-f232-4a54-8685-2cd0916ee521",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "super-duper nitpick again: this is a static value, that it doesn't appear to be used outside of this module.\r\n\r\nMake this\r\n\r\n```scala\r\nobject ActiveJson {\r\n  private val activeJsonPath =\r\n    RelativePath(\"project\").resolve(\"target\").resolve(\"active.json\")\r\n\r\n  def apply(cwd: AbsolutePath): AbsolutePath =\r\n    cwd.resolve(activeJsonPath)\r\n \r\n  def unapply(path: Path): Boolean = {\r\n    path.endsWith(activeJsonPath.toNIO) &&\r\n      path.toFile.isFile\r\n  }\r\n```\r\n\r\n?",
+        "createdAt" : "2018-04-12T09:01:18Z",
+        "updatedAt" : "2018-04-12T16:12:17Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "d7eb53335ae7b0a1e1003d93d1df9d89acb3a2bf",
+    "line" : null,
+    "diffHunk" : "@@ -113,16 +128,26 @@ object SbtServer extends LazyLogging {\n   /**\n    * Returns path to project/target/active.json from the base directory of an sbt build.\n    */\n-  def activeJson(cwd: AbsolutePath): AbsolutePath =\n-    cwd.resolve(\"project\").resolve(\"target\").resolve(\"active.json\")\n+  object ActiveJson {\n+    def apply(): RelativePath =\n+      RelativePath(\"project\").resolve(\"target\").resolve(\"active.json\")"
+  },
+  {
+    "id" : "6db3faab-4d22-4385-9e4d-d52e437620a7",
+    "prId" : 278,
+    "comments" : [
+      {
+        "id" : "41acfe0d-5fff-4347-bc77-55c8bef6993a",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "Should we also check whether the file exists replacing this with `Files.isRegularFile(path)`?",
+        "createdAt" : "2018-04-12T09:37:22Z",
+        "updatedAt" : "2018-04-12T16:12:17Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "bf3728ad-9f4f-4f86-9ca0-f78e5ec30c23",
+        "parentId" : "41acfe0d-5fff-4347-bc77-55c8bef6993a",
+        "author" : {
+          "login" : "laughedelic",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/766656?v=4"
+        },
+        "body" : "This `unapply` is used in the `onChangedFile` handler, which in theory could receive notifications about files created, changed or _deleted_. We currently ignore deleted files notifications (in another place), but it could be used later. So I would just check here the path (and remove `isFile`) and leave any IO-checks/failures to where the file is actually read. What do you think?",
+        "createdAt" : "2018-04-12T14:54:25Z",
+        "updatedAt" : "2018-04-12T16:12:17Z",
+        "lastEditedBy" : {
+          "login" : "laughedelic",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/766656?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "c60a56e5-6ef6-48da-a023-1aaefb02e352",
+        "parentId" : "41acfe0d-5fff-4347-bc77-55c8bef6993a",
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "I think it makes sense, let's leave it this 👍 ",
+        "createdAt" : "2018-04-12T14:55:35Z",
+        "updatedAt" : "2018-04-12T16:12:17Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "f5768ed5-4db1-42f9-b79d-5fa07f13a1e0",
+        "parentId" : "41acfe0d-5fff-4347-bc77-55c8bef6993a",
+        "author" : {
+          "login" : "laughedelic",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/766656?v=4"
+        },
+        "body" : "@gabro check d7eb533 please. I changed it to matching `RelativePath` + similar changes for `CompilerConfig.File` and `Semanticdbs.File`.\r\n\r\n(UPD: fixed unused import and force-pushed, so the commit reference has changed)",
+        "createdAt" : "2018-04-12T16:06:42Z",
+        "updatedAt" : "2018-04-12T16:13:11Z",
+        "lastEditedBy" : {
+          "login" : "laughedelic",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/766656?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "d7eb53335ae7b0a1e1003d93d1df9d89acb3a2bf",
+    "line" : null,
+    "diffHunk" : "@@ -113,16 +128,26 @@ object SbtServer extends LazyLogging {\n   /**\n    * Returns path to project/target/active.json from the base directory of an sbt build.\n    */\n-  def activeJson(cwd: AbsolutePath): AbsolutePath =\n-    cwd.resolve(\"project\").resolve(\"target\").resolve(\"active.json\")\n+  object ActiveJson {\n+    def apply(): RelativePath =\n+      RelativePath(\"project\").resolve(\"target\").resolve(\"active.json\")\n+\n+    def apply(cwd: AbsolutePath): AbsolutePath =\n+      cwd.resolve(ActiveJson())\n+\n+    def unapply(path: Path): Boolean = {\n+      path.endsWith(ActiveJson().toNIO) &&\n+      path.toFile.isFile"
+  }
+]

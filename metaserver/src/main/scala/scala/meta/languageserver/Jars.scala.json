@@ -1,0 +1,55 @@
+[
+  {
+    "id" : "0e0695a4-e569-4ff9-99c2-0a82d67c5c33",
+    "prId" : 23,
+    "comments" : [
+      {
+        "id" : "606d3160-688d-45c1-a5e0-d352413318b8",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "bikeshedding here, but `sources` isn't very descriptive. How about: `fetchSources` or `shouldFetchSources`, or similar?",
+        "createdAt" : "2017-11-14T09:12:54Z",
+        "updatedAt" : "2017-11-14T20:08:40Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "41775214-b3ba-431b-a620-debc021297bb",
+        "parentId" : "606d3160-688d-45c1-a5e0-d352413318b8",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Done, `fetchSourceJars`.",
+        "createdAt" : "2017-11-14T19:33:42Z",
+        "updatedAt" : "2017-11-14T20:08:40Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "5e9272f240feb4f00bdea5ee50e2808699cd0d0e",
+    "line" : null,
+    "diffHunk" : "@@ -1,48 +1,86 @@\n package scala.meta.languageserver\n \n-import java.io.File\n import java.io.OutputStreamWriter\n import java.io.PrintStream\n+import com.typesafe.scalalogging.LazyLogging\n import coursier._\n+import org.langmeta.io.AbsolutePath\n \n-object Jars {\n+case class ModuleID(organization: String, name: String, version: String) {\n+  def toCoursier: Dependency = Dependency(Module(organization, name), version)\n+  override def toString: String = s\"$organization:$name:$version\"\n+}\n+object ModuleID {\n+  def fromString(string: String): List[ModuleID] = {\n+    string\n+      .split(\";\")\n+      .iterator\n+      .flatMap { moduleId =>\n+        moduleId.split(\":\") match {\n+          case Array(org, name, rev) =>\n+            ModuleID(org, name, rev) :: Nil\n+          case _ => Nil\n+        }\n+      }\n+      .toList\n+  }\n+}\n+object Jars extends LazyLogging {\n   def fetch(\n       org: String,\n       artifact: String,\n       version: String,\n-      out: PrintStream\n-  ): List[File] = {\n-    val start = Resolution(Set(Dependency(Module(org, artifact), version)))\n+      out: PrintStream,\n+      sources: Boolean = false\n+  ): List[AbsolutePath] =\n+    fetch(ModuleID(org, artifact, version) :: Nil, out, sources)\n+\n+  def fetch(\n+      modules: Iterable[ModuleID],\n+      out: PrintStream,\n+      sources: Boolean"
+  }
+]

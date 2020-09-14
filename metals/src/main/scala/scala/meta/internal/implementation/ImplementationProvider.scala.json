@@ -1,0 +1,901 @@
+[
+  {
+    "id" : "b72353f1-7048-42b8-9167-4309c994d261",
+    "prId" : 934,
+    "comments" : [
+      {
+        "id" : "1b6293bc-7c08-474e-80fd-6af893f53667",
+        "parentId" : null,
+        "author" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "body" : "private",
+        "createdAt" : "2019-10-02T09:26:17Z",
+        "updatedAt" : "2019-10-03T13:51:34Z",
+        "lastEditedBy" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "d837625e03b77aa42a76d4f700137294452174fa",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,392 @@\n+package scala.meta.internal.implementation\n+\n+import org.eclipse.lsp4j.Location\n+import org.eclipse.lsp4j.TextDocumentPositionParams\n+import scala.meta.internal.mtags.Semanticdbs\n+import scala.meta.internal.mtags.{Symbol => MSymbol}\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.io.AbsolutePath\n+import scala.meta.internal.semanticdb.TextDocuments\n+import scala.meta.internal.semanticdb.SymbolOccurrence\n+import scala.meta.internal.semanticdb.ClassSignature\n+import scala.meta.internal.semanticdb.TypeRef\n+import scala.meta.internal.semanticdb.Signature\n+import scala.meta.internal.semanticdb.TextDocument\n+import java.util.concurrent.ConcurrentHashMap\n+import java.nio.file.Path\n+import scala.meta.internal.semanticdb.SymbolInformation\n+import scala.meta.internal.semanticdb.MethodSignature\n+import scala.meta.internal.mtags.GlobalSymbolIndex\n+import scala.meta.internal.metals.BuildTargets\n+import scala.meta.internal.metals.Buffers\n+import scala.meta.internal.metals.DefinitionProvider\n+import scala.meta.internal.metals.TokenEditDistance\n+import scala.meta.internal.semanticdb.Scala._\n+import scala.meta.internal.semanticdb.TypeSignature\n+import scala.collection.mutable\n+\n+final class ImplementationProvider(\n+    semanticdbs: Semanticdbs,\n+    workspace: AbsolutePath,\n+    index: GlobalSymbolIndex,\n+    buildTargets: BuildTargets,\n+    buffer: Buffers,\n+    definitionProvider: DefinitionProvider\n+) {\n+  import ImplementationProvider._\n+\n+  private val globalTable = new GlobalClassTable(buildTargets)\n+  private val implementationsInPath =\n+    new ConcurrentHashMap[Path, Map[String, Set[ClassLocation]]]\n+\n+  def clear(): Unit = {\n+    implementationsInPath.clear()\n+  }\n+\n+  def onDelete(path: Path): Unit = {\n+    implementationsInPath.remove(path)\n+  }\n+\n+  def onChange(docs: TextDocuments, path: Path): Unit = {\n+    implementationsInPath.compute(\n+      path, { (_, _) =>\n+        computeInheritance(docs)\n+      }\n+    )\n+  }\n+\n+  private def computeInheritance(\n+      documents: TextDocuments\n+  ): Map[String, Set[ClassLocation]] = {\n+    val parentImplLocationPairs =\n+      new mutable.ListBuffer[(String, ClassLocation)]\n+    for {\n+      document <- documents.documents\n+      symbolInfo <- document.symbols\n+    } {\n+      if (isClassLike(symbolInfo)) {\n+        parentImplLocationPairs ++= parentsFromSignature(\n+          symbolInfo.symbol,\n+          symbolInfo.signature,\n+          Some(workspace.resolve(document.uri))\n+        )\n+      }\n+    }\n+    parentImplLocationPairs.groupBy(_._1).map {\n+      case (symbol, locations) =>\n+        symbol -> locations.map(_._2).toSet\n+    }\n+  }\n+\n+  def implementations(params: TextDocumentPositionParams): List[Location] = {\n+    val source = params.getTextDocument.getUri.toAbsolutePath\n+    lazy val global = globalTable.globalSymbolTableFor(source)\n+    val locations = for {\n+      currentDocument <- findSemanticdb(source).toIterable\n+      positionOccurrence = definitionProvider.positionOccurrence(\n+        source,\n+        params,\n+        currentDocument\n+      )\n+      symbolOccurrence <- positionOccurrence.occurrence.toIterable\n+    } yield {\n+      // 1. Search locally for symbol\n+      // 2. Search inside workspace\n+      // 3. Search classpath via GlobalSymbolTable\n+      def symbolSearch(symbol: String): Option[SymbolInformation] = {\n+        findSymbol(currentDocument, symbol)\n+          .orElse(findClassDef(symbol))\n+          .orElse(global.flatMap(_.info(symbol)))\n+      }\n+      val sym = symbolOccurrence.symbol\n+      val dealiased =\n+        if (sym.desc.isType) dealiasClass(sym, symbolSearch _) else sym\n+\n+      val definitionDocument =\n+        if (currentDocument.definesSymbol(dealiased)) {\n+          Some(currentDocument)\n+        } else {\n+          findSemanticDbForSymbol(dealiased)\n+        }\n+\n+      val inheritanceContext = definitionDocument match {\n+        // symbol is not in workspace, we only search classpath for it\n+        case None =>\n+          globalTable.globalContextFor(\n+            source,\n+            implementationsInPath.asScala.toMap\n+          )\n+        // symbol is in workspace,\n+        // we might need to search different places for related symbols\n+        case Some(textDocument) =>\n+          Some(\n+            InheritanceContext.fromDefinitions(\n+              symbolSearch,\n+              implementationsInPath.asScala.toMap\n+            )\n+          )\n+      }\n+      symbolLocationsFromContext(\n+        symbolOccurrence.symbol,\n+        source,\n+        inheritanceContext\n+      )\n+    }\n+    locations.flatten.toList\n+  }\n+\n+  def symbolLocationsFromContext("
+  },
+  {
+    "id" : "cba78b22-6eb1-4ee1-b1dc-79e918657267",
+    "prId" : 934,
+    "comments" : [
+      {
+        "id" : "00f8bd46-80f7-41b7-b5f2-7cc23d58ec36",
+        "parentId" : null,
+        "author" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "body" : "symbolClass",
+        "createdAt" : "2019-10-02T09:29:45Z",
+        "updatedAt" : "2019-10-03T13:51:34Z",
+        "lastEditedBy" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "d837625e03b77aa42a76d4f700137294452174fa",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,392 @@\n+package scala.meta.internal.implementation\n+\n+import org.eclipse.lsp4j.Location\n+import org.eclipse.lsp4j.TextDocumentPositionParams\n+import scala.meta.internal.mtags.Semanticdbs\n+import scala.meta.internal.mtags.{Symbol => MSymbol}\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.io.AbsolutePath\n+import scala.meta.internal.semanticdb.TextDocuments\n+import scala.meta.internal.semanticdb.SymbolOccurrence\n+import scala.meta.internal.semanticdb.ClassSignature\n+import scala.meta.internal.semanticdb.TypeRef\n+import scala.meta.internal.semanticdb.Signature\n+import scala.meta.internal.semanticdb.TextDocument\n+import java.util.concurrent.ConcurrentHashMap\n+import java.nio.file.Path\n+import scala.meta.internal.semanticdb.SymbolInformation\n+import scala.meta.internal.semanticdb.MethodSignature\n+import scala.meta.internal.mtags.GlobalSymbolIndex\n+import scala.meta.internal.metals.BuildTargets\n+import scala.meta.internal.metals.Buffers\n+import scala.meta.internal.metals.DefinitionProvider\n+import scala.meta.internal.metals.TokenEditDistance\n+import scala.meta.internal.semanticdb.Scala._\n+import scala.meta.internal.semanticdb.TypeSignature\n+import scala.collection.mutable\n+\n+final class ImplementationProvider(\n+    semanticdbs: Semanticdbs,\n+    workspace: AbsolutePath,\n+    index: GlobalSymbolIndex,\n+    buildTargets: BuildTargets,\n+    buffer: Buffers,\n+    definitionProvider: DefinitionProvider\n+) {\n+  import ImplementationProvider._\n+\n+  private val globalTable = new GlobalClassTable(buildTargets)\n+  private val implementationsInPath =\n+    new ConcurrentHashMap[Path, Map[String, Set[ClassLocation]]]\n+\n+  def clear(): Unit = {\n+    implementationsInPath.clear()\n+  }\n+\n+  def onDelete(path: Path): Unit = {\n+    implementationsInPath.remove(path)\n+  }\n+\n+  def onChange(docs: TextDocuments, path: Path): Unit = {\n+    implementationsInPath.compute(\n+      path, { (_, _) =>\n+        computeInheritance(docs)\n+      }\n+    )\n+  }\n+\n+  private def computeInheritance(\n+      documents: TextDocuments\n+  ): Map[String, Set[ClassLocation]] = {\n+    val parentImplLocationPairs =\n+      new mutable.ListBuffer[(String, ClassLocation)]\n+    for {\n+      document <- documents.documents\n+      symbolInfo <- document.symbols\n+    } {\n+      if (isClassLike(symbolInfo)) {\n+        parentImplLocationPairs ++= parentsFromSignature(\n+          symbolInfo.symbol,\n+          symbolInfo.signature,\n+          Some(workspace.resolve(document.uri))\n+        )\n+      }\n+    }\n+    parentImplLocationPairs.groupBy(_._1).map {\n+      case (symbol, locations) =>\n+        symbol -> locations.map(_._2).toSet\n+    }\n+  }\n+\n+  def implementations(params: TextDocumentPositionParams): List[Location] = {\n+    val source = params.getTextDocument.getUri.toAbsolutePath\n+    lazy val global = globalTable.globalSymbolTableFor(source)\n+    val locations = for {\n+      currentDocument <- findSemanticdb(source).toIterable\n+      positionOccurrence = definitionProvider.positionOccurrence(\n+        source,\n+        params,\n+        currentDocument\n+      )\n+      symbolOccurrence <- positionOccurrence.occurrence.toIterable\n+    } yield {\n+      // 1. Search locally for symbol\n+      // 2. Search inside workspace\n+      // 3. Search classpath via GlobalSymbolTable\n+      def symbolSearch(symbol: String): Option[SymbolInformation] = {\n+        findSymbol(currentDocument, symbol)\n+          .orElse(findClassDef(symbol))\n+          .orElse(global.flatMap(_.info(symbol)))\n+      }\n+      val sym = symbolOccurrence.symbol\n+      val dealiased =\n+        if (sym.desc.isType) dealiasClass(sym, symbolSearch _) else sym\n+\n+      val definitionDocument =\n+        if (currentDocument.definesSymbol(dealiased)) {\n+          Some(currentDocument)\n+        } else {\n+          findSemanticDbForSymbol(dealiased)\n+        }\n+\n+      val inheritanceContext = definitionDocument match {\n+        // symbol is not in workspace, we only search classpath for it\n+        case None =>\n+          globalTable.globalContextFor(\n+            source,\n+            implementationsInPath.asScala.toMap\n+          )\n+        // symbol is in workspace,\n+        // we might need to search different places for related symbols\n+        case Some(textDocument) =>\n+          Some(\n+            InheritanceContext.fromDefinitions(\n+              symbolSearch,\n+              implementationsInPath.asScala.toMap\n+            )\n+          )\n+      }\n+      symbolLocationsFromContext(\n+        symbolOccurrence.symbol,\n+        source,\n+        inheritanceContext\n+      )\n+    }\n+    locations.flatten.toList\n+  }\n+\n+  def symbolLocationsFromContext(\n+      symbol: String,\n+      source: AbsolutePath,\n+      inheritanceContext: Option[InheritanceContext]\n+  ): Iterable[Location] = {\n+\n+    def findImplementationSymbol(\n+        parentSymbolInfo: SymbolInformation,\n+        implDocument: TextDocument,\n+        classSymbol: SymbolInformation,\n+        classContext: InheritanceContext,\n+        implReal: ClassLocation\n+    ): Option[String] = {\n+      if (isClassLike(parentSymbolInfo))\n+        Some(implReal.symbol)\n+      else {\n+        lazy val global = globalTable.globalSymbolTableFor(source)\n+        def localSearch(symbol: String): Option[SymbolInformation] = {\n+          findSymbol(implDocument, symbol)\n+            .orElse(findClassDef(symbol))\n+            .orElse(global.flatMap(_.info(symbol)))\n+        }\n+        MethodImplementation.find(\n+          parentSymbolInfo,\n+          classSymbol,\n+          classContext,\n+          implReal,\n+          localSearch\n+        )\n+      }\n+    }\n+\n+    import TokenEditDistance.fromBuffer\n+\n+    for {\n+      classContext <- inheritanceContext.toIterable\n+      plainParentSymbol <- classContext.findSymbol(symbol).toIterable\n+      parentSymbol = addParameterSignatures(plainParentSymbol, classContext)\n+      classSymbol <- classFromSymbol(parentSymbol, classContext.findSymbol)"
+  },
+  {
+    "id" : "769c9b1a-027c-4a7d-8285-88068134f380",
+    "prId" : 962,
+    "comments" : [
+      {
+        "id" : "0019243f-d6bc-45fc-9183-7dd6d311bbb8",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Later when we look for the implementation we load semanticDB for the file and find occurence in `textDocument.occurences`, can the same situation happen there? If the annotation is on the implementing class? ",
+        "createdAt" : "2019-10-05T17:15:52Z",
+        "updatedAt" : "2019-10-05T19:47:45Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "689e888b-eb12-4b50-8740-ddafaf30d15f",
+        "parentId" : "0019243f-d6bc-45fc-9183-7dd6d311bbb8",
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "ah, I think so. The occurrence of the sealed trait is not a \"definition\" anymore in that case (it's a \"reference\" IIRC). Can you think of a test case for stressing it?",
+        "createdAt" : "2019-10-05T17:28:27Z",
+        "updatedAt" : "2019-10-05T19:47:45Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "dac6e67d-889d-446e-94ff-31fa2e37d5f2",
+        "parentId" : "0019243f-d6bc-45fc-9183-7dd6d311bbb8",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "That could be a modified test case in this PR I think:\r\n```\r\n    \"\"\"|/a/src/main/scala/a/Main.scala\r\n       |package a\r\n       |import io.circe.generic.JsonCodec\r\n       |trait Be@@ing\r\n       |@JsonCodec sealed trait <<Animal>> extends Being\r\n       |object Animal {\r\n       |  case object <<Dog>> extends Animal\r\n       |  case object <<Cat>> extends Animal\r\n       |}\r\n       |\"\"\".stripMargin\r\n```\r\n\r\nthis most likely will not find `Animal`",
+        "createdAt" : "2019-10-05T18:04:56Z",
+        "updatedAt" : "2019-10-05T19:47:45Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "22a139c3-eeb7-4b1d-8632-0b3cb2def515",
+        "parentId" : "0019243f-d6bc-45fc-9183-7dd6d311bbb8",
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "you're right, I've added the (now failed) test, so that we can work on this tomorrow.",
+        "createdAt" : "2019-10-05T18:12:17Z",
+        "updatedAt" : "2019-10-05T19:47:45Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f8d1518b-8d73-4b26-abbe-6ec70091f834",
+        "parentId" : "0019243f-d6bc-45fc-9183-7dd6d311bbb8",
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "ok, I've pushed a fix for that case too. There's indeed a lot of repetion and I hope we can come up with a more harmonized strategy for finding a definition of a symbol in the next days.",
+        "createdAt" : "2019-10-05T19:48:59Z",
+        "updatedAt" : "2019-10-05T19:48:59Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b2125dcb-d062-4ec7-a7ef-f4cd9bfca2a0",
+        "parentId" : "0019243f-d6bc-45fc-9183-7dd6d311bbb8",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Thanks @gabro !",
+        "createdAt" : "2019-10-05T20:56:59Z",
+        "updatedAt" : "2019-10-05T20:56:59Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "995c18d3e0d073e1c66f1accaf5efc94a5889a07",
+    "line" : 13,
+    "diffHunk" : "@@ -90,7 +91,13 @@ final class ImplementationProvider(\n         params,\n         currentDocument\n       )\n-      symbolOccurrence <- positionOccurrence.occurrence.toIterable\n+      symbolOccurrence <- {"
+  },
+  {
+    "id" : "05d2487e-d6e1-4afc-8705-060946fcf3fb",
+    "prId" : 962,
+    "comments" : [
+      {
+        "id" : "2feb1371-e593-4eec-8aa8-f7d808a288de",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "```suggestion\r\n        def mtagsOccurrence = Mtags\r\n```",
+        "createdAt" : "2019-10-06T06:57:17Z",
+        "updatedAt" : "2019-10-06T06:59:05Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "995c18d3e0d073e1c66f1accaf5efc94a5889a07",
+    "line" : 14,
+    "diffHunk" : "@@ -90,7 +91,13 @@ final class ImplementationProvider(\n         params,\n         currentDocument\n       )\n-      symbolOccurrence <- positionOccurrence.occurrence.toIterable\n+      symbolOccurrence <- {\n+        lazy val mtagsOccurrence = Mtags"
+  },
+  {
+    "id" : "05113ed5-993d-423b-8922-a28807f8837b",
+    "prId" : 989,
+    "comments" : [
+      {
+        "id" : "a2df1c90-5ce3-49c8-93b1-b8d863a6edbe",
+        "parentId" : null,
+        "author" : {
+          "login" : "hepin1989",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/501740?u=b0b4ebfd5fdd2e824196d92f212984038a65b942&v=4"
+        },
+        "body" : "will limit the thread size?",
+        "createdAt" : "2019-10-14T16:07:24Z",
+        "updatedAt" : "2019-10-16T12:02:07Z",
+        "lastEditedBy" : {
+          "login" : "hepin1989",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/501740?u=b0b4ebfd5fdd2e824196d92f212984038a65b942&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "d3bdae9d-f81a-4668-989e-a9c9cb367cd5",
+        "parentId" : "a2df1c90-5ce3-49c8-93b1-b8d863a6edbe",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "It's using`Executors.newCachedThreadPool()`, so it tries to reuse existing threads, but it doesn't limit them.",
+        "createdAt" : "2019-10-14T16:42:07Z",
+        "updatedAt" : "2019-10-16T12:02:07Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "6e7abe7f-23ea-4393-a747-1abc72e743ca",
+        "parentId" : "a2df1c90-5ce3-49c8-93b1-b8d863a6edbe",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "@olafurpg what do you think? Should we maybe add a thread limit on the ThreadPool ?",
+        "createdAt" : "2019-10-14T20:47:18Z",
+        "updatedAt" : "2019-10-16T12:02:07Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "57938863-bb93-4fed-bfb7-2460b9161283",
+        "parentId" : "a2df1c90-5ce3-49c8-93b1-b8d863a6edbe",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "I'm concerned about submitting so many runnables to the Metals server execution context, which is used for more async workloads that are in some cases I/O bound. I would prefer to use parallel collections `.foreach` for this use case, collecting results in a `j.u.c.ConcurrentLinkedQueue`. I think parallel collections use their own execution context which is by default suitable for CPU bound work. I don't have a good experience using non-`foreach` combinators in parallel collections.",
+        "createdAt" : "2019-10-15T09:45:10Z",
+        "updatedAt" : "2019-10-16T12:02:07Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "00ea6b6e-174e-4ad3-8812-033ced45802e",
+        "parentId" : "a2df1c90-5ce3-49c8-93b1-b8d863a6edbe",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Changed to parallel collections, thanks! ",
+        "createdAt" : "2019-10-15T20:21:04Z",
+        "updatedAt" : "2019-10-16T12:02:07Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "6817154f92367dd54357baf2a1e37619cdc53ec4",
+    "line" : null,
+    "diffHunk" : "@@ -35,7 +37,7 @@ final class ImplementationProvider(\n     buildTargets: BuildTargets,\n     buffer: Buffers,\n     definitionProvider: DefinitionProvider\n-) {\n+)(implicit ec: ExecutionContext) {"
+  },
+  {
+    "id" : "cafdcb3d-dfde-4413-8651-0c6927d7af12",
+    "prId" : 989,
+    "comments" : [
+      {
+        "id" : "3c759e3c-4ab2-4cf7-85a4-228ac0919d59",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "nit: please wrap expression in block\r\n```suggestion\r\n    } {\r\n      parallelMap.foreach {\r\n      ...\r\n    }\r\n```",
+        "createdAt" : "2019-10-16T08:53:45Z",
+        "updatedAt" : "2019-10-16T12:02:07Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "6817154f92367dd54357baf2a1e37619cdc53ec4",
+    "line" : null,
+    "diffHunk" : "@@ -177,29 +180,37 @@ final class ImplementationProvider(\n     }\n \n     import TokenEditDistance.fromBuffer\n-\n+    val allLocations = new ConcurrentLinkedQueue[Location]\n     for {\n       classContext <- inheritanceContext.toIterable\n       plainParentSymbol <- classContext.findSymbol(symbol).toIterable\n       parentSymbol = addParameterSignatures(plainParentSymbol, classContext)\n       symbolClass <- classFromSymbol(parentSymbol, classContext.findSymbol)\n-      (file, locations) <- findImplementation(symbolClass.symbol, classContext)\n-      implPath = AbsolutePath(file)\n-      implDocument <- findSemanticdb(implPath).toIterable\n-      distance = fromBuffer(implPath, implDocument.text, buffer)\n-      implLocation <- locations\n-      implReal = implLocation.toRealNames(symbolClass, translateKey = true)\n-      implSymbol <- findImplementationSymbol(\n-        parentSymbol,\n-        implDocument,\n-        symbolClass,\n-        classContext,\n-        implReal\n-      )\n-      implOccurrence <- findDefOccurrence(implDocument, implSymbol, source)\n-      range <- implOccurrence.range\n-      revised <- distance.toRevised(range.toLSP)\n-    } yield new Location(file.toUri.toString, revised)\n+      parallelMap = findImplementation(\n+        symbolClass.symbol,\n+        classContext\n+      ).par\n+    } parallelMap.foreach {"
+  },
+  {
+    "id" : "4dab3889-c7f8-45c5-8e66-01eba2c153d9",
+    "prId" : 989,
+    "comments" : [
+      {
+        "id" : "e788fe80-b2ef-46e1-8d91-2848ec7ab3ec",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "nit: wrap expression in block",
+        "createdAt" : "2019-10-16T08:54:01Z",
+        "updatedAt" : "2019-10-16T12:02:07Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "6817154f92367dd54357baf2a1e37619cdc53ec4",
+    "line" : null,
+    "diffHunk" : "@@ -177,29 +180,37 @@ final class ImplementationProvider(\n     }\n \n     import TokenEditDistance.fromBuffer\n-\n+    val allLocations = new ConcurrentLinkedQueue[Location]\n     for {\n       classContext <- inheritanceContext.toIterable\n       plainParentSymbol <- classContext.findSymbol(symbol).toIterable\n       parentSymbol = addParameterSignatures(plainParentSymbol, classContext)\n       symbolClass <- classFromSymbol(parentSymbol, classContext.findSymbol)\n-      (file, locations) <- findImplementation(symbolClass.symbol, classContext)\n-      implPath = AbsolutePath(file)\n-      implDocument <- findSemanticdb(implPath).toIterable\n-      distance = fromBuffer(implPath, implDocument.text, buffer)\n-      implLocation <- locations\n-      implReal = implLocation.toRealNames(symbolClass, translateKey = true)\n-      implSymbol <- findImplementationSymbol(\n-        parentSymbol,\n-        implDocument,\n-        symbolClass,\n-        classContext,\n-        implReal\n-      )\n-      implOccurrence <- findDefOccurrence(implDocument, implSymbol, source)\n-      range <- implOccurrence.range\n-      revised <- distance.toRevised(range.toLSP)\n-    } yield new Location(file.toUri.toString, revised)\n+      parallelMap = findImplementation(\n+        symbolClass.symbol,\n+        classContext\n+      ).par\n+    } parallelMap.foreach {\n+      case (file, locations) =>\n+        val implPath = AbsolutePath(file)\n+        for {\n+          implDocument <- findSemanticdb(implPath).toIterable\n+          distance = fromBuffer(implPath, implDocument.text, buffer)\n+          implLocation <- locations\n+          implReal = implLocation.toRealNames(symbolClass, translateKey = true)\n+          implSymbol <- findImplementationSymbol(\n+            parentSymbol,\n+            implDocument,\n+            symbolClass,\n+            classContext,\n+            implReal\n+          )\n+          implOccurence <- findDefOccurrence(implDocument, implSymbol, source)\n+          range <- implOccurence.range\n+          revised <- distance.toRevised(range.toLSP)\n+        } allLocations.add(new Location(file.toUri.toString, revised))"
+  },
+  {
+    "id" : "ca2fe509-c090-4200-b5c3-f05652896848",
+    "prId" : 989,
+    "comments" : [
+      {
+        "id" : "2bc3daa8-c650-4831-9390-e715f75906f0",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "readability: should we maybe move this for comprehension into a separate method?",
+        "createdAt" : "2019-10-16T08:54:57Z",
+        "updatedAt" : "2019-10-16T12:02:07Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "baa2959f-72cd-41e6-b300-4ff6332348e6",
+        "parentId" : "2bc3daa8-c650-4831-9390-e715f75906f0",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "I can actually move it back in since `foreach` is being invoked by default there.",
+        "createdAt" : "2019-10-16T11:50:15Z",
+        "updatedAt" : "2019-10-16T12:02:07Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "6817154f92367dd54357baf2a1e37619cdc53ec4",
+    "line" : null,
+    "diffHunk" : "@@ -177,29 +180,37 @@ final class ImplementationProvider(\n     }\n \n     import TokenEditDistance.fromBuffer\n-\n+    val allLocations = new ConcurrentLinkedQueue[Location]\n     for {\n       classContext <- inheritanceContext.toIterable\n       plainParentSymbol <- classContext.findSymbol(symbol).toIterable\n       parentSymbol = addParameterSignatures(plainParentSymbol, classContext)\n       symbolClass <- classFromSymbol(parentSymbol, classContext.findSymbol)\n-      (file, locations) <- findImplementation(symbolClass.symbol, classContext)\n-      implPath = AbsolutePath(file)\n-      implDocument <- findSemanticdb(implPath).toIterable\n-      distance = fromBuffer(implPath, implDocument.text, buffer)\n-      implLocation <- locations\n-      implReal = implLocation.toRealNames(symbolClass, translateKey = true)\n-      implSymbol <- findImplementationSymbol(\n-        parentSymbol,\n-        implDocument,\n-        symbolClass,\n-        classContext,\n-        implReal\n-      )\n-      implOccurrence <- findDefOccurrence(implDocument, implSymbol, source)\n-      range <- implOccurrence.range\n-      revised <- distance.toRevised(range.toLSP)\n-    } yield new Location(file.toUri.toString, revised)\n+      parallelMap = findImplementation(\n+        symbolClass.symbol,\n+        classContext\n+      ).par\n+    } parallelMap.foreach {\n+      case (file, locations) =>\n+        val implPath = AbsolutePath(file)\n+        for {"
+  },
+  {
+    "id" : "9853dac1-5cc7-4540-8903-4ed2e0a1e754",
+    "prId" : 989,
+    "comments" : [
+      {
+        "id" : "c6a281b8-9a69-44a2-ba5c-16a63ce884df",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "I'm not sure how the parallel map works, I generally only use parallel arrays\r\n\r\n```scala\r\nval map = findImplentation(...)\r\nkeys.toArray.par.foreach { file =>\r\n  val locations = map(file)\r\n  // ...\r\n}\r\n```",
+        "createdAt" : "2019-10-16T08:58:28Z",
+        "updatedAt" : "2019-10-16T12:02:07Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "00ec39db-e33a-436a-a5f3-3d1a6f1357de",
+        "parentId" : "c6a281b8-9a69-44a2-ba5c-16a63ce884df",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Shouldn't it work basically the same?",
+        "createdAt" : "2019-10-16T11:13:18Z",
+        "updatedAt" : "2019-10-16T12:02:07Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "56d9dbae-fc7d-4ba7-8bb9-ed7a0a10a1da",
+        "parentId" : "c6a281b8-9a69-44a2-ba5c-16a63ce884df",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "From what I checked the only real issue is with collections like List, which are sequential by nature. Map should be fine since it allows easily for concurrent access.",
+        "createdAt" : "2019-10-16T11:37:30Z",
+        "updatedAt" : "2019-10-16T12:02:07Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "a3a2f39d-3f86-4dec-b3ba-655c487d9f2a",
+        "parentId" : "c6a281b8-9a69-44a2-ba5c-16a63ce884df",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "After a bit more research, Arrays seem to be most efficient really, so changed to that. Thanks! :)",
+        "createdAt" : "2019-10-16T11:57:36Z",
+        "updatedAt" : "2019-10-16T12:02:07Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "6817154f92367dd54357baf2a1e37619cdc53ec4",
+    "line" : null,
+    "diffHunk" : "@@ -177,29 +180,37 @@ final class ImplementationProvider(\n     }\n \n     import TokenEditDistance.fromBuffer\n-\n+    val allLocations = new ConcurrentLinkedQueue[Location]\n     for {\n       classContext <- inheritanceContext.toIterable\n       plainParentSymbol <- classContext.findSymbol(symbol).toIterable\n       parentSymbol = addParameterSignatures(plainParentSymbol, classContext)\n       symbolClass <- classFromSymbol(parentSymbol, classContext.findSymbol)\n-      (file, locations) <- findImplementation(symbolClass.symbol, classContext)\n-      implPath = AbsolutePath(file)\n-      implDocument <- findSemanticdb(implPath).toIterable\n-      distance = fromBuffer(implPath, implDocument.text, buffer)\n-      implLocation <- locations\n-      implReal = implLocation.toRealNames(symbolClass, translateKey = true)\n-      implSymbol <- findImplementationSymbol(\n-        parentSymbol,\n-        implDocument,\n-        symbolClass,\n-        classContext,\n-        implReal\n-      )\n-      implOccurrence <- findDefOccurrence(implDocument, implSymbol, source)\n-      range <- implOccurrence.range\n-      revised <- distance.toRevised(range.toLSP)\n-    } yield new Location(file.toUri.toString, revised)\n+      parallelMap = findImplementation(\n+        symbolClass.symbol,\n+        classContext\n+      ).par"
+  },
+  {
+    "id" : "75faeaa0-f294-4e45-9424-9b8924457ae1",
+    "prId" : 1388,
+    "comments" : [
+      {
+        "id" : "22cfeeca-014c-44fb-a840-995b278669c1",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Maybe let's add a comment why we are first looking for semanticDB",
+        "createdAt" : "2020-02-09T16:23:23Z",
+        "updatedAt" : "2020-02-24T14:38:50Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "dc21706d9256807977910c1e5c5cb2280a9755ef",
+    "line" : 175,
+    "diffHunk" : "@@ -141,28 +143,28 @@ final class ImplementationProvider(\n   }\n \n   def topMethodParents(\n-      symbol: String,\n-      textDocument: TextDocument\n+      doc: TextDocument,\n+      symbol: String\n   ): Seq[Location] = {\n+    val textDocument = findSemanticDbForSymbol(symbol).getOrElse(doc)"
+  },
+  {
+    "id" : "66daa80c-cfec-45e1-9788-cbfaa60f159e",
+    "prId" : 1388,
+    "comments" : [
+      {
+        "id" : "7be779ac-7798-4d2f-a241-b840b7d80db3",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "I would rather just pass a different `symbolSearch` function based on whether we have semanticDB for a symbol. ",
+        "createdAt" : "2020-02-24T11:59:00Z",
+        "updatedAt" : "2020-02-24T14:38:50Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "dc21706d9256807977910c1e5c5cb2280a9755ef",
+    "line" : null,
+    "diffHunk" : "@@ -82,93 +83,127 @@ final class ImplementationProvider(\n     }\n   }\n \n+  def implementations(position: TextDocumentPositionParams): List[Location] = {\n+    implementations(\n+      Left(\n+        FilePosition(\n+          position.getTextDocument.getUri.toAbsolutePath,\n+          position.getPosition\n+        )\n+      ),\n+      position.getTextDocument.getUri.toAbsolutePath\n+    )\n+  }\n+\n   def implementations(\n-      params: TextDocumentPositionParams\n+      positionOrSymbol: Either[FilePosition, SymbolInformation],"
+  },
+  {
+    "id" : "7c1b0e13-2b9d-4363-94a5-75fffb0d8ecc",
+    "prId" : 1388,
+    "comments" : [
+      {
+        "id" : "1fb3c872-ab7a-4dc0-9b73-4f7036e0ad15",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Why do we need this if? ",
+        "createdAt" : "2020-02-24T12:00:59Z",
+        "updatedAt" : "2020-02-24T14:38:50Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f99cff8d-cb00-4afb-9da8-172ef06247ef",
+        "parentId" : "1fb3c872-ab7a-4dc0-9b73-4f7036e0ad15",
+        "author" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "body" : "We get AnyRef as parents, it makes sense not to analyze it",
+        "createdAt" : "2020-02-24T14:39:38Z",
+        "updatedAt" : "2020-02-24T14:39:39Z",
+        "lastEditedBy" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "dc21706d9256807977910c1e5c5cb2280a9755ef",
+    "line" : 231,
+    "diffHunk" : "@@ -177,13 +212,18 @@ final class ImplementationProvider(\n   private def methodInParentSignature(\n       sig: ClassSignature,\n       childInfo: SymbolInformation,\n+      globalSymbolTable: Option[GlobalSymbolTable],\n       childASF: Map[String, String] = Map.empty\n-  ): Seq[Location] = {\n+  ): Seq[Either[Location, SymbolInformation]] = {\n     sig.parents.flatMap {\n-      case parentSym: TypeRef =>\n+      case parentSym: TypeRef if parentSym.symbol != \"scala/AnyRef#\" =>"
+  },
+  {
+    "id" : "85e611ed-3212-4a1f-a017-6fc89fc549e9",
+    "prId" : 1388,
+    "comments" : [
+      {
+        "id" : "12ce8791-5f1c-4a9e-bb5a-71745a990fd8",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Could we extract this to a val.",
+        "createdAt" : "2020-02-24T12:02:26Z",
+        "updatedAt" : "2020-02-24T14:38:50Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "dc21706d9256807977910c1e5c5cb2280a9755ef",
+    "line" : null,
+    "diffHunk" : "@@ -82,93 +83,127 @@ final class ImplementationProvider(\n     }\n   }\n \n+  def implementations(position: TextDocumentPositionParams): List[Location] = {\n+    implementations(\n+      Left(\n+        FilePosition(\n+          position.getTextDocument.getUri.toAbsolutePath,\n+          position.getPosition\n+        )\n+      ),\n+      position.getTextDocument.getUri.toAbsolutePath\n+    )\n+  }\n+\n   def implementations(\n-      params: TextDocumentPositionParams\n+      positionOrSymbol: Either[FilePosition, SymbolInformation],\n+      source: AbsolutePath\n   ): List[Location] = {\n-    val source = params.getTextDocument.getUri.toAbsolutePath\n     lazy val global = globalTable.globalSymbolTableFor(source)\n-    val locations = for {\n-      (symbolOccurrence, currentDocument) <- definitionProvider\n-        .symbolOccurence(\n-          source,\n-          params\n-        )\n-        .toIterable\n-    } yield {\n-      // 1. Search locally for symbol\n-      // 2. Search inside workspace\n-      // 3. Search classpath via GlobalSymbolTable\n-      def symbolSearch(symbol: String): Option[SymbolInformation] = {\n-        findSymbol(currentDocument, symbol)\n-          .orElse(findSymbolDef(symbol))\n-          .orElse(global.flatMap(_.safeInfo(symbol)))\n-      }\n-      val sym = symbolOccurrence.symbol\n-      val dealiased =\n-        if (sym.desc.isType) dealiasClass(sym, symbolSearch _) else sym\n-\n-      val definitionDocument =\n-        if (currentDocument.definesSymbol(dealiased)) {\n-          Some(currentDocument)\n-        } else {\n-          findSemanticDbForSymbol(dealiased)\n+\n+    positionOrSymbol match {\n+      case Left(filePosition) =>\n+        val locations = for {\n+          (symbolOccurrence, currentDocument) <- definitionProvider\n+            .symbolOccurrence(filePosition)\n+            .toIterable\n+        } yield {\n+          // 1. Search locally for symbol\n+          // 2. Search inside workspace\n+          // 3. Search classpath via GlobalSymbolTable\n+          def symbolSearch(symbol: String): Option[SymbolInformation] = {\n+            findSymbol(currentDocument, symbol)\n+              .orElse(findSymbolDef(symbol))\n+              .orElse(global.flatMap(_.safeInfo(symbol)))\n+          }\n+\n+          val sym = symbolOccurrence.symbol\n+          val dealiased =\n+            if (sym.desc.isType) dealiasClass(sym, symbolSearch _) else sym\n+\n+          val definitionDocument =\n+            if (currentDocument.definesSymbol(dealiased)) {\n+              Some(currentDocument)\n+            } else {\n+              findSemanticDbForSymbol(dealiased)\n+            }\n+\n+          val inheritanceContext = definitionDocument match {\n+            // symbol is not in workspace, we only search classpath for it\n+            case None =>\n+              globalTable.globalContextFor(\n+                filePosition.filePath,\n+                implementationsInPath.asScala.toMap\n+              )\n+            // symbol is in workspace,\n+            // we might need to search different places for related symbols\n+            case Some(textDocument) =>\n+              Some(\n+                InheritanceContext.fromDefinitions(\n+                  symbolSearch,\n+                  implementationsInPath.asScala.toMap\n+                )\n+              )\n+          }\n+          symbolLocationsFromContext(\n+            dealiased,\n+            filePosition.filePath,\n+            inheritanceContext\n+          )\n         }\n+        locations.flatten.toList\n \n-      val inheritanceContext = definitionDocument match {\n+      case Right(symbolInformation) =>\n         // symbol is not in workspace, we only search classpath for it\n-        case None =>\n-          globalTable.globalContextFor(\n-            source,\n-            implementationsInPath.asScala.toMap\n-          )\n-        // symbol is in workspace,\n-        // we might need to search different places for related symbols\n-        case Some(textDocument) =>\n-          Some(\n-            InheritanceContext.fromDefinitions(\n-              symbolSearch,\n-              implementationsInPath.asScala.toMap\n-            )\n-          )\n-      }\n-      symbolLocationsFromContext(\n-        dealiased,\n-        source,\n-        inheritanceContext\n-      )\n+        val inheritanceContext = globalTable.globalContextFor(\n+          source,\n+          implementationsInPath.asScala.toMap\n+        )\n+\n+        symbolLocationsFromContext(\n+          symbolInformation.symbol,\n+          source,\n+          inheritanceContext\n+        ).toList\n     }\n-    locations.flatten.toList\n   }\n \n   def topMethodParents(\n-      symbol: String,\n-      textDocument: TextDocument\n-  ): Seq[Location] = {\n+      doc: TextDocument,\n+      symbol: String\n+  ): Seq[Either[Location, SymbolInformation]] = {\n+    // location in semanticDB for symbol might not be present when symbol is local then it must be in current document\n+    val textDocument = findSemanticDbForSymbol(symbol).getOrElse(doc)\n \n     def findClassInfo(owner: String) = {\n       if (owner.nonEmpty) {\n         findSymbol(textDocument, owner)\n       } else {\n-        textDocument.symbols.find {\n-          case sym =>\n-            sym.signature match {\n-              case sig: ClassSignature =>\n-                sig.declarations.exists(_.symlinks.contains(symbol))\n-              case _ => false\n-            }\n+        textDocument.symbols.find { sym =>\n+          sym.signature match {\n+            case sig: ClassSignature =>\n+              sig.declarations.exists(_.symlinks.contains(symbol))\n+            case _ => false\n+          }\n         }\n       }\n     }\n \n     val results = for {\n       currentInfo <- findSymbol(textDocument, symbol)\n-      if (!isClassLike(currentInfo))\n+      if !isClassLike(currentInfo)\n       classInfo <- findClassInfo(symbol.owner)\n     } yield {\n       classInfo.signature match {\n-        case sig: ClassSignature =>\n-          methodInParentSignature(sig, currentInfo)\n-        case _ => Nil\n+        case classSignature: ClassSignature =>\n+          methodInParentSignature(\n+            classSignature,\n+            currentInfo,\n+            globalTable.globalSymbolTableFor("
+  },
+  {
+    "id" : "85f1d037-cd2f-48fd-b799-64ed3cccf89c",
+    "prId" : 1388,
+    "comments" : [
+      {
+        "id" : "76ebba71-0f7b-45f0-9a51-2aa46b37a180",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "` directImplementations ++ directImplementations` I think we might only need  `directImplementations.toSet` - this actually never made sense :fearful: my bad",
+        "createdAt" : "2020-02-24T12:05:22Z",
+        "updatedAt" : "2020-02-24T14:38:50Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "dc21706d9256807977910c1e5c5cb2280a9755ef",
+    "line" : 328,
+    "diffHunk" : "@@ -328,10 +372,10 @@ final class ImplementationProvider(\n         loc =>\n           // we are not interested in local symbols from outside the workspace\n           (loc.symbol.isLocal && loc.file.isEmpty) ||\n-          // local symbols ineheritance should only be picked up in the same file\n+          // local symbols inheritance should only be picked up in the same file\n           (loc.symbol.isLocal && loc.file != currentPath)\n       }\n-      directImplementations.toSet ++ directImplementations\n+      directImplementations ++ directImplementations"
+  },
+  {
+    "id" : "2a9ca472-665c-4fd3-a2e0-f52e99972fd3",
+    "prId" : 1487,
+    "comments" : [
+      {
+        "id" : "abedcb12-6d43-4565-8b94-fd2490e1775a",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "the path can already be resolved via `workspace.resolve(document.uri)` - not sure if we need the additional case class.",
+        "createdAt" : "2020-03-12T11:32:05Z",
+        "updatedAt" : "2020-03-24T16:45:28Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "55838e6c9f4127bc8d06a8d31a6df496a0b729a8",
+    "line" : 163,
+    "diffHunk" : "@@ -350,13 +350,26 @@ final class ImplementationProvider(\n     }\n   }\n \n-  private def findSymbolDef(symbol: String): Option[SymbolInformation] = {\n+  def findSymbolInformation(symbol: String): Option[SymbolInformation] = {\n     findSemanticDbForSymbol(symbol).flatMap(findSymbol(_, symbol))\n   }\n \n+  def findSemanticDbWithPathForSymbol(\n+      symbol: String\n+  ): Option[TextDocumentWithPath] = {\n+    for {\n+      symbolDefinition <- findSymbolDefinition(symbol)\n+      document <- findSemanticdb(symbolDefinition.path)\n+    } yield TextDocumentWithPath(document, symbolDefinition.path)"
+  },
+  {
+    "id" : "667927e7-f360-41d6-96b5-d65df0f31cbd",
+    "prId" : 1598,
+    "comments" : [
+      {
+        "id" : "6370bcac-c545-400d-84e4-0fe2430e175d",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "It seems we are missing the file due to [here](https://github.com/scalameta/metals/blob/39fa3cc3acbed1b7e252747e520ce42ad542260f/metals/src/main/scala/scala/meta/internal/implementation/ImplementationProvider.scala#L490)\r\n\r\nI think this was done in order not to show types as implementations. We could add the file the same way we add it in the method above and move checking for type alias in [here](https://github.com/scalameta/metals/blob/39fa3cc3acbed1b7e252747e520ce42ad542260f/metals/src/main/scala/scala/meta/internal/implementation/ImplementationProvider.scala#L323)\r\n\r\nWe should use the `implDocument` to search for the `SymbolInformation` and check if it is a type alias.",
+        "createdAt" : "2020-04-14T09:38:46Z",
+        "updatedAt" : "2020-04-16T17:42:47Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "e2f33c0aabac844e2453aa80992c933251816de1",
+    "line" : null,
+    "diffHunk" : "@@ -338,17 +338,29 @@ final class ImplementationProvider(\n       file: Path\n   ): Map[Path, Set[ClassLocation]] = {\n \n+    def isTypeAlias(symbol: String) =\n+      classContext\n+        .findSymbol(symbol)\n+        .exists(_.kind == SymbolInformation.Kind.TYPE)\n+\n     def loop(symbol: String, currentPath: Option[Path]): Set[ClassLocation] = {\n       val directImplementations = classContext.getLocations(symbol).filterNot {\n         loc =>\n-          // we are not interested in local symbols from outside the workspace\n-          (loc.symbol.isLocal && loc.file.isEmpty) ||\n-          // local symbols inheritance should only be picked up in the same file\n-          (loc.symbol.isLocal && loc.file != currentPath)\n+          // we keep type aliases\n+          !isTypeAlias(loc.symbol) &&\n+          (\n+            // we are not interested in local symbols from outside the workspace\n+            (loc.symbol.isLocal && loc.file.isEmpty) ||\n+            // local symbols inheritance should only be picked up in the same file\n+            (loc.symbol.isLocal && loc.file != currentPath)\n+          )\n       }\n       directImplementations ++ directImplementations\n         .flatMap { loc =>\n-          val allPossible = loop(loc.symbol, loc.file)\n+          val allPossible = loop(\n+            loc.symbol,\n+            loc.file.orElse(Some(file).filter(_ => isTypeAlias(loc.symbol)))"
+  },
+  {
+    "id" : "a0ee29e5-bd0c-45a6-86fb-5c30c2049ccd",
+    "prId" : 1598,
+    "comments" : [
+      {
+        "id" : "8cb34f72-b1b2-436a-8a4c-361482454e0b",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "We could use the already existing `implDocument` and have it passed here. Then:\r\n`ImplementationProvider.findSymbol(symbol, implDocument).exists(_.kind == SymbolInformation.Kind.TYPE)`",
+        "createdAt" : "2020-04-16T12:26:55Z",
+        "updatedAt" : "2020-04-16T17:42:47Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "e2f33c0aabac844e2453aa80992c933251816de1",
+    "line" : null,
+    "diffHunk" : "@@ -457,6 +468,12 @@ object ImplementationProvider {\n       .find(sym => sym.symbol == symbol)\n   }\n \n+  def isTypeAlias(\n+      symbol: String,\n+      findSymbol: String => Option[SymbolInformation]"
+  },
+  {
+    "id" : "97db15c2-1fed-46d8-a57e-3b1ea68ab749",
+    "prId" : 1598,
+    "comments" : [
+      {
+        "id" : "8773a38f-7b2b-4109-bc32-d04233d799c8",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "We could just do `if ! isTypeAlias(implSymbol, implDocument) `",
+        "createdAt" : "2020-04-16T12:27:44Z",
+        "updatedAt" : "2020-04-16T17:42:47Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "1fcc58c9-a192-4d5a-aea4-590b4064855c",
+        "parentId" : "8773a38f-7b2b-4109-bc32-d04233d799c8",
+        "author" : {
+          "login" : "eilite",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/15162353?u=b8044fca303251cdea8e8aab34eab05d368c5aa0&v=4"
+        },
+        "body" : "Oh yeah of course !",
+        "createdAt" : "2020-04-16T13:30:26Z",
+        "updatedAt" : "2020-04-16T17:42:47Z",
+        "lastEditedBy" : {
+          "login" : "eilite",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/15162353?u=b8044fca303251cdea8e8aab34eab05d368c5aa0&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "e2f33c0aabac844e2453aa80992c933251816de1",
+    "line" : null,
+    "diffHunk" : "@@ -320,7 +320,18 @@ final class ImplementationProvider(\n         classContext,\n         implReal\n       )\n-      implOccurrence <- findDefOccurrence(implDocument, implSymbol, source)\n+      symbolSearch = defaultSymbolSearch(\n+        implPath,\n+        implDocument\n+      )\n+      filteredImplSymbol <- Some(implSymbol).filterNot("
+  },
+  {
+    "id" : "985bcf24-02f6-41e3-87ba-c7ce80a33506",
+    "prId" : 1679,
+    "comments" : [
+      {
+        "id" : "0edfaf87-8705-411f-8d7a-5944ee0b3a59",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "This will duplicate the GlobalClassTable and use twice as much memory for workspace, it should only have one instance in the workspace.",
+        "createdAt" : "2020-04-30T10:52:12Z",
+        "updatedAt" : "2020-04-30T11:31:56Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "3a92fa32-55a2-4a77-8ac1-c3e2135e50ad",
+        "parentId" : "0edfaf87-8705-411f-8d7a-5944ee0b3a59",
+        "author" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "body" : "good catch! as globalTable is available in ImplementationProvider I changed this to:\r\n`globalTable.globalSymbolTableFor(anyWorkspacePath)`",
+        "createdAt" : "2020-04-30T11:33:07Z",
+        "updatedAt" : "2020-04-30T11:33:07Z",
+        "lastEditedBy" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ef497ba77ea264fe4a0d730a77c5fc2bbf3dbb8e",
+    "line" : 8,
+    "diffHunk" : "@@ -88,6 +88,25 @@ final class ImplementationProvider(\n       textDocumentWithPath.textDocument\n     )\n \n+  def defaultSymbolSearchMemoize(\n+      anyWorkspacePath: AbsolutePath,\n+      textDocument: TextDocument\n+  ): String => Option[SymbolInformation] = {\n+    lazy val global ="
+  }
+]

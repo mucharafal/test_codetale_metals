@@ -1,0 +1,286 @@
+[
+  {
+    "id" : "6c2043bd-c3c5-42f7-b497-d026ce7d7ce9",
+    "prId" : 935,
+    "comments" : [
+      {
+        "id" : "2e6071da-4e06-49e5-8f95-5188746ba348",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Do we have to run it as a separate process? Bloop pants is available on classpath right?",
+        "createdAt" : "2019-09-24T11:24:52Z",
+        "updatedAt" : "2019-12-05T19:30:31Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "53f74f08-95ba-44c2-96db-59c8c874fc2a",
+        "parentId" : "2e6071da-4e06-49e5-8f95-5188746ba348",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "That's a good question! No, it doesn't have to run as a separate process. I refactored the `BuildTool.args` method into the following signature to avoided this hacky self-fork\r\n\r\n```scala\r\n  def bloopInstall(\r\n      workspace: AbsolutePath,\r\n      systemProcess: List[String] => Future[BloopInstallResult]\r\n  ): Future[BloopInstallResult]\r\n```\r\n\r\nThe new signature allows us to implement the \"bloop install\" step in normal code without shelling out to a system process.",
+        "createdAt" : "2019-09-26T15:31:23Z",
+        "updatedAt" : "2019-12-05T19:30:31Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "a95ae87fd9621161d156685f32480fcb7bb451a4",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,62 @@\n+package scala.meta.internal.builds\n+\n+import scala.meta.io.AbsolutePath\n+import scala.meta.internal.metals.UserConfiguration\n+import scala.meta.internal.metals.JavaBinary\n+import java.io.File\n+import scala.meta.internal.mtags.ClasspathLoader\n+import java.nio.file.Paths\n+\n+case class PantsBuildTool(userConfig: () => UserConfiguration)\n+    extends BuildTool {\n+  override def toString(): String = \"pants\"\n+  def version: String = \"1.0.0\"\n+  def minimumVersion: String = \"1.0.0\"\n+  def recommendedVersion: String = \"1.0.0\"\n+  def executableName: String = \"pants\"\n+  def digest(workspace: AbsolutePath): Option[String] = {\n+    new PantsDigest(userConfig).current(workspace)\n+  }\n+  def args(workspace: AbsolutePath): List[String] = {\n+    userConfig().pantsTargets match {\n+      case None =>\n+        List(\n+          \"echo\",\n+          \"the 'pants-target' setting must be defined.\"\n+        )\n+      case Some(targets) =>\n+        val classpath = ClasspathLoader\n+          .getURLs(this.getClass.getClassLoader)\n+          .map(url => Paths.get(url.toURI))\n+          .filter(path => {\n+            val filename = path.toString()\n+            // Slim down the classpath so the console output is not too crazy. In the future,\n+            // it would be nice to call `./pants bloop-install` instead.\n+            filename.contains(\"scala-library\") ||\n+            filename.contains(\"scala-collection-compat\") ||\n+            filename.contains(\"coursier\") ||\n+            filename.contains(\"cats\") ||\n+            filename.contains(\"ujson\") ||\n+            filename.contains(\"upickle\") ||\n+            filename.contains(\"bloop\") ||\n+            filename.contains(\"circe\") ||\n+            filename.contains(\"metals\")\n+          })\n+          .mkString(File.pathSeparator)\n+        List("
+  },
+  {
+    "id" : "e5adbc18-710a-44fc-99a9-dca90274fb1f",
+    "prId" : 935,
+    "comments" : [
+      {
+        "id" : "5707d08e-2264-4752-be09-765265d4b081",
+        "parentId" : null,
+        "author" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "body" : "this could be shortened to:\r\n```scala\r\n  .filter(PantsBuildTool.allowedLibraries.contains(_.toString))\r\n```\r\nby extracting those libraries to a set in the companion object",
+        "createdAt" : "2019-09-25T07:44:52Z",
+        "updatedAt" : "2019-12-05T19:30:31Z",
+        "lastEditedBy" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "7f7d6e62-a73e-4ab8-8386-f12f9fb6a31d",
+        "parentId" : "5707d08e-2264-4752-be09-765265d4b081",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "I refactored the names into a list of strings, but the condition can't be simplified into your proposed method since the logic is a bit different",
+        "createdAt" : "2019-09-26T15:02:37Z",
+        "updatedAt" : "2019-12-05T19:30:31Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "a95ae87fd9621161d156685f32480fcb7bb451a4",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,62 @@\n+package scala.meta.internal.builds\n+\n+import scala.meta.io.AbsolutePath\n+import scala.meta.internal.metals.UserConfiguration\n+import scala.meta.internal.metals.JavaBinary\n+import java.io.File\n+import scala.meta.internal.mtags.ClasspathLoader\n+import java.nio.file.Paths\n+\n+case class PantsBuildTool(userConfig: () => UserConfiguration)\n+    extends BuildTool {\n+  override def toString(): String = \"pants\"\n+  def version: String = \"1.0.0\"\n+  def minimumVersion: String = \"1.0.0\"\n+  def recommendedVersion: String = \"1.0.0\"\n+  def executableName: String = \"pants\"\n+  def digest(workspace: AbsolutePath): Option[String] = {\n+    new PantsDigest(userConfig).current(workspace)\n+  }\n+  def args(workspace: AbsolutePath): List[String] = {\n+    userConfig().pantsTargets match {\n+      case None =>\n+        List(\n+          \"echo\",\n+          \"the 'pants-target' setting must be defined.\"\n+        )\n+      case Some(targets) =>\n+        val classpath = ClasspathLoader\n+          .getURLs(this.getClass.getClassLoader)\n+          .map(url => Paths.get(url.toURI))\n+          .filter(path => {"
+  },
+  {
+    "id" : "742ee310-8ea4-45be-b0a5-676da4c056f8",
+    "prId" : 935,
+    "comments" : [
+      {
+        "id" : "84c7d1a4-3402-4d95-a34c-f62bb2ed5d4d",
+        "parentId" : null,
+        "author" : {
+          "login" : "jvican",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/2462974?u=247f9a0cfd142440687595dce462fabed087e912&v=4"
+        },
+        "body" : "Is the plan to move some of this logic eventually to Bloop? I'm open to maintaining the appropriate code there so that we can have first-class Pants support regardless of the use of Metals like we do with the rest of the build tools.",
+        "createdAt" : "2019-10-12T12:12:14Z",
+        "updatedAt" : "2019-12-05T19:30:31Z",
+        "lastEditedBy" : {
+          "login" : "jvican",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/2462974?u=247f9a0cfd142440687595dce462fabed087e912&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d510dafe-1348-4ce8-8a29-099381339e6a",
+        "parentId" : "84c7d1a4-3402-4d95-a34c-f62bb2ed5d4d",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Once this component stabilizes I think it would be best to contribute it upstream to Pants, where it can be kept up-to-date with latest Pants changes and also maybe be improved to take advantage of more suitable Pants APIs.\r\n\r\nSo far, we're still experimenting the Pants->Bloop translation, which makes it most convenient to keep it here in Metals for now.",
+        "createdAt" : "2019-10-20T09:41:33Z",
+        "updatedAt" : "2019-12-05T19:30:31Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a95ae87fd9621161d156685f32480fcb7bb451a4",
+    "line" : 70,
+    "diffHunk" : "@@ -0,0 +1,53 @@\n+package scala.meta.internal.builds\n+\n+import scala.meta.io.AbsolutePath\n+import scala.meta.internal.metals.UserConfiguration\n+import scala.meta.internal.pantsbuild.BloopPants\n+import scala.concurrent.ExecutionContext\n+import scala.concurrent.Future\n+import scala.meta.internal.metals.BloopInstallResult\n+import scala.meta.internal.metals.Timer\n+import scala.meta.internal.metals.Time\n+import scala.util.Failure\n+import scala.util.Success\n+\n+case class PantsBuildTool(userConfig: () => UserConfiguration)(\n+    implicit ec: ExecutionContext\n+) extends BuildTool {\n+  override def toString(): String = \"pants\"\n+  def version: String = \"1.0.0\"\n+  def minimumVersion: String = \"1.0.0\"\n+  def recommendedVersion: String = \"1.0.0\"\n+  def executableName: String = \"pants\"\n+  def digest(workspace: AbsolutePath): Option[String] = {\n+    new PantsDigest(userConfig).current(workspace)\n+  }\n+\n+  def bloopInstall("
+  },
+  {
+    "id" : "e75f940b-a064-41e8-bf28-7cbb517f5735",
+    "prId" : 935,
+    "comments" : [
+      {
+        "id" : "7aa32348-a889-4f9c-96e0-972e8b3810ba",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Targets will be separate by a space? Will that be consistent with the VS Code representation? It would be nice if it was represented as an array inside the settings.",
+        "createdAt" : "2019-12-05T15:33:33Z",
+        "updatedAt" : "2019-12-05T19:30:31Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "a95ae87fd9621161d156685f32480fcb7bb451a4",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,116 @@\n+package scala.meta.internal.builds\n+\n+import scala.meta.io.AbsolutePath\n+import scala.meta.internal.metals.UserConfiguration\n+import scala.meta.internal.pantsbuild.BloopPants\n+import scala.concurrent.ExecutionContext\n+import scala.concurrent.Future\n+import scala.meta.internal.metals.BloopInstallResult\n+import scala.meta.internal.metals.Timer\n+import scala.meta.internal.metals.Time\n+import scala.util.Failure\n+import scala.util.Success\n+import scala.meta.internal.metals.BuildTargets\n+import scala.meta.internal.metals.MetalsLanguageClient\n+import scala.meta.internal.metals.Messages\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.internal.metals.FutureCancelToken\n+import scala.meta.internal.pantsbuild.Args\n+import scala.meta.internal.pantsbuild.PantsConfiguration\n+\n+case class PantsBuildTool(\n+    userConfig: () => UserConfiguration\n+)(implicit ec: ExecutionContext)\n+    extends BuildTool {\n+  override def toString(): String = \"pants\"\n+  // NOTE(olafur) Version detection is not supported yet for Pants.\n+  def version: String = \"1.0.0\"\n+  def minimumVersion: String = \"1.0.0\"\n+  def recommendedVersion: String = \"1.0.0\"\n+\n+  def executableName: String = \"pants\"\n+  def digest(workspace: AbsolutePath): Option[String] = {\n+    new PantsDigest(userConfig).current(workspace)\n+  }\n+\n+  private def pantsTargets(): List[String] =\n+    userConfig().pantsTargets match {\n+      case None => Nil\n+      case Some(target) => target.split(\" \").toList"
+  },
+  {
+    "id" : "a907a5eb-4155-4690-9527-6025e3f44a48",
+    "prId" : 935,
+    "comments" : [
+      {
+        "id" : "e1bcdb64-50ff-4101-8fc3-4f3d614aa73e",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Not sure I understand the logic here? Why for `.sc` files we are looking for the same but with `.scala`?",
+        "createdAt" : "2019-12-05T15:37:03Z",
+        "updatedAt" : "2019-12-05T19:30:31Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cdfb0a41-b1e2-4751-b007-7d421518160f",
+        "parentId" : "e1bcdb64-50ff-4101-8fc3-4f3d614aa73e",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "I added a comment\r\n```\r\n        // Convert Scala script name into a `*.scala` filename to find out what\r\n        // target it should belong to. Pants doesn't support Scala scripts so\r\n        // using the script name unchanged would return no targets.\r\n```",
+        "createdAt" : "2019-12-05T19:24:31Z",
+        "updatedAt" : "2019-12-05T19:30:31Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a95ae87fd9621161d156685f32480fcb7bb451a4",
+    "line" : 52,
+    "diffHunk" : "@@ -0,0 +1,116 @@\n+package scala.meta.internal.builds\n+\n+import scala.meta.io.AbsolutePath\n+import scala.meta.internal.metals.UserConfiguration\n+import scala.meta.internal.pantsbuild.BloopPants\n+import scala.concurrent.ExecutionContext\n+import scala.concurrent.Future\n+import scala.meta.internal.metals.BloopInstallResult\n+import scala.meta.internal.metals.Timer\n+import scala.meta.internal.metals.Time\n+import scala.util.Failure\n+import scala.util.Success\n+import scala.meta.internal.metals.BuildTargets\n+import scala.meta.internal.metals.MetalsLanguageClient\n+import scala.meta.internal.metals.Messages\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.internal.metals.FutureCancelToken\n+import scala.meta.internal.pantsbuild.Args\n+import scala.meta.internal.pantsbuild.PantsConfiguration\n+\n+case class PantsBuildTool(\n+    userConfig: () => UserConfiguration\n+)(implicit ec: ExecutionContext)\n+    extends BuildTool {\n+  override def toString(): String = \"pants\"\n+  // NOTE(olafur) Version detection is not supported yet for Pants.\n+  def version: String = \"1.0.0\"\n+  def minimumVersion: String = \"1.0.0\"\n+  def recommendedVersion: String = \"1.0.0\"\n+\n+  def executableName: String = \"pants\"\n+  def digest(workspace: AbsolutePath): Option[String] = {\n+    new PantsDigest(userConfig).current(workspace)\n+  }\n+\n+  private def pantsTargets(): List[String] =\n+    userConfig().pantsTargets match {\n+      case None => Nil\n+      case Some(target) => target.split(\" \").toList\n+    }\n+\n+  override def onBuildTargets(\n+      workspace: AbsolutePath,\n+      buildTargets: BuildTargets\n+  ): Unit = {\n+    buildTargets.addBuildTargetInference { source =>\n+      // Fallback to `./pants --owner-of=$source list` when hitting on \"no build target\"\n+      if (source.isScalaScript) {\n+        BloopPants\n+          .pantsOwnerOf(\n+            workspace,\n+            source.resolveSibling(_.stripSuffix(\".sc\") + \".scala\")"
+  },
+  {
+    "id" : "f8b5f1da-e7a3-4e45-8562-277faf3934b0",
+    "prId" : 935,
+    "comments" : [
+      {
+        "id" : "71749f6a-66e6-44be-93ba-a0623483d848",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "systemProcess doesn't seem to be used anywhere here",
+        "createdAt" : "2019-12-05T15:42:32Z",
+        "updatedAt" : "2019-12-05T19:30:31Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "7c3c96d4-6ecb-4659-83d6-5326caf5a29d",
+        "parentId" : "71749f6a-66e6-44be-93ba-a0623483d848",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Renamed\r\n```\r\n      // Not used: we call metals/slowTask directly\r\n      _unused: List[String] => Future[BloopInstallResult]\r\n```",
+        "createdAt" : "2019-12-05T19:25:01Z",
+        "updatedAt" : "2019-12-05T19:30:31Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "a95ae87fd9621161d156685f32480fcb7bb451a4",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,116 @@\n+package scala.meta.internal.builds\n+\n+import scala.meta.io.AbsolutePath\n+import scala.meta.internal.metals.UserConfiguration\n+import scala.meta.internal.pantsbuild.BloopPants\n+import scala.concurrent.ExecutionContext\n+import scala.concurrent.Future\n+import scala.meta.internal.metals.BloopInstallResult\n+import scala.meta.internal.metals.Timer\n+import scala.meta.internal.metals.Time\n+import scala.util.Failure\n+import scala.util.Success\n+import scala.meta.internal.metals.BuildTargets\n+import scala.meta.internal.metals.MetalsLanguageClient\n+import scala.meta.internal.metals.Messages\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.internal.metals.FutureCancelToken\n+import scala.meta.internal.pantsbuild.Args\n+import scala.meta.internal.pantsbuild.PantsConfiguration\n+\n+case class PantsBuildTool(\n+    userConfig: () => UserConfiguration\n+)(implicit ec: ExecutionContext)\n+    extends BuildTool {\n+  override def toString(): String = \"pants\"\n+  // NOTE(olafur) Version detection is not supported yet for Pants.\n+  def version: String = \"1.0.0\"\n+  def minimumVersion: String = \"1.0.0\"\n+  def recommendedVersion: String = \"1.0.0\"\n+\n+  def executableName: String = \"pants\"\n+  def digest(workspace: AbsolutePath): Option[String] = {\n+    new PantsDigest(userConfig).current(workspace)\n+  }\n+\n+  private def pantsTargets(): List[String] =\n+    userConfig().pantsTargets match {\n+      case None => Nil\n+      case Some(target) => target.split(\" \").toList\n+    }\n+\n+  override def onBuildTargets(\n+      workspace: AbsolutePath,\n+      buildTargets: BuildTargets\n+  ): Unit = {\n+    buildTargets.addBuildTargetInference { source =>\n+      // Fallback to `./pants --owner-of=$source list` when hitting on \"no build target\"\n+      if (source.isScalaScript) {\n+        BloopPants\n+          .pantsOwnerOf(\n+            workspace,\n+            source.resolveSibling(_.stripSuffix(\".sc\") + \".scala\")\n+          )\n+          .map(\n+            target => PantsConfiguration.toBloopBuildTarget(workspace, target)\n+          )\n+      } else if (source.isScalaOrJava) {\n+        BloopPants.bloopAddOwnerOf(workspace, source)\n+      } else {\n+        Nil\n+      }\n+    }\n+    userConfig().pantsTargets.foreach { pantsTargets =>\n+      PantsConfiguration\n+        .sourceRoots(workspace, pantsTargets)\n+        .foreach(root => buildTargets.addSourceRoot(root))\n+    }\n+  }\n+\n+  def bloopInstall(\n+      workspace: AbsolutePath,\n+      languageClient: MetalsLanguageClient,\n+      systemProcess: List[String] => Future[BloopInstallResult]"
+  }
+]

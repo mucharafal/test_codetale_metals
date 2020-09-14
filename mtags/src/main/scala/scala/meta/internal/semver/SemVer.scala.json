@@ -1,0 +1,58 @@
+[
+  {
+    "id" : "ed6d7d09-3aa5-4051-886f-dfdb0547682c",
+    "prId" : 1256,
+    "comments" : [
+      {
+        "id" : "8ae5e0dc-3839-43de-9f13-cd376c6417f1",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Fixed it to work with `1.4.0-RC` etc. and snapshot versions.",
+        "createdAt" : "2020-01-06T12:46:54Z",
+        "updatedAt" : "2020-01-06T12:46:54Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5221982e1605895d70c5abd22174e1406e1e0efb",
+    "line" : 9,
+    "diffHunk" : "@@ -1,8 +1,13 @@\n package scala.meta.internal.semver\n \n object SemVer {\n+\n   def isCompatibleVersion(minimumVersion: String, version: String): Boolean = {\n-    (minimumVersion.split('.'), version.split('.')) match {\n+\n+    def splitVersion(v: String) =\n+      v.replaceAll(\"(-|\\\\+).+$\", \"\").split('.')"
+  },
+  {
+    "id" : "20888f98-7f29-4977-a719-93f5e30c8564",
+    "prId" : 1584,
+    "comments" : [
+      {
+        "id" : "b94b0658-c1bc-4f43-8d6a-71ea234eb7ab",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "I refactored this to support a slightly more general use case.\r\n\r\nWe still compare versions only by x.y.z, ignoring any other following modifier. This has some edge cases such as `1.0.0+1` being equal to `1.0.0-SNAPSHOT` and `1.0.0+56-abcdefg`, but it still covers all our uses cases for now",
+        "createdAt" : "2020-04-04T13:33:29Z",
+        "updatedAt" : "2020-04-08T10:30:38Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ba70749edb494f6da26064369a549085fcb87161",
+    "line" : 36,
+    "diffHunk" : "@@ -2,18 +2,26 @@ package scala.meta.internal.semver\n \n object SemVer {\n \n-  def isCompatibleVersion(minimumVersion: String, version: String): Boolean = {\n+  case class Version(major: Int, minor: Int, patch: Int) {\n+    def >(that: Version): Boolean = {\n+      this.major > that.major ||\n+      (this.major == that.major && this.minor > that.minor) ||\n+      (this.major == that.major && this.minor == that.minor && this.patch > that.patch)\n+    }\n+\n+    def >=(that: Version): Boolean = this > that || this == that\n+  }\n \n-    def splitVersion(v: String) =\n-      v.replaceAll(\"(-|\\\\+).+$\", \"\").split('.')\n-    val minVersionSplit = splitVersion(minimumVersion).map(_.toInt)\n-    val versionSplit = splitVersion(version).map(_.toInt)\n-    (minVersionSplit, versionSplit) match {\n-      case (Array(minMajor, minMinor, minPatch), Array(major, minor, patch)) =>\n-        (major > minMajor) ||\n-          (major == minMajor && minor > minMinor) ||\n-          (major == minMajor && minor == minMinor && patch >= minPatch)\n-      case _ => false\n+  object Version {\n+    def fromString(version: String): Version = {\n+      val Array(major, minor, patch) =\n+        version.replaceAll(\"(-|\\\\+).+$\", \"\").split('.').map(_.toInt)\n+\n+      Version(major, minor, patch)\n     }\n   }\n+\n+  def isCompatibleVersion(minimumVersion: String, version: String): Boolean = {\n+    Version.fromString(version) >= Version.fromString(minimumVersion)\n+  }"
+  }
+]

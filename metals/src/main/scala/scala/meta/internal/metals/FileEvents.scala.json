@@ -1,0 +1,105 @@
+[
+  {
+    "id" : "4fa052ee-2de4-4c41-b649-460e685bb07d",
+    "prId" : 337,
+    "comments" : [
+      {
+        "id" : "4ea10aa6-0aa9-49a8-89bb-174a8ed64cd6",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "what happens on Windows?",
+        "createdAt" : "2018-11-24T13:11:11Z",
+        "updatedAt" : "2018-11-27T10:23:41Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4d7e17bf-e179-4a66-b8c0-32ffb37f5a38",
+        "parentId" : "4ea10aa6-0aa9-49a8-89bb-174a8ed64cd6",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "BOOM 💥 (aka. not supported)\r\n\r\nAdded comment",
+        "createdAt" : "2018-11-25T11:21:07Z",
+        "updatedAt" : "2018-11-27T10:23:41Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "8ab78d5883e2e77a843cca1ea641084e6e4a2875",
+    "line" : 65,
+    "diffHunk" : "@@ -60,7 +61,10 @@ final class FileEvents(\n         Files.createDirectories(path)\n       }\n     }\n-    paths.add(workspace.resolve(\"build.sbt\").toNIO)\n+    val buildSbt = workspace.resolve(\"build.sbt\").toNIO\n+    if (!Properties.isWin && Files.isRegularFile(buildSbt)) {"
+  },
+  {
+    "id" : "3f48cb1f-f9c9-4de6-a1f5-eb23955acd00",
+    "prId" : 427,
+    "comments" : [
+      {
+        "id" : "78994f9e-9001-4e66-af9d-b721d66a1980",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "the check is redundant",
+        "createdAt" : "2018-12-18T22:35:55Z",
+        "updatedAt" : "2018-12-19T15:27:54Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "0fd2367581ea78fe416c15f14ea826d3ce3ff35b",
+    "line" : 83,
+    "diffHunk" : "@@ -1,77 +1,84 @@\n package scala.meta.internal.metals\n \n import io.methvin.watcher.DirectoryChangeEvent\n-import io.methvin.watcher.DirectoryChangeEvent.EventType\n import io.methvin.watcher.DirectoryChangeListener\n import io.methvin.watcher.DirectoryWatcher\n-import java.nio.file.FileSystems\n import java.nio.file.Files\n import java.nio.file.Path\n-import java.util.Collections\n+import java.util\n+import java.util.concurrent.CompletableFuture\n import java.util.concurrent.Executors\n-import org.eclipse.lsp4j.DidChangeWatchedFilesParams\n-import org.eclipse.lsp4j.DidChangeWatchedFilesRegistrationOptions\n-import org.eclipse.lsp4j.FileChangeType\n-import org.eclipse.lsp4j.FileEvent\n import scala.meta.internal.metals.MetalsEnrichments._\n-import scala.meta.io.AbsolutePath\n-import scala.util.Properties\n \n+/**\n+ * Handles file watching of interesting files in this build.\n+ *\n+ * Tries to minimize file events by dynamically watching only relevant directories for\n+ * the structure of the build. We don't use the LSP dynamic file watcher capability because\n+ *\n+ * 1. the glob syntax is not defined in the LSP spec making it difficult to deliver a\n+ *    consistent file watching experience with all editor clients on all operating systems.\n+ * 2. we may have a lot of file watching events and it's presumably less overhead to\n+ *    get the notifications directly from the OS instead of through the editor via LSP.\n+ *\n+ * Given we rely on file watching for critical functionality like Goto Definition and it's\n+ * really difficult to reproduce/investigate file watching issues, I think it's best to\n+ * have a single file watching solution that we have control over.\n+ *\n+ * This class does not watch for changes in `*.sbt` files in the workspace directory and\n+ * in the `project/`. Those notifications are nice-to-have, but not critical. The library we are\n+ * using https://github.com/gmethvin/directory-watcher only supports recursive directory meaning\n+ * we would have to watch the workspace directory, resulting in a LOT of redundant file events.\n+ * Editors are free to send `workspace/didChangedWatchedFiles` notifications for these directories.\n+ */\n final class FileEvents(\n-    workspace: AbsolutePath,\n-    globs: DidChangeWatchedFilesRegistrationOptions,\n     buildTargets: BuildTargets,\n-    didChangeWatchedFiles: DidChangeWatchedFilesParams => Unit\n+    didChangeWatchedFiles: DirectoryChangeEvent => Unit\n ) extends Cancelable {\n-  private val matchers = globs.getWatchers.asScala.map { watcher =>\n-    FileSystems.getDefault.getPathMatcher(s\"glob:${watcher.getGlobPattern}\")\n-  }\n+\n   private val executor = Executors.newFixedThreadPool(1)\n   private var activeWatcher: Option[DirectoryWatcher] = None\n+  private var watching: CompletableFuture[Void] = new CompletableFuture()\n+\n   override def cancel(): Unit = {\n+    stopWatching()\n     executor.shutdown()\n     activeWatcher.foreach(_.close())\n   }\n-  class Listener extends DirectoryChangeListener {\n-    override def onEvent(event: DirectoryChangeEvent): Unit = {\n-      if (Files.isRegularFile(event.path()) &&\n-        matchers.exists(_.matches(event.path()))) {\n-        val uri = event.path().toUri.toString\n-        val changeType = event.eventType() match {\n-          case EventType.CREATE => FileChangeType.Created\n-          case EventType.MODIFY => FileChangeType.Changed\n-          case EventType.DELETE => FileChangeType.Deleted\n-          case _ => FileChangeType.Changed\n-        }\n-        val fileEvent = new FileEvent(uri, changeType)\n-        val params = new DidChangeWatchedFilesParams(\n-          Collections.singletonList(fileEvent)\n-        )\n-        didChangeWatchedFiles(params)\n+\n+  def restart(): Unit = {\n+    val paths = new util.ArrayList[Path]()\n+    buildTargets.sourceDirectories.foreach { dir =>\n+      if (!dir.isDirectory) {"
+  },
+  {
+    "id" : "a0d1b454-2e6f-4cec-bce9-1688a61790ee",
+    "prId" : 427,
+    "comments" : [
+      {
+        "id" : "b2e05ba8-0aab-40f6-9665-d6ce030c0155",
+        "parentId" : null,
+        "author" : {
+          "login" : "laughedelic",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/766656?v=4"
+        },
+        "body" : "👍 ",
+        "createdAt" : "2018-12-19T01:12:49Z",
+        "updatedAt" : "2018-12-19T15:27:54Z",
+        "lastEditedBy" : {
+          "login" : "laughedelic",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/766656?v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "0fd2367581ea78fe416c15f14ea826d3ce3ff35b",
+    "line" : 35,
+    "diffHunk" : "@@ -1,77 +1,84 @@\n package scala.meta.internal.metals\n \n import io.methvin.watcher.DirectoryChangeEvent\n-import io.methvin.watcher.DirectoryChangeEvent.EventType\n import io.methvin.watcher.DirectoryChangeListener\n import io.methvin.watcher.DirectoryWatcher\n-import java.nio.file.FileSystems\n import java.nio.file.Files\n import java.nio.file.Path\n-import java.util.Collections\n+import java.util\n+import java.util.concurrent.CompletableFuture\n import java.util.concurrent.Executors\n-import org.eclipse.lsp4j.DidChangeWatchedFilesParams\n-import org.eclipse.lsp4j.DidChangeWatchedFilesRegistrationOptions\n-import org.eclipse.lsp4j.FileChangeType\n-import org.eclipse.lsp4j.FileEvent\n import scala.meta.internal.metals.MetalsEnrichments._\n-import scala.meta.io.AbsolutePath\n-import scala.util.Properties\n \n+/**\n+ * Handles file watching of interesting files in this build.\n+ *\n+ * Tries to minimize file events by dynamically watching only relevant directories for\n+ * the structure of the build. We don't use the LSP dynamic file watcher capability because\n+ *\n+ * 1. the glob syntax is not defined in the LSP spec making it difficult to deliver a\n+ *    consistent file watching experience with all editor clients on all operating systems.\n+ * 2. we may have a lot of file watching events and it's presumably less overhead to\n+ *    get the notifications directly from the OS instead of through the editor via LSP.\n+ *\n+ * Given we rely on file watching for critical functionality like Goto Definition and it's\n+ * really difficult to reproduce/investigate file watching issues, I think it's best to\n+ * have a single file watching solution that we have control over."
+  }
+]

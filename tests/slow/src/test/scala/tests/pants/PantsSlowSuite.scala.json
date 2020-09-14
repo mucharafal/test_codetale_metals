@@ -1,0 +1,126 @@
+[
+  {
+    "id" : "93827c8e-7d5a-41ba-911b-b0715b82329e",
+    "prId" : 935,
+    "comments" : [
+      {
+        "id" : "d086b660-d084-48c3-881f-587b962f9f35",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Remove?",
+        "createdAt" : "2019-09-24T11:36:05Z",
+        "updatedAt" : "2019-12-05T19:30:31Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "a95ae87fd9621161d156685f32480fcb7bb451a4",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,254 @@\n+package tests.pants\n+\n+import java.io.FileInputStream\n+import java.nio.charset.StandardCharsets\n+import scala.meta.internal.builds.{PantsBuildTool, PantsDigest}\n+import scala.meta.internal.io.InputStreamIO\n+import scala.meta.internal.metals.Messages._\n+import scala.meta.internal.metals.UserConfiguration\n+import scala.meta.io.AbsolutePath\n+import tests.BaseImportSuite\n+import scala.meta.internal.builds.BuildTool\n+\n+object PantsSlowSuite extends BaseImportSuite(\"pants\") {\n+\n+  val buildTool = PantsBuildTool(() => userConfig)\n+\n+  private def preInitialized = {\n+    val pants_targets_config =\n+      s\"\"\"\n+         |{\n+         |  \"pants-targets\": \"src::\"\n+         |}\n+         |\"\"\".stripMargin\n+    server.didChangeConfiguration(pants_targets_config)\n+  }\n+\n+  override def utestBeforeEach(path: Seq[String]): Unit = {\n+    super.utestBeforeEach(path)\n+    installPants()\n+  }\n+\n+  def installPants(): Unit = {\n+    cleanWorkspace()\n+    val pants = BuildTool.copyFromResource(workspace.toNIO, \"pants\")\n+    pants.toFile().setExecutable(true)\n+    import scala.sys.process._\n+    val exit = List(pants.toString(), \"generate-pants-ini\").!\n+    require(exit == 0, \"failed to generate pants.ini\")\n+  }\n+\n+  override def currentDigest(\n+      workspace: AbsolutePath\n+  ): Option[String] = {\n+    new PantsDigest(\n+      () => UserConfiguration(pantsTargets = Option(s\"src::\"))\n+    ).current(workspace)\n+  }\n+\n+  testAsync(\"basic\") {\n+    for {\n+      _ <- server.initialize(\n+        s\"\"\"\n+           |/src/BUILD\n+           |scala_library(\n+           |  name='math',\n+           |  sources=globs('*.scala'),\n+           |)\n+           |/src/Math.scala\n+           |package src\n+           |class Math {\n+           |  def add(a: Int, b: Int): Unit = a + b\n+           |}\n+           |\"\"\".stripMargin,\n+        preInitialized = () => preInitialized\n+      )\n+      _ = assertNoDiff(\n+        client.workspaceMessageRequests,\n+        List(\n+          importBuildMessage,\n+          progressMessage,\n+          CheckDoctor.allProjectsMisconfigured\n+        ).mkString(\"\\n\")\n+      )\n+      _ = client.messageRequests.clear() // restart\n+      _ = assertStatus(_.isInstalled)\n+      _ = assertNoDiff(client.workspaceMessageRequests, \"\")\n+      _ <- server.didChange(s\"src/BUILD\") { text =>\n+        s\"\"\"${text.replace(\"math\", \"math1\")}\n+           |\n+           |\"\"\".stripMargin\n+      }\n+      _ = assertNoDiff(client.workspaceMessageRequests, \"\")\n+      _ <- server.didSave(s\"src/BUILD\")(identity)\n+    } yield {\n+      assertNoDiff(\n+        client.workspaceMessageRequests,\n+        List(\n+          // Project has .bloop directory so user is asked to \"re-import project\"\n+          importBuildChangesMessage,\n+          progressMessage\n+        ).mkString(\"\\n\")\n+      )\n+      Thread.sleep(1000)\n+    }\n+  }\n+\n+  testAsync(\"transitive\") {\n+    for {\n+      _ <- server.initialize(\n+        s\"\"\"|/src/util/BUILD\n+            |scala_library(\n+            |  name='math',\n+            |  sources=globs('*.scala'),\n+            |)\n+            |/src/util/Math.scala\n+            |package util\n+            |class Math {\n+            |  def add(a: Int, b: Int): Unit = {\n+            |    a + b\n+            |  }\n+            |}\n+            |\n+            |/src/main/BUILD\n+            |scala_library(\n+            |  name='main',\n+            |  sources=globs('*.scala'),\n+            |  dependencies = [\n+            |    \"src/util:math\"\n+            |  ]\n+            |)\n+            |/src/main/Main.scala\n+            |package main\n+            |\n+            |import util.Math\n+            |\n+            |object Main {\n+            |\n+            |\tdef main(args: Array[String]) {\n+            |\t\tval math = new Math\n+            |\t\tprintln(math.add(3,6))  // prints (9)\n+            |\t}\n+            |}\n+            |\n+            |\"\"\".stripMargin,\n+        preInitialized = () => preInitialized\n+      )\n+      _ = assertNoDiff(\n+        client.workspaceMessageRequests,\n+        List(\n+          // Project has no .bloop directory so user is asked to \"import via bloop\"\n+          importBuildMessage,\n+          progressMessage,\n+          CheckDoctor.allProjectsMisconfigured\n+        ).mkString(\"\\n\")\n+      )\n+      _ = client.messageRequests.clear()\n+      _ = assertStatus(_.isInstalled)\n+    } yield assertNoDiff(client.workspaceMessageRequests, \"\")\n+  }\n+//"
+  },
+  {
+    "id" : "19997840-c0af-471c-94bb-18e6b7ec8adf",
+    "prId" : 935,
+    "comments" : [
+      {
+        "id" : "c6b974a1-1a73-4eee-880f-dd75bf7b0dfb",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Can we have a static `pants.ini` defined with rest of the files. This will make the tests run much slower.",
+        "createdAt" : "2019-09-24T11:43:57Z",
+        "updatedAt" : "2019-12-05T19:30:31Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "a95ae87fd9621161d156685f32480fcb7bb451a4",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,254 @@\n+package tests.pants\n+\n+import java.io.FileInputStream\n+import java.nio.charset.StandardCharsets\n+import scala.meta.internal.builds.{PantsBuildTool, PantsDigest}\n+import scala.meta.internal.io.InputStreamIO\n+import scala.meta.internal.metals.Messages._\n+import scala.meta.internal.metals.UserConfiguration\n+import scala.meta.io.AbsolutePath\n+import tests.BaseImportSuite\n+import scala.meta.internal.builds.BuildTool\n+\n+object PantsSlowSuite extends BaseImportSuite(\"pants\") {\n+\n+  val buildTool = PantsBuildTool(() => userConfig)\n+\n+  private def preInitialized = {\n+    val pants_targets_config =\n+      s\"\"\"\n+         |{\n+         |  \"pants-targets\": \"src::\"\n+         |}\n+         |\"\"\".stripMargin\n+    server.didChangeConfiguration(pants_targets_config)\n+  }\n+\n+  override def utestBeforeEach(path: Seq[String]): Unit = {\n+    super.utestBeforeEach(path)\n+    installPants()\n+  }\n+\n+  def installPants(): Unit = {\n+    cleanWorkspace()\n+    val pants = BuildTool.copyFromResource(workspace.toNIO, \"pants\")\n+    pants.toFile().setExecutable(true)\n+    import scala.sys.process._\n+    val exit = List(pants.toString(), \"generate-pants-ini\").!\n+    require(exit == 0, \"failed to generate pants.ini\")"
+  },
+  {
+    "id" : "9c4baa46-5d98-4c46-97cf-519ec2eb5cc5",
+    "prId" : 935,
+    "comments" : [
+      {
+        "id" : "c6c2b099-a8ae-423e-983d-a8456ee17983",
+        "parentId" : null,
+        "author" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "body" : "why not just `\"\"\"{ \"pants-targets\": \"src::\" } \"\"\"` ?",
+        "createdAt" : "2019-09-25T09:06:15Z",
+        "updatedAt" : "2019-12-05T19:30:31Z",
+        "lastEditedBy" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "a95ae87fd9621161d156685f32480fcb7bb451a4",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,254 @@\n+package tests.pants\n+\n+import java.io.FileInputStream\n+import java.nio.charset.StandardCharsets\n+import scala.meta.internal.builds.{PantsBuildTool, PantsDigest}\n+import scala.meta.internal.io.InputStreamIO\n+import scala.meta.internal.metals.Messages._\n+import scala.meta.internal.metals.UserConfiguration\n+import scala.meta.io.AbsolutePath\n+import tests.BaseImportSuite\n+import scala.meta.internal.builds.BuildTool\n+\n+object PantsSlowSuite extends BaseImportSuite(\"pants\") {\n+\n+  val buildTool = PantsBuildTool(() => userConfig)\n+\n+  private def preInitialized = {\n+    val pants_targets_config =\n+      s\"\"\""
+  },
+  {
+    "id" : "f97975f7-c244-4847-a165-30dd706c7a0c",
+    "prId" : 935,
+    "comments" : [
+      {
+        "id" : "eac44eff-d82c-44bf-a946-827fecfb18d1",
+        "parentId" : null,
+        "author" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "body" : "why `s\"src::\"` is an interpolation ?",
+        "createdAt" : "2019-09-25T09:07:37Z",
+        "updatedAt" : "2019-12-05T19:30:31Z",
+        "lastEditedBy" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "a95ae87fd9621161d156685f32480fcb7bb451a4",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,254 @@\n+package tests.pants\n+\n+import java.io.FileInputStream\n+import java.nio.charset.StandardCharsets\n+import scala.meta.internal.builds.{PantsBuildTool, PantsDigest}\n+import scala.meta.internal.io.InputStreamIO\n+import scala.meta.internal.metals.Messages._\n+import scala.meta.internal.metals.UserConfiguration\n+import scala.meta.io.AbsolutePath\n+import tests.BaseImportSuite\n+import scala.meta.internal.builds.BuildTool\n+\n+object PantsSlowSuite extends BaseImportSuite(\"pants\") {\n+\n+  val buildTool = PantsBuildTool(() => userConfig)\n+\n+  private def preInitialized = {\n+    val pants_targets_config =\n+      s\"\"\"\n+         |{\n+         |  \"pants-targets\": \"src::\"\n+         |}\n+         |\"\"\".stripMargin\n+    server.didChangeConfiguration(pants_targets_config)\n+  }\n+\n+  override def utestBeforeEach(path: Seq[String]): Unit = {\n+    super.utestBeforeEach(path)\n+    installPants()\n+  }\n+\n+  def installPants(): Unit = {\n+    cleanWorkspace()\n+    val pants = BuildTool.copyFromResource(workspace.toNIO, \"pants\")\n+    pants.toFile().setExecutable(true)\n+    import scala.sys.process._\n+    val exit = List(pants.toString(), \"generate-pants-ini\").!\n+    require(exit == 0, \"failed to generate pants.ini\")\n+  }\n+\n+  override def currentDigest(\n+      workspace: AbsolutePath\n+  ): Option[String] = {\n+    new PantsDigest(\n+      () => UserConfiguration(pantsTargets = Option(s\"src::\"))"
+  }
+]

@@ -1,0 +1,919 @@
+[
+  {
+    "id" : "befccd00-99ae-47f6-a8e7-f414b5bc14dd",
+    "prId" : 1728,
+    "comments" : [
+      {
+        "id" : "b777a8c6-104f-445a-b33c-51307c066fd2",
+        "parentId" : null,
+        "author" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "body" : "pprint is not needed?",
+        "createdAt" : "2020-05-14T07:56:50Z",
+        "updatedAt" : "2020-06-15T12:58:29Z",
+        "lastEditedBy" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "2acea93a-3925-4ded-a826-c5e6dc748264",
+        "parentId" : "b777a8c6-104f-445a-b33c-51307c066fd2",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Removed",
+        "createdAt" : "2020-06-03T14:06:28Z",
+        "updatedAt" : "2020-06-15T12:58:29Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "b8fc594e56a5aefca5b9a80fb273aca01de04ede",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,348 @@\n+package scala.meta.internal.builds\n+\n+import scala.meta.io.AbsolutePath\n+import scala.meta.internal.metals.MetalsLanguageClient\n+import scala.meta.internal.metals.MetalsQuickPickItem\n+import scala.concurrent.Future\n+import scala.meta.internal.metals.MetalsQuickPickParams\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.concurrent.ExecutionContext\n+import scala.meta.internal.metals.MetalsInputBoxParams\n+import org.eclipse.lsp4j.ExecuteCommandParams\n+import scala.meta.internal.metals.ClientCommands\n+import scala.util.Try\n+import scala.meta.internal.metals.StatusBar\n+import coursierapi._\n+import scala.meta.internal.metals.Time\n+import scala.meta.internal.metals.Messages._\n+import scala.meta.internal.metals.MetalsOpenWindowParams\n+import scala.meta.internal.metals.JsonParser._\n+import scala.meta.internal.metals.Icons\n+import scala.meta.internal.metals.ClientConfiguration\n+\n+class NewProjectProvider(\n+    buildTools: BuildTools,\n+    client: MetalsLanguageClient,\n+    statusBar: StatusBar,\n+    config: ClientConfiguration,\n+    time: Time,\n+    shell: ShellRunner,\n+    icons: Icons\n+)(implicit context: ExecutionContext) {\n+\n+  private val templatesUrl =\n+    \"https://github.com/foundweekends/giter8/wiki/giter8-templates.md\"\n+  private val gitterDependency = Dependency\n+    .of(\"org.foundweekends.giter8\", \"giter8_2.12\", \"0.12.0\")\n+  // equal to cmd's: g8 playframework/play-scala-seed.g8 --name=../<<name>>\n+  private val gitterMain = \"giter8.Giter8\"\n+\n+  lazy val allTemplatesFromWeb: Seq[MetalsQuickPickItem] = {\n+    statusBar.trackBlockingTask(\"Fetching template information from Github\") {\n+      // Matches:\n+      // - [jimschubert/finatra.g8](https://github.com/jimschubert/finatra.g8)\n+      //(A simple Finatra 2.5 template with sbt-revolver and sbt-native-packager)\n+      val pattern = \"\"\"\\[(.+)\\]\\s*\\(.+\\)\\s*\\((.+)\\)\"\"\".r\n+      val all = for {\n+        result <- Try(requests.get(templatesUrl)).toOption.toIterable\n+        if result.statusCode == 200\n+      } yield {\n+        pattern.findAllIn(result.text).matchData.toList.collect {\n+          case matching if matching.groupCount == 2 =>\n+            MetalsQuickPickItem(\n+              id = matching.group(1),\n+              label = s\"${icons.github} \" + matching.group(1),\n+              description = matching.group(2)\n+            )\n+        }\n+      }\n+      NewProjectProvider.back +: all.flatten.toSeq\n+    }\n+  }\n+\n+  def checkNew(existingDirectory: Option[AbsolutePath]): Future[Boolean] = {\n+    val base = AbsolutePath(System.getProperty(\"user.home\"))\n+    val withTemplate = askForTemplate(\n+      NewProjectProvider.defaultTemplates(icons)\n+    )\n+    val fullySpecified = if (existingDirectory.isDefined) {\n+      withTemplate.mapOption { template =>\n+        val Some(directory) = existingDirectory\n+        Future.successful(\n+          (template, directory.parent, Some(directory.filename))\n+        )\n+      }\n+    } else {\n+      withTemplate\n+        .flatMapOption { template =>\n+          constructPath(base).mapOptionInside { path => (template, path) }\n+        }\n+        .flatMapOption {\n+          case (template, path) =>\n+            askForName(nameFromPath(template.id), NewScalaProject.enterName)\n+              .map { name => Some((template, path, name)) }\n+        }\n+    }\n+\n+    fullySpecified.flatMap {\n+      case Some((template, inputPath, Some(projectName))) =>\n+        createNewProject(\n+          inputPath,\n+          template.label.replace(s\"${icons.github} \", \"\"),\n+          projectName,\n+          existingDirectory.isDefined\n+        )\n+      // It's fine to just return if the user resigned\n+      case _ => Future.successful(false)\n+    }\n+  }\n+\n+  private def createNewProject(\n+      inputPath: AbsolutePath,\n+      template: String,\n+      projectName: String,\n+      createdLocally: Boolean\n+  ): Future[Boolean] = {\n+    val projectPath = inputPath.resolve(projectName)\n+    val parent = projectPath.parent\n+    projectPath.createDirectories()\n+    val command = List(\n+      template,\n+      s\"--name=${projectPath.filename}\"\n+    )\n+    shell\n+      .runJava(\n+        gitterDependency,\n+        gitterMain,\n+        parent,\n+        command\n+      )\n+      .flatMap {\n+        case result if result == 0 =>\n+          if (!createdLocally) {\n+            askForWindow(projectPath).map(_ => false)\n+          } else {\n+            Future.successful(true)\n+          }\n+        case _ =>\n+          Future.successful {\n+            client.showMessage(\n+              NewScalaProject\n+                .creationFailed(template, parent.toString())\n+            )\n+            false\n+          }\n+      }\n+  }\n+\n+  private def askForWindow(projectPath: AbsolutePath): Future[Unit] = {\n+    def openWindow(newWindow: Boolean) = {\n+      val params = MetalsOpenWindowParams(\n+        projectPath.toURI.toString(),\n+        new java.lang.Boolean(newWindow)\n+      )\n+      val command = new ExecuteCommandParams(\n+        ClientCommands.OpenWindow.id,\n+        List[Object](\n+          params.toJsonObject\n+        ).asJava\n+      )\n+      client.metalsExecuteClientCommand(command)\n+    }\n+\n+    if (config.isOpenNewWindowProvider()) {\n+      client\n+        .showMessageRequest(NewScalaProject.askForNewWindowParams())\n+        .asScala\n+        .map {\n+          case msg if msg == NewScalaProject.no =>\n+            openWindow(newWindow = true)\n+          case msg if msg == NewScalaProject.yes =>\n+            openWindow(newWindow = false)\n+          case _ =>\n+        }\n+    } else {\n+      Future.successful {\n+        client.showMessage(NewScalaProject.newProjectCreated(projectPath))\n+      }\n+    }\n+  }\n+\n+  private def askForTemplate(\n+      templates: Seq[MetalsQuickPickItem]\n+  ): Future[Option[MetalsQuickPickItem]] = {\n+    client\n+      .metalsQuickPick(\n+        MetalsQuickPickParams(\n+          templates.asJava,\n+          placeHolder = NewScalaProject.selectTheTemplate\n+        )\n+      )\n+      .asScala\n+      .flatMap {\n+        case kind if kind.itemId == NewProjectProvider.more.id =>\n+          askForTemplate(allTemplatesFromWeb)\n+        case kind if kind.itemId == NewProjectProvider.back.id =>\n+          askForTemplate(NewProjectProvider.defaultTemplates(icons))\n+        case kind if kind.itemId == NewProjectProvider.custom.id =>\n+          askForName(\"\", NewScalaProject.enterG8Template)\n+            .mapOptionInside { g8Path =>\n+              MetalsQuickPickItem(\n+                nameFromPath(g8Path),\n+                g8Path,\n+                NewProjectProvider.custom.description\n+              )\n+            }\n+        case kind if !kind.cancelled =>\n+          Future.successful(\n+            templates\n+              .find(_.id == kind.itemId)\n+          )\n+        case _ => Future.successful(None)\n+      }\n+  }\n+\n+  private def askForName(\n+      default: String,\n+      prompt: String\n+  ): Future[Option[String]] = {\n+    if (config.isInputBoxEnabled()) {\n+      client\n+        .metalsInputBox(\n+          MetalsInputBoxParams(\n+            prompt = prompt,\n+            value = default\n+          )\n+        )\n+        .asScala\n+        .flatMap {\n+          case name if !name.cancelled && name.value.nonEmpty =>\n+            Future.successful(Some(name.value))\n+          case name if name.cancelled =>\n+            Future.successful(None)\n+          // reask if empty\n+          case _ => askForName(default, prompt)\n+        }\n+    } else {\n+      Future.successful(Some(default))\n+    }\n+  }\n+\n+  private def constructPath(\n+      from: AbsolutePath\n+  ): Future[Option[AbsolutePath]] = {\n+    val paths = from.list.toList\n+      .collect {\n+        case path if path.isDirectory =>\n+          MetalsQuickPickItem(\n+            id = path.filename,\n+            label = s\"${icons.folder} ${path.filename}\"\n+          )\n+      }\n+    val currentDir =\n+      MetalsQuickPickItem(id = \"ok\", label = s\"${icons.check} Ok\")\n+    val parentDir =\n+      MetalsQuickPickItem(id = \"..\", label = s\"${icons.folder} ..\")\n+    val includeUp = if (from.hasParent) List(parentDir) else Nil\n+    client\n+      .metalsQuickPick(\n+        MetalsQuickPickParams(\n+          (currentDir :: includeUp ::: paths).asJava,\n+          placeHolder = from.toString()\n+        )\n+      )\n+      .asScala\n+      .flatMap {\n+        case path if path.cancelled =>\n+          pprint.log(path)"
+  },
+  {
+    "id" : "3161e0cf-a3c4-4b53-a06b-cf1bad2334da",
+    "prId" : 1728,
+    "comments" : [
+      {
+        "id" : "847b08c4-1b06-49fb-83e2-157f28bdb335",
+        "parentId" : null,
+        "author" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "body" : "why always mapped to false here?",
+        "createdAt" : "2020-05-14T08:22:52Z",
+        "updatedAt" : "2020-06-15T12:58:29Z",
+        "lastEditedBy" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "206b70b0-c788-4ec3-8b90-0e56dae91a01",
+        "parentId" : "847b08c4-1b06-49fb-83e2-157f28bdb335",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "That was a lefover, removed the result altogether.",
+        "createdAt" : "2020-06-03T14:07:36Z",
+        "updatedAt" : "2020-06-15T12:58:29Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "b8fc594e56a5aefca5b9a80fb273aca01de04ede",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,348 @@\n+package scala.meta.internal.builds\n+\n+import scala.meta.io.AbsolutePath\n+import scala.meta.internal.metals.MetalsLanguageClient\n+import scala.meta.internal.metals.MetalsQuickPickItem\n+import scala.concurrent.Future\n+import scala.meta.internal.metals.MetalsQuickPickParams\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.concurrent.ExecutionContext\n+import scala.meta.internal.metals.MetalsInputBoxParams\n+import org.eclipse.lsp4j.ExecuteCommandParams\n+import scala.meta.internal.metals.ClientCommands\n+import scala.util.Try\n+import scala.meta.internal.metals.StatusBar\n+import coursierapi._\n+import scala.meta.internal.metals.Time\n+import scala.meta.internal.metals.Messages._\n+import scala.meta.internal.metals.MetalsOpenWindowParams\n+import scala.meta.internal.metals.JsonParser._\n+import scala.meta.internal.metals.Icons\n+import scala.meta.internal.metals.ClientConfiguration\n+\n+class NewProjectProvider(\n+    buildTools: BuildTools,\n+    client: MetalsLanguageClient,\n+    statusBar: StatusBar,\n+    config: ClientConfiguration,\n+    time: Time,\n+    shell: ShellRunner,\n+    icons: Icons\n+)(implicit context: ExecutionContext) {\n+\n+  private val templatesUrl =\n+    \"https://github.com/foundweekends/giter8/wiki/giter8-templates.md\"\n+  private val gitterDependency = Dependency\n+    .of(\"org.foundweekends.giter8\", \"giter8_2.12\", \"0.12.0\")\n+  // equal to cmd's: g8 playframework/play-scala-seed.g8 --name=../<<name>>\n+  private val gitterMain = \"giter8.Giter8\"\n+\n+  lazy val allTemplatesFromWeb: Seq[MetalsQuickPickItem] = {\n+    statusBar.trackBlockingTask(\"Fetching template information from Github\") {\n+      // Matches:\n+      // - [jimschubert/finatra.g8](https://github.com/jimschubert/finatra.g8)\n+      //(A simple Finatra 2.5 template with sbt-revolver and sbt-native-packager)\n+      val pattern = \"\"\"\\[(.+)\\]\\s*\\(.+\\)\\s*\\((.+)\\)\"\"\".r\n+      val all = for {\n+        result <- Try(requests.get(templatesUrl)).toOption.toIterable\n+        if result.statusCode == 200\n+      } yield {\n+        pattern.findAllIn(result.text).matchData.toList.collect {\n+          case matching if matching.groupCount == 2 =>\n+            MetalsQuickPickItem(\n+              id = matching.group(1),\n+              label = s\"${icons.github} \" + matching.group(1),\n+              description = matching.group(2)\n+            )\n+        }\n+      }\n+      NewProjectProvider.back +: all.flatten.toSeq\n+    }\n+  }\n+\n+  def checkNew(existingDirectory: Option[AbsolutePath]): Future[Boolean] = {\n+    val base = AbsolutePath(System.getProperty(\"user.home\"))\n+    val withTemplate = askForTemplate(\n+      NewProjectProvider.defaultTemplates(icons)\n+    )\n+    val fullySpecified = if (existingDirectory.isDefined) {\n+      withTemplate.mapOption { template =>\n+        val Some(directory) = existingDirectory\n+        Future.successful(\n+          (template, directory.parent, Some(directory.filename))\n+        )\n+      }\n+    } else {\n+      withTemplate\n+        .flatMapOption { template =>\n+          constructPath(base).mapOptionInside { path => (template, path) }\n+        }\n+        .flatMapOption {\n+          case (template, path) =>\n+            askForName(nameFromPath(template.id), NewScalaProject.enterName)\n+              .map { name => Some((template, path, name)) }\n+        }\n+    }\n+\n+    fullySpecified.flatMap {\n+      case Some((template, inputPath, Some(projectName))) =>\n+        createNewProject(\n+          inputPath,\n+          template.label.replace(s\"${icons.github} \", \"\"),\n+          projectName,\n+          existingDirectory.isDefined\n+        )\n+      // It's fine to just return if the user resigned\n+      case _ => Future.successful(false)\n+    }\n+  }\n+\n+  private def createNewProject(\n+      inputPath: AbsolutePath,\n+      template: String,\n+      projectName: String,\n+      createdLocally: Boolean\n+  ): Future[Boolean] = {\n+    val projectPath = inputPath.resolve(projectName)\n+    val parent = projectPath.parent\n+    projectPath.createDirectories()\n+    val command = List(\n+      template,\n+      s\"--name=${projectPath.filename}\"\n+    )\n+    shell\n+      .runJava(\n+        gitterDependency,\n+        gitterMain,\n+        parent,\n+        command\n+      )\n+      .flatMap {\n+        case result if result == 0 =>\n+          if (!createdLocally) {\n+            askForWindow(projectPath).map(_ => false)"
+  },
+  {
+    "id" : "fc1d1b65-2e25-48d3-a618-ca10372246e7",
+    "prId" : 1728,
+    "comments" : [
+      {
+        "id" : "f6a512cc-3d2c-4a99-8a6b-80264ceb88e0",
+        "parentId" : null,
+        "author" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "body" : "If user has no internet connection when NewScalaProject is invoked (or request times out) we will store no templates until user restarts VSCode.\r\nMaybe we could improve here a little and:\r\n- show notification to user if Try(..) fails or statuscode != 200 that fetching templates failed.\r\n- retry fetching next time we want to create new scala project if previous attempt failed.\r\n\r\nI can see user doing:\r\nrun \"New scala Project\" -> popup with error that fetching failed -> check wi-fi etc -> rerun \"New scala Project\" -> use fetched templates",
+        "createdAt" : "2020-05-14T08:34:05Z",
+        "updatedAt" : "2020-06-15T12:58:29Z",
+        "lastEditedBy" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "deb18337-a37e-4c3b-a1c9-69d4d5e69f5e",
+        "parentId" : "f6a512cc-3d2c-4a99-8a6b-80264ceb88e0",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Good idea, fixed.",
+        "createdAt" : "2020-06-03T14:07:46Z",
+        "updatedAt" : "2020-06-15T12:58:29Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "b8fc594e56a5aefca5b9a80fb273aca01de04ede",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,348 @@\n+package scala.meta.internal.builds\n+\n+import scala.meta.io.AbsolutePath\n+import scala.meta.internal.metals.MetalsLanguageClient\n+import scala.meta.internal.metals.MetalsQuickPickItem\n+import scala.concurrent.Future\n+import scala.meta.internal.metals.MetalsQuickPickParams\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.concurrent.ExecutionContext\n+import scala.meta.internal.metals.MetalsInputBoxParams\n+import org.eclipse.lsp4j.ExecuteCommandParams\n+import scala.meta.internal.metals.ClientCommands\n+import scala.util.Try\n+import scala.meta.internal.metals.StatusBar\n+import coursierapi._\n+import scala.meta.internal.metals.Time\n+import scala.meta.internal.metals.Messages._\n+import scala.meta.internal.metals.MetalsOpenWindowParams\n+import scala.meta.internal.metals.JsonParser._\n+import scala.meta.internal.metals.Icons\n+import scala.meta.internal.metals.ClientConfiguration\n+\n+class NewProjectProvider(\n+    buildTools: BuildTools,\n+    client: MetalsLanguageClient,\n+    statusBar: StatusBar,\n+    config: ClientConfiguration,\n+    time: Time,\n+    shell: ShellRunner,\n+    icons: Icons\n+)(implicit context: ExecutionContext) {\n+\n+  private val templatesUrl =\n+    \"https://github.com/foundweekends/giter8/wiki/giter8-templates.md\"\n+  private val gitterDependency = Dependency\n+    .of(\"org.foundweekends.giter8\", \"giter8_2.12\", \"0.12.0\")\n+  // equal to cmd's: g8 playframework/play-scala-seed.g8 --name=../<<name>>\n+  private val gitterMain = \"giter8.Giter8\"\n+\n+  lazy val allTemplatesFromWeb: Seq[MetalsQuickPickItem] = {"
+  },
+  {
+    "id" : "ee7bf4a0-8bc8-4efb-85f4-c99176ff9339",
+    "prId" : 1728,
+    "comments" : [
+      {
+        "id" : "ba2596de-8314-484d-b904-a260cb086e8e",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "We should probably start in the parent directory.",
+        "createdAt" : "2020-05-19T09:35:16Z",
+        "updatedAt" : "2020-06-15T12:58:29Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "b8fc594e56a5aefca5b9a80fb273aca01de04ede",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,348 @@\n+package scala.meta.internal.builds\n+\n+import scala.meta.io.AbsolutePath\n+import scala.meta.internal.metals.MetalsLanguageClient\n+import scala.meta.internal.metals.MetalsQuickPickItem\n+import scala.concurrent.Future\n+import scala.meta.internal.metals.MetalsQuickPickParams\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.concurrent.ExecutionContext\n+import scala.meta.internal.metals.MetalsInputBoxParams\n+import org.eclipse.lsp4j.ExecuteCommandParams\n+import scala.meta.internal.metals.ClientCommands\n+import scala.util.Try\n+import scala.meta.internal.metals.StatusBar\n+import coursierapi._\n+import scala.meta.internal.metals.Time\n+import scala.meta.internal.metals.Messages._\n+import scala.meta.internal.metals.MetalsOpenWindowParams\n+import scala.meta.internal.metals.JsonParser._\n+import scala.meta.internal.metals.Icons\n+import scala.meta.internal.metals.ClientConfiguration\n+\n+class NewProjectProvider(\n+    buildTools: BuildTools,\n+    client: MetalsLanguageClient,\n+    statusBar: StatusBar,\n+    config: ClientConfiguration,\n+    time: Time,\n+    shell: ShellRunner,\n+    icons: Icons\n+)(implicit context: ExecutionContext) {\n+\n+  private val templatesUrl =\n+    \"https://github.com/foundweekends/giter8/wiki/giter8-templates.md\"\n+  private val gitterDependency = Dependency\n+    .of(\"org.foundweekends.giter8\", \"giter8_2.12\", \"0.12.0\")\n+  // equal to cmd's: g8 playframework/play-scala-seed.g8 --name=../<<name>>\n+  private val gitterMain = \"giter8.Giter8\"\n+\n+  lazy val allTemplatesFromWeb: Seq[MetalsQuickPickItem] = {\n+    statusBar.trackBlockingTask(\"Fetching template information from Github\") {\n+      // Matches:\n+      // - [jimschubert/finatra.g8](https://github.com/jimschubert/finatra.g8)\n+      //(A simple Finatra 2.5 template with sbt-revolver and sbt-native-packager)\n+      val pattern = \"\"\"\\[(.+)\\]\\s*\\(.+\\)\\s*\\((.+)\\)\"\"\".r\n+      val all = for {\n+        result <- Try(requests.get(templatesUrl)).toOption.toIterable\n+        if result.statusCode == 200\n+      } yield {\n+        pattern.findAllIn(result.text).matchData.toList.collect {\n+          case matching if matching.groupCount == 2 =>\n+            MetalsQuickPickItem(\n+              id = matching.group(1),\n+              label = s\"${icons.github} \" + matching.group(1),\n+              description = matching.group(2)\n+            )\n+        }\n+      }\n+      NewProjectProvider.back +: all.flatten.toSeq\n+    }\n+  }\n+\n+  def checkNew(existingDirectory: Option[AbsolutePath]): Future[Boolean] = {\n+    val base = AbsolutePath(System.getProperty(\"user.home\"))"
+  },
+  {
+    "id" : "5a56f02e-a25b-4e39-8bd3-40bd9e501b1b",
+    "prId" : 1728,
+    "comments" : [
+      {
+        "id" : "586c3860-5362-44d8-8074-741b6952ad63",
+        "parentId" : null,
+        "author" : {
+          "login" : "ckipp01",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/13974112?u=7b6a2ddab8eec6f99e4e40ae9b81f71cb5ba92e5&v=4"
+        },
+        "body" : "Also, don't forget to remove this 😆 \r\n",
+        "createdAt" : "2020-05-19T11:57:33Z",
+        "updatedAt" : "2020-06-15T12:58:29Z",
+        "lastEditedBy" : {
+          "login" : "ckipp01",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/13974112?u=7b6a2ddab8eec6f99e4e40ae9b81f71cb5ba92e5&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "6a02d86a-bb47-4559-9f79-30e33307e3ba",
+        "parentId" : "586c3860-5362-44d8-8074-741b6952ad63",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Removed! Thanks for noticing!",
+        "createdAt" : "2020-06-03T14:06:19Z",
+        "updatedAt" : "2020-06-15T12:58:29Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "b8fc594e56a5aefca5b9a80fb273aca01de04ede",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,348 @@\n+package scala.meta.internal.builds\n+\n+import scala.meta.io.AbsolutePath\n+import scala.meta.internal.metals.MetalsLanguageClient\n+import scala.meta.internal.metals.MetalsQuickPickItem\n+import scala.concurrent.Future\n+import scala.meta.internal.metals.MetalsQuickPickParams\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.concurrent.ExecutionContext\n+import scala.meta.internal.metals.MetalsInputBoxParams\n+import org.eclipse.lsp4j.ExecuteCommandParams\n+import scala.meta.internal.metals.ClientCommands\n+import scala.util.Try\n+import scala.meta.internal.metals.StatusBar\n+import coursierapi._\n+import scala.meta.internal.metals.Time\n+import scala.meta.internal.metals.Messages._\n+import scala.meta.internal.metals.MetalsOpenWindowParams\n+import scala.meta.internal.metals.JsonParser._\n+import scala.meta.internal.metals.Icons\n+import scala.meta.internal.metals.ClientConfiguration\n+\n+class NewProjectProvider(\n+    buildTools: BuildTools,\n+    client: MetalsLanguageClient,\n+    statusBar: StatusBar,\n+    config: ClientConfiguration,\n+    time: Time,\n+    shell: ShellRunner,\n+    icons: Icons\n+)(implicit context: ExecutionContext) {\n+\n+  private val templatesUrl =\n+    \"https://github.com/foundweekends/giter8/wiki/giter8-templates.md\"\n+  private val gitterDependency = Dependency\n+    .of(\"org.foundweekends.giter8\", \"giter8_2.12\", \"0.12.0\")\n+  // equal to cmd's: g8 playframework/play-scala-seed.g8 --name=../<<name>>\n+  private val gitterMain = \"giter8.Giter8\"\n+\n+  lazy val allTemplatesFromWeb: Seq[MetalsQuickPickItem] = {\n+    statusBar.trackBlockingTask(\"Fetching template information from Github\") {\n+      // Matches:\n+      // - [jimschubert/finatra.g8](https://github.com/jimschubert/finatra.g8)\n+      //(A simple Finatra 2.5 template with sbt-revolver and sbt-native-packager)\n+      val pattern = \"\"\"\\[(.+)\\]\\s*\\(.+\\)\\s*\\((.+)\\)\"\"\".r\n+      val all = for {\n+        result <- Try(requests.get(templatesUrl)).toOption.toIterable\n+        if result.statusCode == 200\n+      } yield {\n+        pattern.findAllIn(result.text).matchData.toList.collect {\n+          case matching if matching.groupCount == 2 =>\n+            MetalsQuickPickItem(\n+              id = matching.group(1),\n+              label = s\"${icons.github} \" + matching.group(1),\n+              description = matching.group(2)\n+            )\n+        }\n+      }\n+      NewProjectProvider.back +: all.flatten.toSeq\n+    }\n+  }\n+\n+  def checkNew(existingDirectory: Option[AbsolutePath]): Future[Boolean] = {\n+    val base = AbsolutePath(System.getProperty(\"user.home\"))\n+    val withTemplate = askForTemplate(\n+      NewProjectProvider.defaultTemplates(icons)\n+    )\n+    val fullySpecified = if (existingDirectory.isDefined) {\n+      withTemplate.mapOption { template =>\n+        val Some(directory) = existingDirectory\n+        Future.successful(\n+          (template, directory.parent, Some(directory.filename))\n+        )\n+      }\n+    } else {\n+      withTemplate\n+        .flatMapOption { template =>\n+          constructPath(base).mapOptionInside { path => (template, path) }\n+        }\n+        .flatMapOption {\n+          case (template, path) =>\n+            askForName(nameFromPath(template.id), NewScalaProject.enterName)\n+              .map { name => Some((template, path, name)) }\n+        }\n+    }\n+\n+    fullySpecified.flatMap {\n+      case Some((template, inputPath, Some(projectName))) =>\n+        createNewProject(\n+          inputPath,\n+          template.label.replace(s\"${icons.github} \", \"\"),\n+          projectName,\n+          existingDirectory.isDefined\n+        )\n+      // It's fine to just return if the user resigned\n+      case _ => Future.successful(false)\n+    }\n+  }\n+\n+  private def createNewProject(\n+      inputPath: AbsolutePath,\n+      template: String,\n+      projectName: String,\n+      createdLocally: Boolean\n+  ): Future[Boolean] = {\n+    val projectPath = inputPath.resolve(projectName)\n+    val parent = projectPath.parent\n+    projectPath.createDirectories()\n+    val command = List(\n+      template,\n+      s\"--name=${projectPath.filename}\"\n+    )\n+    shell\n+      .runJava(\n+        gitterDependency,\n+        gitterMain,\n+        parent,\n+        command\n+      )\n+      .flatMap {\n+        case result if result == 0 =>\n+          if (!createdLocally) {\n+            askForWindow(projectPath).map(_ => false)\n+          } else {\n+            Future.successful(true)\n+          }\n+        case _ =>\n+          Future.successful {\n+            client.showMessage(\n+              NewScalaProject\n+                .creationFailed(template, parent.toString())\n+            )\n+            false\n+          }\n+      }\n+  }\n+\n+  private def askForWindow(projectPath: AbsolutePath): Future[Unit] = {\n+    def openWindow(newWindow: Boolean) = {\n+      val params = MetalsOpenWindowParams(\n+        projectPath.toURI.toString(),\n+        new java.lang.Boolean(newWindow)\n+      )\n+      val command = new ExecuteCommandParams(\n+        ClientCommands.OpenWindow.id,\n+        List[Object](\n+          params.toJsonObject\n+        ).asJava\n+      )\n+      client.metalsExecuteClientCommand(command)\n+    }\n+\n+    if (config.isOpenNewWindowProvider()) {\n+      client\n+        .showMessageRequest(NewScalaProject.askForNewWindowParams())\n+        .asScala\n+        .map {\n+          case msg if msg == NewScalaProject.no =>\n+            openWindow(newWindow = true)\n+          case msg if msg == NewScalaProject.yes =>\n+            openWindow(newWindow = false)\n+          case _ =>\n+        }\n+    } else {\n+      Future.successful {\n+        client.showMessage(NewScalaProject.newProjectCreated(projectPath))\n+      }\n+    }\n+  }\n+\n+  private def askForTemplate(\n+      templates: Seq[MetalsQuickPickItem]\n+  ): Future[Option[MetalsQuickPickItem]] = {\n+    client\n+      .metalsQuickPick(\n+        MetalsQuickPickParams(\n+          templates.asJava,\n+          placeHolder = NewScalaProject.selectTheTemplate\n+        )\n+      )\n+      .asScala\n+      .flatMap {\n+        case kind if kind.itemId == NewProjectProvider.more.id =>\n+          askForTemplate(allTemplatesFromWeb)\n+        case kind if kind.itemId == NewProjectProvider.back.id =>\n+          askForTemplate(NewProjectProvider.defaultTemplates(icons))\n+        case kind if kind.itemId == NewProjectProvider.custom.id =>\n+          askForName(\"\", NewScalaProject.enterG8Template)\n+            .mapOptionInside { g8Path =>\n+              MetalsQuickPickItem(\n+                nameFromPath(g8Path),\n+                g8Path,\n+                NewProjectProvider.custom.description\n+              )\n+            }\n+        case kind if !kind.cancelled =>\n+          Future.successful(\n+            templates\n+              .find(_.id == kind.itemId)\n+          )\n+        case _ => Future.successful(None)\n+      }\n+  }\n+\n+  private def askForName(\n+      default: String,\n+      prompt: String\n+  ): Future[Option[String]] = {\n+    if (config.isInputBoxEnabled()) {\n+      client\n+        .metalsInputBox(\n+          MetalsInputBoxParams(\n+            prompt = prompt,\n+            value = default\n+          )\n+        )\n+        .asScala\n+        .flatMap {\n+          case name if !name.cancelled && name.value.nonEmpty =>\n+            Future.successful(Some(name.value))\n+          case name if name.cancelled =>\n+            Future.successful(None)\n+          // reask if empty\n+          case _ => askForName(default, prompt)\n+        }\n+    } else {\n+      Future.successful(Some(default))\n+    }\n+  }\n+\n+  private def constructPath(\n+      from: AbsolutePath\n+  ): Future[Option[AbsolutePath]] = {\n+    val paths = from.list.toList\n+      .collect {\n+        case path if path.isDirectory =>\n+          MetalsQuickPickItem(\n+            id = path.filename,\n+            label = s\"${icons.folder} ${path.filename}\"\n+          )\n+      }\n+    val currentDir =\n+      MetalsQuickPickItem(id = \"ok\", label = s\"${icons.check} Ok\")\n+    val parentDir =\n+      MetalsQuickPickItem(id = \"..\", label = s\"${icons.folder} ..\")\n+    val includeUp = if (from.hasParent) List(parentDir) else Nil\n+    client\n+      .metalsQuickPick(\n+        MetalsQuickPickParams(\n+          (currentDir :: includeUp ::: paths).asJava,\n+          placeHolder = from.toString()\n+        )\n+      )\n+      .asScala\n+      .flatMap {\n+        case path if path.cancelled =>\n+          pprint.log(path)"
+  },
+  {
+    "id" : "c7899e17-4433-4875-aaa3-13a432c94a1e",
+    "prId" : 1728,
+    "comments" : [
+      {
+        "id" : "2b7e54bc-a253-457a-8acc-42edf0f1fb9c",
+        "parentId" : null,
+        "author" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "body" : "it is 'giter' not to be confused with 'gitter.im' ;)",
+        "createdAt" : "2020-06-05T10:20:17Z",
+        "updatedAt" : "2020-06-15T12:58:29Z",
+        "lastEditedBy" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "91215db5-0ca7-40f2-9154-526abed2ee53",
+        "parentId" : "2b7e54bc-a253-457a-8acc-42edf0f1fb9c",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "ach, changed!",
+        "createdAt" : "2020-06-05T13:03:04Z",
+        "updatedAt" : "2020-06-15T12:58:29Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "b8fc594e56a5aefca5b9a80fb273aca01de04ede",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,358 @@\n+package scala.meta.internal.builds\n+\n+import scala.collection.mutable\n+import scala.concurrent.ExecutionContext\n+import scala.concurrent.Future\n+import scala.util.Try\n+\n+import scala.meta.internal.metals.ClientCommands\n+import scala.meta.internal.metals.ClientConfiguration\n+import scala.meta.internal.metals.Icons\n+import scala.meta.internal.metals.JsonParser._\n+import scala.meta.internal.metals.Messages._\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.internal.metals.MetalsInputBoxParams\n+import scala.meta.internal.metals.MetalsLanguageClient\n+import scala.meta.internal.metals.MetalsOpenWindowParams\n+import scala.meta.internal.metals.MetalsQuickPickItem\n+import scala.meta.internal.metals.MetalsQuickPickParams\n+import scala.meta.internal.metals.StatusBar\n+import scala.meta.internal.metals.Time\n+import scala.meta.io.AbsolutePath\n+\n+import coursierapi._\n+import org.eclipse.lsp4j.ExecuteCommandParams\n+\n+class NewProjectProvider(\n+    buildTools: BuildTools,\n+    client: MetalsLanguageClient,\n+    statusBar: StatusBar,\n+    config: ClientConfiguration,\n+    time: Time,\n+    shell: ShellRunner,\n+    icons: Icons,\n+    workspace: AbsolutePath\n+)(implicit context: ExecutionContext) {\n+\n+  private val templatesUrl =\n+    \"https://github.com/foundweekends/giter8/wiki/giter8-templates.md\"\n+  private val gitterDependency = Dependency"
+  },
+  {
+    "id" : "dcf8d31f-7c38-4fb4-8dfc-df3a212e7e09",
+    "prId" : 1728,
+    "comments" : [
+      {
+        "id" : "80d3afb2-9b16-449f-8e75-e237a5fb09e7",
+        "parentId" : null,
+        "author" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "body" : "this never mutates, it doesn't need to be mutable. \r\nThen somewhere below you don't need to call `.toSeq`",
+        "createdAt" : "2020-06-05T10:23:13Z",
+        "updatedAt" : "2020-06-15T12:58:29Z",
+        "lastEditedBy" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "2efdb40b-a241-4832-aa0c-cbf18833bd4f",
+        "parentId" : "80d3afb2-9b16-449f-8e75-e237a5fb09e7",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "It does mutate, we update the templates in it.",
+        "createdAt" : "2020-06-05T12:06:09Z",
+        "updatedAt" : "2020-06-15T12:58:29Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "eddff6b1-d4ea-4687-9bbe-2b9a67835072",
+        "parentId" : "80d3afb2-9b16-449f-8e75-e237a5fb09e7",
+        "author" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "body" : "ahh right this is val, nvm :)",
+        "createdAt" : "2020-06-05T12:17:25Z",
+        "updatedAt" : "2020-06-15T12:58:29Z",
+        "lastEditedBy" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "d887e56c-4a54-4716-9188-8ef3fc0012f3",
+        "parentId" : "80d3afb2-9b16-449f-8e75-e237a5fb09e7",
+        "author" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "body" : "noo wait, where do you set it?",
+        "createdAt" : "2020-06-05T12:31:31Z",
+        "updatedAt" : "2020-06-15T12:58:29Z",
+        "lastEditedBy" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "3e5f9473-136b-4ffb-b06d-6fcb1ce3e02d",
+        "parentId" : "80d3afb2-9b16-449f-8e75-e237a5fb09e7",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "och, actually forgot about that one. Now it downloads each time. uff...",
+        "createdAt" : "2020-06-05T12:44:47Z",
+        "updatedAt" : "2020-06-15T12:58:29Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "6ce52cca-7de1-46d8-87ce-bddac5112b61",
+        "parentId" : "80d3afb2-9b16-449f-8e75-e237a5fb09e7",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Now it should be good.",
+        "createdAt" : "2020-06-05T13:02:53Z",
+        "updatedAt" : "2020-06-15T12:58:29Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "b8fc594e56a5aefca5b9a80fb273aca01de04ede",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,358 @@\n+package scala.meta.internal.builds\n+\n+import scala.collection.mutable\n+import scala.concurrent.ExecutionContext\n+import scala.concurrent.Future\n+import scala.util.Try\n+\n+import scala.meta.internal.metals.ClientCommands\n+import scala.meta.internal.metals.ClientConfiguration\n+import scala.meta.internal.metals.Icons\n+import scala.meta.internal.metals.JsonParser._\n+import scala.meta.internal.metals.Messages._\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.internal.metals.MetalsInputBoxParams\n+import scala.meta.internal.metals.MetalsLanguageClient\n+import scala.meta.internal.metals.MetalsOpenWindowParams\n+import scala.meta.internal.metals.MetalsQuickPickItem\n+import scala.meta.internal.metals.MetalsQuickPickParams\n+import scala.meta.internal.metals.StatusBar\n+import scala.meta.internal.metals.Time\n+import scala.meta.io.AbsolutePath\n+\n+import coursierapi._\n+import org.eclipse.lsp4j.ExecuteCommandParams\n+\n+class NewProjectProvider(\n+    buildTools: BuildTools,\n+    client: MetalsLanguageClient,\n+    statusBar: StatusBar,\n+    config: ClientConfiguration,\n+    time: Time,\n+    shell: ShellRunner,\n+    icons: Icons,\n+    workspace: AbsolutePath\n+)(implicit context: ExecutionContext) {\n+\n+  private val templatesUrl =\n+    \"https://github.com/foundweekends/giter8/wiki/giter8-templates.md\"\n+  private val gitterDependency = Dependency\n+    .of(\"org.foundweekends.giter8\", \"giter8_2.12\", \"0.12.0\")\n+  // equal to cmd's: g8 playframework/play-scala-seed.g8 --name=../<<name>>\n+  private val gitterMain = \"giter8.Giter8\"\n+\n+  private val allTemplates = mutable.Seq.empty[MetalsQuickPickItem]"
+  },
+  {
+    "id" : "c6cc949e-9b72-401b-8cb4-62c696200ca3",
+    "prId" : 1728,
+    "comments" : [
+      {
+        "id" : "04eb26f5-2dd5-4a45-9e62-11755d31b287",
+        "parentId" : null,
+        "author" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "body" : "createNewProjectFromTemplate? :P",
+        "createdAt" : "2020-06-05T10:27:10Z",
+        "updatedAt" : "2020-06-15T12:58:29Z",
+        "lastEditedBy" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "89b13500-2943-4e99-82b9-b6f7528213fa",
+        "parentId" : "04eb26f5-2dd5-4a45-9e62-11755d31b287",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "changed",
+        "createdAt" : "2020-06-05T13:02:42Z",
+        "updatedAt" : "2020-06-15T12:58:29Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "b8fc594e56a5aefca5b9a80fb273aca01de04ede",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,358 @@\n+package scala.meta.internal.builds\n+\n+import scala.collection.mutable\n+import scala.concurrent.ExecutionContext\n+import scala.concurrent.Future\n+import scala.util.Try\n+\n+import scala.meta.internal.metals.ClientCommands\n+import scala.meta.internal.metals.ClientConfiguration\n+import scala.meta.internal.metals.Icons\n+import scala.meta.internal.metals.JsonParser._\n+import scala.meta.internal.metals.Messages._\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.internal.metals.MetalsInputBoxParams\n+import scala.meta.internal.metals.MetalsLanguageClient\n+import scala.meta.internal.metals.MetalsOpenWindowParams\n+import scala.meta.internal.metals.MetalsQuickPickItem\n+import scala.meta.internal.metals.MetalsQuickPickParams\n+import scala.meta.internal.metals.StatusBar\n+import scala.meta.internal.metals.Time\n+import scala.meta.io.AbsolutePath\n+\n+import coursierapi._\n+import org.eclipse.lsp4j.ExecuteCommandParams\n+\n+class NewProjectProvider(\n+    buildTools: BuildTools,\n+    client: MetalsLanguageClient,\n+    statusBar: StatusBar,\n+    config: ClientConfiguration,\n+    time: Time,\n+    shell: ShellRunner,\n+    icons: Icons,\n+    workspace: AbsolutePath\n+)(implicit context: ExecutionContext) {\n+\n+  private val templatesUrl =\n+    \"https://github.com/foundweekends/giter8/wiki/giter8-templates.md\"\n+  private val gitterDependency = Dependency\n+    .of(\"org.foundweekends.giter8\", \"giter8_2.12\", \"0.12.0\")\n+  // equal to cmd's: g8 playframework/play-scala-seed.g8 --name=../<<name>>\n+  private val gitterMain = \"giter8.Giter8\"\n+\n+  private val allTemplates = mutable.Seq.empty[MetalsQuickPickItem]\n+\n+  def allTemplatesFromWeb: Seq[MetalsQuickPickItem] = synchronized {\n+    if (allTemplates.nonEmpty) {\n+      allTemplates.toSeq\n+    } else {\n+      statusBar.trackBlockingTask(\"Fetching template information from Github\") {\n+        // Matches:\n+        // - [jimschubert/finatra.g8](https://github.com/jimschubert/finatra.g8)\n+        //(A simple Finatra 2.5 template with sbt-revolver and sbt-native-packager)\n+        val pattern = \"\"\"\\[(.+)\\]\\s*\\(.+\\)\\s*\\((.+)\\)\"\"\".r\n+        val all = for {\n+          result <- Try(requests.get(templatesUrl)).toOption.toIterable\n+          _ = if (result.statusCode != 200)\n+            client.showMessage(\n+              NewScalaProject.templateDownloadFailed(result.statusMessage)\n+            )\n+          if result.statusCode == 200\n+        } yield {\n+          pattern.findAllIn(result.text).matchData.toList.collect {\n+            case matching if matching.groupCount == 2 =>\n+              MetalsQuickPickItem(\n+                id = matching.group(1),\n+                label = s\"${icons.github} \" + matching.group(1),\n+                description = matching.group(2)\n+              )\n+          }\n+        }\n+        NewProjectProvider.back +: all.flatten.toSeq\n+      }\n+    }\n+  }\n+\n+  def checkNew(): Future[Unit] = {"
+  },
+  {
+    "id" : "9ca2aba7-0a48-44cf-b937-95c672011ef9",
+    "prId" : 1728,
+    "comments" : [
+      {
+        "id" : "3853ab7a-1e2f-462f-b148-163d40e5cbb4",
+        "parentId" : null,
+        "author" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "body" : "'askForPath' (or sth similar to good convention askForName / askForTemplate)\r\nNice recursion :)",
+        "createdAt" : "2020-06-05T10:36:56Z",
+        "updatedAt" : "2020-06-15T12:58:29Z",
+        "lastEditedBy" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "95a07660-a92b-4168-90a0-b613c2386833",
+        "parentId" : "3853ab7a-1e2f-462f-b148-163d40e5cbb4",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Changed the name!",
+        "createdAt" : "2020-06-05T13:02:31Z",
+        "updatedAt" : "2020-06-15T12:58:29Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "b8fc594e56a5aefca5b9a80fb273aca01de04ede",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,358 @@\n+package scala.meta.internal.builds\n+\n+import scala.collection.mutable\n+import scala.concurrent.ExecutionContext\n+import scala.concurrent.Future\n+import scala.util.Try\n+\n+import scala.meta.internal.metals.ClientCommands\n+import scala.meta.internal.metals.ClientConfiguration\n+import scala.meta.internal.metals.Icons\n+import scala.meta.internal.metals.JsonParser._\n+import scala.meta.internal.metals.Messages._\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.internal.metals.MetalsInputBoxParams\n+import scala.meta.internal.metals.MetalsLanguageClient\n+import scala.meta.internal.metals.MetalsOpenWindowParams\n+import scala.meta.internal.metals.MetalsQuickPickItem\n+import scala.meta.internal.metals.MetalsQuickPickParams\n+import scala.meta.internal.metals.StatusBar\n+import scala.meta.internal.metals.Time\n+import scala.meta.io.AbsolutePath\n+\n+import coursierapi._\n+import org.eclipse.lsp4j.ExecuteCommandParams\n+\n+class NewProjectProvider(\n+    buildTools: BuildTools,\n+    client: MetalsLanguageClient,\n+    statusBar: StatusBar,\n+    config: ClientConfiguration,\n+    time: Time,\n+    shell: ShellRunner,\n+    icons: Icons,\n+    workspace: AbsolutePath\n+)(implicit context: ExecutionContext) {\n+\n+  private val templatesUrl =\n+    \"https://github.com/foundweekends/giter8/wiki/giter8-templates.md\"\n+  private val gitterDependency = Dependency\n+    .of(\"org.foundweekends.giter8\", \"giter8_2.12\", \"0.12.0\")\n+  // equal to cmd's: g8 playframework/play-scala-seed.g8 --name=../<<name>>\n+  private val gitterMain = \"giter8.Giter8\"\n+\n+  private val allTemplates = mutable.Seq.empty[MetalsQuickPickItem]\n+\n+  def allTemplatesFromWeb: Seq[MetalsQuickPickItem] = synchronized {\n+    if (allTemplates.nonEmpty) {\n+      allTemplates.toSeq\n+    } else {\n+      statusBar.trackBlockingTask(\"Fetching template information from Github\") {\n+        // Matches:\n+        // - [jimschubert/finatra.g8](https://github.com/jimschubert/finatra.g8)\n+        //(A simple Finatra 2.5 template with sbt-revolver and sbt-native-packager)\n+        val pattern = \"\"\"\\[(.+)\\]\\s*\\(.+\\)\\s*\\((.+)\\)\"\"\".r\n+        val all = for {\n+          result <- Try(requests.get(templatesUrl)).toOption.toIterable\n+          _ = if (result.statusCode != 200)\n+            client.showMessage(\n+              NewScalaProject.templateDownloadFailed(result.statusMessage)\n+            )\n+          if result.statusCode == 200\n+        } yield {\n+          pattern.findAllIn(result.text).matchData.toList.collect {\n+            case matching if matching.groupCount == 2 =>\n+              MetalsQuickPickItem(\n+                id = matching.group(1),\n+                label = s\"${icons.github} \" + matching.group(1),\n+                description = matching.group(2)\n+              )\n+          }\n+        }\n+        NewProjectProvider.back +: all.flatten.toSeq\n+      }\n+    }\n+  }\n+\n+  def checkNew(): Future[Unit] = {\n+    val base = workspace.parent\n+    val withTemplate = askForTemplate(\n+      NewProjectProvider.curatedTemplates(icons)\n+    )\n+    withTemplate\n+      .flatMapOption { template =>\n+        constructPath(base).mapOptionInside { path => (template, path) }\n+      }\n+      .flatMapOption {\n+        case (template, path) =>\n+          askForName(nameFromPath(template.id), NewScalaProject.enterName)\n+            .map { name => Some((template, path, name)) }\n+      }\n+      .flatMap {\n+        case Some((template, inputPath, Some(projectName))) =>\n+          createNewProject(\n+            inputPath,\n+            template.label.replace(s\"${icons.github} \", \"\"),\n+            projectName\n+          )\n+        // It's fine to just return if the user resigned\n+        case _ => Future.successful(())\n+      }\n+  }\n+\n+  private def createNewProject(\n+      inputPath: AbsolutePath,\n+      template: String,\n+      projectName: String\n+  ): Future[Unit] = {\n+    val projectPath = inputPath.resolve(projectName)\n+    val parent = projectPath.parent\n+    projectPath.createDirectories()\n+    val command = List(\n+      template,\n+      s\"--name=${projectPath.filename}\"\n+    )\n+    shell\n+      .runJava(\n+        gitterDependency,\n+        gitterMain,\n+        parent,\n+        command\n+      )\n+      .flatMap {\n+        case result if result == 0 =>\n+          askForWindow(projectPath)\n+        case _ =>\n+          Future.successful {\n+            client.showMessage(\n+              NewScalaProject\n+                .creationFailed(template, parent.toString())\n+            )\n+          }\n+      }\n+  }\n+\n+  private def askForWindow(projectPath: AbsolutePath): Future[Unit] = {\n+    def openWindow(newWindow: Boolean) = {\n+      val params = MetalsOpenWindowParams(\n+        projectPath.toURI.toString(),\n+        new java.lang.Boolean(newWindow)\n+      )\n+      val command = new ExecuteCommandParams(\n+        ClientCommands.OpenWindow.id,\n+        List[Object](\n+          params.toJsonObject\n+        ).asJava\n+      )\n+      client.metalsExecuteClientCommand(command)\n+    }\n+\n+    if (config.isOpenNewWindowProvider()) {\n+      client\n+        .showMessageRequest(NewScalaProject.askForNewWindowParams())\n+        .asScala\n+        .map {\n+          case msg if msg == NewScalaProject.no =>\n+            openWindow(newWindow = false)\n+          case msg if msg == NewScalaProject.yes =>\n+            openWindow(newWindow = true)\n+          case _ =>\n+        }\n+    } else {\n+      Future.successful {\n+        client.showMessage(NewScalaProject.newProjectCreated(projectPath))\n+      }\n+    }\n+  }\n+\n+  private def askForTemplate(\n+      templates: Seq[MetalsQuickPickItem]\n+  ): Future[Option[MetalsQuickPickItem]] = {\n+    client\n+      .metalsQuickPick(\n+        MetalsQuickPickParams(\n+          templates.asJava,\n+          placeHolder = NewScalaProject.selectTheTemplate\n+        )\n+      )\n+      .asScala\n+      .flatMap {\n+        case kind if kind.itemId == NewProjectProvider.more.id =>\n+          askForTemplate(allTemplatesFromWeb)\n+        case kind if kind.itemId == NewProjectProvider.back.id =>\n+          askForTemplate(NewProjectProvider.curatedTemplates(icons))\n+        case kind if kind.itemId == NewProjectProvider.custom.id =>\n+          askForName(\"\", NewScalaProject.enterG8Template)\n+            .mapOptionInside { g8Path =>\n+              MetalsQuickPickItem(\n+                nameFromPath(g8Path),\n+                g8Path,\n+                NewProjectProvider.custom.description\n+              )\n+            }\n+        case kind if !kind.cancelled =>\n+          Future.successful(\n+            templates\n+              .find(_.id == kind.itemId)\n+          )\n+        case _ => Future.successful(None)\n+      }\n+  }\n+\n+  private def askForName(\n+      default: String,\n+      prompt: String\n+  ): Future[Option[String]] = {\n+    if (config.isInputBoxEnabled()) {\n+      client\n+        .metalsInputBox(\n+          MetalsInputBoxParams(\n+            prompt = prompt,\n+            value = default\n+          )\n+        )\n+        .asScala\n+        .flatMap {\n+          case name if !name.cancelled && name.value.nonEmpty =>\n+            Future.successful(Some(name.value))\n+          case name if name.cancelled =>\n+            Future.successful(None)\n+          // reask if empty\n+          case _ => askForName(default, prompt)\n+        }\n+    } else {\n+      Future.successful(Some(default))\n+    }\n+  }\n+\n+  private def constructPath("
+  },
+  {
+    "id" : "df6d7996-4e83-4380-8186-5dfbbe9f2836",
+    "prId" : 1728,
+    "comments" : [
+      {
+        "id" : "451ead1d-3505-490c-9045-b915a4ddc6c3",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "I added a couple of new templates as well as one done by my colleague around Akka and kubernetes. The plan is to keep this list small so that we can be sure of the \"curated\" templates. It's always possible to manually enter a template or pick one from the list in https://github.com/foundweekends/giter8/wiki/giter8-templates\r\n\r\nLet me know if any templates could benefit of being added to the list here.",
+        "createdAt" : "2020-06-11T12:23:23Z",
+        "updatedAt" : "2020-06-15T12:58:29Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b8fc594e56a5aefca5b9a80fb273aca01de04ede",
+    "line" : 376,
+    "diffHunk" : "@@ -0,0 +1,359 @@\n+package scala.meta.internal.builds\n+\n+import scala.collection.mutable\n+import scala.concurrent.ExecutionContext\n+import scala.concurrent.Future\n+import scala.util.Try\n+\n+import scala.meta.internal.metals.ClientCommands\n+import scala.meta.internal.metals.ClientConfiguration\n+import scala.meta.internal.metals.Icons\n+import scala.meta.internal.metals.JsonParser._\n+import scala.meta.internal.metals.Messages._\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.internal.metals.MetalsInputBoxParams\n+import scala.meta.internal.metals.MetalsLanguageClient\n+import scala.meta.internal.metals.MetalsOpenWindowParams\n+import scala.meta.internal.metals.MetalsQuickPickItem\n+import scala.meta.internal.metals.MetalsQuickPickParams\n+import scala.meta.internal.metals.StatusBar\n+import scala.meta.internal.metals.Time\n+import scala.meta.io.AbsolutePath\n+\n+import coursierapi._\n+import org.eclipse.lsp4j.ExecuteCommandParams\n+\n+class NewProjectProvider(\n+    buildTools: BuildTools,\n+    client: MetalsLanguageClient,\n+    statusBar: StatusBar,\n+    config: ClientConfiguration,\n+    time: Time,\n+    shell: ShellRunner,\n+    icons: Icons,\n+    workspace: AbsolutePath\n+)(implicit context: ExecutionContext) {\n+\n+  private val templatesUrl =\n+    \"https://github.com/foundweekends/giter8/wiki/giter8-templates.md\"\n+  private val giterDependency = Dependency\n+    .of(\"org.foundweekends.giter8\", \"giter8_2.12\", \"0.12.0\")\n+  // equal to cmd's: g8 playframework/play-scala-seed.g8 --name=../<<name>>\n+  private val giterMain = \"giter8.Giter8\"\n+\n+  private val allTemplates = mutable.MutableList.empty[MetalsQuickPickItem]\n+\n+  def allTemplatesFromWeb: Seq[MetalsQuickPickItem] = synchronized {\n+    if (allTemplates.nonEmpty) {\n+      allTemplates.toSeq\n+    } else {\n+      statusBar.trackBlockingTask(\"Fetching template information from Github\") {\n+        // Matches:\n+        // - [jimschubert/finatra.g8](https://github.com/jimschubert/finatra.g8)\n+        //(A simple Finatra 2.5 template with sbt-revolver and sbt-native-packager)\n+        val pattern = \"\"\"\\[(.+)\\]\\s*\\(.+\\)\\s*\\((.+)\\)\"\"\".r\n+        val all = for {\n+          result <- Try(requests.get(templatesUrl)).toOption.toIterable\n+          _ = if (result.statusCode != 200)\n+            client.showMessage(\n+              NewScalaProject.templateDownloadFailed(result.statusMessage)\n+            )\n+          if result.statusCode == 200\n+        } yield {\n+          pattern.findAllIn(result.text).matchData.toList.collect {\n+            case matching if matching.groupCount == 2 =>\n+              MetalsQuickPickItem(\n+                id = matching.group(1),\n+                label = s\"${icons.github} \" + matching.group(1),\n+                description = matching.group(2)\n+              )\n+          }\n+        }\n+        allTemplates ++= all.flatten\n+      }\n+    }\n+    NewProjectProvider.back +: allTemplates.toSeq\n+  }\n+\n+  def createNewProjectFromTemplate(): Future[Unit] = {\n+    val base = workspace.parent\n+    val withTemplate = askForTemplate(\n+      NewProjectProvider.curatedTemplates(icons)\n+    )\n+    withTemplate\n+      .flatMapOption { template =>\n+        askForPath(base).mapOptionInside { path => (template, path) }\n+      }\n+      .flatMapOption {\n+        case (template, path) =>\n+          askForName(nameFromPath(template.id), NewScalaProject.enterName)\n+            .map { name => Some((template, path, name)) }\n+      }\n+      .flatMap {\n+        case Some((template, inputPath, Some(projectName))) =>\n+          createNewProject(\n+            inputPath,\n+            template.label.replace(s\"${icons.github} \", \"\"),\n+            projectName\n+          )\n+        // It's fine to just return if the user resigned\n+        case _ => Future.successful(())\n+      }\n+  }\n+\n+  private def createNewProject(\n+      inputPath: AbsolutePath,\n+      template: String,\n+      projectName: String\n+  ): Future[Unit] = {\n+    val projectPath = inputPath.resolve(projectName)\n+    val parent = projectPath.parent\n+    projectPath.createDirectories()\n+    val command = List(\n+      template,\n+      s\"--name=${projectPath.filename}\"\n+    )\n+    shell\n+      .runJava(\n+        giterDependency,\n+        giterMain,\n+        parent,\n+        command\n+      )\n+      .flatMap {\n+        case result if result == 0 =>\n+          askForWindow(projectPath)\n+        case _ =>\n+          Future.successful {\n+            client.showMessage(\n+              NewScalaProject\n+                .creationFailed(template, parent.toString())\n+            )\n+          }\n+      }\n+  }\n+\n+  private def askForWindow(projectPath: AbsolutePath): Future[Unit] = {\n+    def openWindow(newWindow: Boolean) = {\n+      val params = MetalsOpenWindowParams(\n+        projectPath.toURI.toString(),\n+        new java.lang.Boolean(newWindow)\n+      )\n+      val command = new ExecuteCommandParams(\n+        ClientCommands.OpenWindow.id,\n+        List[Object](\n+          params.toJsonObject\n+        ).asJava\n+      )\n+      client.metalsExecuteClientCommand(command)\n+    }\n+\n+    if (config.isOpenNewWindowProvider()) {\n+      client\n+        .showMessageRequest(NewScalaProject.askForNewWindowParams())\n+        .asScala\n+        .map {\n+          case msg if msg == NewScalaProject.no =>\n+            openWindow(newWindow = false)\n+          case msg if msg == NewScalaProject.yes =>\n+            openWindow(newWindow = true)\n+          case _ =>\n+        }\n+    } else {\n+      Future.successful {\n+        client.showMessage(NewScalaProject.newProjectCreated(projectPath))\n+      }\n+    }\n+  }\n+\n+  private def askForTemplate(\n+      templates: Seq[MetalsQuickPickItem]\n+  ): Future[Option[MetalsQuickPickItem]] = {\n+    client\n+      .metalsQuickPick(\n+        MetalsQuickPickParams(\n+          templates.asJava,\n+          placeHolder = NewScalaProject.selectTheTemplate\n+        )\n+      )\n+      .asScala\n+      .flatMap {\n+        case kind if kind.itemId == NewProjectProvider.more.id =>\n+          askForTemplate(allTemplatesFromWeb)\n+        case kind if kind.itemId == NewProjectProvider.back.id =>\n+          askForTemplate(NewProjectProvider.curatedTemplates(icons))\n+        case kind if kind.itemId == NewProjectProvider.custom.id =>\n+          askForName(\"\", NewScalaProject.enterG8Template)\n+            .mapOptionInside { g8Path =>\n+              MetalsQuickPickItem(\n+                nameFromPath(g8Path),\n+                g8Path,\n+                NewProjectProvider.custom.description\n+              )\n+            }\n+        case kind if !kind.cancelled =>\n+          Future.successful(\n+            templates\n+              .find(_.id == kind.itemId)\n+          )\n+        case _ => Future.successful(None)\n+      }\n+  }\n+\n+  private def askForName(\n+      default: String,\n+      prompt: String\n+  ): Future[Option[String]] = {\n+    if (config.isInputBoxEnabled()) {\n+      client\n+        .metalsInputBox(\n+          MetalsInputBoxParams(\n+            prompt = prompt,\n+            value = default\n+          )\n+        )\n+        .asScala\n+        .flatMap {\n+          case name if !name.cancelled && name.value.nonEmpty =>\n+            Future.successful(Some(name.value))\n+          case name if name.cancelled =>\n+            Future.successful(None)\n+          // reask if empty\n+          case _ => askForName(default, prompt)\n+        }\n+    } else {\n+      Future.successful(Some(default))\n+    }\n+  }\n+\n+  private def askForPath(\n+      from: AbsolutePath\n+  ): Future[Option[AbsolutePath]] = {\n+    val paths = from.list.toList\n+      .collect {\n+        case path if path.isDirectory =>\n+          MetalsQuickPickItem(\n+            id = path.filename,\n+            label = s\"${icons.folder} ${path.filename}\"\n+          )\n+      }\n+    val currentDir =\n+      MetalsQuickPickItem(id = \"ok\", label = s\"${icons.check} Ok\")\n+    val parentDir =\n+      MetalsQuickPickItem(id = \"..\", label = s\"${icons.folder} ..\")\n+    val includeUp = if (from.hasParent) List(parentDir) else Nil\n+    client\n+      .metalsQuickPick(\n+        MetalsQuickPickParams(\n+          (currentDir :: includeUp ::: paths).asJava,\n+          placeHolder = from.toString()\n+        )\n+      )\n+      .asScala\n+      .flatMap {\n+        case path if path.cancelled =>\n+          Future.successful(None)\n+        case path if path.itemId == currentDir.id =>\n+          Future.successful(Some(from))\n+        case path if path.itemId == parentDir.id =>\n+          askForPath(from.parent)\n+        case path =>\n+          askForPath(from.resolve(path.itemId))\n+      }\n+  }\n+\n+  // scala/hello-world.g8 -> hello-world\n+  private def nameFromPath(g8Path: String) = {\n+    g8Path.replaceAll(\".*/\", \"\").replace(\".g8\", \"\")\n+  }\n+}\n+\n+object NewProjectProvider {\n+\n+  val custom: MetalsQuickPickItem = MetalsQuickPickItem(\n+    id = \"custom\",\n+    label = \"Custom\",\n+    description = \"Enter template manually\"\n+  )\n+\n+  val more: MetalsQuickPickItem = MetalsQuickPickItem(\n+    id = \"more\",\n+    label = \"Discover more...\",\n+    description = \"From github.com/foundweekends/giter8/wiki/giter8-templates\"\n+  )\n+\n+  val back: MetalsQuickPickItem = MetalsQuickPickItem(\n+    id = \"back\",\n+    label = \"Back\",\n+    description = \"Back to curated Metals templates\"\n+  )\n+\n+  def curatedTemplates(icons: Icons): Seq[MetalsQuickPickItem] = {\n+    Seq(\n+      MetalsQuickPickItem(\n+        id = \"scala/hello-world.g8\",\n+        label = \"scala/hello-world.g8\",\n+        description = \"A template to demonstrate a minimal Scala application\"\n+      ),\n+      MetalsQuickPickItem(\n+        id = \"scala/scalatest-example.g8\",\n+        label = \"scala/scalatest-example.g8\",\n+        description = \"A template for trying out ScalaTest\"\n+      ),\n+      MetalsQuickPickItem(\n+        id = \"akka/akka-scala-seed.g8\",\n+        label = \"akka/akka-scala-seed.g8\",\n+        description = \"A minimal seed template for an Akka with Scala build\"\n+      ),\n+      MetalsQuickPickItem(\n+        id = \"zio/zio-project-seed.g8\",\n+        label = \"zio/zio-project-seed.g8\",\n+        description = \"A template for ZIO\"\n+      ),\n+      MetalsQuickPickItem(\n+        id = \"playframework/play-scala-seed.g8\",\n+        label = \"playframework/play-scala-seed.g8\",\n+        description = \"Play Scala Seed Template\"\n+      ),\n+      MetalsQuickPickItem(\n+        id = \"lagom/lagom-scala.g8\",\n+        label = \"lagom/lagom-scala.g8\",\n+        description = \"A Lagom Scala seed template for sbt\"\n+      ),\n+      MetalsQuickPickItem(\n+        id = \"scala-native/scala-native.g8\",\n+        label = \"scala-native/scala-native.g8\",\n+        description = \"Scala Native\"\n+      ),\n+      MetalsQuickPickItem(\n+        id = \"lampepfl/dotty.g8\",\n+        label = \"lampepfl/dotty.g8\",\n+        description = \"A template for trying out Dotty\"\n+      ),\n+      MetalsQuickPickItem(\n+        id = \"http4s/http4s.g8\",\n+        label = \"http4s/http4s.g8\",\n+        description = \"Simple http4s example\"\n+      ),\n+      MetalsQuickPickItem(\n+        id = \"scalameta/mill-scala-seed.g8\",\n+        label = \"scalameta/mill-scala-seed.g8\",\n+        description = \"A Scala template for the Mill build tool\"\n+      ),\n+      MetalsQuickPickItem(\n+        id = \"scalameta/gradle-scala-seed.g8\",\n+        label = \"scalameta/gradle-scala-seed.g8\",\n+        description = \"A Scala template for the Gradle build tool\"\n+      ),\n+      MetalsQuickPickItem("
+  },
+  {
+    "id" : "79ccd33f-d3e8-48f1-9ded-48b715c83ce5",
+    "prId" : 1728,
+    "comments" : [
+      {
+        "id" : "04d55ff8-7394-41c7-8298-5a7fece5473d",
+        "parentId" : null,
+        "author" : {
+          "login" : "ckipp01",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/13974112?u=7b6a2ddab8eec6f99e4e40ae9b81f71cb5ba92e5&v=4"
+        },
+        "body" : "It's cool to see multiple build tool options 👍 ",
+        "createdAt" : "2020-06-11T12:59:44Z",
+        "updatedAt" : "2020-06-15T12:58:29Z",
+        "lastEditedBy" : {
+          "login" : "ckipp01",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/13974112?u=7b6a2ddab8eec6f99e4e40ae9b81f71cb5ba92e5&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b8fc594e56a5aefca5b9a80fb273aca01de04ede",
+    "line" : 374,
+    "diffHunk" : "@@ -0,0 +1,359 @@\n+package scala.meta.internal.builds\n+\n+import scala.collection.mutable\n+import scala.concurrent.ExecutionContext\n+import scala.concurrent.Future\n+import scala.util.Try\n+\n+import scala.meta.internal.metals.ClientCommands\n+import scala.meta.internal.metals.ClientConfiguration\n+import scala.meta.internal.metals.Icons\n+import scala.meta.internal.metals.JsonParser._\n+import scala.meta.internal.metals.Messages._\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.internal.metals.MetalsInputBoxParams\n+import scala.meta.internal.metals.MetalsLanguageClient\n+import scala.meta.internal.metals.MetalsOpenWindowParams\n+import scala.meta.internal.metals.MetalsQuickPickItem\n+import scala.meta.internal.metals.MetalsQuickPickParams\n+import scala.meta.internal.metals.StatusBar\n+import scala.meta.internal.metals.Time\n+import scala.meta.io.AbsolutePath\n+\n+import coursierapi._\n+import org.eclipse.lsp4j.ExecuteCommandParams\n+\n+class NewProjectProvider(\n+    buildTools: BuildTools,\n+    client: MetalsLanguageClient,\n+    statusBar: StatusBar,\n+    config: ClientConfiguration,\n+    time: Time,\n+    shell: ShellRunner,\n+    icons: Icons,\n+    workspace: AbsolutePath\n+)(implicit context: ExecutionContext) {\n+\n+  private val templatesUrl =\n+    \"https://github.com/foundweekends/giter8/wiki/giter8-templates.md\"\n+  private val giterDependency = Dependency\n+    .of(\"org.foundweekends.giter8\", \"giter8_2.12\", \"0.12.0\")\n+  // equal to cmd's: g8 playframework/play-scala-seed.g8 --name=../<<name>>\n+  private val giterMain = \"giter8.Giter8\"\n+\n+  private val allTemplates = mutable.MutableList.empty[MetalsQuickPickItem]\n+\n+  def allTemplatesFromWeb: Seq[MetalsQuickPickItem] = synchronized {\n+    if (allTemplates.nonEmpty) {\n+      allTemplates.toSeq\n+    } else {\n+      statusBar.trackBlockingTask(\"Fetching template information from Github\") {\n+        // Matches:\n+        // - [jimschubert/finatra.g8](https://github.com/jimschubert/finatra.g8)\n+        //(A simple Finatra 2.5 template with sbt-revolver and sbt-native-packager)\n+        val pattern = \"\"\"\\[(.+)\\]\\s*\\(.+\\)\\s*\\((.+)\\)\"\"\".r\n+        val all = for {\n+          result <- Try(requests.get(templatesUrl)).toOption.toIterable\n+          _ = if (result.statusCode != 200)\n+            client.showMessage(\n+              NewScalaProject.templateDownloadFailed(result.statusMessage)\n+            )\n+          if result.statusCode == 200\n+        } yield {\n+          pattern.findAllIn(result.text).matchData.toList.collect {\n+            case matching if matching.groupCount == 2 =>\n+              MetalsQuickPickItem(\n+                id = matching.group(1),\n+                label = s\"${icons.github} \" + matching.group(1),\n+                description = matching.group(2)\n+              )\n+          }\n+        }\n+        allTemplates ++= all.flatten\n+      }\n+    }\n+    NewProjectProvider.back +: allTemplates.toSeq\n+  }\n+\n+  def createNewProjectFromTemplate(): Future[Unit] = {\n+    val base = workspace.parent\n+    val withTemplate = askForTemplate(\n+      NewProjectProvider.curatedTemplates(icons)\n+    )\n+    withTemplate\n+      .flatMapOption { template =>\n+        askForPath(base).mapOptionInside { path => (template, path) }\n+      }\n+      .flatMapOption {\n+        case (template, path) =>\n+          askForName(nameFromPath(template.id), NewScalaProject.enterName)\n+            .map { name => Some((template, path, name)) }\n+      }\n+      .flatMap {\n+        case Some((template, inputPath, Some(projectName))) =>\n+          createNewProject(\n+            inputPath,\n+            template.label.replace(s\"${icons.github} \", \"\"),\n+            projectName\n+          )\n+        // It's fine to just return if the user resigned\n+        case _ => Future.successful(())\n+      }\n+  }\n+\n+  private def createNewProject(\n+      inputPath: AbsolutePath,\n+      template: String,\n+      projectName: String\n+  ): Future[Unit] = {\n+    val projectPath = inputPath.resolve(projectName)\n+    val parent = projectPath.parent\n+    projectPath.createDirectories()\n+    val command = List(\n+      template,\n+      s\"--name=${projectPath.filename}\"\n+    )\n+    shell\n+      .runJava(\n+        giterDependency,\n+        giterMain,\n+        parent,\n+        command\n+      )\n+      .flatMap {\n+        case result if result == 0 =>\n+          askForWindow(projectPath)\n+        case _ =>\n+          Future.successful {\n+            client.showMessage(\n+              NewScalaProject\n+                .creationFailed(template, parent.toString())\n+            )\n+          }\n+      }\n+  }\n+\n+  private def askForWindow(projectPath: AbsolutePath): Future[Unit] = {\n+    def openWindow(newWindow: Boolean) = {\n+      val params = MetalsOpenWindowParams(\n+        projectPath.toURI.toString(),\n+        new java.lang.Boolean(newWindow)\n+      )\n+      val command = new ExecuteCommandParams(\n+        ClientCommands.OpenWindow.id,\n+        List[Object](\n+          params.toJsonObject\n+        ).asJava\n+      )\n+      client.metalsExecuteClientCommand(command)\n+    }\n+\n+    if (config.isOpenNewWindowProvider()) {\n+      client\n+        .showMessageRequest(NewScalaProject.askForNewWindowParams())\n+        .asScala\n+        .map {\n+          case msg if msg == NewScalaProject.no =>\n+            openWindow(newWindow = false)\n+          case msg if msg == NewScalaProject.yes =>\n+            openWindow(newWindow = true)\n+          case _ =>\n+        }\n+    } else {\n+      Future.successful {\n+        client.showMessage(NewScalaProject.newProjectCreated(projectPath))\n+      }\n+    }\n+  }\n+\n+  private def askForTemplate(\n+      templates: Seq[MetalsQuickPickItem]\n+  ): Future[Option[MetalsQuickPickItem]] = {\n+    client\n+      .metalsQuickPick(\n+        MetalsQuickPickParams(\n+          templates.asJava,\n+          placeHolder = NewScalaProject.selectTheTemplate\n+        )\n+      )\n+      .asScala\n+      .flatMap {\n+        case kind if kind.itemId == NewProjectProvider.more.id =>\n+          askForTemplate(allTemplatesFromWeb)\n+        case kind if kind.itemId == NewProjectProvider.back.id =>\n+          askForTemplate(NewProjectProvider.curatedTemplates(icons))\n+        case kind if kind.itemId == NewProjectProvider.custom.id =>\n+          askForName(\"\", NewScalaProject.enterG8Template)\n+            .mapOptionInside { g8Path =>\n+              MetalsQuickPickItem(\n+                nameFromPath(g8Path),\n+                g8Path,\n+                NewProjectProvider.custom.description\n+              )\n+            }\n+        case kind if !kind.cancelled =>\n+          Future.successful(\n+            templates\n+              .find(_.id == kind.itemId)\n+          )\n+        case _ => Future.successful(None)\n+      }\n+  }\n+\n+  private def askForName(\n+      default: String,\n+      prompt: String\n+  ): Future[Option[String]] = {\n+    if (config.isInputBoxEnabled()) {\n+      client\n+        .metalsInputBox(\n+          MetalsInputBoxParams(\n+            prompt = prompt,\n+            value = default\n+          )\n+        )\n+        .asScala\n+        .flatMap {\n+          case name if !name.cancelled && name.value.nonEmpty =>\n+            Future.successful(Some(name.value))\n+          case name if name.cancelled =>\n+            Future.successful(None)\n+          // reask if empty\n+          case _ => askForName(default, prompt)\n+        }\n+    } else {\n+      Future.successful(Some(default))\n+    }\n+  }\n+\n+  private def askForPath(\n+      from: AbsolutePath\n+  ): Future[Option[AbsolutePath]] = {\n+    val paths = from.list.toList\n+      .collect {\n+        case path if path.isDirectory =>\n+          MetalsQuickPickItem(\n+            id = path.filename,\n+            label = s\"${icons.folder} ${path.filename}\"\n+          )\n+      }\n+    val currentDir =\n+      MetalsQuickPickItem(id = \"ok\", label = s\"${icons.check} Ok\")\n+    val parentDir =\n+      MetalsQuickPickItem(id = \"..\", label = s\"${icons.folder} ..\")\n+    val includeUp = if (from.hasParent) List(parentDir) else Nil\n+    client\n+      .metalsQuickPick(\n+        MetalsQuickPickParams(\n+          (currentDir :: includeUp ::: paths).asJava,\n+          placeHolder = from.toString()\n+        )\n+      )\n+      .asScala\n+      .flatMap {\n+        case path if path.cancelled =>\n+          Future.successful(None)\n+        case path if path.itemId == currentDir.id =>\n+          Future.successful(Some(from))\n+        case path if path.itemId == parentDir.id =>\n+          askForPath(from.parent)\n+        case path =>\n+          askForPath(from.resolve(path.itemId))\n+      }\n+  }\n+\n+  // scala/hello-world.g8 -> hello-world\n+  private def nameFromPath(g8Path: String) = {\n+    g8Path.replaceAll(\".*/\", \"\").replace(\".g8\", \"\")\n+  }\n+}\n+\n+object NewProjectProvider {\n+\n+  val custom: MetalsQuickPickItem = MetalsQuickPickItem(\n+    id = \"custom\",\n+    label = \"Custom\",\n+    description = \"Enter template manually\"\n+  )\n+\n+  val more: MetalsQuickPickItem = MetalsQuickPickItem(\n+    id = \"more\",\n+    label = \"Discover more...\",\n+    description = \"From github.com/foundweekends/giter8/wiki/giter8-templates\"\n+  )\n+\n+  val back: MetalsQuickPickItem = MetalsQuickPickItem(\n+    id = \"back\",\n+    label = \"Back\",\n+    description = \"Back to curated Metals templates\"\n+  )\n+\n+  def curatedTemplates(icons: Icons): Seq[MetalsQuickPickItem] = {\n+    Seq(\n+      MetalsQuickPickItem(\n+        id = \"scala/hello-world.g8\",\n+        label = \"scala/hello-world.g8\",\n+        description = \"A template to demonstrate a minimal Scala application\"\n+      ),\n+      MetalsQuickPickItem(\n+        id = \"scala/scalatest-example.g8\",\n+        label = \"scala/scalatest-example.g8\",\n+        description = \"A template for trying out ScalaTest\"\n+      ),\n+      MetalsQuickPickItem(\n+        id = \"akka/akka-scala-seed.g8\",\n+        label = \"akka/akka-scala-seed.g8\",\n+        description = \"A minimal seed template for an Akka with Scala build\"\n+      ),\n+      MetalsQuickPickItem(\n+        id = \"zio/zio-project-seed.g8\",\n+        label = \"zio/zio-project-seed.g8\",\n+        description = \"A template for ZIO\"\n+      ),\n+      MetalsQuickPickItem(\n+        id = \"playframework/play-scala-seed.g8\",\n+        label = \"playframework/play-scala-seed.g8\",\n+        description = \"Play Scala Seed Template\"\n+      ),\n+      MetalsQuickPickItem(\n+        id = \"lagom/lagom-scala.g8\",\n+        label = \"lagom/lagom-scala.g8\",\n+        description = \"A Lagom Scala seed template for sbt\"\n+      ),\n+      MetalsQuickPickItem(\n+        id = \"scala-native/scala-native.g8\",\n+        label = \"scala-native/scala-native.g8\",\n+        description = \"Scala Native\"\n+      ),\n+      MetalsQuickPickItem(\n+        id = \"lampepfl/dotty.g8\",\n+        label = \"lampepfl/dotty.g8\",\n+        description = \"A template for trying out Dotty\"\n+      ),\n+      MetalsQuickPickItem(\n+        id = \"http4s/http4s.g8\",\n+        label = \"http4s/http4s.g8\",\n+        description = \"Simple http4s example\"\n+      ),\n+      MetalsQuickPickItem(\n+        id = \"scalameta/mill-scala-seed.g8\",\n+        label = \"scalameta/mill-scala-seed.g8\",\n+        description = \"A Scala template for the Mill build tool\"\n+      ),\n+      MetalsQuickPickItem(\n+        id = \"scalameta/gradle-scala-seed.g8\",\n+        label = \"scalameta/gradle-scala-seed.g8\",\n+        description = \"A Scala template for the Gradle build tool\""
+  },
+  {
+    "id" : "24d54e5a-134a-47c4-9df9-1c7b54fba32c",
+    "prId" : 1728,
+    "comments" : [
+      {
+        "id" : "52a4977d-a36b-4d85-b213-e230992fdb0e",
+        "parentId" : null,
+        "author" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "body" : "this `if` branch doesn't matter as you don't assign result",
+        "createdAt" : "2020-06-15T06:50:49Z",
+        "updatedAt" : "2020-06-15T12:58:29Z",
+        "lastEditedBy" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "b8fc594e56a5aefca5b9a80fb273aca01de04ede",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,384 @@\n+package scala.meta.internal.builds\n+\n+import java.io.File\n+\n+import scala.collection.mutable\n+import scala.concurrent.ExecutionContext\n+import scala.concurrent.Future\n+import scala.util.Try\n+\n+import scala.meta.internal.metals.ClientCommands\n+import scala.meta.internal.metals.ClientConfiguration\n+import scala.meta.internal.metals.Icons\n+import scala.meta.internal.metals.JsonParser._\n+import scala.meta.internal.metals.Messages._\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.internal.metals.MetalsInputBoxParams\n+import scala.meta.internal.metals.MetalsLanguageClient\n+import scala.meta.internal.metals.MetalsOpenWindowParams\n+import scala.meta.internal.metals.MetalsQuickPickItem\n+import scala.meta.internal.metals.MetalsQuickPickParams\n+import scala.meta.internal.metals.StatusBar\n+import scala.meta.internal.metals.Time\n+import scala.meta.io.AbsolutePath\n+\n+import coursierapi._\n+import org.eclipse.lsp4j.ExecuteCommandParams\n+\n+class NewProjectProvider(\n+    buildTools: BuildTools,\n+    client: MetalsLanguageClient,\n+    statusBar: StatusBar,\n+    config: ClientConfiguration,\n+    time: Time,\n+    shell: ShellRunner,\n+    icons: Icons,\n+    workspace: AbsolutePath\n+)(implicit context: ExecutionContext) {\n+\n+  private val templatesUrl =\n+    \"https://github.com/foundweekends/giter8/wiki/giter8-templates.md\"\n+  private val giterDependency = Dependency\n+    .of(\"org.foundweekends.giter8\", \"giter8_2.12\", \"0.13.0-M1\")\n+  // equal to cmd's: g8 playframework/play-scala-seed.g8 --name=../<<name>>\n+  private val giterMain = \"giter8.Giter8\"\n+\n+  private val allTemplates = mutable.MutableList.empty[MetalsQuickPickItem]\n+\n+  def allTemplatesFromWeb: Seq[MetalsQuickPickItem] = synchronized {\n+    if (allTemplates.nonEmpty) {\n+      allTemplates.toSeq"
+  },
+  {
+    "id" : "b9c305c5-d056-4e6d-a843-1b5d9867b6ba",
+    "prId" : 1728,
+    "comments" : [
+      {
+        "id" : "23c42594-1100-420b-ba31-170d923088cd",
+        "parentId" : null,
+        "author" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "body" : "`case ExitCodes.Success =>`",
+        "createdAt" : "2020-06-15T06:59:56Z",
+        "updatedAt" : "2020-06-15T12:58:29Z",
+        "lastEditedBy" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "dc0c9825-ed2e-4d7f-b5b4-f0d5418b5661",
+        "parentId" : "23c42594-1100-420b-ba31-170d923088cd",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Fixed!",
+        "createdAt" : "2020-06-15T10:34:52Z",
+        "updatedAt" : "2020-06-15T12:58:29Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "b8fc594e56a5aefca5b9a80fb273aca01de04ede",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,384 @@\n+package scala.meta.internal.builds\n+\n+import java.io.File\n+\n+import scala.collection.mutable\n+import scala.concurrent.ExecutionContext\n+import scala.concurrent.Future\n+import scala.util.Try\n+\n+import scala.meta.internal.metals.ClientCommands\n+import scala.meta.internal.metals.ClientConfiguration\n+import scala.meta.internal.metals.Icons\n+import scala.meta.internal.metals.JsonParser._\n+import scala.meta.internal.metals.Messages._\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.internal.metals.MetalsInputBoxParams\n+import scala.meta.internal.metals.MetalsLanguageClient\n+import scala.meta.internal.metals.MetalsOpenWindowParams\n+import scala.meta.internal.metals.MetalsQuickPickItem\n+import scala.meta.internal.metals.MetalsQuickPickParams\n+import scala.meta.internal.metals.StatusBar\n+import scala.meta.internal.metals.Time\n+import scala.meta.io.AbsolutePath\n+\n+import coursierapi._\n+import org.eclipse.lsp4j.ExecuteCommandParams\n+\n+class NewProjectProvider(\n+    buildTools: BuildTools,\n+    client: MetalsLanguageClient,\n+    statusBar: StatusBar,\n+    config: ClientConfiguration,\n+    time: Time,\n+    shell: ShellRunner,\n+    icons: Icons,\n+    workspace: AbsolutePath\n+)(implicit context: ExecutionContext) {\n+\n+  private val templatesUrl =\n+    \"https://github.com/foundweekends/giter8/wiki/giter8-templates.md\"\n+  private val giterDependency = Dependency\n+    .of(\"org.foundweekends.giter8\", \"giter8_2.12\", \"0.13.0-M1\")\n+  // equal to cmd's: g8 playframework/play-scala-seed.g8 --name=../<<name>>\n+  private val giterMain = \"giter8.Giter8\"\n+\n+  private val allTemplates = mutable.MutableList.empty[MetalsQuickPickItem]\n+\n+  def allTemplatesFromWeb: Seq[MetalsQuickPickItem] = synchronized {\n+    if (allTemplates.nonEmpty) {\n+      allTemplates.toSeq\n+    } else {\n+      statusBar.trackBlockingTask(\"Fetching template information from Github\") {\n+        // Matches:\n+        // - [jimschubert/finatra.g8](https://github.com/jimschubert/finatra.g8)\n+        //(A simple Finatra 2.5 template with sbt-revolver and sbt-native-packager)\n+        val pattern = \"\"\"\\[(.+)\\]\\s*\\(.+\\)\\s*\\((.+)\\)\"\"\".r\n+        val all = for {\n+          result <- Try(requests.get(templatesUrl)).toOption.toIterable\n+          _ = if (result.statusCode != 200)\n+            client.showMessage(\n+              NewScalaProject.templateDownloadFailed(result.statusMessage)\n+            )\n+          if result.statusCode == 200\n+        } yield {\n+          pattern.findAllIn(result.text).matchData.toList.collect {\n+            case matching if matching.groupCount == 2 =>\n+              MetalsQuickPickItem(\n+                id = matching.group(1),\n+                label = s\"${icons.github} \" + matching.group(1),\n+                description = matching.group(2)\n+              )\n+          }\n+        }\n+        allTemplates ++= all.flatten\n+      }\n+    }\n+    NewProjectProvider.back +: allTemplates.toSeq\n+  }\n+\n+  def createNewProjectFromTemplate(): Future[Unit] = {\n+    val base = workspace.parent\n+    val withTemplate = askForTemplate(\n+      NewProjectProvider.curatedTemplates(icons)\n+    )\n+    withTemplate\n+      .flatMapOption { template =>\n+        askForPath(Some(base)).mapOptionInside { path => (template, path) }\n+      }\n+      .flatMapOption {\n+        case (template, path) =>\n+          askForName(nameFromPath(template.id), NewScalaProject.enterName)\n+            .map { name => Some((template, path, name)) }\n+      }\n+      .flatMap {\n+        case Some((template, inputPath, Some(projectName))) =>\n+          createNewProject(\n+            inputPath,\n+            template.label.replace(s\"${icons.github} \", \"\"),\n+            projectName\n+          )\n+        // It's fine to just return if the user resigned\n+        case _ => Future.successful(())\n+      }\n+  }\n+\n+  private def createNewProject(\n+      inputPath: AbsolutePath,\n+      template: String,\n+      projectName: String\n+  ): Future[Unit] = {\n+    val projectPath = inputPath.resolve(projectName)\n+    val parent = projectPath.parent\n+    projectPath.createDirectories()\n+    val command = List(\n+      template,\n+      s\"--name=${projectPath.filename}\"\n+    )\n+    shell\n+      .runJava(\n+        giterDependency,\n+        giterMain,\n+        parent,\n+        command\n+      )\n+      .flatMap {\n+        case result if result == 0 =>"
+  },
+  {
+    "id" : "6df87018-55f4-482b-a3c2-3485650eab06",
+    "prId" : 1728,
+    "comments" : [
+      {
+        "id" : "b4a8029a-5770-41ed-8182-5a1b7c2551e5",
+        "parentId" : null,
+        "author" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "body" : "(you can ignore if you want :D just a minor optimization)\r\n\r\nwe could change allTemplates to var but immutable.\r\nthen in `allTemplatesFromWeb`:\r\nif (empty)  { fetch() }\r\nreturn allTemplates\r\n\r\n(you don't need to convert mutable->immutable and add back each time you call this)",
+        "createdAt" : "2020-06-15T07:27:01Z",
+        "updatedAt" : "2020-06-15T12:58:29Z",
+        "lastEditedBy" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "8518162b-1f8d-4675-9e97-f5ece016852a",
+        "parentId" : "b4a8029a-5770-41ed-8182-5a1b7c2551e5",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "changed to var",
+        "createdAt" : "2020-06-15T10:35:21Z",
+        "updatedAt" : "2020-06-15T12:58:29Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "b8fc594e56a5aefca5b9a80fb273aca01de04ede",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,384 @@\n+package scala.meta.internal.builds\n+\n+import java.io.File\n+\n+import scala.collection.mutable\n+import scala.concurrent.ExecutionContext\n+import scala.concurrent.Future\n+import scala.util.Try\n+\n+import scala.meta.internal.metals.ClientCommands\n+import scala.meta.internal.metals.ClientConfiguration\n+import scala.meta.internal.metals.Icons\n+import scala.meta.internal.metals.JsonParser._\n+import scala.meta.internal.metals.Messages._\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.internal.metals.MetalsInputBoxParams\n+import scala.meta.internal.metals.MetalsLanguageClient\n+import scala.meta.internal.metals.MetalsOpenWindowParams\n+import scala.meta.internal.metals.MetalsQuickPickItem\n+import scala.meta.internal.metals.MetalsQuickPickParams\n+import scala.meta.internal.metals.StatusBar\n+import scala.meta.internal.metals.Time\n+import scala.meta.io.AbsolutePath\n+\n+import coursierapi._\n+import org.eclipse.lsp4j.ExecuteCommandParams\n+\n+class NewProjectProvider(\n+    buildTools: BuildTools,\n+    client: MetalsLanguageClient,\n+    statusBar: StatusBar,\n+    config: ClientConfiguration,\n+    time: Time,\n+    shell: ShellRunner,\n+    icons: Icons,\n+    workspace: AbsolutePath\n+)(implicit context: ExecutionContext) {\n+\n+  private val templatesUrl =\n+    \"https://github.com/foundweekends/giter8/wiki/giter8-templates.md\"\n+  private val giterDependency = Dependency\n+    .of(\"org.foundweekends.giter8\", \"giter8_2.12\", \"0.13.0-M1\")\n+  // equal to cmd's: g8 playframework/play-scala-seed.g8 --name=../<<name>>\n+  private val giterMain = \"giter8.Giter8\"\n+\n+  private val allTemplates = mutable.MutableList.empty[MetalsQuickPickItem]"
+  },
+  {
+    "id" : "90efe020-696f-4bec-b91e-c13704365302",
+    "prId" : 1728,
+    "comments" : [
+      {
+        "id" : "e5daac69-879a-4aee-8499-eb1ce4307240",
+        "parentId" : null,
+        "author" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "body" : "I would extract that to class field, it will be converted to regex only once and will be converted earlier and not add delay to fetching templates process(although it might not even be noticeable)\r\n",
+        "createdAt" : "2020-06-15T07:30:16Z",
+        "updatedAt" : "2020-06-15T12:58:29Z",
+        "lastEditedBy" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "61d18b0a-4691-47b0-90b4-0510de342b21",
+        "parentId" : "e5daac69-879a-4aee-8499-eb1ce4307240",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Added it to the object so that we can add a test for it.",
+        "createdAt" : "2020-06-15T10:35:43Z",
+        "updatedAt" : "2020-06-15T12:58:29Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "b8fc594e56a5aefca5b9a80fb273aca01de04ede",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,384 @@\n+package scala.meta.internal.builds\n+\n+import java.io.File\n+\n+import scala.collection.mutable\n+import scala.concurrent.ExecutionContext\n+import scala.concurrent.Future\n+import scala.util.Try\n+\n+import scala.meta.internal.metals.ClientCommands\n+import scala.meta.internal.metals.ClientConfiguration\n+import scala.meta.internal.metals.Icons\n+import scala.meta.internal.metals.JsonParser._\n+import scala.meta.internal.metals.Messages._\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.internal.metals.MetalsInputBoxParams\n+import scala.meta.internal.metals.MetalsLanguageClient\n+import scala.meta.internal.metals.MetalsOpenWindowParams\n+import scala.meta.internal.metals.MetalsQuickPickItem\n+import scala.meta.internal.metals.MetalsQuickPickParams\n+import scala.meta.internal.metals.StatusBar\n+import scala.meta.internal.metals.Time\n+import scala.meta.io.AbsolutePath\n+\n+import coursierapi._\n+import org.eclipse.lsp4j.ExecuteCommandParams\n+\n+class NewProjectProvider(\n+    buildTools: BuildTools,\n+    client: MetalsLanguageClient,\n+    statusBar: StatusBar,\n+    config: ClientConfiguration,\n+    time: Time,\n+    shell: ShellRunner,\n+    icons: Icons,\n+    workspace: AbsolutePath\n+)(implicit context: ExecutionContext) {\n+\n+  private val templatesUrl =\n+    \"https://github.com/foundweekends/giter8/wiki/giter8-templates.md\"\n+  private val giterDependency = Dependency\n+    .of(\"org.foundweekends.giter8\", \"giter8_2.12\", \"0.13.0-M1\")\n+  // equal to cmd's: g8 playframework/play-scala-seed.g8 --name=../<<name>>\n+  private val giterMain = \"giter8.Giter8\"\n+\n+  private val allTemplates = mutable.MutableList.empty[MetalsQuickPickItem]\n+\n+  def allTemplatesFromWeb: Seq[MetalsQuickPickItem] = synchronized {\n+    if (allTemplates.nonEmpty) {\n+      allTemplates.toSeq\n+    } else {\n+      statusBar.trackBlockingTask(\"Fetching template information from Github\") {\n+        // Matches:\n+        // - [jimschubert/finatra.g8](https://github.com/jimschubert/finatra.g8)\n+        //(A simple Finatra 2.5 template with sbt-revolver and sbt-native-packager)\n+        val pattern = \"\"\"\\[(.+)\\]\\s*\\(.+\\)\\s*\\((.+)\\)\"\"\".r"
+  },
+  {
+    "id" : "beea8838-dc64-40f1-82d3-3fd9fdd37143",
+    "prId" : 1728,
+    "comments" : [
+      {
+        "id" : "b5307726-ad3d-481c-921d-4aa97d5aa4fb",
+        "parentId" : null,
+        "author" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "body" : "It would be good to have simple unit test for this pattern.`[jimschubert/finatra.g8] (https://github.com/jimschubert/finatra.g8)` ~> regex ~> `('jimschubert/finatra.g8', 'https://github.com/jimschubert/finatra.g8')`\r\n\r\nSomeone can easily play with regex if needed in future.",
+        "createdAt" : "2020-06-15T07:36:07Z",
+        "updatedAt" : "2020-06-15T12:58:29Z",
+        "lastEditedBy" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "197efbd1-7a7a-45e5-9068-9d7a99caa910",
+        "parentId" : "b5307726-ad3d-481c-921d-4aa97d5aa4fb",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Add a separate test in the NewProjectLspSuite",
+        "createdAt" : "2020-06-15T10:36:00Z",
+        "updatedAt" : "2020-06-15T12:58:29Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "b8fc594e56a5aefca5b9a80fb273aca01de04ede",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,384 @@\n+package scala.meta.internal.builds\n+\n+import java.io.File\n+\n+import scala.collection.mutable\n+import scala.concurrent.ExecutionContext\n+import scala.concurrent.Future\n+import scala.util.Try\n+\n+import scala.meta.internal.metals.ClientCommands\n+import scala.meta.internal.metals.ClientConfiguration\n+import scala.meta.internal.metals.Icons\n+import scala.meta.internal.metals.JsonParser._\n+import scala.meta.internal.metals.Messages._\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.internal.metals.MetalsInputBoxParams\n+import scala.meta.internal.metals.MetalsLanguageClient\n+import scala.meta.internal.metals.MetalsOpenWindowParams\n+import scala.meta.internal.metals.MetalsQuickPickItem\n+import scala.meta.internal.metals.MetalsQuickPickParams\n+import scala.meta.internal.metals.StatusBar\n+import scala.meta.internal.metals.Time\n+import scala.meta.io.AbsolutePath\n+\n+import coursierapi._\n+import org.eclipse.lsp4j.ExecuteCommandParams\n+\n+class NewProjectProvider(\n+    buildTools: BuildTools,\n+    client: MetalsLanguageClient,\n+    statusBar: StatusBar,\n+    config: ClientConfiguration,\n+    time: Time,\n+    shell: ShellRunner,\n+    icons: Icons,\n+    workspace: AbsolutePath\n+)(implicit context: ExecutionContext) {\n+\n+  private val templatesUrl =\n+    \"https://github.com/foundweekends/giter8/wiki/giter8-templates.md\"\n+  private val giterDependency = Dependency\n+    .of(\"org.foundweekends.giter8\", \"giter8_2.12\", \"0.13.0-M1\")\n+  // equal to cmd's: g8 playframework/play-scala-seed.g8 --name=../<<name>>\n+  private val giterMain = \"giter8.Giter8\"\n+\n+  private val allTemplates = mutable.MutableList.empty[MetalsQuickPickItem]\n+\n+  def allTemplatesFromWeb: Seq[MetalsQuickPickItem] = synchronized {\n+    if (allTemplates.nonEmpty) {\n+      allTemplates.toSeq\n+    } else {\n+      statusBar.trackBlockingTask(\"Fetching template information from Github\") {\n+        // Matches:\n+        // - [jimschubert/finatra.g8](https://github.com/jimschubert/finatra.g8)\n+        //(A simple Finatra 2.5 template with sbt-revolver and sbt-native-packager)\n+        val pattern = \"\"\"\\[(.+)\\]\\s*\\(.+\\)\\s*\\((.+)\\)\"\"\".r"
+  },
+  {
+    "id" : "a3a769c6-6217-42a6-88a1-a1caae17b837",
+    "prId" : 1728,
+    "comments" : [
+      {
+        "id" : "1f8a61e8-0c83-46db-8748-ce7c89fc0e0b",
+        "parentId" : null,
+        "author" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "body" : "'not verified' can we use `mapOption` here instead of `flatMap`?",
+        "createdAt" : "2020-06-15T07:44:21Z",
+        "updatedAt" : "2020-06-15T12:58:29Z",
+        "lastEditedBy" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0d76d716-d844-4aee-9ae7-d2cee6230d7a",
+        "parentId" : "1f8a61e8-0c83-46db-8748-ce7c89fc0e0b",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "flatMap is better here, we could use `mapOption`, but it's not straightforward",
+        "createdAt" : "2020-06-15T10:36:36Z",
+        "updatedAt" : "2020-06-15T12:58:29Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b8fc594e56a5aefca5b9a80fb273aca01de04ede",
+    "line" : 97,
+    "diffHunk" : "@@ -0,0 +1,384 @@\n+package scala.meta.internal.builds\n+\n+import java.io.File\n+\n+import scala.collection.mutable\n+import scala.concurrent.ExecutionContext\n+import scala.concurrent.Future\n+import scala.util.Try\n+\n+import scala.meta.internal.metals.ClientCommands\n+import scala.meta.internal.metals.ClientConfiguration\n+import scala.meta.internal.metals.Icons\n+import scala.meta.internal.metals.JsonParser._\n+import scala.meta.internal.metals.Messages._\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.internal.metals.MetalsInputBoxParams\n+import scala.meta.internal.metals.MetalsLanguageClient\n+import scala.meta.internal.metals.MetalsOpenWindowParams\n+import scala.meta.internal.metals.MetalsQuickPickItem\n+import scala.meta.internal.metals.MetalsQuickPickParams\n+import scala.meta.internal.metals.StatusBar\n+import scala.meta.internal.metals.Time\n+import scala.meta.io.AbsolutePath\n+\n+import coursierapi._\n+import org.eclipse.lsp4j.ExecuteCommandParams\n+\n+class NewProjectProvider(\n+    buildTools: BuildTools,\n+    client: MetalsLanguageClient,\n+    statusBar: StatusBar,\n+    config: ClientConfiguration,\n+    time: Time,\n+    shell: ShellRunner,\n+    icons: Icons,\n+    workspace: AbsolutePath\n+)(implicit context: ExecutionContext) {\n+\n+  private val templatesUrl =\n+    \"https://github.com/foundweekends/giter8/wiki/giter8-templates.md\"\n+  private val giterDependency = Dependency\n+    .of(\"org.foundweekends.giter8\", \"giter8_2.12\", \"0.13.0-M1\")\n+  // equal to cmd's: g8 playframework/play-scala-seed.g8 --name=../<<name>>\n+  private val giterMain = \"giter8.Giter8\"\n+\n+  private val allTemplates = mutable.MutableList.empty[MetalsQuickPickItem]\n+\n+  def allTemplatesFromWeb: Seq[MetalsQuickPickItem] = synchronized {\n+    if (allTemplates.nonEmpty) {\n+      allTemplates.toSeq\n+    } else {\n+      statusBar.trackBlockingTask(\"Fetching template information from Github\") {\n+        // Matches:\n+        // - [jimschubert/finatra.g8](https://github.com/jimschubert/finatra.g8)\n+        //(A simple Finatra 2.5 template with sbt-revolver and sbt-native-packager)\n+        val pattern = \"\"\"\\[(.+)\\]\\s*\\(.+\\)\\s*\\((.+)\\)\"\"\".r\n+        val all = for {\n+          result <- Try(requests.get(templatesUrl)).toOption.toIterable\n+          _ = if (result.statusCode != 200)\n+            client.showMessage(\n+              NewScalaProject.templateDownloadFailed(result.statusMessage)\n+            )\n+          if result.statusCode == 200\n+        } yield {\n+          pattern.findAllIn(result.text).matchData.toList.collect {\n+            case matching if matching.groupCount == 2 =>\n+              MetalsQuickPickItem(\n+                id = matching.group(1),\n+                label = s\"${icons.github} \" + matching.group(1),\n+                description = matching.group(2)\n+              )\n+          }\n+        }\n+        allTemplates ++= all.flatten\n+      }\n+    }\n+    NewProjectProvider.back +: allTemplates.toSeq\n+  }\n+\n+  def createNewProjectFromTemplate(): Future[Unit] = {\n+    val base = workspace.parent\n+    val withTemplate = askForTemplate(\n+      NewProjectProvider.curatedTemplates(icons)\n+    )\n+    withTemplate\n+      .flatMapOption { template =>\n+        askForPath(Some(base)).mapOptionInside { path => (template, path) }\n+      }\n+      .flatMapOption {\n+        case (template, path) =>\n+          askForName(nameFromPath(template.id), NewScalaProject.enterName)\n+            .map { name => Some((template, path, name)) }\n+      }\n+      .flatMap {"
+  },
+  {
+    "id" : "d14688e6-95f2-4e6c-8153-294f29b8ebb6",
+    "prId" : 1840,
+    "comments" : [
+      {
+        "id" : "4e890831-944d-4c08-a870-55e0e7168ad3",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "These large diffs shouldn’t be necessary. I don’t remember the setting to keep the old behavior but I’m tempted to open an upstream issue about enabling it by default. No action needed here, just thinking out loud ",
+        "createdAt" : "2020-06-19T07:04:18Z",
+        "updatedAt" : "2020-06-19T09:40:38Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "961d6ddc05eac5a93c79be85a06377fe25b9317c",
+    "line" : 33,
+    "diffHunk" : "@@ -45,40 +45,43 @@ class NewProjectProvider(\n   private val giterMain = \"giter8.Giter8\"\n \n   private var allTemplates = Seq.empty[MetalsQuickPickItem]\n-  def allTemplatesFromWeb: Seq[MetalsQuickPickItem] = synchronized {\n-    if (allTemplates.nonEmpty) {\n-      allTemplates\n-    } else {\n-      statusBar.trackBlockingTask(\"Fetching template information from Github\") {\n-        // Matches:\n-        // - [jimschubert/finatra.g8](https://github.com/jimschubert/finatra.g8)\n-        //(A simple Finatra 2.5 template with sbt-revolver and sbt-native-packager)\n-        val all = for {\n-          result <- Try(requests.get(templatesUrl)).toOption.toIterable\n-          _ = if (result.statusCode != 200)\n-            client.showMessage(\n-              NewScalaProject.templateDownloadFailed(result.statusMessage)\n-            )\n-          if result.statusCode == 200\n-        } yield {\n-          NewProjectProvider.templatePattern\n-            .findAllIn(result.text)\n-            .matchData\n-            .toList\n-            .collect {\n-              case matching if matching.groupCount == 2 =>\n-                MetalsQuickPickItem(\n-                  id = matching.group(1),\n-                  label = s\"${icons.github}\" + matching.group(1),\n-                  description = matching.group(2)\n-                )\n-            }\n+  def allTemplatesFromWeb: Seq[MetalsQuickPickItem] =\n+    synchronized {"
+  }
+]

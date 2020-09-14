@@ -1,0 +1,312 @@
+[
+  {
+    "id" : "ba0999fb-7069-4c8f-972e-2953468c5bbd",
+    "prId" : 1466,
+    "comments" : [
+      {
+        "id" : "60fabaaa-5a90-4ed0-9215-877162e7b7c1",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "This will fail on Nil, could you handle that case?",
+        "createdAt" : "2020-04-03T08:35:28Z",
+        "updatedAt" : "2020-04-03T11:50:57Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d72fc182a42fd127dd0593dfbb3028ac615338b9",
+    "line" : 140,
+    "diffHunk" : "@@ -0,0 +1,235 @@\n+package scala.meta.internal.metals.debug\n+\n+import java.net.InetSocketAddress\n+import java.net.ServerSocket\n+import java.net.Socket\n+import java.net.URI\n+import java.{util => ju}\n+import java.util.concurrent.TimeUnit\n+import java.util.Collections.singletonList\n+import ch.epfl.scala.bsp4j.BuildTargetIdentifier\n+import ch.epfl.scala.{bsp4j => b}\n+import com.google.common.net.InetAddresses\n+import com.google.gson.JsonElement\n+import scala.meta.internal.metals.DefinitionProvider\n+import scala.meta.internal.metals.BuildTargets\n+import scala.meta.internal.metals.BuildTargetClasses\n+import scala.meta.internal.metals.MetalsLanguageClient\n+import ch.epfl.scala.{bsp4j => b}\n+import scala.concurrent.Future\n+import scala.concurrent.Promise\n+import scala.concurrent.ExecutionContext\n+import scala.meta.internal.metals.BuildServerConnection\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.internal.metals.DebugUnresolvedMainClassParams\n+import scala.meta.internal.metals.DebugUnresolvedTestClassParams\n+import scala.meta.internal.metals.BuildTargetClassesFinder\n+import scala.meta.internal.metals.Compilations\n+import scala.util.Try\n+import scala.util.Failure\n+import org.eclipse.lsp4j.MessageParams\n+import org.eclipse.lsp4j.MessageType\n+import scala.meta.internal.metals.JsonParser\n+import scala.meta.internal.metals.JsonParser._\n+import scala.meta.internal.metals.ClassNotFoundInBuildTargetException\n+import scala.meta.internal.metals.Messages.UnresolvedDebugSessionParams\n+\n+class DebugProvider(\n+    definitionProvider: DefinitionProvider,\n+    buildServer: => Option[BuildServerConnection],\n+    buildTargets: BuildTargets,\n+    buildTargetClasses: BuildTargetClasses,\n+    compilations: Compilations,\n+    languageClient: MetalsLanguageClient\n+) {\n+\n+  lazy val buildTargetClassesFinder = new BuildTargetClassesFinder(\n+    buildTargets,\n+    buildTargetClasses\n+  )\n+\n+  def start(\n+      parameters: b.DebugSessionParams\n+  )(implicit ec: ExecutionContext): Future[DebugServer] = {\n+    Future.fromTry(parseSessionName(parameters)).flatMap { sessionName =>\n+      val proxyServer = new ServerSocket(0)\n+      val host = InetAddresses.toUriString(proxyServer.getInetAddress)\n+      val port = proxyServer.getLocalPort\n+      val uri = URI.create(s\"tcp://$host:$port\")\n+      val connectedToServer = Promise[Unit]()\n+\n+      val awaitClient =\n+        () => Future(proxyServer.accept()).withTimeout(10, TimeUnit.SECONDS)\n+\n+      // long timeout, since server might take a while to compile the project\n+      val connectToServer = () => {\n+        buildServer\n+          .map(_.startDebugSession(parameters))\n+          .getOrElse(BuildServerUnavailableError)\n+          .withTimeout(60, TimeUnit.SECONDS)\n+          .map { uri =>\n+            val socket = connect(uri)\n+            connectedToServer.trySuccess(())\n+            socket\n+          }\n+      }\n+\n+      val proxyFactory = { () =>\n+        val targets = parameters.getTargets.asScala\n+          .map(_.getUri)\n+          .map(new BuildTargetIdentifier(_))\n+        val sourcePathProvider = new SourcePathProvider(\n+          definitionProvider,\n+          buildTargets,\n+          targets.toList\n+        )\n+        DebugProxy\n+          .open(sessionName, sourcePathProvider, awaitClient, connectToServer)\n+      }\n+      val server = new DebugServer(sessionName, uri, proxyFactory)\n+\n+      server.listen.andThen { case _ => proxyServer.close() }\n+\n+      connectedToServer.future.map(_ => server)\n+    }\n+  }\n+\n+  def resolveMainClassParams(\n+      params: DebugUnresolvedMainClassParams\n+  )(implicit ec: ExecutionContext): Future[b.DebugSessionParams] = {\n+    withRebuildRetry(() =>\n+      buildTargetClassesFinder\n+        .findMainClassAndItsBuildTarget(\n+          params.mainClass,\n+          Option(params.buildTarget)\n+        )\n+    ).map {\n+      case (clazz, target) :: others =>\n+        if (others.nonEmpty) {\n+          reportOtherBuildTargets(\n+            clazz.getClassName(),\n+            target,\n+            others,\n+            \"main\"\n+          )\n+        }\n+        clazz.setArguments(Option(params.args).getOrElse(List().asJava))\n+        clazz.setJvmOptions(\n+          Option(params.jvmOptions).getOrElse(List().asJava)\n+        )\n+        new b.DebugSessionParams(\n+          singletonList(target.getId()),\n+          b.DebugSessionParamsDataKind.SCALA_MAIN_CLASS,\n+          clazz.toJson\n+        )\n+    }\n+  }\n+\n+  def resolveTestClassParams(\n+      params: DebugUnresolvedTestClassParams\n+  )(implicit ec: ExecutionContext): Future[b.DebugSessionParams] = {\n+    withRebuildRetry(() => {\n+      buildTargetClassesFinder\n+        .findTestClassAndItsBuildTarget(\n+          params.testClass,\n+          Option(params.buildTarget)\n+        )\n+    }).map {"
+  },
+  {
+    "id" : "b59c89e8-d6d3-4a9d-953f-0a0f85ff1546",
+    "prId" : 1466,
+    "comments" : [
+      {
+        "id" : "268b1c0f-5b3c-4a7c-b700-30ae53eb1f4b",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "This will also fail on Nil, could you handle that case?",
+        "createdAt" : "2020-04-03T08:35:43Z",
+        "updatedAt" : "2020-04-03T11:50:57Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cb6ba5f1-1ef2-4875-a077-e282feacca07",
+        "parentId" : "268b1c0f-5b3c-4a7c-b700-30ae53eb1f4b",
+        "author" : {
+          "login" : "alekseiAlefirov",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/10850363?v=4"
+        },
+        "body" : "as I commented on `BuildTargetClassFinder#findMainClassAndItsBuildTarget` (above method def), it either returns `Success` with non-empty list, or `Failure`. So it should not be the case. I wish we had a type-level solution for that.",
+        "createdAt" : "2020-04-03T10:21:29Z",
+        "updatedAt" : "2020-04-03T11:50:57Z",
+        "lastEditedBy" : {
+          "login" : "alekseiAlefirov",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/10850363?v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "37738c6a-d0a3-4363-85c0-754369d4cc58",
+        "parentId" : "268b1c0f-5b3c-4a7c-b700-30ae53eb1f4b",
+        "author" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "body" : "Solution for NonEmptyList? You have `scalaz.NonEmptyList`, `cats.data.NonEmptyList`, everything is already included in dependencies",
+        "createdAt" : "2020-04-03T11:08:54Z",
+        "updatedAt" : "2020-04-03T11:50:57Z",
+        "lastEditedBy" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "15027bf3-5630-45a9-a685-5695d40433fb",
+        "parentId" : "268b1c0f-5b3c-4a7c-b700-30ae53eb1f4b",
+        "author" : {
+          "login" : "alekseiAlefirov",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/10850363?v=4"
+        },
+        "body" : "hmm, last time I checked (several months ago), `cats` just got eliminated from Metals, and it was said it's better to have less dependencies. Okay, thanks, @kpbochenek !",
+        "createdAt" : "2020-04-03T11:27:41Z",
+        "updatedAt" : "2020-04-03T11:50:57Z",
+        "lastEditedBy" : {
+          "login" : "alekseiAlefirov",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/10850363?v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2acd28ac-3f39-4cfd-bfd6-82879afd1f78",
+        "parentId" : "268b1c0f-5b3c-4a7c-b700-30ae53eb1f4b",
+        "author" : {
+          "login" : "alekseiAlefirov",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/10850363?v=4"
+        },
+        "body" : "okay, seems like there's no cats used in the main code, and @tgodzik recommended not to start.\r\n^ fixed with `throw NoSuchElement(Exception)` for the `Nil` case",
+        "createdAt" : "2020-04-03T11:58:44Z",
+        "updatedAt" : "2020-04-03T11:58:44Z",
+        "lastEditedBy" : {
+          "login" : "alekseiAlefirov",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/10850363?v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d72fc182a42fd127dd0593dfbb3028ac615338b9",
+    "line" : 107,
+    "diffHunk" : "@@ -0,0 +1,235 @@\n+package scala.meta.internal.metals.debug\n+\n+import java.net.InetSocketAddress\n+import java.net.ServerSocket\n+import java.net.Socket\n+import java.net.URI\n+import java.{util => ju}\n+import java.util.concurrent.TimeUnit\n+import java.util.Collections.singletonList\n+import ch.epfl.scala.bsp4j.BuildTargetIdentifier\n+import ch.epfl.scala.{bsp4j => b}\n+import com.google.common.net.InetAddresses\n+import com.google.gson.JsonElement\n+import scala.meta.internal.metals.DefinitionProvider\n+import scala.meta.internal.metals.BuildTargets\n+import scala.meta.internal.metals.BuildTargetClasses\n+import scala.meta.internal.metals.MetalsLanguageClient\n+import ch.epfl.scala.{bsp4j => b}\n+import scala.concurrent.Future\n+import scala.concurrent.Promise\n+import scala.concurrent.ExecutionContext\n+import scala.meta.internal.metals.BuildServerConnection\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.internal.metals.DebugUnresolvedMainClassParams\n+import scala.meta.internal.metals.DebugUnresolvedTestClassParams\n+import scala.meta.internal.metals.BuildTargetClassesFinder\n+import scala.meta.internal.metals.Compilations\n+import scala.util.Try\n+import scala.util.Failure\n+import org.eclipse.lsp4j.MessageParams\n+import org.eclipse.lsp4j.MessageType\n+import scala.meta.internal.metals.JsonParser\n+import scala.meta.internal.metals.JsonParser._\n+import scala.meta.internal.metals.ClassNotFoundInBuildTargetException\n+import scala.meta.internal.metals.Messages.UnresolvedDebugSessionParams\n+\n+class DebugProvider(\n+    definitionProvider: DefinitionProvider,\n+    buildServer: => Option[BuildServerConnection],\n+    buildTargets: BuildTargets,\n+    buildTargetClasses: BuildTargetClasses,\n+    compilations: Compilations,\n+    languageClient: MetalsLanguageClient\n+) {\n+\n+  lazy val buildTargetClassesFinder = new BuildTargetClassesFinder(\n+    buildTargets,\n+    buildTargetClasses\n+  )\n+\n+  def start(\n+      parameters: b.DebugSessionParams\n+  )(implicit ec: ExecutionContext): Future[DebugServer] = {\n+    Future.fromTry(parseSessionName(parameters)).flatMap { sessionName =>\n+      val proxyServer = new ServerSocket(0)\n+      val host = InetAddresses.toUriString(proxyServer.getInetAddress)\n+      val port = proxyServer.getLocalPort\n+      val uri = URI.create(s\"tcp://$host:$port\")\n+      val connectedToServer = Promise[Unit]()\n+\n+      val awaitClient =\n+        () => Future(proxyServer.accept()).withTimeout(10, TimeUnit.SECONDS)\n+\n+      // long timeout, since server might take a while to compile the project\n+      val connectToServer = () => {\n+        buildServer\n+          .map(_.startDebugSession(parameters))\n+          .getOrElse(BuildServerUnavailableError)\n+          .withTimeout(60, TimeUnit.SECONDS)\n+          .map { uri =>\n+            val socket = connect(uri)\n+            connectedToServer.trySuccess(())\n+            socket\n+          }\n+      }\n+\n+      val proxyFactory = { () =>\n+        val targets = parameters.getTargets.asScala\n+          .map(_.getUri)\n+          .map(new BuildTargetIdentifier(_))\n+        val sourcePathProvider = new SourcePathProvider(\n+          definitionProvider,\n+          buildTargets,\n+          targets.toList\n+        )\n+        DebugProxy\n+          .open(sessionName, sourcePathProvider, awaitClient, connectToServer)\n+      }\n+      val server = new DebugServer(sessionName, uri, proxyFactory)\n+\n+      server.listen.andThen { case _ => proxyServer.close() }\n+\n+      connectedToServer.future.map(_ => server)\n+    }\n+  }\n+\n+  def resolveMainClassParams(\n+      params: DebugUnresolvedMainClassParams\n+  )(implicit ec: ExecutionContext): Future[b.DebugSessionParams] = {\n+    withRebuildRetry(() =>\n+      buildTargetClassesFinder\n+        .findMainClassAndItsBuildTarget(\n+          params.mainClass,\n+          Option(params.buildTarget)\n+        )\n+    ).map {\n+      case (clazz, target) :: others =>"
+  },
+  {
+    "id" : "7cfb3b6f-0569-4b78-9a1c-2db4b93f54e2",
+    "prId" : 1658,
+    "comments" : [
+      {
+        "id" : "ee32077d-a785-42f1-8cb9-c9a124271013",
+        "parentId" : null,
+        "author" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "body" : "`failed.foreach` and above too",
+        "createdAt" : "2020-04-27T12:32:07Z",
+        "updatedAt" : "2020-04-27T16:10:09Z",
+        "lastEditedBy" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "3181f5db-7113-4283-aa68-612abb6193f0",
+        "parentId" : "ee32077d-a785-42f1-8cb9-c9a124271013",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Fixed",
+        "createdAt" : "2020-04-27T13:38:32Z",
+        "updatedAt" : "2020-04-27T16:10:09Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "a85757ad79d2c98e7698e8eb798381fc1936ad30",
+    "line" : null,
+    "diffHunk" : "@@ -138,24 +151,58 @@ class DebugProvider(\n           Option(params.buildTarget)\n         )\n     }).map {\n-      case (clazz, target) :: others =>\n-        if (others.nonEmpty) {\n-          reportOtherBuildTargets(\n-            clazz,\n-            target,\n-            others,\n-            \"test\"\n+        case (clazz, target) :: others\n+            if buildClient.buildHasErrors(target.getId()) =>\n+          throw WorkspaceErrorsException\n+        case (clazz, target) :: others =>\n+          if (others.nonEmpty) {\n+            reportOtherBuildTargets(\n+              clazz,\n+              target,\n+              others,\n+              \"test\"\n+            )\n+          }\n+          new b.DebugSessionParams(\n+            singletonList(target.getId()),\n+            b.DebugSessionParamsDataKind.SCALA_TEST_SUITES,\n+            singletonList(clazz).toJson\n           )\n-        }\n-        new b.DebugSessionParams(\n-          singletonList(target.getId()),\n-          b.DebugSessionParamsDataKind.SCALA_TEST_SUITES,\n-          singletonList(clazz).toJson\n+        //should not really happen due to\n+        //`findMainClassAndItsBuildTarget` succeeding with non-empty list\n+        case Nil => throw new ju.NoSuchElementException(params.testClass)\n+      }\n+      .recover(reportErrors)"
+  },
+  {
+    "id" : "c41642a3-4ea4-4ee1-9193-36ea74ea7ca4",
+    "prId" : 1658,
+    "comments" : [
+      {
+        "id" : "74d5304f-f03a-48e4-ba33-5cc7b8be0540",
+        "parentId" : null,
+        "author" : {
+          "login" : "mlachkar",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/7843237?u=d2941da73011b9a49767ac863ce5bc20b7b10ed7&v=4"
+        },
+        "body" : "why not return Future.failed(WorkspaceErrorsException) and flatMap before ? \r\n\r\n",
+        "createdAt" : "2020-04-27T14:18:26Z",
+        "updatedAt" : "2020-04-27T16:10:09Z",
+        "lastEditedBy" : {
+          "login" : "mlachkar",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/7843237?u=d2941da73011b9a49767ac863ce5bc20b7b10ed7&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "c9c38a98-7d27-47fb-a431-c14b9792fabb",
+        "parentId" : "74d5304f-f03a-48e4-ba33-5cc7b8be0540",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "I would need to add Future() to the cases before and this does basically the same thing. I would prefer to leave it this way.",
+        "createdAt" : "2020-04-27T15:19:35Z",
+        "updatedAt" : "2020-04-27T16:10:09Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "502c30ba-1ac5-45ec-ad2b-49730a84d005",
+        "parentId" : "74d5304f-f03a-48e4-ba33-5cc7b8be0540",
+        "author" : {
+          "login" : "mlachkar",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/7843237?u=d2941da73011b9a49767ac863ce5bc20b7b10ed7&v=4"
+        },
+        "body" : "you can add Future.successful for the others. \r\nIsn't throwing and catching exceptions costly? ",
+        "createdAt" : "2020-04-27T15:29:05Z",
+        "updatedAt" : "2020-04-27T16:10:09Z",
+        "lastEditedBy" : {
+          "login" : "mlachkar",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/7843237?u=d2941da73011b9a49767ac863ce5bc20b7b10ed7&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "016632ea-3e47-4b8a-a1f4-0fe1ca291281",
+        "parentId" : "74d5304f-f03a-48e4-ba33-5cc7b8be0540",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "I don't think there is much difference. But I guess using Future.failed is more idiomatic. I will change.",
+        "createdAt" : "2020-04-27T16:10:49Z",
+        "updatedAt" : "2020-04-27T16:10:50Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "a85757ad79d2c98e7698e8eb798381fc1936ad30",
+    "line" : null,
+    "diffHunk" : "@@ -97,13 +106,16 @@ class DebugProvider(\n   def resolveMainClassParams(\n       params: DebugUnresolvedMainClassParams\n   )(implicit ec: ExecutionContext): Future[b.DebugSessionParams] = {\n-    withRebuildRetry(() =>\n+    val result = withRebuildRetry(() =>\n       buildTargetClassesFinder\n         .findMainClassAndItsBuildTarget(\n           params.mainClass,\n           Option(params.buildTarget)\n         )\n     ).map {\n+      case (clazz, target) :: others\n+          if buildClient.buildHasErrors(target.getId()) =>\n+        throw WorkspaceErrorsException"
+  },
+  {
+    "id" : "1b551d9a-8db7-46c8-a6f3-41823135ade4",
+    "prId" : 1781,
+    "comments" : [
+      {
+        "id" : "325f4045-2541-42a8-95ef-ae3ef3fba149",
+        "parentId" : null,
+        "author" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "body" : "good idea to act smart here! :+1: ",
+        "createdAt" : "2020-05-27T11:20:35Z",
+        "updatedAt" : "2020-05-27T11:20:35Z",
+        "lastEditedBy" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "376535f14d761d5513fd67b015e9ab10588f0ac7",
+    "line" : 24,
+    "diffHunk" : "@@ -226,6 +227,26 @@ class DebugProvider(\n     }\n   }\n \n+  private def translateJvmParams(\n+      parameters: b.DebugSessionParams\n+  ): b.DebugSessionParams = {\n+    parameters.getData match {\n+      case json: JsonElement if parameters.getDataKind == \"scala-main-class\" =>\n+        json.as[b.ScalaMainClass].foreach { main =>\n+          val translated = main.getJvmOptions().asScala.map { param =>\n+            if (!param.startsWith(\"-J\"))"
+  }
+]

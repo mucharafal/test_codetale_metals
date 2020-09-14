@@ -1,0 +1,30 @@
+[
+  {
+    "id" : "5c06b38a-7d51-4930-91c0-c4298b9ccf66",
+    "prId" : 150,
+    "comments" : [
+      {
+        "id" : "ed4bdfb6-2d35-42f5-8b79-f02ed80cbd55",
+        "parentId" : null,
+        "author" : {
+          "login" : "ShaneDelmore",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/4604933?v=4"
+        },
+        "body" : "Love this",
+        "createdAt" : "2017-12-22T15:31:26Z",
+        "updatedAt" : "2017-12-22T15:31:26Z",
+        "lastEditedBy" : {
+          "login" : "ShaneDelmore",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/4604933?v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a4426b5e7bab61970f17a76134c70d5fae680431",
+    "line" : 52,
+    "diffHunk" : "@@ -0,0 +1,63 @@\n+package scala.meta.languageserver.providers\n+\n+import scala.meta._\n+import scala.meta.languageserver.ScalametaEnrichments._\n+import scala.meta.languageserver.Uri\n+import scala.meta.languageserver.refactoring.Backtick\n+import scala.meta.languageserver.search.SymbolIndex\n+import com.typesafe.scalalogging.LazyLogging\n+import langserver.core.Notifications\n+import langserver.messages.RenameResult\n+import langserver.messages.TextDocumentRenameRequest\n+import langserver.types.MessageType\n+import langserver.types.TextEdit\n+import langserver.types.WorkspaceEdit\n+\n+object RenameProvider extends LazyLogging {\n+  def rename(\n+      request: TextDocumentRenameRequest,\n+      symbolIndex: SymbolIndex,\n+      notifications: Notifications\n+  ): RenameResult = Backtick.backtickWrap(request.params.newName) match {\n+    case Left(err) =>\n+      // LSP specifies that a ResponseError should be returned in this case\n+      // but it seems when we do that at least vscode doesn't display the error\n+      // message, only \"No result\" is displayed to the user, which is not helpful.\n+      // I prefer to use showMessage to explain what went wrong and perform\n+      // no text edit.\n+      notifications.showMessage(MessageType.Warning, err)\n+      RenameResult(WorkspaceEdit(Map.empty))\n+    case Right(newName) =>\n+      val uri = Uri(request.params.textDocument.uri)\n+      val edits = for {\n+        symbol <- symbolIndex\n+          .findSymbol(\n+            uri,\n+            request.params.position.line,\n+            request.params.position.character\n+          )\n+          .toList\n+        if {\n+          symbol match {\n+            case _: Symbol.Local => true\n+            case _ =>\n+              notifications.showMessage(\n+                MessageType.Warning,\n+                s\"Rename for global symbol $symbol is not supported yet. \" +\n+                  s\"Only local symbols can be renamed.\"\n+              )\n+              false\n+          }\n+        }\n+        data <- symbolIndex.referencesData(symbol)"
+  }
+]

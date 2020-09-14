@@ -1,0 +1,33 @@
+[
+  {
+    "id" : "d6eb6269-0264-4ef4-8f73-a15c4a48ec00",
+    "prId" : 158,
+    "comments" : [
+      {
+        "id" : "25475378-39c9-4908-8726-c45ac0092ba3",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "`isEnabled` is based on `scalafix.enabled`. This check also skips the compiler errors, which are not related.",
+        "createdAt" : "2018-01-02T14:06:45Z",
+        "updatedAt" : "2018-01-02T19:54:18Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "affa2ea127de9483cd4eeda3dfcfcb3bb80a4322",
+    "line" : null,
+    "diffHunk" : "@@ -6,31 +6,35 @@ import com.typesafe.scalalogging.LazyLogging\n import scala.{meta => m}\n import langserver.messages.PublishDiagnostics\n import scala.meta.languageserver.ScalametaEnrichments._\n+import scala.meta.languageserver.MonixEnrichments._\n import scala.tools.nsc.interpreter.OutputStream\n import monix.eval.Task\n+import monix.execution.Scheduler\n+import monix.reactive.Observable\n import org.langmeta.AbsolutePath\n \n class SquiggliesProvider(\n-    configuration: Task[Configuration],\n+    configuration: Observable[Configuration],\n     cwd: AbsolutePath,\n     stdout: OutputStream\n-) extends LazyLogging {\n+)(implicit s: Scheduler)\n+    extends LazyLogging {\n+  private val isEnabled: () => Boolean =\n+    configuration.map(_.scalafix.enabled).toFunction0()\n \n   lazy val linter = new Linter(cwd, stdout)\n \n   def squigglies(doc: m.Document): Task[Seq[PublishDiagnostics]] =\n     squigglies(m.Database(doc :: Nil))\n-  def squigglies(db: m.Database): Task[Seq[PublishDiagnostics]] =\n-    for {\n-      config <- configuration\n-    } yield {\n+  def squigglies(db: m.Database): Task[Seq[PublishDiagnostics]] = Task.eval {\n+    if (!isEnabled()) Nil"
+  }
+]

@@ -1,0 +1,155 @@
+[
+  {
+    "id" : "fd5d3218-30fa-44d0-8de9-61e090ed3bfc",
+    "prId" : 1625,
+    "comments" : [
+      {
+        "id" : "17a4beaa-9ae5-400c-8e82-a5af84f208c2",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "@olafurpg @gabro It seems that if we use something different than `munitExecutionContext` we get:\r\n```\r\nX tests.debug.StackFrameDapSuite.afterAll  0.002s java.lang.IllegalArgumentException: requirement failed\r\n2020-04-15T12:00:59.8858923Z [error]     at scala.Predef$.require(Predef.scala:268)\r\n2020-04-15T12:00:59.8859382Z [error]     at scala.concurrent.BatchingExecutor$Batch.run(BatchingExecutor.scala:55)\r\n2020-04-15T12:00:59.8859785Z [error]     at scala.concurrent.Future$InternalCallbackExecutor$.unbatchedExecute(Future.scala:875)\r\n2020-04-15T12:00:59.8860176Z [error]     at scala.concurrent.BatchingExecutor$Batch.blockOn(BatchingExecutor.scala:96)\r\n2020-04-15T12:00:59.8872621Z [error]     at scala.concurrent.package$.blocking(package.scala:146)\r\n2020-04-15T12:00:59.8873105Z [error]     at scala.concurrent.java8.FuturesConvertersImpl$CF.get(FutureConvertersImpl.scala:92)\r\n2020-04-15T12:00:59.8873645Z [error]     at scala.meta.internal.metals.MetalsLanguageServer.cancel(MetalsLanguageServer.scala:89)\r\n2020-04-15T12:00:59.8874081Z [error]     at scala.meta.internal.metals.MetalsLanguageServer.cancelAll(MetalsLanguageServer.scala:97)\r\n2020-04-15T12:00:59.8874432Z [error]     at tests.BaseLspSuite.afterAll(BaseLspSuite.scala:46)\r\n2020-04-15T12:00:59.8874769Z [error]     at munit.MUnitRunner.$anonfun$runAfterAll$3(MUnitRunner.scala:160)\r\n```\r\nany idea how we can make it clearer? Maybe we can have an additional mapping that doesn't take executionContext?",
+        "createdAt" : "2020-04-15T14:33:43Z",
+        "updatedAt" : "2020-05-11T14:17:44Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "cc7fb927-0378-4e39-ad6e-36e7622d9567",
+        "parentId" : "17a4beaa-9ae5-400c-8e82-a5af84f208c2",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Created an issue https://github.com/scalameta/munit/issues/127",
+        "createdAt" : "2020-05-11T15:00:16Z",
+        "updatedAt" : "2020-05-11T15:00:17Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "b7c6f9fa61606c4021d0457804114d0f344e41a8",
+    "line" : 43,
+    "diffHunk" : "@@ -8,8 +8,48 @@ import scala.concurrent.Future\n import scala.meta.internal.metals.debug.DebugWorkspaceLayout\n import scala.meta.internal.metals.debug.Stoppage\n import scala.meta.internal.metals.debug.TestDebugger\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.internal.metals.GlobalTrace\n+import scala.meta.internal.metals.debug.DebugProtocol\n+import scala.util.Failure\n+import scala.util.Success\n \n abstract class BaseDapSuite(suiteName: String) extends BaseLspSuite(suiteName) {\n+\n+  private val dapClient =\n+    GlobalTrace.protocolTracePath(DebugProtocol.clientName)\n+  private val dapServer =\n+    GlobalTrace.protocolTracePath(DebugProtocol.serverName)\n+\n+  override def beforeAll(): Unit = {\n+    super.beforeAll()\n+    dapClient.touch()\n+    dapServer.touch()\n+  }\n+\n+  protected def logDapTraces(): Unit = {\n+    scribe.warn(\"The DAP test failed, printing the traces\")\n+    scribe.warn(dapClient.toString() + \":\")\n+    scribe.info(dapClient.readText)\n+    scribe.warn(dapServer.toString() + \":\")\n+    scribe.info(dapServer.readText)\n+  }\n+\n+  override def munitTestTransforms: List[TestTransform] =\n+    super.munitTestTransforms :+\n+      new TestTransform(\"Print DAP traces\", { test =>\n+        test.withBody(() =>\n+          test\n+            .body()\n+            .andThen {\n+              case Failure(exception) =>\n+                logDapTraces()\n+                exception\n+              case Success(value) => value\n+            }(munitExecutionContext)"
+  },
+  {
+    "id" : "372bfef4-c1ad-4f74-91b8-9c410f8757b0",
+    "prId" : 1625,
+    "comments" : [
+      {
+        "id" : "05849ca2-3e6e-46dc-b8a3-88fa5f0fb198",
+        "parentId" : null,
+        "author" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "body" : "The traces should be per test-case, not test-suite (note: I an guessing the correct name of the method ;) )\r\n```suggestion\r\n  override def beforeEach(): Unit = {\r\n```",
+        "createdAt" : "2020-04-16T07:41:22Z",
+        "updatedAt" : "2020-05-11T14:17:44Z",
+        "lastEditedBy" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "fd88ffe6-35c8-4f78-bf3c-8cda26277fd3",
+        "parentId" : "05849ca2-3e6e-46dc-b8a3-88fa5f0fb198",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Changed",
+        "createdAt" : "2020-04-16T12:17:52Z",
+        "updatedAt" : "2020-05-11T14:17:44Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "b7c6f9fa61606c4021d0457804114d0f344e41a8",
+    "line" : null,
+    "diffHunk" : "@@ -8,8 +8,48 @@ import scala.concurrent.Future\n import scala.meta.internal.metals.debug.DebugWorkspaceLayout\n import scala.meta.internal.metals.debug.Stoppage\n import scala.meta.internal.metals.debug.TestDebugger\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.internal.metals.GlobalTrace\n+import scala.meta.internal.metals.debug.DebugProtocol\n+import scala.util.Failure\n+import scala.util.Success\n \n abstract class BaseDapSuite(suiteName: String) extends BaseLspSuite(suiteName) {\n+\n+  private val dapClient =\n+    GlobalTrace.protocolTracePath(DebugProtocol.clientName)\n+  private val dapServer =\n+    GlobalTrace.protocolTracePath(DebugProtocol.serverName)\n+\n+  override def beforeAll(): Unit = {"
+  },
+  {
+    "id" : "6d48b86e-b644-46a4-a6a9-7bdbbef23b98",
+    "prId" : 1625,
+    "comments" : [
+      {
+        "id" : "07a8f713-e25e-46c1-86d3-0b4e28069ce7",
+        "parentId" : null,
+        "author" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "body" : "```suggestion\r\n```",
+        "createdAt" : "2020-05-11T09:29:55Z",
+        "updatedAt" : "2020-05-11T14:17:44Z",
+        "lastEditedBy" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "f5274491-f17a-4a5d-b5f3-5ce5c90b0b89",
+        "parentId" : "07a8f713-e25e-46c1-86d3-0b4e28069ce7",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Forgot about that one!",
+        "createdAt" : "2020-05-11T14:20:01Z",
+        "updatedAt" : "2020-05-11T14:20:01Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "b7c6f9fa61606c4021d0457804114d0f344e41a8",
+    "line" : null,
+    "diffHunk" : "@@ -8,8 +8,49 @@ import scala.concurrent.Future\n import scala.meta.internal.metals.debug.DebugWorkspaceLayout\n import scala.meta.internal.metals.debug.Stoppage\n import scala.meta.internal.metals.debug.TestDebugger\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.internal.metals.GlobalTrace\n+import scala.meta.internal.metals.debug.DebugProtocol\n+import scala.util.Failure\n+import scala.util.Success\n+import munit.GenericBeforeEach\n \n abstract class BaseDapSuite(suiteName: String) extends BaseLspSuite(suiteName) {\n+\n+  private val dapClient =\n+    GlobalTrace.protocolTracePath(DebugProtocol.clientName)\n+  private val dapServer =\n+    GlobalTrace.protocolTracePath(DebugProtocol.serverName)\n+\n+  override def beforeEach(context: GenericBeforeEach[Future[Any]]): Unit = {\n+    super.beforeEach(context)\n+    dapClient.touch()\n+    dapServer.touch()\n+  }\n+\n+  protected def logDapTraces(): Unit = {\n+    // scribe.warn(\"The DAP test failed, printing the traces\")\n+    // scribe.warn(dapClient.toString() + \":\")\n+    // scribe.info(dapClient.readText)\n+    // scribe.warn(dapServer.toString() + \":\")\n+    // scribe.info(dapServer.readText)"
+  }
+]

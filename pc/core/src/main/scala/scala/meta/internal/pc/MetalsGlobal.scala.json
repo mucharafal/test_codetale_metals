@@ -1,0 +1,33 @@
+[
+  {
+    "id" : "37f24879-e973-4e94-b38e-d3822748eea2",
+    "prId" : 527,
+    "comments" : [
+      {
+        "id" : "5d33feb5-3153-4934-9758-61951e1439e3",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "unused?",
+        "createdAt" : "2019-02-17T10:53:02Z",
+        "updatedAt" : "2019-03-10T09:44:08Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "c7621ebcf6232d37856b167824069496131bae13",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,348 @@\n+package scala.meta.internal.pc\n+\n+import java.util.logging.Logger\n+import scala.collection.JavaConverters._\n+import scala.collection.concurrent.TrieMap\n+import scala.collection.mutable\n+import scala.language.implicitConversions\n+import scala.meta.internal.semanticdb.scalac.SemanticdbOps\n+import scala.meta.pc\n+import scala.meta.pc.SymbolDocumentation\n+import scala.meta.pc.SymbolSearch\n+import scala.reflect.internal.{Flags => gf}\n+import scala.tools.nsc.Settings\n+import scala.tools.nsc.interactive.Global\n+import scala.tools.nsc.reporters.Reporter\n+\n+class MetalsGlobal(\n+    settings: Settings,\n+    reporter: Reporter,\n+    val search: SymbolSearch,\n+    val buildTargetIdentifier: String,\n+    val logger: Logger\n+) extends Global(settings, reporter) { compiler =>\n+\n+  def isDocs: Boolean = System.getProperty(\"metals.signature-help\") != \"no-docs\"\n+  def isJavaSymbol(sym: Symbol): Boolean =\n+    !sym.hasPackageFlag && sym.isJava\n+\n+  lazy val semanticdbOps: SemanticdbOps {\n+    val global: compiler.type\n+  } = new SemanticdbOps {\n+    val global: compiler.type = compiler\n+  }\n+\n+  def semanticdbSymbol(symbol: Symbol): String = {\n+    import semanticdbOps._\n+    symbol.toSemantic\n+  }\n+\n+  def printPretty(pos: Position): Unit = {\n+    println(pretty(pos))\n+  }\n+  def pretty(pos: Position): String = {\n+    if (pos.isDefined) {\n+      val lineCaret =\n+        if (pos.isRange) {\n+          val indent = \" \" * (pos.column - 1)\n+          val caret = \"^\" * (pos.end - pos.start)\n+          indent + caret\n+        } else {\n+          pos.lineCaret\n+        }\n+      pos.lineContent + \"\\n\" + lineCaret\n+    } else {\n+      \"<none>\"\n+    }\n+  }\n+\n+  def treePos(tree: Tree): Position = {\n+    if (tree.pos == null) {\n+      NoPosition\n+    } else if (tree.symbol != null &&\n+      tree.symbol.name.startsWith(\"x$\") &&\n+      tree.symbol.isArtifact) {\n+      tree.symbol.pos\n+    } else {\n+      tree.pos\n+    }\n+  }\n+\n+  def methodInfoSymbol(symbol: Symbol): Symbol =\n+    if (!symbol.isJava && symbol.isPrimaryConstructor) symbol.owner\n+    else symbol\n+  def rawMethodInfo(symbol: Symbol): Option[SymbolDocumentation] = {\n+    for {\n+      info <- methodInfos.get(semanticdbSymbol(methodInfoSymbol(symbol)))\n+      if info != null\n+    } yield info\n+  }\n+  def methodInfo(symbol: Symbol): Option[SymbolDocumentation] = {\n+    val sym = compiler.semanticdbSymbol(methodInfoSymbol(symbol))\n+    val documentation = search.documentation(sym)\n+    if (documentation.isPresent) Some(documentation.get())\n+    else None\n+  }\n+\n+  // The following pattern match is an adaptation of this pattern match:\n+  // https://github.com/scalameta/scalameta/blob/dc639c83f1c26627c39aef9bfb3dae779ecdb237/semanticdb/scalac/library/src/main/scala/scala/meta/internal/semanticdb/scalac/TypeOps.scala\n+  def shortType(longType: Type, history: ShortenedNames): Type = {\n+    def loop(tpe: Type, name: Option[Name]): Type = tpe match {\n+      case TypeRef(pre, sym, args) =>\n+        TypeRef(\n+          loop(pre, Some(sym.name)),\n+          sym,\n+          args.map(arg => loop(arg, name))\n+        )\n+      case SingleType(pre, sym) =>\n+        if (sym.hasPackageFlag) {\n+          if (history.tryShortenName(name, sym)) NoPrefix\n+          else tpe\n+        } else {\n+          SingleType(loop(pre, Some(sym.name)), sym)\n+        }\n+      case ThisType(sym) =>\n+        if (sym.hasPackageFlag) {\n+          if (history.tryShortenName(name, sym)) NoPrefix\n+          else tpe\n+        } else {\n+          TypeRef(NoPrefix, sym, Nil)\n+        }\n+      case ConstantType(Constant(sym: TermSymbol))\n+          if sym.hasFlag(gf.JAVA_ENUM) =>\n+        loop(SingleType(sym.owner.thisPrefix, sym), None)\n+      case ConstantType(Constant(tpe: Type)) =>\n+        ConstantType(Constant(loop(tpe, None)))\n+      case SuperType(thistpe, supertpe) =>\n+        SuperType(loop(thistpe, None), loop(supertpe, None))\n+      case RefinedType(parents, decls) =>\n+        RefinedType(parents.map(parent => loop(parent, None)), decls)\n+      case AnnotatedType(annotations, underlying) =>\n+        AnnotatedType(annotations, loop(underlying, None))\n+      case ExistentialType(quantified, underlying) =>\n+        ExistentialType(quantified, loop(underlying, None))\n+      case PolyType(tparams, resultType) =>\n+        PolyType(tparams, resultType.map(t => loop(t, None)))\n+      case NullaryMethodType(resultType) =>\n+        loop(resultType, None)\n+      case TypeBounds(lo, hi) =>\n+        TypeBounds(loop(lo, None), loop(hi, None))\n+      case t => t\n+    }\n+    longType match {\n+      case ThisType(_) => longType\n+      case _ => loop(longType, None)\n+    }\n+  }\n+\n+  def metalsToLongString(tpe: Type, history: ShortenedNames): String = {\n+    shortType(tpe, history).toLongString\n+  }\n+\n+//  def metalsToShortString(tpe: Type): String = {\n+//    val sb = new StringBuilder()\n+//    def loop(t: Type): Unit = {}\n+//    sb.toString()\n+//  }"
+  }
+]

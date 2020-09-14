@@ -1,0 +1,942 @@
+[
+  {
+    "id" : "18235cec-229c-4a7e-97c2-ddaed267ee20",
+    "prId" : 226,
+    "comments" : [
+      {
+        "id" : "e6460a30-5e9e-4eba-8bf7-a89e131cf1d9",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "do we actually implement `textDocument/willSaveWaitUntil`?",
+        "createdAt" : "2018-04-02T15:16:31Z",
+        "updatedAt" : "2018-04-02T21:54:11Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "f0fd2400-a726-449a-ba38-215916ed3f36",
+        "parentId" : "e6460a30-5e9e-4eba-8bf7-a89e131cf1d9",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "I think @laughedelic added support for it, this is copy-pasted from old roadmap",
+        "createdAt" : "2018-04-02T15:46:14Z",
+        "updatedAt" : "2018-04-02T21:54:11Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "586bf82f-ece1-42c9-8f16-0d0924fee691",
+        "parentId" : "e6460a30-5e9e-4eba-8bf7-a89e131cf1d9",
+        "author" : {
+          "login" : "laughedelic",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/766656?v=4"
+        },
+        "body" : "Yes, we have it 👌 ",
+        "createdAt" : "2018-04-02T18:25:57Z",
+        "updatedAt" : "2018-04-02T21:54:11Z",
+        "lastEditedBy" : {
+          "login" : "laughedelic",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/766656?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "774cbf430ac6829db5d40bd97995fc3a6d38bab0",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,169 @@\n+# Roadmap\n+\n+* [**Simple installation**](#simple-installation): importing a project should be\n+  simple and require as few steps as possible.\n+* [**Correct diagnostics**](#correct-diagnostics): the editor should never show\n+  spurious red squiggles, even at the cost of higher latency.\n+* [**Robust navigation**](#robust-navigation): goto definition should work\n+  everywhere, even for Java dependencies.\n+* [**Fast completions**](#fast-completions): completions suggestions should\n+  respond in ~200ms, even at the cost of occasionally wrong results.\n+* [**Low CPU and memory usage**](#low-cpu-and-memory-usage): indexing should be\n+  lightweight and run in the background.\n+* [**Solid refactoring**](#solid-refactoring): rename, organize imports and\n+  insert type annotation should always leave the codebase in a compiling state.\n+\n+## Simple installation\n+\n+The first you do with an IDE is boring but critical: import a project. The\n+Language Server Protocol does not provide utilities to extract metadata from a\n+build tool (module source files, dependencies, configuration data), so we are\n+still exploring what is the best option.\n+\n+* [ ] sbt-metals: plugin that provides a `*:metalsSetup` task to export sbt\n+      build metadata.\n+* [ ] [BSP][]: LSP-inspired protocol to standardize on communication between a\n+      language server and build tool. In theory, should enable automatic\n+      importing of projects without custom build plugins or manual installation\n+      steps.\n+\n+## Correct diagnostics\n+\n+Red squiggles are one of the most basic but also difficult-to-support features\n+in an IDE. The Scala compiler was not designed for interactivity, which makes\n+fast and correct diagnostics difficult to support in the editor. We are still\n+unsure what the best model is for diagnostics, so we are still exploring what is\n+the best option.\n+\n+* [x] Scala Presentation Compiler: interactively publish squiggles as you type.\n+      Provides low latency but may get off-sync with build diagnostics.\n+  * Disabled by default. Can be enabled with configuration option\n+    `scalac.diagnostics.enabled=true`.\n+  * Requires [`metalsSetup`](#metalssetup).\n+* [x] sbt server: sbt 1.1 added LSP support so that build errors are reported\n+      directly to the editor. Metals can connect to sbt server as a client to\n+      trigger batch compilation on file save. Guarantees diagnostics are always\n+      in-sync with build diagnostics but at the cost of higher latency.\n+  * Disabled by default. Can be enabled with configuration option\n+    `sbt.enabled=true`.\n+  * Requires sbt 1.1 or later.\n+* [x] Linting with [Scalafix][].\n+  * Requires [semanticdb-scalac](#semanticdb-scalac).\n+  * Supports both built-in and custom linter rules.\n+\n+## Robust navigation\n+\n+Goto definition and find references is a great way to navigate and learn about a\n+codebase. Metals uses [SemanticDB][], a data model for semantic information\n+about programs in Scala and other languages, to power code navigation. Indexing\n+happens with during batch compilation in the build tool, using a similar\n+architecture as [Index-While-Building][] in XCode 9.\n+\n+* Goto definition (`textDocument/definition`). Requires\n+  [semanticdb-scalac](#semanticdb-scalac).\n+  * [x] project -> project.\n+  * [x] project -> Scala dependency. Requires [`metalsSetup`](#metalssetup).\n+  * [x] project -> Java dependency. Requires [`metalsSetup`](#metalssetup).\n+  * [ ] dependency -> dependency.\n+* [x] Find references (`textDocument/references`). Works the same as goto\n+      definition.\n+  * [x] project -> project.\n+  * [ ] project -> Scala dependency.\n+  * [ ] project -> Java dependency.\n+  * [ ] dependency -> dependency.\n+* [x] Highlight references to symbol at position\n+      (`textDocument/documentHighlight`).\n+* [x] Open symbol in file (`textDocument/documentSymbol`)\n+* [x] Open symbol in workspace (`workspace/symbol`)\n+* [x] Symbol outline in the sidebar as you type (`textDocument/documentSymbol`).\n+* [ ] Goto implementation (`textDocument/implementation`)\n+* [ ] Goto type definition (`textDocument/typeDefinition`)\n+* [x] Show type of symbol at position (`textDocument/hover`). Requires\n+      [semanticdb-scalac](#semanticdb-scalac).\n+* [ ] Show type of expression at position (`textDocument/hover`).\n+\n+## Fast completions\n+\n+Auto completions are a great way to explore a library interface and save\n+keystrokes while writing code. Completions are sensitive to latency since\n+suggestions update on every keystroke. Correct and fast completions are\n+difficult to support in Scala due to several challenges:\n+\n+1.  the presentation compiler does not lend itself well to interactive editing\n+2.  some completions semantics are are difficult to reproduce outside of the\n+    compiler\n+    * extension methods depend on implicit conversions\n+    * whitebox macros can refine result types which influences completion\n+      suggestions\n+\n+It will take a while until Metals can robustly support completions.\n+\n+* [x] Scala Presentation Compiler. Faithfully reproduces full language semantics\n+      but may be slow and difficult to keep in-sync with the build for\n+      long-running interactive sessions.\n+  * Disabled by default. Can be enabled with configuration option\n+    `scalac.completions.enabled=true`.\n+  * Requires [`metalsSetup`](#metalssetup).\n+  * Shows parameter list as you type (`textDocument/signatureHelp`).\n+* [ ] Auto-import global symbol from classpath.\n+* [ ] Auto-expand abstract methods when implementing a trait or abstract class.\n+\n+## Low CPU and memory usage\n+\n+Heavy resource usage is one of the most frequent complaints about IDEs. Low CPU\n+and memory usage becomes even more important when working in larger codebases.\n+\n+* [ ] Persistent symbol index: currently Metals stores the navigation index\n+      in-memory, which can consume multiple GB of RAM for large projects.\n+* [ ] Faster Scala and Java outline indexing. Currently, Metals can index the\n+      outlines of Scala sources at ~30-40k loc/s and Java sources at ~450k\n+      loc/s.\n+* [ ] Throttled background indexing. Currently, all available CPUs are utilized\n+      for indexing, which makes the computer slow for a period after running\n+      `metalsSetup`.\n+* [ ] Faster \"open symbol in workspace\" (`workspace/symbol`). Currently, uses a\n+      naive linear search algorithm that is slow for large projects.\n+\n+## Solid refactoring\n+\n+Refactoring makes you more productive while editing code. On demand refactoring\n+such as rename or formatting are great to save keystrokes for frequent\n+mechanical tasks. Passive refactoring suggestions help you learn new language\n+best practices.\n+\n+* Format (`textDocument/formatting`) with [Scalafmt][].\n+  * [x] Whole file on demand (`textDocument/formatting`)\n+  * [ ] Selected range (`textDocument/rangeFormatting`)\n+  * [x] On save (`textDocument/willSaveWaitUntil`)"
+  },
+  {
+    "id" : "0646a07d-7c0f-4b8f-a133-cfba14dc2728",
+    "prId" : 226,
+    "comments" : [
+      {
+        "id" : "300ce835-c732-4b3a-bbfe-83e26e8a7b1a",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "nitpick: `bsp` is lowercase here and uppercase above. I would stick to uppercase (similar to LSP)",
+        "createdAt" : "2018-04-02T15:17:47Z",
+        "updatedAt" : "2018-04-02T21:54:11Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "1a6535ae-fc61-44b7-ae5c-9b81f37dbc37",
+        "parentId" : "300ce835-c732-4b3a-bbfe-83e26e8a7b1a",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "prettier formats it to lowercase for some reason, markdown formatting is surprisingly helpful IMO",
+        "createdAt" : "2018-04-02T15:46:52Z",
+        "updatedAt" : "2018-04-02T21:54:11Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "774cbf430ac6829db5d40bd97995fc3a6d38bab0",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,169 @@\n+# Roadmap\n+\n+* [**Simple installation**](#simple-installation): importing a project should be\n+  simple and require as few steps as possible.\n+* [**Correct diagnostics**](#correct-diagnostics): the editor should never show\n+  spurious red squiggles, even at the cost of higher latency.\n+* [**Robust navigation**](#robust-navigation): goto definition should work\n+  everywhere, even for Java dependencies.\n+* [**Fast completions**](#fast-completions): completions suggestions should\n+  respond in ~200ms, even at the cost of occasionally wrong results.\n+* [**Low CPU and memory usage**](#low-cpu-and-memory-usage): indexing should be\n+  lightweight and run in the background.\n+* [**Solid refactoring**](#solid-refactoring): rename, organize imports and\n+  insert type annotation should always leave the codebase in a compiling state.\n+\n+## Simple installation\n+\n+The first you do with an IDE is boring but critical: import a project. The\n+Language Server Protocol does not provide utilities to extract metadata from a\n+build tool (module source files, dependencies, configuration data), so we are\n+still exploring what is the best option.\n+\n+* [ ] sbt-metals: plugin that provides a `*:metalsSetup` task to export sbt\n+      build metadata.\n+* [ ] [BSP][]: LSP-inspired protocol to standardize on communication between a\n+      language server and build tool. In theory, should enable automatic\n+      importing of projects without custom build plugins or manual installation\n+      steps.\n+\n+## Correct diagnostics\n+\n+Red squiggles are one of the most basic but also difficult-to-support features\n+in an IDE. The Scala compiler was not designed for interactivity, which makes\n+fast and correct diagnostics difficult to support in the editor. We are still\n+unsure what the best model is for diagnostics, so we are still exploring what is\n+the best option.\n+\n+* [x] Scala Presentation Compiler: interactively publish squiggles as you type.\n+      Provides low latency but may get off-sync with build diagnostics.\n+  * Disabled by default. Can be enabled with configuration option\n+    `scalac.diagnostics.enabled=true`.\n+  * Requires [`metalsSetup`](#metalssetup).\n+* [x] sbt server: sbt 1.1 added LSP support so that build errors are reported\n+      directly to the editor. Metals can connect to sbt server as a client to\n+      trigger batch compilation on file save. Guarantees diagnostics are always\n+      in-sync with build diagnostics but at the cost of higher latency.\n+  * Disabled by default. Can be enabled with configuration option\n+    `sbt.enabled=true`.\n+  * Requires sbt 1.1 or later.\n+* [x] Linting with [Scalafix][].\n+  * Requires [semanticdb-scalac](#semanticdb-scalac).\n+  * Supports both built-in and custom linter rules.\n+\n+## Robust navigation\n+\n+Goto definition and find references is a great way to navigate and learn about a\n+codebase. Metals uses [SemanticDB][], a data model for semantic information\n+about programs in Scala and other languages, to power code navigation. Indexing\n+happens with during batch compilation in the build tool, using a similar\n+architecture as [Index-While-Building][] in XCode 9.\n+\n+* Goto definition (`textDocument/definition`). Requires\n+  [semanticdb-scalac](#semanticdb-scalac).\n+  * [x] project -> project.\n+  * [x] project -> Scala dependency. Requires [`metalsSetup`](#metalssetup).\n+  * [x] project -> Java dependency. Requires [`metalsSetup`](#metalssetup).\n+  * [ ] dependency -> dependency.\n+* [x] Find references (`textDocument/references`). Works the same as goto\n+      definition.\n+  * [x] project -> project.\n+  * [ ] project -> Scala dependency.\n+  * [ ] project -> Java dependency.\n+  * [ ] dependency -> dependency.\n+* [x] Highlight references to symbol at position\n+      (`textDocument/documentHighlight`).\n+* [x] Open symbol in file (`textDocument/documentSymbol`)\n+* [x] Open symbol in workspace (`workspace/symbol`)\n+* [x] Symbol outline in the sidebar as you type (`textDocument/documentSymbol`).\n+* [ ] Goto implementation (`textDocument/implementation`)\n+* [ ] Goto type definition (`textDocument/typeDefinition`)\n+* [x] Show type of symbol at position (`textDocument/hover`). Requires\n+      [semanticdb-scalac](#semanticdb-scalac).\n+* [ ] Show type of expression at position (`textDocument/hover`).\n+\n+## Fast completions\n+\n+Auto completions are a great way to explore a library interface and save\n+keystrokes while writing code. Completions are sensitive to latency since\n+suggestions update on every keystroke. Correct and fast completions are\n+difficult to support in Scala due to several challenges:\n+\n+1.  the presentation compiler does not lend itself well to interactive editing\n+2.  some completions semantics are are difficult to reproduce outside of the\n+    compiler\n+    * extension methods depend on implicit conversions\n+    * whitebox macros can refine result types which influences completion\n+      suggestions\n+\n+It will take a while until Metals can robustly support completions.\n+\n+* [x] Scala Presentation Compiler. Faithfully reproduces full language semantics\n+      but may be slow and difficult to keep in-sync with the build for\n+      long-running interactive sessions.\n+  * Disabled by default. Can be enabled with configuration option\n+    `scalac.completions.enabled=true`.\n+  * Requires [`metalsSetup`](#metalssetup).\n+  * Shows parameter list as you type (`textDocument/signatureHelp`).\n+* [ ] Auto-import global symbol from classpath.\n+* [ ] Auto-expand abstract methods when implementing a trait or abstract class.\n+\n+## Low CPU and memory usage\n+\n+Heavy resource usage is one of the most frequent complaints about IDEs. Low CPU\n+and memory usage becomes even more important when working in larger codebases.\n+\n+* [ ] Persistent symbol index: currently Metals stores the navigation index\n+      in-memory, which can consume multiple GB of RAM for large projects.\n+* [ ] Faster Scala and Java outline indexing. Currently, Metals can index the\n+      outlines of Scala sources at ~30-40k loc/s and Java sources at ~450k\n+      loc/s.\n+* [ ] Throttled background indexing. Currently, all available CPUs are utilized\n+      for indexing, which makes the computer slow for a period after running\n+      `metalsSetup`.\n+* [ ] Faster \"open symbol in workspace\" (`workspace/symbol`). Currently, uses a\n+      naive linear search algorithm that is slow for large projects.\n+\n+## Solid refactoring\n+\n+Refactoring makes you more productive while editing code. On demand refactoring\n+such as rename or formatting are great to save keystrokes for frequent\n+mechanical tasks. Passive refactoring suggestions help you learn new language\n+best practices.\n+\n+* Format (`textDocument/formatting`) with [Scalafmt][].\n+  * [x] Whole file on demand (`textDocument/formatting`)\n+  * [ ] Selected range (`textDocument/rangeFormatting`)\n+  * [x] On save (`textDocument/willSaveWaitUntil`)\n+  * [ ] As you type (`textDocument/onTypeFormatting`)\n+  * Scalafmt version can be configured with `scalafmt.version=\"1.3.0\"`.\n+  * NOTE. The first time Scalafmt is invoked is slow since it requires\n+    downloading the configured Scalafmt version with Coursier.\n+* [x] Rename local symbol. Requires [semanticdb-scalac](#semanticdb-scalac).\n+* [ ] Rename global symbol.\n+* [x] Remove unused imports (`textDocument/codeActions`). Requires\n+      [semanticdb-scalac](#semanticdb-scalac).\n+* [ ] Move class.\n+* [ ] Organize imports.\n+* [ ] Insert type annotation.\n+\n+## Glossary\n+\n+### metalsSetup\n+\n+Task in sbt-metals to generate build metadata. Run `*:metalsSetup` to generate\n+metadata for all modules in the build, including main and test sources.\n+\n+### semanticdb-scalac\n+\n+Compiler plugin that emits [SemanticDB][] files during batch compilation in the\n+build tool. Overhead of the compiler plugin is ~30%, which may improve in the\n+future.\n+\n+[semanticdb]: https://github.com/scalameta/scalameta/blob/master/semanticdb/semanticdb3/semanticdb3.md\n+[index-while-building]: https://youtu.be/jGJhnIT-D2M\n+[code outline]: https://marketplace.visualstudio.com/items?itemName=patrys.vscode-code-outline\n+[atom-ide-ui]: https://atom.io/packages/atom-ide-ui\n+[bsp]: https://github.com/scalacenter/bsp/blob/master/docs/bsp.md"
+  },
+  {
+    "id" : "513603b6-fd79-4fe6-8573-18e71dfb84e2",
+    "prId" : 226,
+    "comments" : [
+      {
+        "id" : "f9da378f-4bff-4115-9586-54b1d6038752",
+        "parentId" : null,
+        "author" : {
+          "login" : "xeno-by",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/609152?u=20bb3a58b554d0984a33eaa519c5cf3fd09e88fc&v=4"
+        },
+        "body" : "Is this a roadmap for 0.2.0, 1.0.0, or some other version?",
+        "createdAt" : "2018-04-02T16:03:45Z",
+        "updatedAt" : "2018-04-02T21:54:11Z",
+        "lastEditedBy" : {
+          "login" : "xeno-by",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/609152?u=20bb3a58b554d0984a33eaa519c5cf3fd09e88fc&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "9f264c3d-d4d6-4f33-8826-008e0da22883",
+        "parentId" : "f9da378f-4bff-4115-9586-54b1d6038752",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "A proper roadmap with funding and dedicated team could set a deadline like \"2018 Q1-Q2\". That's how the vscode roadmap is organized https://github.com/Microsoft/vscode/wiki/Roadmap. However, Metals has no funding and the prioritization of tasks depends on personal motivation of our contributors. I prefer not to promise in what order or when any of this functionality will be implemented.",
+        "createdAt" : "2018-04-02T17:05:34Z",
+        "updatedAt" : "2018-04-02T21:54:11Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "2ff0d05b-f111-43db-9dcc-58c67300d2c5",
+        "parentId" : "f9da378f-4bff-4115-9586-54b1d6038752",
+        "author" : {
+          "login" : "laughedelic",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/766656?v=4"
+        },
+        "body" : "I also think it shouldn't refer to any particular version. I think this roadmap is more of a \"vision\" document than a plan with milestones.",
+        "createdAt" : "2018-04-02T18:09:33Z",
+        "updatedAt" : "2018-04-02T21:54:11Z",
+        "lastEditedBy" : {
+          "login" : "laughedelic",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/766656?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "a3d3ed19-f904-4443-9b4b-a04aa606326c",
+        "parentId" : "f9da378f-4bff-4115-9586-54b1d6038752",
+        "author" : {
+          "login" : "xeno-by",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/609152?u=20bb3a58b554d0984a33eaa519c5cf3fd09e88fc&v=4"
+        },
+        "body" : "Version numbers don't have to be tied to concrete dates. \r\n\r\nI think being able to say \"we want to achieve X, Y, Z for 0.2.0, and A, B, C for 0.3.0\" will allow us to better structure our work. In my opinion, a plan is useful regardless of whether we have funding or not.",
+        "createdAt" : "2018-04-02T21:36:29Z",
+        "updatedAt" : "2018-04-02T21:54:11Z",
+        "lastEditedBy" : {
+          "login" : "xeno-by",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/609152?u=20bb3a58b554d0984a33eaa519c5cf3fd09e88fc&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "774cbf430ac6829db5d40bd97995fc3a6d38bab0",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,169 @@\n+# Roadmap"
+  },
+  {
+    "id" : "3725fad6-7be2-4304-ab4d-03840c8c1f95",
+    "prId" : 226,
+    "comments" : [
+      {
+        "id" : "45ddba29-b96c-4271-adf6-6e44bc28d8ec",
+        "parentId" : null,
+        "author" : {
+          "login" : "xeno-by",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/609152?u=20bb3a58b554d0984a33eaa519c5cf3fd09e88fc&v=4"
+        },
+        "body" : "Never as in \"never\" or \"much more rarely than the others\"?",
+        "createdAt" : "2018-04-02T16:06:47Z",
+        "updatedAt" : "2018-04-02T21:54:11Z",
+        "lastEditedBy" : {
+          "login" : "xeno-by",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/609152?u=20bb3a58b554d0984a33eaa519c5cf3fd09e88fc&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "92486967-9565-4438-b07b-0bf18b1967d9",
+        "parentId" : "45ddba29-b96c-4271-adf6-6e44bc28d8ec",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "s/never/not/",
+        "createdAt" : "2018-04-02T17:05:57Z",
+        "updatedAt" : "2018-04-02T21:54:11Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "774cbf430ac6829db5d40bd97995fc3a6d38bab0",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,169 @@\n+# Roadmap\n+\n+* [**Simple installation**](#simple-installation): importing a project should be\n+  simple and require as few steps as possible.\n+* [**Correct diagnostics**](#correct-diagnostics): the editor should never show\n+  spurious red squiggles, even at the cost of higher latency."
+  },
+  {
+    "id" : "50174b63-106f-49cc-8a4e-503dd8001a9b",
+    "prId" : 226,
+    "comments" : [
+      {
+        "id" : "f75a83a4-b91e-452e-9bbe-8b3a74dc2376",
+        "parentId" : null,
+        "author" : {
+          "login" : "xeno-by",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/609152?u=20bb3a58b554d0984a33eaa519c5cf3fd09e88fc&v=4"
+        },
+        "body" : "What does \"lightweight\" mean here? Much like \"principled\", this word is very often abused, to the degree that I'm not really sure what it means anymore.",
+        "createdAt" : "2018-04-02T16:07:38Z",
+        "updatedAt" : "2018-04-02T21:54:11Z",
+        "lastEditedBy" : {
+          "login" : "xeno-by",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/609152?u=20bb3a58b554d0984a33eaa519c5cf3fd09e88fc&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "61bb1af8-c6db-47aa-9f14-5c0b4b436a91",
+        "parentId" : "f75a83a4-b91e-452e-9bbe-8b3a74dc2376",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "I disagree \"lightweight\" has no meaning. Nevertheless, rephrased to\r\n\r\n> Indexing should run in the background and not get in your way from coding.\r\n\r\n",
+        "createdAt" : "2018-04-02T17:10:05Z",
+        "updatedAt" : "2018-04-02T21:54:11Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "774cbf430ac6829db5d40bd97995fc3a6d38bab0",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,169 @@\n+# Roadmap\n+\n+* [**Simple installation**](#simple-installation): importing a project should be\n+  simple and require as few steps as possible.\n+* [**Correct diagnostics**](#correct-diagnostics): the editor should never show\n+  spurious red squiggles, even at the cost of higher latency.\n+* [**Robust navigation**](#robust-navigation): goto definition should work\n+  everywhere, even for Java dependencies.\n+* [**Fast completions**](#fast-completions): completions suggestions should\n+  respond in ~200ms, even at the cost of occasionally wrong results.\n+* [**Low CPU and memory usage**](#low-cpu-and-memory-usage): indexing should be\n+  lightweight and run in the background."
+  },
+  {
+    "id" : "8ae37e3b-dfe4-4d86-93b5-ddf3fea019b6",
+    "prId" : 226,
+    "comments" : [
+      {
+        "id" : "2240a356-13a1-4bc8-83f0-8fd41de7f940",
+        "parentId" : null,
+        "author" : {
+          "login" : "xeno-by",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/609152?u=20bb3a58b554d0984a33eaa519c5cf3fd09e88fc&v=4"
+        },
+        "body" : "Why is it `scalac.diagnostics.enabled`, but not `sbt.diagnostics.enabled`?",
+        "createdAt" : "2018-04-02T16:09:02Z",
+        "updatedAt" : "2018-04-02T21:54:11Z",
+        "lastEditedBy" : {
+          "login" : "xeno-by",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/609152?u=20bb3a58b554d0984a33eaa519c5cf3fd09e88fc&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "6b12d115-d522-46a7-bf0a-7f8639bb63e5",
+        "parentId" : "2240a356-13a1-4bc8-83f0-8fd41de7f940",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "it should probably be `sbt.diagnostics.enabled`, but that's for another PR",
+        "createdAt" : "2018-04-02T17:10:48Z",
+        "updatedAt" : "2018-04-02T21:54:11Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "8d5595a4-5d23-4389-bf47-32222f0a214e",
+        "parentId" : "2240a356-13a1-4bc8-83f0-8fd41de7f940",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "tracked in https://github.com/scalameta/metals/issues/228",
+        "createdAt" : "2018-04-02T17:11:40Z",
+        "updatedAt" : "2018-04-02T21:54:11Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "e2ae79f5-d1e8-4a41-9b94-e2c5f3d5891b",
+        "parentId" : "2240a356-13a1-4bc8-83f0-8fd41de7f940",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "I think we might want to enable the sbt server integration by default, too, when I think of it.",
+        "createdAt" : "2018-04-02T18:54:41Z",
+        "updatedAt" : "2018-04-02T21:54:11Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "f2650bc9-c08f-4e58-ac4d-9aee930656ee",
+        "parentId" : "2240a356-13a1-4bc8-83f0-8fd41de7f940",
+        "author" : {
+          "login" : "laughedelic",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/766656?v=4"
+        },
+        "body" : "If it's enabled by default, then it shouldn't show an error message when it fails to connect _automatically_ (only when user calls the \"sbt connect\" command). Imagine you use it for the first time and you don't know anything about this integration and the first thing you see after  server initialization is an error: \"sbt 1.1 is not running...\" (\"wtf, I'm not even using sbt\" says somebody with bloop/mill/etc. 😝)",
+        "createdAt" : "2018-04-02T19:34:28Z",
+        "updatedAt" : "2018-04-02T21:54:11Z",
+        "lastEditedBy" : {
+          "login" : "laughedelic",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/766656?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "774cbf430ac6829db5d40bd97995fc3a6d38bab0",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,169 @@\n+# Roadmap\n+\n+* [**Simple installation**](#simple-installation): importing a project should be\n+  simple and require as few steps as possible.\n+* [**Correct diagnostics**](#correct-diagnostics): the editor should never show\n+  spurious red squiggles, even at the cost of higher latency.\n+* [**Robust navigation**](#robust-navigation): goto definition should work\n+  everywhere, even for Java dependencies.\n+* [**Fast completions**](#fast-completions): completions suggestions should\n+  respond in ~200ms, even at the cost of occasionally wrong results.\n+* [**Low CPU and memory usage**](#low-cpu-and-memory-usage): indexing should be\n+  lightweight and run in the background.\n+* [**Solid refactoring**](#solid-refactoring): rename, organize imports and\n+  insert type annotation should always leave the codebase in a compiling state.\n+\n+## Simple installation\n+\n+The first you do with an IDE is boring but critical: import a project. The\n+Language Server Protocol does not provide utilities to extract metadata from a\n+build tool (module source files, dependencies, configuration data), so we are\n+still exploring what is the best option.\n+\n+* [ ] sbt-metals: plugin that provides a `*:metalsSetup` task to export sbt\n+      build metadata.\n+* [ ] [BSP][]: LSP-inspired protocol to standardize on communication between a\n+      language server and build tool. In theory, should enable automatic\n+      importing of projects without custom build plugins or manual installation\n+      steps.\n+\n+## Correct diagnostics\n+\n+Red squiggles are one of the most basic but also difficult-to-support features\n+in an IDE. The Scala compiler was not designed for interactivity, which makes\n+fast and correct diagnostics difficult to support in the editor. We are still\n+unsure what the best model is for diagnostics, so we are still exploring what is\n+the best option.\n+\n+* [x] Scala Presentation Compiler: interactively publish squiggles as you type.\n+      Provides low latency but may get off-sync with build diagnostics.\n+  * Disabled by default. Can be enabled with configuration option\n+    `scalac.diagnostics.enabled=true`.\n+  * Requires [`metalsSetup`](#metalssetup).\n+* [x] sbt server: sbt 1.1 added LSP support so that build errors are reported\n+      directly to the editor. Metals can connect to sbt server as a client to\n+      trigger batch compilation on file save. Guarantees diagnostics are always\n+      in-sync with build diagnostics but at the cost of higher latency.\n+  * Disabled by default. Can be enabled with configuration option\n+    `sbt.enabled=true`."
+  },
+  {
+    "id" : "61953560-c5fb-4e7f-85dd-d6afcb3c884c",
+    "prId" : 226,
+    "comments" : [
+      {
+        "id" : "5f63f076-ab29-4188-b13e-f9c64e5d63ac",
+        "parentId" : null,
+        "author" : {
+          "login" : "xeno-by",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/609152?u=20bb3a58b554d0984a33eaa519c5cf3fd09e88fc&v=4"
+        },
+        "body" : "Why do we say this only in this section, but not in other, like in the PC one? I suggest we leave this sentence out.",
+        "createdAt" : "2018-04-02T16:12:45Z",
+        "updatedAt" : "2018-04-02T21:54:11Z",
+        "lastEditedBy" : {
+          "login" : "xeno-by",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/609152?u=20bb3a58b554d0984a33eaa519c5cf3fd09e88fc&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "479fb4fc-2ef9-41ca-91a2-8c208d25eb42",
+        "parentId" : "5f63f076-ab29-4188-b13e-f9c64e5d63ac",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Removed, and added\r\n\r\n> Given these challenges, we are still exploring how to best support correct and fast completions.",
+        "createdAt" : "2018-04-02T17:15:08Z",
+        "updatedAt" : "2018-04-02T21:54:11Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "774cbf430ac6829db5d40bd97995fc3a6d38bab0",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,169 @@\n+# Roadmap\n+\n+* [**Simple installation**](#simple-installation): importing a project should be\n+  simple and require as few steps as possible.\n+* [**Correct diagnostics**](#correct-diagnostics): the editor should never show\n+  spurious red squiggles, even at the cost of higher latency.\n+* [**Robust navigation**](#robust-navigation): goto definition should work\n+  everywhere, even for Java dependencies.\n+* [**Fast completions**](#fast-completions): completions suggestions should\n+  respond in ~200ms, even at the cost of occasionally wrong results.\n+* [**Low CPU and memory usage**](#low-cpu-and-memory-usage): indexing should be\n+  lightweight and run in the background.\n+* [**Solid refactoring**](#solid-refactoring): rename, organize imports and\n+  insert type annotation should always leave the codebase in a compiling state.\n+\n+## Simple installation\n+\n+The first you do with an IDE is boring but critical: import a project. The\n+Language Server Protocol does not provide utilities to extract metadata from a\n+build tool (module source files, dependencies, configuration data), so we are\n+still exploring what is the best option.\n+\n+* [ ] sbt-metals: plugin that provides a `*:metalsSetup` task to export sbt\n+      build metadata.\n+* [ ] [BSP][]: LSP-inspired protocol to standardize on communication between a\n+      language server and build tool. In theory, should enable automatic\n+      importing of projects without custom build plugins or manual installation\n+      steps.\n+\n+## Correct diagnostics\n+\n+Red squiggles are one of the most basic but also difficult-to-support features\n+in an IDE. The Scala compiler was not designed for interactivity, which makes\n+fast and correct diagnostics difficult to support in the editor. We are still\n+unsure what the best model is for diagnostics, so we are still exploring what is\n+the best option.\n+\n+* [x] Scala Presentation Compiler: interactively publish squiggles as you type.\n+      Provides low latency but may get off-sync with build diagnostics.\n+  * Disabled by default. Can be enabled with configuration option\n+    `scalac.diagnostics.enabled=true`.\n+  * Requires [`metalsSetup`](#metalssetup).\n+* [x] sbt server: sbt 1.1 added LSP support so that build errors are reported\n+      directly to the editor. Metals can connect to sbt server as a client to\n+      trigger batch compilation on file save. Guarantees diagnostics are always\n+      in-sync with build diagnostics but at the cost of higher latency.\n+  * Disabled by default. Can be enabled with configuration option\n+    `sbt.enabled=true`.\n+  * Requires sbt 1.1 or later.\n+* [x] Linting with [Scalafix][].\n+  * Requires [semanticdb-scalac](#semanticdb-scalac).\n+  * Supports both built-in and custom linter rules.\n+\n+## Robust navigation\n+\n+Goto definition and find references is a great way to navigate and learn about a\n+codebase. Metals uses [SemanticDB][], a data model for semantic information\n+about programs in Scala and other languages, to power code navigation. Indexing\n+happens with during batch compilation in the build tool, using a similar\n+architecture as [Index-While-Building][] in XCode 9.\n+\n+* Goto definition (`textDocument/definition`). Requires\n+  [semanticdb-scalac](#semanticdb-scalac).\n+  * [x] project -> project.\n+  * [x] project -> Scala dependency. Requires [`metalsSetup`](#metalssetup).\n+  * [x] project -> Java dependency. Requires [`metalsSetup`](#metalssetup).\n+  * [ ] dependency -> dependency.\n+* [x] Find references (`textDocument/references`). Works the same as goto\n+      definition.\n+  * [x] project -> project.\n+  * [ ] project -> Scala dependency.\n+  * [ ] project -> Java dependency.\n+  * [ ] dependency -> dependency.\n+* [x] Highlight references to symbol at position\n+      (`textDocument/documentHighlight`).\n+* [x] Open symbol in file (`textDocument/documentSymbol`)\n+* [x] Open symbol in workspace (`workspace/symbol`)\n+* [x] Symbol outline in the sidebar as you type (`textDocument/documentSymbol`).\n+* [ ] Goto implementation (`textDocument/implementation`)\n+* [ ] Goto type definition (`textDocument/typeDefinition`)\n+* [x] Show type of symbol at position (`textDocument/hover`). Requires\n+      [semanticdb-scalac](#semanticdb-scalac).\n+* [ ] Show type of expression at position (`textDocument/hover`).\n+\n+## Fast completions\n+\n+Auto completions are a great way to explore a library interface and save\n+keystrokes while writing code. Completions are sensitive to latency since\n+suggestions update on every keystroke. Correct and fast completions are\n+difficult to support in Scala due to several challenges:\n+\n+1.  the presentation compiler does not lend itself well to interactive editing\n+2.  some completions semantics are are difficult to reproduce outside of the\n+    compiler\n+    * extension methods depend on implicit conversions\n+    * whitebox macros can refine result types which influences completion\n+      suggestions\n+\n+It will take a while until Metals can robustly support completions."
+  },
+  {
+    "id" : "4a51acbc-ce2b-4383-810d-e37196dc98f2",
+    "prId" : 226,
+    "comments" : [
+      {
+        "id" : "95e3c757-1f5d-44fb-97eb-0784b596e2d2",
+        "parentId" : null,
+        "author" : {
+          "login" : "xeno-by",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/609152?u=20bb3a58b554d0984a33eaa519c5cf3fd09e88fc&v=4"
+        },
+        "body" : "are are",
+        "createdAt" : "2018-04-02T16:12:55Z",
+        "updatedAt" : "2018-04-02T21:54:11Z",
+        "lastEditedBy" : {
+          "login" : "xeno-by",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/609152?u=20bb3a58b554d0984a33eaa519c5cf3fd09e88fc&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "dd6a1bfb-f177-4291-89ab-4c038826d88a",
+        "parentId" : "95e3c757-1f5d-44fb-97eb-0784b596e2d2",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "fixed",
+        "createdAt" : "2018-04-02T17:14:11Z",
+        "updatedAt" : "2018-04-02T21:54:11Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "774cbf430ac6829db5d40bd97995fc3a6d38bab0",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,169 @@\n+# Roadmap\n+\n+* [**Simple installation**](#simple-installation): importing a project should be\n+  simple and require as few steps as possible.\n+* [**Correct diagnostics**](#correct-diagnostics): the editor should never show\n+  spurious red squiggles, even at the cost of higher latency.\n+* [**Robust navigation**](#robust-navigation): goto definition should work\n+  everywhere, even for Java dependencies.\n+* [**Fast completions**](#fast-completions): completions suggestions should\n+  respond in ~200ms, even at the cost of occasionally wrong results.\n+* [**Low CPU and memory usage**](#low-cpu-and-memory-usage): indexing should be\n+  lightweight and run in the background.\n+* [**Solid refactoring**](#solid-refactoring): rename, organize imports and\n+  insert type annotation should always leave the codebase in a compiling state.\n+\n+## Simple installation\n+\n+The first you do with an IDE is boring but critical: import a project. The\n+Language Server Protocol does not provide utilities to extract metadata from a\n+build tool (module source files, dependencies, configuration data), so we are\n+still exploring what is the best option.\n+\n+* [ ] sbt-metals: plugin that provides a `*:metalsSetup` task to export sbt\n+      build metadata.\n+* [ ] [BSP][]: LSP-inspired protocol to standardize on communication between a\n+      language server and build tool. In theory, should enable automatic\n+      importing of projects without custom build plugins or manual installation\n+      steps.\n+\n+## Correct diagnostics\n+\n+Red squiggles are one of the most basic but also difficult-to-support features\n+in an IDE. The Scala compiler was not designed for interactivity, which makes\n+fast and correct diagnostics difficult to support in the editor. We are still\n+unsure what the best model is for diagnostics, so we are still exploring what is\n+the best option.\n+\n+* [x] Scala Presentation Compiler: interactively publish squiggles as you type.\n+      Provides low latency but may get off-sync with build diagnostics.\n+  * Disabled by default. Can be enabled with configuration option\n+    `scalac.diagnostics.enabled=true`.\n+  * Requires [`metalsSetup`](#metalssetup).\n+* [x] sbt server: sbt 1.1 added LSP support so that build errors are reported\n+      directly to the editor. Metals can connect to sbt server as a client to\n+      trigger batch compilation on file save. Guarantees diagnostics are always\n+      in-sync with build diagnostics but at the cost of higher latency.\n+  * Disabled by default. Can be enabled with configuration option\n+    `sbt.enabled=true`.\n+  * Requires sbt 1.1 or later.\n+* [x] Linting with [Scalafix][].\n+  * Requires [semanticdb-scalac](#semanticdb-scalac).\n+  * Supports both built-in and custom linter rules.\n+\n+## Robust navigation\n+\n+Goto definition and find references is a great way to navigate and learn about a\n+codebase. Metals uses [SemanticDB][], a data model for semantic information\n+about programs in Scala and other languages, to power code navigation. Indexing\n+happens with during batch compilation in the build tool, using a similar\n+architecture as [Index-While-Building][] in XCode 9.\n+\n+* Goto definition (`textDocument/definition`). Requires\n+  [semanticdb-scalac](#semanticdb-scalac).\n+  * [x] project -> project.\n+  * [x] project -> Scala dependency. Requires [`metalsSetup`](#metalssetup).\n+  * [x] project -> Java dependency. Requires [`metalsSetup`](#metalssetup).\n+  * [ ] dependency -> dependency.\n+* [x] Find references (`textDocument/references`). Works the same as goto\n+      definition.\n+  * [x] project -> project.\n+  * [ ] project -> Scala dependency.\n+  * [ ] project -> Java dependency.\n+  * [ ] dependency -> dependency.\n+* [x] Highlight references to symbol at position\n+      (`textDocument/documentHighlight`).\n+* [x] Open symbol in file (`textDocument/documentSymbol`)\n+* [x] Open symbol in workspace (`workspace/symbol`)\n+* [x] Symbol outline in the sidebar as you type (`textDocument/documentSymbol`).\n+* [ ] Goto implementation (`textDocument/implementation`)\n+* [ ] Goto type definition (`textDocument/typeDefinition`)\n+* [x] Show type of symbol at position (`textDocument/hover`). Requires\n+      [semanticdb-scalac](#semanticdb-scalac).\n+* [ ] Show type of expression at position (`textDocument/hover`).\n+\n+## Fast completions\n+\n+Auto completions are a great way to explore a library interface and save\n+keystrokes while writing code. Completions are sensitive to latency since\n+suggestions update on every keystroke. Correct and fast completions are\n+difficult to support in Scala due to several challenges:\n+\n+1.  the presentation compiler does not lend itself well to interactive editing\n+2.  some completions semantics are are difficult to reproduce outside of the"
+  },
+  {
+    "id" : "086c845b-9d9a-47a1-83a8-aa51b76d9a58",
+    "prId" : 226,
+    "comments" : [
+      {
+        "id" : "8a46c0c1-799e-469e-8209-f20309793404",
+        "parentId" : null,
+        "author" : {
+          "login" : "xeno-by",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/609152?u=20bb3a58b554d0984a33eaa519c5cf3fd09e88fc&v=4"
+        },
+        "body" : "Is there a concrete goal? Things can always be made faster, but where do we stop?",
+        "createdAt" : "2018-04-02T16:14:14Z",
+        "updatedAt" : "2018-04-02T21:54:11Z",
+        "lastEditedBy" : {
+          "login" : "xeno-by",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/609152?u=20bb3a58b554d0984a33eaa519c5cf3fd09e88fc&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "4d69fadb-afa7-4e42-8b85-06d6d69c67be",
+        "parentId" : "8a46c0c1-799e-469e-8209-f20309793404",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Same as I said before, no funding so I prefer not to make public promises here. If someone is motivated to take on this challenge they will be able to check out these boxes.\r\n\r\nIt's probably wrong to call this a \"roadmap\" as it's rather a wishlist ",
+        "createdAt" : "2018-04-02T17:17:02Z",
+        "updatedAt" : "2018-04-02T21:54:11Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "8111d0f4-9204-4e36-ae74-3744f5c970da",
+        "parentId" : "8a46c0c1-799e-469e-8209-f20309793404",
+        "author" : {
+          "login" : "xeno-by",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/609152?u=20bb3a58b554d0984a33eaa519c5cf3fd09e88fc&v=4"
+        },
+        "body" : "It's not a promise though, is it? Elsewhere in the document you're saying \"200 ms\" as a latency goal for something (don't remember what exactly you were referring to). Why not say here that you want, say ~0.5mloc/s indexing speed?",
+        "createdAt" : "2018-04-02T21:34:33Z",
+        "updatedAt" : "2018-04-02T21:54:11Z",
+        "lastEditedBy" : {
+          "login" : "xeno-by",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/609152?u=20bb3a58b554d0984a33eaa519c5cf3fd09e88fc&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "774cbf430ac6829db5d40bd97995fc3a6d38bab0",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,169 @@\n+# Roadmap\n+\n+* [**Simple installation**](#simple-installation): importing a project should be\n+  simple and require as few steps as possible.\n+* [**Correct diagnostics**](#correct-diagnostics): the editor should never show\n+  spurious red squiggles, even at the cost of higher latency.\n+* [**Robust navigation**](#robust-navigation): goto definition should work\n+  everywhere, even for Java dependencies.\n+* [**Fast completions**](#fast-completions): completions suggestions should\n+  respond in ~200ms, even at the cost of occasionally wrong results.\n+* [**Low CPU and memory usage**](#low-cpu-and-memory-usage): indexing should be\n+  lightweight and run in the background.\n+* [**Solid refactoring**](#solid-refactoring): rename, organize imports and\n+  insert type annotation should always leave the codebase in a compiling state.\n+\n+## Simple installation\n+\n+The first you do with an IDE is boring but critical: import a project. The\n+Language Server Protocol does not provide utilities to extract metadata from a\n+build tool (module source files, dependencies, configuration data), so we are\n+still exploring what is the best option.\n+\n+* [ ] sbt-metals: plugin that provides a `*:metalsSetup` task to export sbt\n+      build metadata.\n+* [ ] [BSP][]: LSP-inspired protocol to standardize on communication between a\n+      language server and build tool. In theory, should enable automatic\n+      importing of projects without custom build plugins or manual installation\n+      steps.\n+\n+## Correct diagnostics\n+\n+Red squiggles are one of the most basic but also difficult-to-support features\n+in an IDE. The Scala compiler was not designed for interactivity, which makes\n+fast and correct diagnostics difficult to support in the editor. We are still\n+unsure what the best model is for diagnostics, so we are still exploring what is\n+the best option.\n+\n+* [x] Scala Presentation Compiler: interactively publish squiggles as you type.\n+      Provides low latency but may get off-sync with build diagnostics.\n+  * Disabled by default. Can be enabled with configuration option\n+    `scalac.diagnostics.enabled=true`.\n+  * Requires [`metalsSetup`](#metalssetup).\n+* [x] sbt server: sbt 1.1 added LSP support so that build errors are reported\n+      directly to the editor. Metals can connect to sbt server as a client to\n+      trigger batch compilation on file save. Guarantees diagnostics are always\n+      in-sync with build diagnostics but at the cost of higher latency.\n+  * Disabled by default. Can be enabled with configuration option\n+    `sbt.enabled=true`.\n+  * Requires sbt 1.1 or later.\n+* [x] Linting with [Scalafix][].\n+  * Requires [semanticdb-scalac](#semanticdb-scalac).\n+  * Supports both built-in and custom linter rules.\n+\n+## Robust navigation\n+\n+Goto definition and find references is a great way to navigate and learn about a\n+codebase. Metals uses [SemanticDB][], a data model for semantic information\n+about programs in Scala and other languages, to power code navigation. Indexing\n+happens with during batch compilation in the build tool, using a similar\n+architecture as [Index-While-Building][] in XCode 9.\n+\n+* Goto definition (`textDocument/definition`). Requires\n+  [semanticdb-scalac](#semanticdb-scalac).\n+  * [x] project -> project.\n+  * [x] project -> Scala dependency. Requires [`metalsSetup`](#metalssetup).\n+  * [x] project -> Java dependency. Requires [`metalsSetup`](#metalssetup).\n+  * [ ] dependency -> dependency.\n+* [x] Find references (`textDocument/references`). Works the same as goto\n+      definition.\n+  * [x] project -> project.\n+  * [ ] project -> Scala dependency.\n+  * [ ] project -> Java dependency.\n+  * [ ] dependency -> dependency.\n+* [x] Highlight references to symbol at position\n+      (`textDocument/documentHighlight`).\n+* [x] Open symbol in file (`textDocument/documentSymbol`)\n+* [x] Open symbol in workspace (`workspace/symbol`)\n+* [x] Symbol outline in the sidebar as you type (`textDocument/documentSymbol`).\n+* [ ] Goto implementation (`textDocument/implementation`)\n+* [ ] Goto type definition (`textDocument/typeDefinition`)\n+* [x] Show type of symbol at position (`textDocument/hover`). Requires\n+      [semanticdb-scalac](#semanticdb-scalac).\n+* [ ] Show type of expression at position (`textDocument/hover`).\n+\n+## Fast completions\n+\n+Auto completions are a great way to explore a library interface and save\n+keystrokes while writing code. Completions are sensitive to latency since\n+suggestions update on every keystroke. Correct and fast completions are\n+difficult to support in Scala due to several challenges:\n+\n+1.  the presentation compiler does not lend itself well to interactive editing\n+2.  some completions semantics are are difficult to reproduce outside of the\n+    compiler\n+    * extension methods depend on implicit conversions\n+    * whitebox macros can refine result types which influences completion\n+      suggestions\n+\n+It will take a while until Metals can robustly support completions.\n+\n+* [x] Scala Presentation Compiler. Faithfully reproduces full language semantics\n+      but may be slow and difficult to keep in-sync with the build for\n+      long-running interactive sessions.\n+  * Disabled by default. Can be enabled with configuration option\n+    `scalac.completions.enabled=true`.\n+  * Requires [`metalsSetup`](#metalssetup).\n+  * Shows parameter list as you type (`textDocument/signatureHelp`).\n+* [ ] Auto-import global symbol from classpath.\n+* [ ] Auto-expand abstract methods when implementing a trait or abstract class.\n+\n+## Low CPU and memory usage\n+\n+Heavy resource usage is one of the most frequent complaints about IDEs. Low CPU\n+and memory usage becomes even more important when working in larger codebases.\n+\n+* [ ] Persistent symbol index: currently Metals stores the navigation index\n+      in-memory, which can consume multiple GB of RAM for large projects.\n+* [ ] Faster Scala and Java outline indexing. Currently, Metals can index the\n+      outlines of Scala sources at ~30-40k loc/s and Java sources at ~450k\n+      loc/s."
+  },
+  {
+    "id" : "cbbeabcb-9d2a-4e8d-9def-83590a133b13",
+    "prId" : 226,
+    "comments" : [
+      {
+        "id" : "5318f8e1-1903-40d3-a91d-f04fe4919fe4",
+        "parentId" : null,
+        "author" : {
+          "login" : "laughedelic",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/766656?v=4"
+        },
+        "body" : "I would add that it requires launching sbt manually to motivate more why it's an opt-in. I also don't expect that it will change anytime soon (say sbt 1.2).",
+        "createdAt" : "2018-04-02T18:14:05Z",
+        "updatedAt" : "2018-04-02T21:54:11Z",
+        "lastEditedBy" : {
+          "login" : "laughedelic",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/766656?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "b10bd351-ce7a-4e88-a471-db736374dc1e",
+        "parentId" : "5318f8e1-1903-40d3-a91d-f04fe4919fe4",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "I added \"  * Requires a running sbt 1.1 server or later.\"",
+        "createdAt" : "2018-04-02T19:10:30Z",
+        "updatedAt" : "2018-04-02T21:54:11Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "774cbf430ac6829db5d40bd97995fc3a6d38bab0",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,170 @@\n+# Roadmap\n+\n+* [**Simple installation**](#simple-installation): importing a project should be\n+  simple and require as few steps as possible.\n+* [**Correct diagnostics**](#correct-diagnostics): the editor should not show\n+  spurious red squiggles, even at the cost of higher latency.\n+* [**Robust navigation**](#robust-navigation): goto definition should work\n+  everywhere, even for Java dependencies.\n+* [**Fast completions**](#fast-completions): completions suggestions should\n+  respond in ~200ms, even at the cost of occasionally wrong results.\n+* [**Low CPU and memory usage**](#low-cpu-and-memory-usage): indexing should run\n+  in the background and not get in your way from coding.\n+* [**Solid refactoring**](#solid-refactoring): rename, organize imports and\n+  insert type annotation should always leave the codebase in a compiling state.\n+\n+## Simple installation\n+\n+The first you do with an IDE is boring but critical: import a project. The\n+Language Server Protocol does not provide utilities to extract metadata from a\n+build tool (module source files, dependencies, configuration data), so we are\n+still exploring what is the best option.\n+\n+* [ ] sbt-metals: plugin that provides a `*:metalsSetup` task to export sbt\n+      build metadata.\n+* [ ] [BSP][]: LSP-inspired protocol to standardize on communication between a\n+      language server and build tool. In theory, should enable automatic\n+      importing of projects without custom build plugins or manual installation\n+      steps.\n+\n+## Correct diagnostics\n+\n+Red squiggles are one of the most basic but also difficult-to-support features\n+in an IDE. The Scala compiler was not designed for interactivity, which makes\n+fast and correct diagnostics difficult to support in the editor. We are still\n+unsure what the best model is for diagnostics, so we are still exploring what is\n+the best option.\n+\n+* [x] Scala Presentation Compiler: interactively publish squiggles as you type.\n+      Provides low latency but may get off-sync with build diagnostics.\n+  * Disabled by default. Can be enabled with configuration option\n+    `scalac.diagnostics.enabled=true`.\n+  * Requires [`metalsSetup`](#metalssetup).\n+* [x] sbt server: sbt 1.1 added LSP support so that build errors are reported\n+      directly to the editor. Metals can connect to sbt server as a client to\n+      trigger batch compilation on file save. Guarantees diagnostics are always\n+      in-sync with build diagnostics but at the cost of higher latency.\n+  * Disabled by default. Can be enabled with configuration option\n+    `sbt.enabled=true`.\n+  * Requires sbt 1.1 or later."
+  },
+  {
+    "id" : "07447798-e91d-4fb9-8f28-ca72e9019b47",
+    "prId" : 226,
+    "comments" : [
+      {
+        "id" : "54299e90-f731-4984-8c04-1a3eece93bfb",
+        "parentId" : null,
+        "author" : {
+          "login" : "laughedelic",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/766656?v=4"
+        },
+        "body" : "I'm not sure what do you mean here. If you define a symbol in your project, it won't be referred to from its dependencies. I understand though that inside of any given project (even a dependency) you may want to find references to any given symbol.",
+        "createdAt" : "2018-04-02T18:17:50Z",
+        "updatedAt" : "2018-04-02T21:54:11Z",
+        "lastEditedBy" : {
+          "login" : "laughedelic",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/766656?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "98bb7c90-d3db-485a-9add-a95ea956aa58",
+        "parentId" : "54299e90-f731-4984-8c04-1a3eece93bfb",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Good catch, I updated to hopefully make it clearer.",
+        "createdAt" : "2018-04-02T19:11:54Z",
+        "updatedAt" : "2018-04-02T21:54:11Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "774cbf430ac6829db5d40bd97995fc3a6d38bab0",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,170 @@\n+# Roadmap\n+\n+* [**Simple installation**](#simple-installation): importing a project should be\n+  simple and require as few steps as possible.\n+* [**Correct diagnostics**](#correct-diagnostics): the editor should not show\n+  spurious red squiggles, even at the cost of higher latency.\n+* [**Robust navigation**](#robust-navigation): goto definition should work\n+  everywhere, even for Java dependencies.\n+* [**Fast completions**](#fast-completions): completions suggestions should\n+  respond in ~200ms, even at the cost of occasionally wrong results.\n+* [**Low CPU and memory usage**](#low-cpu-and-memory-usage): indexing should run\n+  in the background and not get in your way from coding.\n+* [**Solid refactoring**](#solid-refactoring): rename, organize imports and\n+  insert type annotation should always leave the codebase in a compiling state.\n+\n+## Simple installation\n+\n+The first you do with an IDE is boring but critical: import a project. The\n+Language Server Protocol does not provide utilities to extract metadata from a\n+build tool (module source files, dependencies, configuration data), so we are\n+still exploring what is the best option.\n+\n+* [ ] sbt-metals: plugin that provides a `*:metalsSetup` task to export sbt\n+      build metadata.\n+* [ ] [BSP][]: LSP-inspired protocol to standardize on communication between a\n+      language server and build tool. In theory, should enable automatic\n+      importing of projects without custom build plugins or manual installation\n+      steps.\n+\n+## Correct diagnostics\n+\n+Red squiggles are one of the most basic but also difficult-to-support features\n+in an IDE. The Scala compiler was not designed for interactivity, which makes\n+fast and correct diagnostics difficult to support in the editor. We are still\n+unsure what the best model is for diagnostics, so we are still exploring what is\n+the best option.\n+\n+* [x] Scala Presentation Compiler: interactively publish squiggles as you type.\n+      Provides low latency but may get off-sync with build diagnostics.\n+  * Disabled by default. Can be enabled with configuration option\n+    `scalac.diagnostics.enabled=true`.\n+  * Requires [`metalsSetup`](#metalssetup).\n+* [x] sbt server: sbt 1.1 added LSP support so that build errors are reported\n+      directly to the editor. Metals can connect to sbt server as a client to\n+      trigger batch compilation on file save. Guarantees diagnostics are always\n+      in-sync with build diagnostics but at the cost of higher latency.\n+  * Disabled by default. Can be enabled with configuration option\n+    `sbt.enabled=true`.\n+  * Requires sbt 1.1 or later.\n+* [x] Linting with [Scalafix][].\n+  * Requires [semanticdb-scalac](#semanticdb-scalac).\n+  * Supports both built-in and custom linter rules.\n+\n+## Robust navigation\n+\n+Goto definition and find references is a great way to navigate and learn about a\n+codebase. Metals uses [SemanticDB][], a data model for semantic information\n+about programs in Scala and other languages, to power code navigation. Indexing\n+happens with during batch compilation in the build tool, using a similar\n+architecture as [Index-While-Building][] in XCode 9.\n+\n+* Goto definition (`textDocument/definition`). Requires\n+  [semanticdb-scalac](#semanticdb-scalac).\n+  * [x] project -> project.\n+  * [x] project -> Scala dependency. Requires [`metalsSetup`](#metalssetup).\n+  * [x] project -> Java dependency. Requires [`metalsSetup`](#metalssetup).\n+  * [ ] dependency -> dependency.\n+* [x] Find references (`textDocument/references`). Works the same as goto\n+      definition.\n+  * [x] project -> project.\n+  * [ ] project -> Scala dependency."
+  },
+  {
+    "id" : "d269c3d0-3b0f-45fa-a529-bff0f9e236ab",
+    "prId" : 226,
+    "comments" : [
+      {
+        "id" : "e61a2959-51c3-4ba3-a609-d6b236fa5a90",
+        "parentId" : null,
+        "author" : {
+          "login" : "laughedelic",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/766656?v=4"
+        },
+        "body" : "It's currently disabled. Should we enable it by default or mention here that it's an opt-in?",
+        "createdAt" : "2018-04-02T18:18:31Z",
+        "updatedAt" : "2018-04-02T21:54:11Z",
+        "lastEditedBy" : {
+          "login" : "laughedelic",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/766656?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "c695c5d6-f0b7-4fa1-b5a8-3a8fcdc5a9fa",
+        "parentId" : "e61a2959-51c3-4ba3-a609-d6b236fa5a90",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "I think we should enable it by default. It uses same data as references which is enabled by default.",
+        "createdAt" : "2018-04-02T19:12:26Z",
+        "updatedAt" : "2018-04-02T21:54:11Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "294b0263-baa5-4926-853f-e62453562ac0",
+        "parentId" : "e61a2959-51c3-4ba3-a609-d6b236fa5a90",
+        "author" : {
+          "login" : "laughedelic",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/766656?v=4"
+        },
+        "body" : "Well, even if it uses the same data, when it's lagging, it's much more noticeable (than jumping to a bit wrong place):\r\n\r\n<img width=\"435\" alt=\"screen shot 2018-01-15 at 14 51 46\" src=\"https://user-images.githubusercontent.com/766656/38212064-c3e17e54-36bc-11e8-9ca3-1ae9e218163c.png\">\r\n",
+        "createdAt" : "2018-04-02T19:29:28Z",
+        "updatedAt" : "2018-04-02T21:54:11Z",
+        "lastEditedBy" : {
+          "login" : "laughedelic",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/766656?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "774cbf430ac6829db5d40bd97995fc3a6d38bab0",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,170 @@\n+# Roadmap\n+\n+* [**Simple installation**](#simple-installation): importing a project should be\n+  simple and require as few steps as possible.\n+* [**Correct diagnostics**](#correct-diagnostics): the editor should not show\n+  spurious red squiggles, even at the cost of higher latency.\n+* [**Robust navigation**](#robust-navigation): goto definition should work\n+  everywhere, even for Java dependencies.\n+* [**Fast completions**](#fast-completions): completions suggestions should\n+  respond in ~200ms, even at the cost of occasionally wrong results.\n+* [**Low CPU and memory usage**](#low-cpu-and-memory-usage): indexing should run\n+  in the background and not get in your way from coding.\n+* [**Solid refactoring**](#solid-refactoring): rename, organize imports and\n+  insert type annotation should always leave the codebase in a compiling state.\n+\n+## Simple installation\n+\n+The first you do with an IDE is boring but critical: import a project. The\n+Language Server Protocol does not provide utilities to extract metadata from a\n+build tool (module source files, dependencies, configuration data), so we are\n+still exploring what is the best option.\n+\n+* [ ] sbt-metals: plugin that provides a `*:metalsSetup` task to export sbt\n+      build metadata.\n+* [ ] [BSP][]: LSP-inspired protocol to standardize on communication between a\n+      language server and build tool. In theory, should enable automatic\n+      importing of projects without custom build plugins or manual installation\n+      steps.\n+\n+## Correct diagnostics\n+\n+Red squiggles are one of the most basic but also difficult-to-support features\n+in an IDE. The Scala compiler was not designed for interactivity, which makes\n+fast and correct diagnostics difficult to support in the editor. We are still\n+unsure what the best model is for diagnostics, so we are still exploring what is\n+the best option.\n+\n+* [x] Scala Presentation Compiler: interactively publish squiggles as you type.\n+      Provides low latency but may get off-sync with build diagnostics.\n+  * Disabled by default. Can be enabled with configuration option\n+    `scalac.diagnostics.enabled=true`.\n+  * Requires [`metalsSetup`](#metalssetup).\n+* [x] sbt server: sbt 1.1 added LSP support so that build errors are reported\n+      directly to the editor. Metals can connect to sbt server as a client to\n+      trigger batch compilation on file save. Guarantees diagnostics are always\n+      in-sync with build diagnostics but at the cost of higher latency.\n+  * Disabled by default. Can be enabled with configuration option\n+    `sbt.enabled=true`.\n+  * Requires sbt 1.1 or later.\n+* [x] Linting with [Scalafix][].\n+  * Requires [semanticdb-scalac](#semanticdb-scalac).\n+  * Supports both built-in and custom linter rules.\n+\n+## Robust navigation\n+\n+Goto definition and find references is a great way to navigate and learn about a\n+codebase. Metals uses [SemanticDB][], a data model for semantic information\n+about programs in Scala and other languages, to power code navigation. Indexing\n+happens with during batch compilation in the build tool, using a similar\n+architecture as [Index-While-Building][] in XCode 9.\n+\n+* Goto definition (`textDocument/definition`). Requires\n+  [semanticdb-scalac](#semanticdb-scalac).\n+  * [x] project -> project.\n+  * [x] project -> Scala dependency. Requires [`metalsSetup`](#metalssetup).\n+  * [x] project -> Java dependency. Requires [`metalsSetup`](#metalssetup).\n+  * [ ] dependency -> dependency.\n+* [x] Find references (`textDocument/references`). Works the same as goto\n+      definition.\n+  * [x] project -> project.\n+  * [ ] project -> Scala dependency.\n+  * [ ] project -> Java dependency.\n+  * [ ] dependency -> dependency.\n+* [x] Highlight references to symbol at position\n+      (`textDocument/documentHighlight`)."
+  },
+  {
+    "id" : "25d61e35-2a45-4eae-9596-bcc85c9aacfc",
+    "prId" : 226,
+    "comments" : [
+      {
+        "id" : "09afaac2-1821-4ecc-a402-331802f4c01c",
+        "parentId" : null,
+        "author" : {
+          "login" : "laughedelic",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/766656?v=4"
+        },
+        "body" : "Isn't it just symbols outline (2 lines below). What do you mean here?",
+        "createdAt" : "2018-04-02T18:19:24Z",
+        "updatedAt" : "2018-04-02T21:54:11Z",
+        "lastEditedBy" : {
+          "login" : "laughedelic",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/766656?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "0b632075-af6d-4f45-8239-a342f4f19bdb",
+        "parentId" : "09afaac2-1821-4ecc-a402-331802f4c01c",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Rephrased s/Open/Goto/. This is the ability to write name of symbol, the code outline uses the same endpoint ",
+        "createdAt" : "2018-04-02T19:14:39Z",
+        "updatedAt" : "2018-04-02T21:54:11Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "774cbf430ac6829db5d40bd97995fc3a6d38bab0",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,170 @@\n+# Roadmap\n+\n+* [**Simple installation**](#simple-installation): importing a project should be\n+  simple and require as few steps as possible.\n+* [**Correct diagnostics**](#correct-diagnostics): the editor should not show\n+  spurious red squiggles, even at the cost of higher latency.\n+* [**Robust navigation**](#robust-navigation): goto definition should work\n+  everywhere, even for Java dependencies.\n+* [**Fast completions**](#fast-completions): completions suggestions should\n+  respond in ~200ms, even at the cost of occasionally wrong results.\n+* [**Low CPU and memory usage**](#low-cpu-and-memory-usage): indexing should run\n+  in the background and not get in your way from coding.\n+* [**Solid refactoring**](#solid-refactoring): rename, organize imports and\n+  insert type annotation should always leave the codebase in a compiling state.\n+\n+## Simple installation\n+\n+The first you do with an IDE is boring but critical: import a project. The\n+Language Server Protocol does not provide utilities to extract metadata from a\n+build tool (module source files, dependencies, configuration data), so we are\n+still exploring what is the best option.\n+\n+* [ ] sbt-metals: plugin that provides a `*:metalsSetup` task to export sbt\n+      build metadata.\n+* [ ] [BSP][]: LSP-inspired protocol to standardize on communication between a\n+      language server and build tool. In theory, should enable automatic\n+      importing of projects without custom build plugins or manual installation\n+      steps.\n+\n+## Correct diagnostics\n+\n+Red squiggles are one of the most basic but also difficult-to-support features\n+in an IDE. The Scala compiler was not designed for interactivity, which makes\n+fast and correct diagnostics difficult to support in the editor. We are still\n+unsure what the best model is for diagnostics, so we are still exploring what is\n+the best option.\n+\n+* [x] Scala Presentation Compiler: interactively publish squiggles as you type.\n+      Provides low latency but may get off-sync with build diagnostics.\n+  * Disabled by default. Can be enabled with configuration option\n+    `scalac.diagnostics.enabled=true`.\n+  * Requires [`metalsSetup`](#metalssetup).\n+* [x] sbt server: sbt 1.1 added LSP support so that build errors are reported\n+      directly to the editor. Metals can connect to sbt server as a client to\n+      trigger batch compilation on file save. Guarantees diagnostics are always\n+      in-sync with build diagnostics but at the cost of higher latency.\n+  * Disabled by default. Can be enabled with configuration option\n+    `sbt.enabled=true`.\n+  * Requires sbt 1.1 or later.\n+* [x] Linting with [Scalafix][].\n+  * Requires [semanticdb-scalac](#semanticdb-scalac).\n+  * Supports both built-in and custom linter rules.\n+\n+## Robust navigation\n+\n+Goto definition and find references is a great way to navigate and learn about a\n+codebase. Metals uses [SemanticDB][], a data model for semantic information\n+about programs in Scala and other languages, to power code navigation. Indexing\n+happens with during batch compilation in the build tool, using a similar\n+architecture as [Index-While-Building][] in XCode 9.\n+\n+* Goto definition (`textDocument/definition`). Requires\n+  [semanticdb-scalac](#semanticdb-scalac).\n+  * [x] project -> project.\n+  * [x] project -> Scala dependency. Requires [`metalsSetup`](#metalssetup).\n+  * [x] project -> Java dependency. Requires [`metalsSetup`](#metalssetup).\n+  * [ ] dependency -> dependency.\n+* [x] Find references (`textDocument/references`). Works the same as goto\n+      definition.\n+  * [x] project -> project.\n+  * [ ] project -> Scala dependency.\n+  * [ ] project -> Java dependency.\n+  * [ ] dependency -> dependency.\n+* [x] Highlight references to symbol at position\n+      (`textDocument/documentHighlight`).\n+* [x] Open symbol in file (`textDocument/documentSymbol`)"
+  },
+  {
+    "id" : "0420daa4-1775-48a8-92d4-bf2b2bc27d18",
+    "prId" : 226,
+    "comments" : [
+      {
+        "id" : "154418c9-3623-498c-b8bb-084f4fffbe58",
+        "parentId" : null,
+        "author" : {
+          "login" : "laughedelic",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/766656?v=4"
+        },
+        "body" : "By the way, why not the latest 1.4.0?",
+        "createdAt" : "2018-04-02T18:26:44Z",
+        "updatedAt" : "2018-04-02T21:54:11Z",
+        "lastEditedBy" : {
+          "login" : "laughedelic",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/766656?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "e1804459-1788-433f-bbfe-ea58948034a1",
+        "parentId" : "154418c9-3623-498c-b8bb-084f4fffbe58",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "No reason, just to give an example",
+        "createdAt" : "2018-04-02T19:15:03Z",
+        "updatedAt" : "2018-04-02T21:54:11Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "2c5117bc-4a3b-48a0-a818-f0415bb75ceb",
+        "parentId" : "154418c9-3623-498c-b8bb-084f4fffbe58",
+        "author" : {
+          "login" : "laughedelic",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/766656?v=4"
+        },
+        "body" : "I mean the actual default value. It's 1.3.0. Can we set it to 1.4.0?",
+        "createdAt" : "2018-04-02T19:43:46Z",
+        "updatedAt" : "2018-04-02T21:54:11Z",
+        "lastEditedBy" : {
+          "login" : "laughedelic",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/766656?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "774cbf430ac6829db5d40bd97995fc3a6d38bab0",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,170 @@\n+# Roadmap\n+\n+* [**Simple installation**](#simple-installation): importing a project should be\n+  simple and require as few steps as possible.\n+* [**Correct diagnostics**](#correct-diagnostics): the editor should not show\n+  spurious red squiggles, even at the cost of higher latency.\n+* [**Robust navigation**](#robust-navigation): goto definition should work\n+  everywhere, even for Java dependencies.\n+* [**Fast completions**](#fast-completions): completions suggestions should\n+  respond in ~200ms, even at the cost of occasionally wrong results.\n+* [**Low CPU and memory usage**](#low-cpu-and-memory-usage): indexing should run\n+  in the background and not get in your way from coding.\n+* [**Solid refactoring**](#solid-refactoring): rename, organize imports and\n+  insert type annotation should always leave the codebase in a compiling state.\n+\n+## Simple installation\n+\n+The first you do with an IDE is boring but critical: import a project. The\n+Language Server Protocol does not provide utilities to extract metadata from a\n+build tool (module source files, dependencies, configuration data), so we are\n+still exploring what is the best option.\n+\n+* [ ] sbt-metals: plugin that provides a `*:metalsSetup` task to export sbt\n+      build metadata.\n+* [ ] [BSP][]: LSP-inspired protocol to standardize on communication between a\n+      language server and build tool. In theory, should enable automatic\n+      importing of projects without custom build plugins or manual installation\n+      steps.\n+\n+## Correct diagnostics\n+\n+Red squiggles are one of the most basic but also difficult-to-support features\n+in an IDE. The Scala compiler was not designed for interactivity, which makes\n+fast and correct diagnostics difficult to support in the editor. We are still\n+unsure what the best model is for diagnostics, so we are still exploring what is\n+the best option.\n+\n+* [x] Scala Presentation Compiler: interactively publish squiggles as you type.\n+      Provides low latency but may get off-sync with build diagnostics.\n+  * Disabled by default. Can be enabled with configuration option\n+    `scalac.diagnostics.enabled=true`.\n+  * Requires [`metalsSetup`](#metalssetup).\n+* [x] sbt server: sbt 1.1 added LSP support so that build errors are reported\n+      directly to the editor. Metals can connect to sbt server as a client to\n+      trigger batch compilation on file save. Guarantees diagnostics are always\n+      in-sync with build diagnostics but at the cost of higher latency.\n+  * Disabled by default. Can be enabled with configuration option\n+    `sbt.enabled=true`.\n+  * Requires sbt 1.1 or later.\n+* [x] Linting with [Scalafix][].\n+  * Requires [semanticdb-scalac](#semanticdb-scalac).\n+  * Supports both built-in and custom linter rules.\n+\n+## Robust navigation\n+\n+Goto definition and find references is a great way to navigate and learn about a\n+codebase. Metals uses [SemanticDB][], a data model for semantic information\n+about programs in Scala and other languages, to power code navigation. Indexing\n+happens with during batch compilation in the build tool, using a similar\n+architecture as [Index-While-Building][] in XCode 9.\n+\n+* Goto definition (`textDocument/definition`). Requires\n+  [semanticdb-scalac](#semanticdb-scalac).\n+  * [x] project -> project.\n+  * [x] project -> Scala dependency. Requires [`metalsSetup`](#metalssetup).\n+  * [x] project -> Java dependency. Requires [`metalsSetup`](#metalssetup).\n+  * [ ] dependency -> dependency.\n+* [x] Find references (`textDocument/references`). Works the same as goto\n+      definition.\n+  * [x] project -> project.\n+  * [ ] project -> Scala dependency.\n+  * [ ] project -> Java dependency.\n+  * [ ] dependency -> dependency.\n+* [x] Highlight references to symbol at position\n+      (`textDocument/documentHighlight`).\n+* [x] Open symbol in file (`textDocument/documentSymbol`)\n+* [x] Open symbol in workspace (`workspace/symbol`)\n+* [x] Symbol outline in the sidebar as you type (`textDocument/documentSymbol`).\n+* [ ] Goto implementation (`textDocument/implementation`)\n+* [ ] Goto type definition (`textDocument/typeDefinition`)\n+* [x] Show type of symbol at position (`textDocument/hover`). Requires\n+      [semanticdb-scalac](#semanticdb-scalac).\n+* [ ] Show type of expression at position (`textDocument/hover`).\n+\n+## Fast completions\n+\n+Auto completions are a great way to explore a library interface and save\n+keystrokes while writing code. Completions are sensitive to latency since\n+suggestions update on every keystroke. Correct and fast completions are\n+difficult to support in Scala due to several challenges:\n+\n+1.  the presentation compiler does not lend itself well to interactive editing\n+2.  some completions semantics are difficult to reproduce outside of the\n+    compiler\n+    * extension methods depend on implicit conversions\n+    * whitebox macros can refine result types which influences completion\n+      suggestions\n+\n+Given these challenges, we are still exploring how to best support correct and\n+fast completions.\n+\n+* [x] Scala Presentation Compiler. Faithfully reproduces full language semantics\n+      but may be slow and difficult to keep in-sync with the build for\n+      long-running interactive sessions.\n+  * Disabled by default. Can be enabled with configuration option\n+    `scalac.completions.enabled=true`.\n+  * Requires [`metalsSetup`](#metalssetup).\n+  * Shows parameter list as you type (`textDocument/signatureHelp`).\n+* [ ] Auto-import global symbol from classpath.\n+* [ ] Auto-expand abstract methods when implementing a trait or abstract class.\n+\n+## Low CPU and memory usage\n+\n+Heavy resource usage is one of the most frequent complaints about IDEs. Low CPU\n+and memory usage becomes even more important when working in larger codebases.\n+\n+* [ ] Persistent symbol index: currently Metals stores the navigation index\n+      in-memory, which can consume multiple GB of RAM for large projects.\n+* [ ] Faster Scala and Java outline indexing. Currently, Metals can index the\n+      outlines of Scala sources at ~30-40k loc/s and Java sources at ~450k\n+      loc/s.\n+* [ ] Throttled background indexing. Currently, all available CPUs are utilized\n+      for indexing, which makes the computer slow for a period after running\n+      `metalsSetup`.\n+* [ ] Faster \"open symbol in workspace\" (`workspace/symbol`). Currently, uses a\n+      naive linear search algorithm that is slow for large projects.\n+\n+## Solid refactoring\n+\n+Refactoring makes you more productive while editing code. On demand refactoring\n+such as rename or formatting are great to save keystrokes for frequent\n+mechanical tasks. Passive refactoring suggestions help you learn new language\n+best practices.\n+\n+* Format (`textDocument/formatting`) with [Scalafmt][].\n+  * [x] Whole file on demand (`textDocument/formatting`)\n+  * [ ] Selected range (`textDocument/rangeFormatting`)\n+  * [x] On save (`textDocument/willSaveWaitUntil`)\n+  * [ ] As you type (`textDocument/onTypeFormatting`)\n+  * Scalafmt version can be configured with `scalafmt.version=\"1.3.0\"`."
+  }
+]

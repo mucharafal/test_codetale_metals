@@ -1,0 +1,64 @@
+[
+  {
+    "id" : "1a7e1f01-b1fe-4f96-a9b8-8f27d3dc4efc",
+    "prId" : 721,
+    "comments" : [
+      {
+        "id" : "a5e23920-24d0-442d-a200-9cd1e67a8dfa",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "`BaseDebugSuite`.\r\n\r\nAlso, is there a reason to keep `protected[debug]`? Test code is private APIs either way, we don't publish it.",
+        "createdAt" : "2019-05-20T10:34:38Z",
+        "updatedAt" : "2019-05-22T07:33:25Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "e3c999e9b79f7d0d6a4c95756d12ec54f6abbc90",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,92 @@\n+package tests.debug\n+\n+import java.net.URI\n+import java.nio.file.Files\n+import java.nio.file.Paths\n+import java.util.concurrent.ExecutorService\n+import java.util.concurrent.Executors\n+import java.util.concurrent.TimeUnit\n+import org.eclipse.lsp4j.InitializeParams\n+import org.eclipse.lsp4j.InitializedParams\n+import org.eclipse.lsp4j.debug.InitializeRequestArguments\n+import tests.BaseSuite\n+import tests.FileLayout\n+import tests.QuickBuild\n+import scala.concurrent.ExecutionContext.fromExecutorService\n+import scala.concurrent.ExecutionContextExecutorService\n+import scala.concurrent.Future\n+import scala.meta.internal.io.PathIO\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.internal.metals.MetalsLanguageServer\n+import scala.meta.internal.metals.NoopLanguageClient\n+\n+protected[debug] abstract class MetalsBaseDebugSuite extends BaseSuite {"
+  },
+  {
+    "id" : "e0f589a2-eadb-49bf-a1d8-c637c27d2613",
+    "prId" : 721,
+    "comments" : [
+      {
+        "id" : "4c078779-94f0-4893-b32b-afd004c864f0",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Although it seems appealing to abstract over the for comprehension boilerplate in `testAsync`, I am concerned that the current implementation of `testDebug` won't be able to cover more advanced user workflows like restart/cancel. I think it would be better if debug tests were  regular slow tests except with additional `debugServer` and `debugClient` helpers in scope.\r\n\r\nIn the completion test suite, the `check` method has a lot of parameters with default values like `filter: String => Boolean = _ => true`. However, the difference between completions `check` and `testDebug` is that\r\n-  completions are a single synchronous request->response method\r\n- run/debug can be multiple steps with bi-directional asynchronous communication between the client and server",
+        "createdAt" : "2019-05-20T11:02:12Z",
+        "updatedAt" : "2019-05-22T07:33:25Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "e3c999e9b79f7d0d6a4c95756d12ec54f6abbc90",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,92 @@\n+package tests.debug\n+\n+import java.net.URI\n+import java.nio.file.Files\n+import java.nio.file.Paths\n+import java.util.concurrent.ExecutorService\n+import java.util.concurrent.Executors\n+import java.util.concurrent.TimeUnit\n+import org.eclipse.lsp4j.InitializeParams\n+import org.eclipse.lsp4j.InitializedParams\n+import org.eclipse.lsp4j.debug.InitializeRequestArguments\n+import tests.BaseSuite\n+import tests.FileLayout\n+import tests.QuickBuild\n+import scala.concurrent.ExecutionContext.fromExecutorService\n+import scala.concurrent.ExecutionContextExecutorService\n+import scala.concurrent.Future\n+import scala.meta.internal.io.PathIO\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.internal.metals.MetalsLanguageServer\n+import scala.meta.internal.metals.NoopLanguageClient\n+\n+protected[debug] abstract class MetalsBaseDebugSuite extends BaseSuite {\n+  private val executor: ExecutorService = Executors.newCachedThreadPool()\n+  protected implicit val executionContext: ExecutionContextExecutorService =\n+    fromExecutorService(executor)\n+  private var metalsServer: MetalsLanguageServer = _\n+\n+  protected var workspace: URI = _\n+  protected var server: DebugProtocolServer = _\n+  protected var client: DebugProtocolClient = _\n+\n+  override def utestBeforeEach(path: Seq[String]): Unit = {\n+    if (path.isEmpty) return\n+    workspace = PathIO.workingDirectory\n+      .resolve(\"target\")\n+      .resolve(\"e2e\")\n+      .resolve(\"debug-adapter\")\n+      .resolve(path.last.replace(' ', '-'))\n+      .toURI\n+    Files.createDirectories(Paths.get(workspace))\n+\n+    metalsServer = new MetalsLanguageServer(executionContext)\n+    metalsServer.connectToLanguageClient(NoopLanguageClient)\n+\n+    client = new DebugProtocolClient\n+    server = DebugProtocolServer(\n+      workspace,\n+      metalsServer.compilationScheduler,\n+      metalsServer.buildTargets\n+    )\n+    server.setClient(client)\n+  }\n+\n+  protected final def testDebug(name: String)("
+  }
+]

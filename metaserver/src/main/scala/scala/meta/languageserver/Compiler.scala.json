@@ -1,0 +1,507 @@
+[
+  {
+    "id" : "e32975ec-b73c-44a1-bed5-a09913a77048",
+    "prId" : 23,
+    "comments" : [
+      {
+        "id" : "8ca71b31-89d4-4f43-9e83-183dcc8429c9",
+        "parentId" : null,
+        "author" : {
+          "login" : "ShaneDelmore",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/4604933?v=4"
+        },
+        "body" : "What caused this to be repeated 3 times?  Some automated tool?",
+        "createdAt" : "2017-11-11T16:35:27Z",
+        "updatedAt" : "2017-11-14T20:08:40Z",
+        "lastEditedBy" : {
+          "login" : "ShaneDelmore",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/4604933?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "13654f6a-08ea-42a9-a905-1944bc0ee4df",
+        "parentId" : "8ca71b31-89d4-4f43-9e83-183dcc8429c9",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Fixed with OrganizeImports",
+        "createdAt" : "2017-11-11T16:45:31Z",
+        "updatedAt" : "2017-11-14T20:08:40Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "5e9272f240feb4f00bdea5ee50e2808699cd0d0e",
+    "line" : null,
+    "diffHunk" : "@@ -1,54 +1,52 @@\n package scala.meta.languageserver\n \n import java.io.File\n+import java.io.PrintStream\n import java.nio.file.Files\n import java.util.Properties\n+import java.util.concurrent.ConcurrentHashMap\n+import java.util.concurrent.ConcurrentHashMap\n+import java.util.concurrent.ConcurrentHashMap"
+  },
+  {
+    "id" : "db3c80cc-12a9-4214-b1d0-fcbb0c706552",
+    "prId" : 23,
+    "comments" : [
+      {
+        "id" : "036c313a-7d8b-4f54-be7a-50395b1dc673",
+        "parentId" : null,
+        "author" : {
+          "login" : "ShaneDelmore",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/4604933?v=4"
+        },
+        "body" : "This name makes me think it is (Publisher, Subscriber) but based on the usage it is actually (Subscriber, Publisher)",
+        "createdAt" : "2017-11-11T16:37:36Z",
+        "updatedAt" : "2017-11-14T20:08:40Z",
+        "lastEditedBy" : {
+          "login" : "ShaneDelmore",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/4604933?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "1c4e1e20-43ba-450e-b830-9b281e394192",
+        "parentId" : "036c313a-7d8b-4f54-be7a-50395b1dc673",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Fixed.",
+        "createdAt" : "2017-11-11T16:45:37Z",
+        "updatedAt" : "2017-11-14T20:08:40Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "5e9272f240feb4f00bdea5ee50e2808699cd0d0e",
+    "line" : null,
+    "diffHunk" : "@@ -1,54 +1,52 @@\n package scala.meta.languageserver\n \n import java.io.File\n+import java.io.PrintStream\n import java.nio.file.Files\n import java.util.Properties\n+import java.util.concurrent.ConcurrentHashMap\n+import java.util.concurrent.ConcurrentHashMap\n+import java.util.concurrent.ConcurrentHashMap\n+import java.util.concurrent.ConcurrentSkipListSet\n import scala.collection.mutable\n+import scala.concurrent.Future\n import scala.reflect.io\n+import scala.runtime.CharRef\n import scala.tools.nsc.Settings\n import scala.tools.nsc.interactive.{Global, Response}\n import scala.tools.nsc.reporters.StoreReporter\n import com.typesafe.scalalogging.LazyLogging\n import langserver.core.Connection\n import langserver.messages.MessageType\n+import monix.eval.Task\n+import monix.execution.Scheduler\n+import monix.reactive.MulticastStrategy\n import monix.reactive.Observable\n import org.langmeta.io.AbsolutePath\n+import org.langmeta.semanticdb.Document\n \n-case class CompilerConfig(\n-    sources: List[AbsolutePath],\n-    scalacOptions: List[String],\n-    classpath: String\n-)\n-object CompilerConfig {\n-  def fromPath(\n-      path: AbsolutePath\n-  )(implicit cwd: AbsolutePath): CompilerConfig = {\n-    val input = Files.newInputStream(path.toNIO)\n-    try {\n-      val props = new Properties()\n-      props.load(input)\n-      val sources = props\n-        .getProperty(\"sources\")\n-        .split(File.pathSeparator)\n-        .iterator\n-        .map(AbsolutePath(_))\n-        .toList\n-      val scalacOptions = props.getProperty(\"scalacOptions\").split(\" \").toList\n-      val classpath = props.getProperty(\"classpath\")\n-      CompilerConfig(sources, scalacOptions, classpath)\n-    } finally input.close()\n-  }\n-}\n class Compiler(\n+    out: PrintStream,\n     config: Observable[AbsolutePath],\n     connection: Connection,\n     buffers: Buffers\n-)(implicit cwd: AbsolutePath)\n+)(implicit cwd: AbsolutePath, s: Scheduler)\n     extends LazyLogging {\n+  private val documentPubSub ="
+  },
+  {
+    "id" : "9ed05c9e-2a24-481c-9da2-3bc369d4eb61",
+    "prId" : 23,
+    "comments" : [
+      {
+        "id" : "5c329c97-6539-46a8-9473-a39fc7c9636f",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "what is this import for?",
+        "createdAt" : "2017-11-14T09:34:38Z",
+        "updatedAt" : "2017-11-14T20:08:40Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "a939fbf0-655b-4aaf-ab8c-dbfec57113dc",
+        "parentId" : "5c329c97-6539-46a8-9473-a39fc7c9636f",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "It's unused, removed.",
+        "createdAt" : "2017-11-14T18:41:50Z",
+        "updatedAt" : "2017-11-14T20:08:40Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "5e9272f240feb4f00bdea5ee50e2808699cd0d0e",
+    "line" : null,
+    "diffHunk" : "@@ -99,11 +93,35 @@ class Compiler(\n       (\"-Ypresentation-any-thread\" :: config.scalacOptions).mkString(\" \")\n     )\n     val compiler = new Global(settings, new StoreReporter)\n-\n     config.sources.foreach { path =>\n       // TODO(olafur) garbage collect compilers from removed files.\n       compilerByPath(path) = compiler\n     }\n+    Effects.InstallPresentationCompiler\n+  }\n+  private def indexDependencyClasspath(\n+      config: CompilerConfig\n+  ): Effects.IndexSourcesClasspath = {\n+    val buf = List.newBuilder[AbsolutePath]\n+    val sourceJars = config.sourceJars\n+    sourceJars.foreach { jar =>\n+      // ensure we only index each jar once even under race conditions.\n+      indexedJars.computeIfAbsent(\n+        jar,\n+        (path: AbsolutePath) => buf += path\n+      )\n+    }\n+    val sourcesClasspath = buf.result()\n+    if (sourcesClasspath.nonEmpty) {\n+      logger.info(\n+        s\"Indexing classpath with ${sourcesClasspath.length} entries...\"\n+      )\n+    }\n+    ctags.Ctags.index(sourcesClasspath) { doc =>\n+      documentSubscriber.onNext(doc)\n+    }\n+    import scala.collection.JavaConverters._"
+  },
+  {
+    "id" : "e7fd71fb-6190-47c4-b4cd-6237be43c9e2",
+    "prId" : 45,
+    "comments" : [
+      {
+        "id" : "fd761dd4-fe74-49d7-856f-e086807dfa18",
+        "parentId" : null,
+        "author" : {
+          "login" : "ShaneDelmore",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/4604933?v=4"
+        },
+        "body" : "We should rename this since it isn't actually ctags structure (although ctags generation would still be a nice separate feature).",
+        "createdAt" : "2017-11-22T21:07:01Z",
+        "updatedAt" : "2017-11-22T21:53:24Z",
+        "lastEditedBy" : {
+          "login" : "ShaneDelmore",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/4604933?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "026c971f-22d1-4314-a7d9-7fbd9166c13d",
+        "parentId" : "fd761dd4-fe74-49d7-856f-e086807dfa18",
+        "author" : {
+          "login" : "ShaneDelmore",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/4604933?v=4"
+        },
+        "body" : "Not a blocker for the pr though.",
+        "createdAt" : "2017-11-22T21:07:10Z",
+        "updatedAt" : "2017-11-22T21:53:24Z",
+        "lastEditedBy" : {
+          "login" : "ShaneDelmore",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/4604933?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "6829a682-20d0-4146-939c-585e8dd4e6b7",
+        "parentId" : "fd761dd4-fe74-49d7-856f-e086807dfa18",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Agree, we can rename ctags to something else. Suggestion are welcome",
+        "createdAt" : "2017-11-22T21:08:48Z",
+        "updatedAt" : "2017-11-22T21:53:24Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "07b899d0ababc60348d3fbfc05eefbfd0ba43538",
+    "line" : null,
+    "diffHunk" : "@@ -118,9 +118,8 @@ class Compiler(\n         s\"Indexing classpath with ${sourcesClasspath.length} entries...\"\n       )\n     }\n-    ctags.Ctags.index(sourcesClasspath) { doc =>\n-      documentSubscriber.onNext(doc)\n-    }\n+    val db = ctags.Ctags.indexDatabase(sourcesClasspath)"
+  },
+  {
+    "id" : "3691ff05-3bb4-4205-b85c-f0449a6d0ea4",
+    "prId" : 45,
+    "comments" : [
+      {
+        "id" : "ca2091f3-cfbc-4bc8-93cb-792438141100",
+        "parentId" : null,
+        "author" : {
+          "login" : "ShaneDelmore",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/4604933?v=4"
+        },
+        "body" : "I'm guessing this is safe for now but I worry this pattern will become dangerous in the future if the first task is mutating compiler globals and the second independent task is also working inside compiler.  I fear concurrency and mutation together in general though.",
+        "createdAt" : "2017-11-22T21:16:46Z",
+        "updatedAt" : "2017-11-22T21:53:24Z",
+        "lastEditedBy" : {
+          "login" : "ShaneDelmore",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/4604933?v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0eb59cce-a20e-4095-9b8b-e057a1479315",
+        "parentId" : "ca2091f3-cfbc-4bc8-93cb-792438141100",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "The indexDependencyClasspath should be moved out of Compiler.scala since it doesn't do anything related to the compiler. Opened https://github.com/scalameta/language-server/issues/48",
+        "createdAt" : "2017-11-22T21:20:05Z",
+        "updatedAt" : "2017-11-22T21:53:24Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "07b899d0ababc60348d3fbfc05eefbfd0ba43538",
+    "line" : 24,
+    "diffHunk" : "@@ -40,7 +43,7 @@ class Compiler(\n       .flatMap { config =>\n         Observable.fromTask(\n           Task(loadNewCompilerGlobals(config))\n-            .zip(Task(indexDependencyClasspath(config)))\n+            .zip(Task(indexDependencyClasspath(config.sourceJars)))"
+  },
+  {
+    "id" : "565a4d64-70c3-48e3-82d3-a4a0d718299b",
+    "prId" : 45,
+    "comments" : [
+      {
+        "id" : "fb375823-6ee8-493b-823c-1fef82da8111",
+        "parentId" : null,
+        "author" : {
+          "login" : "ShaneDelmore",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/4604933?v=4"
+        },
+        "body" : "Is there any value in taking smaller locks during each individual indexDatabase call to give others time to jump in the gaps if it takes a long time to load indexes?",
+        "createdAt" : "2017-11-22T21:19:07Z",
+        "updatedAt" : "2017-11-22T21:53:24Z",
+        "lastEditedBy" : {
+          "login" : "ShaneDelmore",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/4604933?v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e5ddb99a-bbca-4527-bf42-540defc48b19",
+        "parentId" : "fb375823-6ee8-493b-823c-1fef82da8111",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "There is, I've opened https://github.com/scalameta/language-server/issues/49 to track improvements on this.",
+        "createdAt" : "2017-11-22T21:22:50Z",
+        "updatedAt" : "2017-11-22T21:53:24Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "07b899d0ababc60348d3fbfc05eefbfd0ba43538",
+    "line" : 65,
+    "diffHunk" : "@@ -102,27 +105,38 @@ class Compiler(\n     Effects.InstallPresentationCompiler\n   }\n \n-  private def indexDependencyClasspath(\n-      config: CompilerConfig\n+  // NOTE(olafur) this probably belongs somewhere else than Compiler.\n+  def indexDependencyClasspath(\n+      sourceJars: List[AbsolutePath]\n   ): Effects.IndexSourcesClasspath = {\n     if (!serverConfig.indexClasspath) return Effects.IndexSourcesClasspath\n+    val sourceJarsWithJDK =\n+      if (serverConfig.indexJDK)\n+        CompilerConfig.jdkSources.fold(sourceJars)(_ :: sourceJars)\n+      else sourceJars\n     val buf = List.newBuilder[AbsolutePath]\n-    val sourceJars = config.sourceJars\n-    sourceJars.foreach { jar =>\n+    sourceJarsWithJDK.foreach { jar =>\n       // ensure we only index each jar once even under race conditions.\n+      // race conditions are not unlikely since multiple .compilerconfig\n+      // are typically created at the same time for each project/configuration\n+      // combination. Duplicate tasks are expensive, for example we don't want\n+      // to index the JDK twice on first startup.\n       indexedJars.computeIfAbsent(jar, _ => buf += jar)\n     }\n-    val sourcesClasspath = buf.result()\n-    if (sourcesClasspath.nonEmpty) {\n-      logger.info(\n-        s\"Indexing classpath with ${sourcesClasspath.length} entries...\"\n-      )\n-    }\n-    ctags.Ctags.index(sourcesClasspath) { doc =>\n-      documentSubscriber.onNext(doc)\n+    val sourceJarsToIndex = buf.result()\n+    // Acquire a lock on the leveldb cache only during indexing.\n+    LevelDBMap.withDB(cacheDirectory.resolve(\"leveldb\").toFile) { db =>"
+  },
+  {
+    "id" : "63cead89-2264-4f95-996f-7cf6e3e5029e",
+    "prId" : 45,
+    "comments" : [
+      {
+        "id" : "8f615fa5-4a7f-4e01-92c1-8cab9af0f78c",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Even added a note to move this method :) ",
+        "createdAt" : "2017-11-22T21:21:00Z",
+        "updatedAt" : "2017-11-22T21:53:24Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "07b899d0ababc60348d3fbfc05eefbfd0ba43538",
+    "line" : null,
+    "diffHunk" : "@@ -102,27 +105,38 @@ class Compiler(\n     Effects.InstallPresentationCompiler\n   }\n \n-  private def indexDependencyClasspath(\n-      config: CompilerConfig\n+  // NOTE(olafur) this probably belongs somewhere else than Compiler."
+  },
+  {
+    "id" : "d97fd70e-e78b-47b0-9de8-ccd8c7100806",
+    "prId" : 51,
+    "comments" : [
+      {
+        "id" : "117df141-e5d6-4dc6-9059-14b8e9cc13db",
+        "parentId" : null,
+        "author" : {
+          "login" : "laughedelic",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/766656?v=4"
+        },
+        "body" : "This works outside of parentheses too 😄 \r\n\r\n<img width=\"300\" alt=\"screen shot 2017-11-23 at 16 39 20\" src=\"https://user-images.githubusercontent.com/766656/33180825-590a60c8-d06e-11e7-8525-557fd1b0b400.png\">\r\n",
+        "createdAt" : "2017-11-23T15:53:46Z",
+        "updatedAt" : "2017-11-24T08:43:02Z",
+        "lastEditedBy" : {
+          "login" : "laughedelic",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/766656?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "883c4f5166496bb8753684b7289e699c64765e1d",
+    "line" : null,
+    "diffHunk" : "@@ -47,41 +54,97 @@ class Compiler(\n         )\n       }\n \n+  def signatureHelp(\n+      path: AbsolutePath,\n+      line: Int,\n+      column: Int\n+  ): SignatureHelp = {\n+    getCompiler(path, line, column - 1).fold(noSignatureHelp) {\n+      case (compiler, position) =>\n+        logger.info(s\"Signature help at $path:$line:$column\")\n+        // Find the last leading open paren to get the method symbol\n+        // of this argument list. Note, this may still cause false positives\n+        // in cases like `foo(bar(), <cursor>)` since we will find the\n+        // symbol of `bar` when we want to match against `foo`.\n+        // Related https://github.com/scalameta/language-server/issues/52\n+        val lastParenOffset =\n+          position.source.content.lastIndexOf('(', position.point)"
+  },
+  {
+    "id" : "6015ba34-6dba-4afb-a657-7be788da09ab",
+    "prId" : 51,
+    "comments" : [
+      {
+        "id" : "d736b3a6-82bb-4f73-b3f1-2438e9bb598c",
+        "parentId" : null,
+        "author" : {
+          "login" : "laughedelic",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/766656?v=4"
+        },
+        "body" : "I combined this just from what was already around. But is there a better way to get separately parameters list and return type?\r\n\r\n<img width=\"209\" alt=\"screen shot 2017-11-23 at 13 41 40\" src=\"https://user-images.githubusercontent.com/766656/33181089-42e0e168-d06f-11e7-8759-4c026867a861.png\">\r\n",
+        "createdAt" : "2017-11-23T15:56:36Z",
+        "updatedAt" : "2017-11-24T08:43:02Z",
+        "lastEditedBy" : {
+          "login" : "laughedelic",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/766656?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "883c4f5166496bb8753684b7289e699c64765e1d",
+    "line" : null,
+    "diffHunk" : "@@ -47,41 +54,97 @@ class Compiler(\n         )\n       }\n \n+  def signatureHelp(\n+      path: AbsolutePath,\n+      line: Int,\n+      column: Int\n+  ): SignatureHelp = {\n+    getCompiler(path, line, column - 1).fold(noSignatureHelp) {\n+      case (compiler, position) =>\n+        logger.info(s\"Signature help at $path:$line:$column\")\n+        // Find the last leading open paren to get the method symbol\n+        // of this argument list. Note, this may still cause false positives\n+        // in cases like `foo(bar(), <cursor>)` since we will find the\n+        // symbol of `bar` when we want to match against `foo`.\n+        // Related https://github.com/scalameta/language-server/issues/52\n+        val lastParenOffset =\n+          position.source.content.lastIndexOf('(', position.point)\n+        if (lastParenOffset < 0) {\n+          // bail if we can't find open paren to prevent false positives.\n+          noSignatureHelp\n+        } else {\n+          val lastParenPosition = position.withPoint(lastParenOffset)\n+          val signatureInformations = for {\n+            member <- compiler\n+              .completionsAt(lastParenPosition)\n+              .matchingResults()\n+              .distinct\n+            if member.sym.isMethod\n+          } yield {\n+            val sym = member.sym.asMethod\n+            val parameterInfos = sym.paramLists.headOption.map { params =>\n+              params.map { param =>\n+                ParameterInformation(\n+                  label = s\"${param.nameString}: ${param.info.toLongString}\",\n+                  documentation = None\n+                )\n+              }\n+            }\n+            SignatureInformation(\n+              label = s\"${sym.nameString}${sym.info.toLongString}\","
+  },
+  {
+    "id" : "d211370f-f885-4dc6-861a-05fdcabd4393",
+    "prId" : 51,
+    "comments" : [
+      {
+        "id" : "04178a7a-339f-49ab-a09b-941d84d656fb",
+        "parentId" : null,
+        "author" : {
+          "login" : "laughedelic",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/766656?v=4"
+        },
+        "body" : "What about constructors? \r\n\r\n![2017-11-23 16 36 22](https://user-images.githubusercontent.com/766656/33181224-b2a2654e-d06f-11e7-8e68-4543a3f6e1a7.gif)\r\n",
+        "createdAt" : "2017-11-23T15:58:10Z",
+        "updatedAt" : "2017-11-24T08:43:02Z",
+        "lastEditedBy" : {
+          "login" : "laughedelic",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/766656?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "883c4f5166496bb8753684b7289e699c64765e1d",
+    "line" : null,
+    "diffHunk" : "@@ -47,41 +54,97 @@ class Compiler(\n         )\n       }\n \n+  def signatureHelp(\n+      path: AbsolutePath,\n+      line: Int,\n+      column: Int\n+  ): SignatureHelp = {\n+    getCompiler(path, line, column - 1).fold(noSignatureHelp) {\n+      case (compiler, position) =>\n+        logger.info(s\"Signature help at $path:$line:$column\")\n+        // Find the last leading open paren to get the method symbol\n+        // of this argument list. Note, this may still cause false positives\n+        // in cases like `foo(bar(), <cursor>)` since we will find the\n+        // symbol of `bar` when we want to match against `foo`.\n+        // Related https://github.com/scalameta/language-server/issues/52\n+        val lastParenOffset =\n+          position.source.content.lastIndexOf('(', position.point)\n+        if (lastParenOffset < 0) {\n+          // bail if we can't find open paren to prevent false positives.\n+          noSignatureHelp\n+        } else {\n+          val lastParenPosition = position.withPoint(lastParenOffset)\n+          val signatureInformations = for {\n+            member <- compiler\n+              .completionsAt(lastParenPosition)\n+              .matchingResults()\n+              .distinct\n+            if member.sym.isMethod"
+  },
+  {
+    "id" : "6307aa33-dcd9-4750-a364-31e30f96dcdd",
+    "prId" : 55,
+    "comments" : [
+      {
+        "id" : "91566f95-f349-40d7-b671-53aa949ab3ca",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "In #51 I moved all logic into `compiler.SignatureHelpProvider`, I think it would make sense to have a corresponding `compiler.HoverProvider` object, even if the method is small.",
+        "createdAt" : "2017-11-24T08:49:51Z",
+        "updatedAt" : "2017-11-24T13:24:16Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "526420d2-a2c8-4033-9e5d-693b71738d13",
+        "parentId" : "91566f95-f349-40d7-b671-53aa949ab3ca",
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "Yes, that's what I intend to do in this PR. I opened it for early feedback, but it's not quite ready for merge :) thanks for the review!",
+        "createdAt" : "2017-11-24T08:53:10Z",
+        "updatedAt" : "2017-11-24T13:24:16Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "263f633472f35ed4fafa354006bcef2642c8770a",
+    "line" : null,
+    "diffHunk" : "@@ -217,4 +204,17 @@ object Compiler extends LazyLogging {\n     f(r)\n     r\n   }\n+  def typeOfTree(c: Global)(t: c.Tree): Option[String] = {"
+  }
+]

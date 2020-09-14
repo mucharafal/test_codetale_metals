@@ -1,0 +1,99 @@
+[
+  {
+    "id" : "0894c467-b708-4125-b6ce-efc0a5102cf0",
+    "prId" : 1174,
+    "comments" : [
+      {
+        "id" : "2806a4a3-58b0-49a0-963c-a2c348b3460a",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "I'm wondering if we should change this API to directly return the toplevels 🤔 \r\n```suggestion\r\n    List<String> definitionSourceToplevels(String symbol);\r\n```\r\nThis would allow the Metals server to potentially cache the results between different invocations. The `Mtags.toplevels` method is on the other hand very fast (~900k lines/sec) I have a feeling that a lot of `match (exhaustive)` completions are on the same types (for example `scala/Option#`).",
+        "createdAt" : "2019-12-13T12:34:48Z",
+        "updatedAt" : "2019-12-16T12:57:43Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "2a62a3c6-cda0-4f28-a437-247ed5588e48",
+        "parentId" : "2806a4a3-58b0-49a0-963c-a2c348b3460a",
+        "author" : {
+          "login" : "tanishiking",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/9353584?u=c3e5aba60a43901e7d2b7c0ea4caac06cde77049&v=4"
+        },
+        "body" : "> I'm wondering if we should change this API to directly return the toplevels 🤔\r\n\r\nSure! That makes more sense, and now we can remove the java version of `VirtualFile` and `VirtualFileImpl` 😄 ",
+        "createdAt" : "2019-12-14T14:39:19Z",
+        "updatedAt" : "2019-12-16T12:57:43Z",
+        "lastEditedBy" : {
+          "login" : "tanishiking",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/9353584?u=c3e5aba60a43901e7d2b7c0ea4caac06cde77049&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "75b85a68-931a-46b6-a532-9564998720ed",
+        "parentId" : "2806a4a3-58b0-49a0-963c-a2c348b3460a",
+        "author" : {
+          "login" : "tanishiking",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/9353584?u=c3e5aba60a43901e7d2b7c0ea4caac06cde77049&v=4"
+        },
+        "body" : "Thank you so much for your input @olafurpg !\r\n\r\nI just added a straightforward implementation of the cache for `definitionSourceToplevels` in https://github.com/scalameta/metals/pull/1174/commits/a70886e97250f94890b922cb89662fb911f3eaf5\r\n\r\nThough it definitely makes sense to introduce cache for `definitionSourceToplevels` :+1:, I have one concern about the cache invalidation:\r\nIn https://github.com/scalameta/metals/pull/1174/commits/a70886e97250f94890b922cb896 the cache in `MetalsSymbolSearch` will be cleared only when the [workspace is updated](https://github.com/scalameta/metals/blob/2475a952a4eaf7f3b5e41246e091c3757f244908/metals/src/main/scala/scala/meta/internal/metals/MetalsLanguageServer.scala#L390-L407).\r\nIf we add some new subclasses to a `sealed abstract class X`, metals server would be unable to reflect the changes until the workspace is updated.\r\n\r\n---\r\n\r\nTo avoid this, it might be better to do:\r\n\r\n- cache `definitionSourceToplevels` result by the symbol of definition's (absolute) path\r\n  - `private val cache = new TrieMap[AbsolutePath, ju.List[String]]()`\r\n- Everytime the project is compiled, clear the cache for `definitionSourceToplevels` at [Compilers#didCompile](https://github.com/scalameta/metals/blob/2475a952a4eaf7f3b5e41246e091c3757f244908/metals/src/main/scala/scala/meta/internal/metals/Compilers.scala#L109-L122) before restart the PresentationCompiler instance.\r\n  - so the metals server can reflect the change to the completion items.\r\n  - to do this, we have to add cache cleanup method to `SymbolSearch`\r\n- The cache items we have to clear are the items whose key (`AbsolutePath`) is located under the project's workspace.\r\n  - We don't need to clear the symbol cache from the 3rd party definitions, because they won't change without updating the workspace.\r\n\r\nWhat do you think about this?",
+        "createdAt" : "2019-12-14T14:41:51Z",
+        "updatedAt" : "2019-12-16T12:57:43Z",
+        "lastEditedBy" : {
+          "login" : "tanishiking",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/9353584?u=c3e5aba60a43901e7d2b7c0ea4caac06cde77049&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "09f6b77f-2238-44fd-8058-690f47b8764c",
+        "parentId" : "2806a4a3-58b0-49a0-963c-a2c348b3460a",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Cache invalidation is a good question. Can we maybe reuse the toplevels indexing for WorkspaceSymbolProvider? That index is already updated on file save. ",
+        "createdAt" : "2019-12-14T14:45:11Z",
+        "updatedAt" : "2019-12-16T12:57:43Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "0d5f96fb977b6c73c44b8b5c061480393ecb1c82",
+    "line" : null,
+    "diffHunk" : "@@ -19,6 +19,11 @@\n      */\n     List<Location> definition(String symbol);\n \n+    /**\n+     * Returns the file where the symbol is defined, if any.\n+     */\n+    Optional<VirtualFile> definitionSource(String symbol);"
+  }
+]

@@ -1,0 +1,1500 @@
+[
+  {
+    "id" : "a4abd0e4-eef1-42ab-9085-b55446ab5698",
+    "prId" : 387,
+    "comments" : [
+      {
+        "id" : "47a3840f-7add-45a7-98dc-4a3979ffdccb",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "Does this work?\r\nThe configuration sent by the client is nested under the `metals`, but here it's accessing `$key` instead of `metals.$key`. \r\n\r\nFor example:\r\n\r\n```json\r\n{\r\n  \"jsonrpc\": \"2.0\",\r\n  \"method\": \"workspace/didChangeConfiguration\",\r\n  \"params\": {\r\n    \"settings\": {\r\n      \"metals\": {\r\n        \"serverVersion\": \"0.4.0-SNAPSHOT\",\r\n        \"serverProperties\": \"\",\r\n        \"javaHome\": \"\"\r\n      }\r\n    }\r\n  }\r\n}\r\n```\r\n\r\nAm I missing something?",
+        "createdAt" : "2018-12-08T17:48:57Z",
+        "updatedAt" : "2018-12-09T18:05:10Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "4d561602-5500-4c56-9ab6-49a9427bea1b",
+        "parentId" : "47a3840f-7add-45a7-98dc-4a3979ffdccb",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Good catch! This won't indeed work. I don't want to hard-code JSON decoding for the way VSCode sends it however. I think it's better to optionally drill into the `settings.metals` key but by default permit\r\n\r\n```json\r\n{\r\n        \"serverVersion\": \"0.4.0-SNAPSHOT\",\r\n        \"serverProperties\": \"\",\r\n        \"javaHome\": \"\"\r\n}\r\n```",
+        "createdAt" : "2018-12-09T11:57:22Z",
+        "updatedAt" : "2018-12-09T18:05:10Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "73a8b5b3-0c4d-4b62-b3fe-d3950f31e213",
+        "parentId" : "47a3840f-7add-45a7-98dc-4a3979ffdccb",
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "Since that's not specified by LSP, why not advertising that nested structure?\r\n\r\nAtom and Code seem to agree, do we have other data points?",
+        "createdAt" : "2018-12-09T13:43:22Z",
+        "updatedAt" : "2018-12-09T18:05:10Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "8ba62bc3-dbc7-4001-bf76-90ba698bbef8",
+        "parentId" : "47a3840f-7add-45a7-98dc-4a3979ffdccb",
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "I've checked the protocol, and `settings` is mandated by it (I didn't know)\r\n\r\nAs per forcing the client in wrapping everything under `metals`, I don't see why not.\r\n\r\nEmacs supports that LSP method and it allows the user to decide the structure, so lsp-scala can easily do it. I don't know yet about sublime and vim.\r\n\r\nHabing ",
+        "createdAt" : "2018-12-09T13:58:29Z",
+        "updatedAt" : "2018-12-09T18:05:10Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "1b1118ae5909e6fd535bcd79958b0dfde37041e3",
+    "line" : null,
+    "diffHunk" : "@@ -1,44 +1,92 @@\n package scala.meta.internal.metals\n \n import com.google.gson.JsonObject\n+import com.google.gson.JsonPrimitive\n+import java.util.Properties\n import scala.collection.mutable.ListBuffer\n-import scala.util.control.NonFatal\n+import scala.util.Try\n \n /**\n  * Configuration that the user can override via workspace/didChangeConfiguration.\n  *\n  * @param javaHome The Java home location used to detect src.zip for JDK sources.\n  */\n case class UserConfiguration(\n-    javaHome: Option[String] = None\n+    javaHome: Option[String] = None,\n+    sbtLauncher: Option[String] = None,\n+    sbtOpts: List[String] = Nil\n )\n \n object UserConfiguration {\n+  def options: List[UserConfigurationOption] = List(\n+    UserConfigurationOption(\n+      \"java-home\",\n+      \"`JAVA_HOME` environment variable with fallback to `user.home` system property.\",\n+      \"/Library/Java/JavaVirtualMachines/jdk1.8.0_192.jdk/Contents/Home\",\n+      \"Java Home directory\",\n+      \"The Java Home directory used for indexing JDK sources and locating the `java` binary.\"\n+    ),\n+    UserConfigurationOption(\n+      \"sbt-launcher\",\n+      \"Metals embedded sbt-launch.jar.\",\n+      \"/usr/local/Cellar/sbt/1.2.6/libexec/bin/sbt-launch.jar\",\n+      \"sbt launcher jar\",\n+      \"Optional sbt-launch.jar launcher to use when running `sbt bloopInstall`.\"\n+    ),\n+    UserConfigurationOption(\n+      \"sbt-options\",\n+      \"\"\"empty string `\"\"`.\"\"\",\n+      \"-Dsbt.override.build.repos=true -Divy.home=/home/ivy-cache\",\n+      \"sbt JVM options\",\n+      \"\"\"Additional space separated JVM options used for the `sbt bloopInstall` step.\n+        |By default, Metals respects custom options in `.jvmopts` and `.sbtopts` of the workspace root directory,\n+        |it's recommended to use those instead of customizing this setting. The benefit of `.jvmopts` and `.sbtopts`\n+        |is that it's respected by other tools such as IntelliJ.\n+        |\"\"\".stripMargin\n+    )\n+  )\n+\n   def fromJson(\n-      base: UserConfiguration,\n-      json: JsonObject\n+      json: JsonObject,\n+      properties: Properties = System.getProperties\n   ): Either[List[String], UserConfiguration] = {\n     val errors = ListBuffer.empty[String]\n \n-    val javaHome: Option[String] =\n-      if (json.has(\"javaHome\")) {\n-        try {\n-          val string = json.get(\"javaHome\").getAsString\n-          if (string.isEmpty) None\n-          else Some(string)\n-        } catch {\n-          case NonFatal(e) =>\n-            errors += e.getMessage\n-            base.javaHome\n-        }\n-      } else {\n-        base.javaHome\n+    def getKey(key: String): Option[String] = {\n+      def option[T](fn: String => T): Option[T] =\n+        Option(fn(key)).orElse(Option(fn(StringCase.kebabToCamel(key))))\n+      for {\n+        value <- option(json.get)"
+  },
+  {
+    "id" : "319813dc-a86c-4263-bde6-80c2293268fc",
+    "prId" : 387,
+    "comments" : [
+      {
+        "id" : "49e7a8d6-ac99-4902-b62c-78565ea36753",
+        "parentId" : null,
+        "author" : {
+          "login" : "laughedelic",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/766656?v=4"
+        },
+        "body" : "I'm not sure I understand, why is this hardcoded here?",
+        "createdAt" : "2018-12-09T13:32:45Z",
+        "updatedAt" : "2018-12-09T18:05:10Z",
+        "lastEditedBy" : {
+          "login" : "laughedelic",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/766656?v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "670f2e7f-4127-49f3-8e5f-9fd082bae58f",
+        "parentId" : "49e7a8d6-ac99-4902-b62c-78565ea36753",
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "That's the `example` field ;)\r\n\r\n (took me a while too)",
+        "createdAt" : "2018-12-09T13:41:10Z",
+        "updatedAt" : "2018-12-09T18:05:10Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1b1118ae5909e6fd535bcd79958b0dfde37041e3",
+    "line" : 35,
+    "diffHunk" : "@@ -1,44 +1,92 @@\n package scala.meta.internal.metals\n \n import com.google.gson.JsonObject\n+import com.google.gson.JsonPrimitive\n+import java.util.Properties\n import scala.collection.mutable.ListBuffer\n-import scala.util.control.NonFatal\n+import scala.util.Try\n \n /**\n  * Configuration that the user can override via workspace/didChangeConfiguration.\n  *\n  * @param javaHome The Java home location used to detect src.zip for JDK sources.\n  */\n case class UserConfiguration(\n-    javaHome: Option[String] = None\n+    javaHome: Option[String] = None,\n+    sbtLauncher: Option[String] = None,\n+    sbtOpts: List[String] = Nil\n )\n \n object UserConfiguration {\n+  def options: List[UserConfigurationOption] = List(\n+    UserConfigurationOption(\n+      \"java-home\",\n+      \"`JAVA_HOME` environment variable with fallback to `user.home` system property.\",\n+      \"/Library/Java/JavaVirtualMachines/jdk1.8.0_192.jdk/Contents/Home\",\n+      \"Java Home directory\",\n+      \"The Java Home directory used for indexing JDK sources and locating the `java` binary.\"\n+    ),\n+    UserConfigurationOption(\n+      \"sbt-launcher\",\n+      \"Metals embedded sbt-launch.jar.\",\n+      \"/usr/local/Cellar/sbt/1.2.6/libexec/bin/sbt-launch.jar\","
+  },
+  {
+    "id" : "84525074-9375-450d-bd60-cb0eda8b91c0",
+    "prId" : 387,
+    "comments" : [
+      {
+        "id" : "c6e4782d-a0a9-4bdc-9bf8-2580e8b1203d",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "This looks wrong. `\"settings\"` is part of the protocol and it's already being accessed in `didChangeConfiguration` with `params.getSettings()`",
+        "createdAt" : "2018-12-09T18:23:13Z",
+        "updatedAt" : "2018-12-09T18:23:30Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1b1118ae5909e6fd535bcd79958b0dfde37041e3",
+    "line" : 74,
+    "diffHunk" : "@@ -1,48 +1,121 @@\n package scala.meta.internal.metals\n \n import com.google.gson.JsonObject\n+import com.google.gson.JsonPrimitive\n+import java.util.Properties\n import scala.collection.mutable.ListBuffer\n-import scala.util.control.NonFatal\n+import scala.util.Try\n \n /**\n  * Configuration that the user can override via workspace/didChangeConfiguration.\n  *\n  * @param javaHome The Java home location used to detect src.zip for JDK sources.\n  */\n case class UserConfiguration(\n-    javaHome: Option[String] = None\n+    javaHome: Option[String] = None,\n+    sbtLauncher: Option[String] = None,\n+    sbtOpts: List[String] = Nil,\n+    sbtScript: Option[String] = None\n )\n \n object UserConfiguration {\n+  def options: List[UserConfigurationOption] = List(\n+    UserConfigurationOption(\n+      \"java-home\",\n+      \"`JAVA_HOME` environment variable with fallback to `user.home` system property.\",\n+      \"/Library/Java/JavaVirtualMachines/jdk1.8.0_192.jdk/Contents/Home\",\n+      \"Java Home directory\",\n+      \"The Java Home directory used for indexing JDK sources and locating the `java` binary.\"\n+    ),\n+    UserConfigurationOption(\n+      \"sbt-launcher\",\n+      \"Metals embedded sbt-launch.jar.\",\n+      \"/usr/local/Cellar/sbt/1.2.6/libexec/bin/sbt-launch.jar\",\n+      \"sbt launcher jar\",\n+      \"Optional sbt-launch.jar launcher to use when running `sbt bloopInstall`.\"\n+    ),\n+    UserConfigurationOption(\n+      \"sbt-options\",\n+      \"\"\"empty string `\"\"`.\"\"\",\n+      \"-Dsbt.override.build.repos=true -Divy.home=/home/ivy-cache\",\n+      \"sbt JVM options\",\n+      \"\"\"Additional space separated JVM options used for the `sbt bloopInstall` step.\n+        |By default, Metals respects custom options in `.jvmopts` and `.sbtopts` of the workspace root directory,\n+        |it's recommended to use those instead of customizing this setting. The benefit of `.jvmopts` and `.sbtopts`\n+        |is that it's respected by other tools such as IntelliJ.\n+        |\"\"\".stripMargin\n+    ),\n+    UserConfigurationOption(\n+      \"sbt-script\",\n+      \"\"\"empty string `\"\"`.\"\"\",\n+      \"/usr/local/bin/sbt\",\n+      \"sbt script\",\n+      \"\"\"Custom `sbt` executable to use for running `sbt bloopInstall`, overrides\n+        |`sbt-options` and `sbt-launcher` options.\n+        |\n+        |By default, Metals uses `java -jar sbt-launch.jar` to launch sbt while respecting\n+        |`.jvmopts` and `.sbtopts`. In case this option is defined, then Metals\n+        |executes the configured sbt script instead.\n+        |\"\"\".stripMargin\n+    )\n+  )\n+\n   def fromJson(\n-      base: UserConfiguration,\n-      json: JsonObject\n+      json: JsonObject,\n+      properties: Properties = System.getProperties\n   ): Either[List[String], UserConfiguration] = {\n     val errors = ListBuffer.empty[String]\n+    val base: JsonObject =\n+      (for {\n+        settings <- Option(json.getAsJsonObject(\"settings\"))"
+  },
+  {
+    "id" : "2d386b89-ca6e-496f-a2c4-a5c56e8b191b",
+    "prId" : 429,
+    "comments" : [
+      {
+        "id" : "3728a0c1-d993-422e-a2cd-0d0d495bd9af",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Let's remove this option, it's a sensible default",
+        "createdAt" : "2018-12-20T08:34:03Z",
+        "updatedAt" : "2018-12-22T11:11:14Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "ec1161fecfaec6824cba1eb2a21806f972c8f67f",
+    "line" : null,
+    "diffHunk" : "@@ -13,7 +14,10 @@ import scala.util.Try\n  */\n case class UserConfiguration(\n     javaHome: Option[String] = None,\n-    sbtScript: Option[String] = None\n+    sbtScript: Option[String] = None,\n+    scalafmtVersion: Option[String] = None,\n+    scalafmtRequireConfigFile: Boolean = true,"
+  },
+  {
+    "id" : "d389f05f-eb7e-4a2c-9d6c-a16bc4ebacde",
+    "prId" : 429,
+    "comments" : [
+      {
+        "id" : "e9efa9bb-83c1-43ca-9028-085787b07cbb",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "`: String = \"1.5.1\"",
+        "createdAt" : "2018-12-20T08:34:21Z",
+        "updatedAt" : "2018-12-22T11:11:14Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "e7eee074-a0da-4cb6-8384-f8d3a8edb328",
+        "parentId" : "e9efa9bb-83c1-43ca-9028-085787b07cbb",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Actually, let's remove this option and read `version` from `.scalafmt.conf` instead. That leaves us with only one user option for Scalafmt, which is better.",
+        "createdAt" : "2018-12-20T09:38:55Z",
+        "updatedAt" : "2018-12-22T11:11:14Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "ec1161fecfaec6824cba1eb2a21806f972c8f67f",
+    "line" : null,
+    "diffHunk" : "@@ -13,7 +14,10 @@ import scala.util.Try\n  */\n case class UserConfiguration(\n     javaHome: Option[String] = None,\n-    sbtScript: Option[String] = None\n+    sbtScript: Option[String] = None,\n+    scalafmtVersion: Option[String] = None,"
+  },
+  {
+    "id" : "690d87a7-d2a6-431f-97ed-e4b9185e5f95",
+    "prId" : 429,
+    "comments" : [
+      {
+        "id" : "4c06e591-5429-42cc-9fbd-a7738b43bd15",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "`: RelativePath = RelativePath(\".scalafmt.conf\")`",
+        "createdAt" : "2018-12-20T08:34:43Z",
+        "updatedAt" : "2018-12-22T11:11:14Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "ec1161fecfaec6824cba1eb2a21806f972c8f67f",
+    "line" : null,
+    "diffHunk" : "@@ -13,7 +14,10 @@ import scala.util.Try\n  */\n case class UserConfiguration(\n     javaHome: Option[String] = None,\n-    sbtScript: Option[String] = None\n+    sbtScript: Option[String] = None,\n+    scalafmtVersion: Option[String] = None,\n+    scalafmtRequireConfigFile: Boolean = true,\n+    scalafmtConfigPath: Option[String] = None"
+  },
+  {
+    "id" : "16086c02-d361-46a6-ba73-23f8aaba3713",
+    "prId" : 429,
+    "comments" : [
+      {
+        "id" : "4f9a8dae-d122-4b83-ac7c-318784a8f7ee",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "> The Scalafmt version used to format Scala sources. Should match the Scalafmt version used by the installed `scalafmt` cli or sbt-scalafmt plugin for this workspace. ",
+        "createdAt" : "2018-12-20T08:36:57Z",
+        "updatedAt" : "2018-12-22T11:11:14Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "393b5efa-d2d9-4bd8-82db-75c6cc4a50cb",
+        "parentId" : "4f9a8dae-d122-4b83-ac7c-318784a8f7ee",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "We should honestly just start using the `version` key in `.scalafmt.conf`, but don't have motivation to push that transition right now.",
+        "createdAt" : "2018-12-20T08:40:37Z",
+        "updatedAt" : "2018-12-22T11:11:14Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "0d1369e8-e656-4820-8c12-5201741e726b",
+        "parentId" : "4f9a8dae-d122-4b83-ac7c-318784a8f7ee",
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "Would this simply require to read the .scalafmt.conf and classload that version? Or is there more to the story?",
+        "createdAt" : "2018-12-20T09:37:49Z",
+        "updatedAt" : "2018-12-22T11:11:14Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "ec1161fecfaec6824cba1eb2a21806f972c8f67f",
+    "line" : null,
+    "diffHunk" : "@@ -35,6 +39,31 @@ object UserConfiguration {\n         |`.jvmopts` and `.sbtopts`. Update this setting if your `sbt` script requires more customizations\n         |like using environment variables.\n         |\"\"\".stripMargin\n+    ),\n+    UserConfigurationOption(\n+      \"scalafmt-version\",\n+      \"1.5.1\",\n+      \"1.3.0\",\n+      \"Scalafmt version\",\n+      \"\"\"Optional Scalafmt version\"\"\""
+  },
+  {
+    "id" : "8d295728-ace5-46bc-a252-5fc52890a184",
+    "prId" : 429,
+    "comments" : [
+      {
+        "id" : "250e8684-8369-47da-9224-8c8b8a27dd2f",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Remove",
+        "createdAt" : "2018-12-20T08:37:03Z",
+        "updatedAt" : "2018-12-22T11:11:14Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "ec1161fecfaec6824cba1eb2a21806f972c8f67f",
+    "line" : null,
+    "diffHunk" : "@@ -35,6 +39,31 @@ object UserConfiguration {\n         |`.jvmopts` and `.sbtopts`. Update this setting if your `sbt` script requires more customizations\n         |like using environment variables.\n         |\"\"\".stripMargin\n+    ),\n+    UserConfigurationOption(\n+      \"scalafmt-version\",\n+      \"1.5.1\",\n+      \"1.3.0\",\n+      \"Scalafmt version\",\n+      \"\"\"Optional Scalafmt version\"\"\"\n+    ),\n+    UserConfigurationOption("
+  },
+  {
+    "id" : "eb7cdf7d-f8bb-425e-806c-01f43abef36a",
+    "prId" : 429,
+    "comments" : [
+      {
+        "id" : "b20e8b6a-7081-4956-ade3-4f28a8bd721a",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "`project/.scalafmt.conf` seems to be a common choice",
+        "createdAt" : "2018-12-20T08:37:22Z",
+        "updatedAt" : "2018-12-22T11:11:14Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "ec1161fecfaec6824cba1eb2a21806f972c8f67f",
+    "line" : null,
+    "diffHunk" : "@@ -35,6 +39,31 @@ object UserConfiguration {\n         |`.jvmopts` and `.sbtopts`. Update this setting if your `sbt` script requires more customizations\n         |like using environment variables.\n         |\"\"\".stripMargin\n+    ),\n+    UserConfigurationOption(\n+      \"scalafmt-version\",\n+      \"1.5.1\",\n+      \"1.3.0\",\n+      \"Scalafmt version\",\n+      \"\"\"Optional Scalafmt version\"\"\"\n+    ),\n+    UserConfigurationOption(\n+      \"scalafmt-require-config-file\",\n+      \"true\",\n+      \"false\",\n+      \"Scalafmt require config file\",\n+      \"\"\"|Whether a Scalafmt config file is required for formatting to work.\n+         |By default, Metals ignores textFormatting/requests if no Scalafmt config file is found.\n+         |Update this setting to `true` if you prefer to run Scalafmt with its default configuration\n+         |when no Scalafmt config file is present.\n+      \"\"\".stripMargin\n+    ),\n+    UserConfigurationOption(\n+      \"scalafmt-require-config-path\",\n+      \".scalafmt.conf\",\n+      \"path/to/my/scalafmt.conf\","
+  },
+  {
+    "id" : "079fd46a-133b-4626-898d-19f2b7a8be11",
+    "prId" : 429,
+    "comments" : [
+      {
+        "id" : "89db488d-4ef9-41de-b2d5-185d3faf27e5",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "> Optional custom path to the `.scalafmt.conf` file. Should be relative to the workspace root directory and use forward slashes `/` for file separators (even on Windows).",
+        "createdAt" : "2018-12-20T08:39:39Z",
+        "updatedAt" : "2018-12-22T11:11:14Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "ec1161fecfaec6824cba1eb2a21806f972c8f67f",
+    "line" : null,
+    "diffHunk" : "@@ -35,6 +39,31 @@ object UserConfiguration {\n         |`.jvmopts` and `.sbtopts`. Update this setting if your `sbt` script requires more customizations\n         |like using environment variables.\n         |\"\"\".stripMargin\n+    ),\n+    UserConfigurationOption(\n+      \"scalafmt-version\",\n+      \"1.5.1\",\n+      \"1.3.0\",\n+      \"Scalafmt version\",\n+      \"\"\"Optional Scalafmt version\"\"\"\n+    ),\n+    UserConfigurationOption(\n+      \"scalafmt-require-config-file\",\n+      \"true\",\n+      \"false\",\n+      \"Scalafmt require config file\",\n+      \"\"\"|Whether a Scalafmt config file is required for formatting to work.\n+         |By default, Metals ignores textFormatting/requests if no Scalafmt config file is found.\n+         |Update this setting to `true` if you prefer to run Scalafmt with its default configuration\n+         |when no Scalafmt config file is present.\n+      \"\"\".stripMargin\n+    ),\n+    UserConfigurationOption(\n+      \"scalafmt-require-config-path\",\n+      \".scalafmt.conf\",\n+      \"path/to/my/scalafmt.conf\",\n+      \"Scalafmt config path\",\n+      \"Optional Scalafmt config file path, relative to the workspace root\""
+  },
+  {
+    "id" : "f2db7887-3b97-4d83-a89e-36b710b82f79",
+    "prId" : 694,
+    "comments" : [
+      {
+        "id" : "2f48e5a4-a377-43fc-9a7d-4b108289220b",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "sbt-launch.jar?",
+        "createdAt" : "2019-04-25T09:14:56Z",
+        "updatedAt" : "2019-05-07T08:42:52Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "0da7b668-ed91-42bc-aa3d-a2bb6439f874",
+        "parentId" : "2f48e5a4-a377-43fc-9a7d-4b108289220b",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "I was sure I changed that :octopus: ",
+        "createdAt" : "2019-04-25T13:22:32Z",
+        "updatedAt" : "2019-05-07T08:42:52Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "95e8d18af9437cb5a757194bc83a227e9c0b8d79",
+    "line" : null,
+    "diffHunk" : "@@ -51,6 +52,17 @@ object UserConfiguration {\n         |like using environment variables.\n         |\"\"\".stripMargin\n     ),\n+    UserConfigurationOption(\n+      \"gradle-script\",\n+      \"\"\"empty string `\"\"`.\"\"\",\n+      \"/usr/local/bin/gradle\",\n+      \"gradle script\",\n+      \"\"\"Optional absolute path to a `gradle` executable to use for running `gradle bloopInstall`.\n+        |By default, Metals uses `java -jar sbt-launch.jar` with an embedded launcher while respecting"
+  },
+  {
+    "id" : "6a5e77f6-3ae1-4364-adc1-285be3115b85",
+    "prId" : 935,
+    "comments" : [
+      {
+        "id" : "9f23db54-4868-45a1-8ffb-e38ba8fb73a9",
+        "parentId" : null,
+        "author" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "body" : "```suggestion\r\n        |Must be relative to the workspace root directory and use forward slashes / as file separators\r\n```",
+        "createdAt" : "2019-09-20T08:05:40Z",
+        "updatedAt" : "2019-12-05T19:30:31Z",
+        "lastEditedBy" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "081530ad-b922-439c-9cb7-6ce4729efc75",
+        "parentId" : "9f23db54-4868-45a1-8ffb-e38ba8fb73a9",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Fixed.",
+        "createdAt" : "2019-09-20T11:07:42Z",
+        "updatedAt" : "2019-12-05T19:30:31Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "a95ae87fd9621161d156685f32480fcb7bb451a4",
+    "line" : null,
+    "diffHunk" : "@@ -92,6 +93,16 @@ object UserConfiguration {\n         |Should be relative to the workspace root directory and use forward slashes / for file\n         |separators (even on Windows).\n         |\"\"\".stripMargin\n+    ),\n+    // TODO: add description\n+    UserConfigurationOption(\n+      \"pants-targets\",\n+      \"\"\"empty string `\"\"`.\"\"\",\n+      \"::/\",\n+      \"pants script\",\n+      \"\"\". List of pants targets\n+        |Should be relative to the workspace root directory and use forward slashes / for file"
+  },
+  {
+    "id" : "260600e5-8df7-4d71-84a2-05e97d5d0788",
+    "prId" : 935,
+    "comments" : [
+      {
+        "id" : "6a220511-c831-4d83-8c72-78d88b03255a",
+        "parentId" : null,
+        "author" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "body" : "```suggestion\r\n    pprint.log(pantsTargets) // TODO remove\r\n```",
+        "createdAt" : "2019-09-20T08:07:23Z",
+        "updatedAt" : "2019-12-05T19:30:31Z",
+        "lastEditedBy" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "79f41472-b3ea-4ce4-81eb-06df59f05fbf",
+        "parentId" : "6a220511-c831-4d83-8c72-78d88b03255a",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Removed.",
+        "createdAt" : "2019-09-20T11:07:50Z",
+        "updatedAt" : "2019-12-05T19:30:31Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "a95ae87fd9621161d156685f32480fcb7bb451a4",
+    "line" : null,
+    "diffHunk" : "@@ -166,6 +177,9 @@ object UserConfiguration {\n     errors ++= symbolPrefixes.keys.flatMap { sym =>\n       Symbol.validated(sym).left.toOption\n     }\n+    val pantsTargets =\n+      getStringKey(\"pants-targets\")\n+    pprint.log(pantsTargets)"
+  },
+  {
+    "id" : "ad81c52e-bb1f-4cd4-a87c-b569bb0cd48f",
+    "prId" : 935,
+    "comments" : [
+      {
+        "id" : "8d528595-3816-4c3c-94f2-f59c6fb6131c",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "These changes got introduces in this PR to enforce consistency in `UserConfiguration`. Every field should be configurable",
+        "createdAt" : "2019-12-03T16:22:10Z",
+        "updatedAt" : "2019-12-05T19:30:31Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "a95ae87fd9621161d156685f32480fcb7bb451a4",
+    "line" : null,
+    "diffHunk" : "@@ -168,6 +186,14 @@ object UserConfiguration {\n     errors ++= symbolPrefixes.keys.flatMap { sym =>\n       Symbol.validated(sym).left.toOption\n     }\n+    val worksheetScreenWidth ="
+  },
+  {
+    "id" : "70df8a52-e814-4396-945a-b704acc02ccd",
+    "prId" : 1041,
+    "comments" : [
+      {
+        "id" : "5f1f3bfc-390f-43a7-a87d-e89b7976824c",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "if this is specific to worksheets, I would reflect it in the name, e.g. something like\r\n\r\n```suggestion\r\n    worksheetScreenWidth: Int = 120,\r\n```",
+        "createdAt" : "2019-11-04T11:54:59Z",
+        "updatedAt" : "2019-11-09T20:01:12Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "b5748f3f-a9d9-485c-94e0-36c59481d299",
+        "parentId" : "5f1f3bfc-390f-43a7-a87d-e89b7976824c",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Good idea, done.",
+        "createdAt" : "2019-11-06T06:27:39Z",
+        "updatedAt" : "2019-11-09T20:01:12Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "a2902a65a77773398f8ac710483906215a06bcf8",
+    "line" : null,
+    "diffHunk" : "@@ -25,7 +25,9 @@ case class UserConfiguration(\n     scalafmtConfigPath: RelativePath =\n       UserConfiguration.default.scalafmtConfigPath,\n     symbolPrefixes: Map[String, String] =\n-      UserConfiguration.default.symbolPrefixes\n+      UserConfiguration.default.symbolPrefixes,\n+    screenWidth: Int = 120,"
+  },
+  {
+    "id" : "1c16759e-c62f-4481-87eb-a5d141aefe2a",
+    "prId" : 1145,
+    "comments" : [
+      {
+        "id" : "03924e69-bed1-466f-9296-77b60782f46b",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "these imports seem unused?",
+        "createdAt" : "2019-12-04T16:56:35Z",
+        "updatedAt" : "2019-12-05T11:14:30Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f6d73e2c-dbea-4f73-a787-9445d4e957e1",
+        "parentId" : "03924e69-bed1-466f-9296-77b60782f46b",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "They're used in the final version of the PR. I did my best to split the mega commit into smaller chunks but may have missed some import changes",
+        "createdAt" : "2019-12-05T10:30:16Z",
+        "updatedAt" : "2019-12-05T11:14:30Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c032fa899f1747d53cf2025b6e1cf03227b19980",
+    "line" : 5,
+    "diffHunk" : "@@ -10,6 +10,8 @@ import scala.meta.RelativePath\n import scala.meta.internal.mtags.Symbol\n import scala.meta.pc.PresentationCompilerConfig\n import scala.util.Try\n+import scala.util.Failure\n+import scala.util.Success"
+  },
+  {
+    "id" : "a5daf819-d188-4c20-8d8b-f825cd66ab27",
+    "prId" : 1310,
+    "comments" : [
+      {
+        "id" : "55b4fe3b-d892-482e-a98f-6bd29693df15",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "I'm on the fence about this setting since the plugin file is required for \"import build\" to work. I feel like we should instead have some setting to disable \"import build\" entirely, for users who prefer to do it manually 🤔 Any thoughts?\r\n\r\nAlternatively, we should have an option to use a global sbt-bloop plugin instead of project-local. But I'm not sure that's a good direction.",
+        "createdAt" : "2020-01-15T19:17:57Z",
+        "updatedAt" : "2020-01-19T10:49:31Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "9ae3050b-4ea9-469c-974d-88cb51546c17",
+        "parentId" : "55b4fe3b-d892-482e-a98f-6bd29693df15",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "> I'm on the fence about this setting since the plugin file is required for \"import build\" to work. I feel like we should instead have some setting to disable \"import build\" entirely, for users who prefer to do it manually thinking Any thoughts?\r\n\r\nIf someone has a Bloop plugin inside their workspace already and they really don't want to generate the Sbt file, I think we should let them. They would still want to have an automatic import on sbt file changes. And it's a really clear setting that I don't think anyone will click unless they really want to.\r\n\r\n>Alternatively, we should have an option to use a global sbt-bloop plugin instead of project-local. But I'm not sure that's a good direction.\r\n\r\nThat would be just back to the previous behavior and from what I understand it wouldn't play well with offloading.\r\n\r\nOverall, I think this would be needed, because we are basically modifying the user's build definition and we should have an option of user telling us that they don't want it.\r\n",
+        "createdAt" : "2020-01-16T08:09:26Z",
+        "updatedAt" : "2020-01-19T10:49:31Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "861f6894-f29d-4a57-ad9b-09e46e95500e",
+        "parentId" : "55b4fe3b-d892-482e-a98f-6bd29693df15",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Can we rename the setting to something like “I already have bloop installed”?",
+        "createdAt" : "2020-01-16T16:22:38Z",
+        "updatedAt" : "2020-01-19T10:49:31Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "0c56edd5-387f-4b58-87f5-28177268710c",
+        "parentId" : "55b4fe3b-d892-482e-a98f-6bd29693df15",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Changed to `bloop-sbt-already-installed`",
+        "createdAt" : "2020-01-17T18:05:46Z",
+        "updatedAt" : "2020-01-19T10:49:31Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "e5a0168268324dcfda820d80b1b28f7833499098",
+    "line" : null,
+    "diffHunk" : "@@ -105,6 +107,20 @@ object UserConfiguration {\n         |`src/main/scala:: src/main/java::`. Syntax such as `src/{main,test}::`\n         |is not supported.\n         |\"\"\".stripMargin\n+    ),\n+    UserConfigurationOption(\n+      \"bloop-generate-sbt\","
+  },
+  {
+    "id" : "ee8b9098-d4ea-4c25-9044-c1814bda96bf",
+    "prId" : 1310,
+    "comments" : [
+      {
+        "id" : "bd015aec-b0ed-4a61-a025-24d63027baf8",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "What about?\r\n```suggestion\r\n      \"bloop-version\",\r\n```",
+        "createdAt" : "2020-01-15T19:18:27Z",
+        "updatedAt" : "2020-01-19T10:49:31Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "34937fdb-19f4-41c5-89df-1440a12ca8bc",
+        "parentId" : "bd015aec-b0ed-4a61-a025-24d63027baf8",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "The user might think it will also change the Bloop server version, and that should be done manually by them. \r\n\r\nOr maybe that setting should also apply to the server version? What do you think?",
+        "createdAt" : "2020-01-16T08:11:25Z",
+        "updatedAt" : "2020-01-19T10:49:31Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "16c6f42c-d3fe-46cf-887b-eec7db423117",
+        "parentId" : "bd015aec-b0ed-4a61-a025-24d63027baf8",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Makes sense ",
+        "createdAt" : "2020-01-16T16:20:26Z",
+        "updatedAt" : "2020-01-19T10:49:31Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "731a0e92-09b7-48af-91f0-e7aac08565d5",
+        "parentId" : "bd015aec-b0ed-4a61-a025-24d63027baf8",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Ok, so now it's possible to change Bloop version and restart the server when the setting change.\r\n\r\nI think that's a pretty neat feature especially if a user wants to leverage new Bloop and Metals wer enot yet released. What do you think?\r\n",
+        "createdAt" : "2020-01-17T18:07:03Z",
+        "updatedAt" : "2020-01-19T10:49:31Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "e5a0168268324dcfda820d80b1b28f7833499098",
+    "line" : null,
+    "diffHunk" : "@@ -105,6 +107,20 @@ object UserConfiguration {\n         |`src/main/scala:: src/main/java::`. Syntax such as `src/{main,test}::`\n         |is not supported.\n         |\"\"\".stripMargin\n+    ),\n+    UserConfigurationOption(\n+      \"bloop-generate-sbt\",\n+      \"\"\"true\"\"\",\n+      \"true\",\n+      \"Generate Bloop plugin file\",\n+      \"\"\"Option that can specified to false if the user doesn't want to generate an sbt file adding the Bloop sbt plugin.\"\"\"\n+    ),\n+    UserConfigurationOption(\n+      \"bloop-plugin-version\","
+  },
+  {
+    "id" : "6eafddc6-8930-4c6a-875e-a68c9b30e234",
+    "prId" : 1310,
+    "comments" : [
+      {
+        "id" : "055e31f3-6062-4a30-b121-1525cd423ea3",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "For better or worse, the correct capitalization for sbt is always lowercase, even when starting new sentences.\r\n```suggestion\r\n      \"Don't generate Bloop plugin file for sbt\",\r\n```",
+        "createdAt" : "2020-01-18T23:48:14Z",
+        "updatedAt" : "2020-01-19T10:49:31Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "e5a0168268324dcfda820d80b1b28f7833499098",
+    "line" : null,
+    "diffHunk" : "@@ -105,6 +107,21 @@ object UserConfiguration {\n         |`src/main/scala:: src/main/java::`. Syntax such as `src/{main,test}::`\n         |is not supported.\n         |\"\"\".stripMargin\n+    ),\n+    UserConfigurationOption(\n+      \"bloop-sbt-already-installed\",\n+      \"false\",\n+      \"false\",\n+      \"Don't generate Bloop plugin file for Sbt\","
+  },
+  {
+    "id" : "a34396f2-6de9-4a4f-8792-1fc8685e1476",
+    "prId" : 1310,
+    "comments" : [
+      {
+        "id" : "0a1efc2d-ba76-4374-9e40-b1f21ed99ee6",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "```suggestion\r\n      \"If true, Metals will not generate a `project/metals.sbt` file under the assumption that sbt-bloop is already manually installed in the sbt build. Build import will fail with a 'not valid command bloopInstall' error in case Bloop is not manually installed in the build when using this option.\"\r\n```",
+        "createdAt" : "2020-01-18T23:50:31Z",
+        "updatedAt" : "2020-01-19T10:49:31Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "e5a0168268324dcfda820d80b1b28f7833499098",
+    "line" : null,
+    "diffHunk" : "@@ -105,6 +107,21 @@ object UserConfiguration {\n         |`src/main/scala:: src/main/java::`. Syntax such as `src/{main,test}::`\n         |is not supported.\n         |\"\"\".stripMargin\n+    ),\n+    UserConfigurationOption(\n+      \"bloop-sbt-already-installed\",\n+      \"false\",\n+      \"false\",\n+      \"Don't generate Bloop plugin file for Sbt\",\n+      \"Option that can specified to true if the user doesn't want to generate an sbt file adding the Bloop sbt plugin.\""
+  },
+  {
+    "id" : "82c13251-05f8-45a7-9390-a009c13936d8",
+    "prId" : 1397,
+    "comments" : [
+      {
+        "id" : "ec80f917-d0cc-4e7e-ace6-6f3a8a9b208d",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Instead of passing in `isEmpty = ...`, the `f` method can implement the filter instead.",
+        "createdAt" : "2020-02-06T13:27:31Z",
+        "updatedAt" : "2020-02-06T13:55:21Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "1f16b810-9451-4535-94bf-76b79abf8b43",
+        "parentId" : "ec80f917-d0cc-4e7e-ace6-6f3a8a9b208d",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Hmm... that will not work since the f method is invoked after we get the value.",
+        "createdAt" : "2020-02-06T13:40:18Z",
+        "updatedAt" : "2020-02-06T13:55:21Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "c70f82b8027fe2155980d12961659c110d7f21d7",
+    "line" : null,
+    "diffHunk" : "@@ -133,11 +133,16 @@ object UserConfiguration {\n     val base: JsonObject =\n       Option(json.getAsJsonObject(\"metals\")).getOrElse(new JsonObject)\n \n-    def getKey[A](key: String, f: JsonElement => Option[A]): Option[A] = {\n+    def getKey[A](\n+        key: String,\n+        f: JsonElement => Option[A],\n+        isEmpty: JsonElement => Boolean = _ => false"
+  },
+  {
+    "id" : "a84be454-a107-4a16-9a06-9a30bd3b9bfe",
+    "prId" : 1397,
+    "comments" : [
+      {
+        "id" : "bbec37ca-fd55-468d-ae59-a3620a7a49ed",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "```suggestion\r\n            }, Some(_).filter(_.nonEmpty))\r\n```",
+        "createdAt" : "2020-02-06T13:27:43Z",
+        "updatedAt" : "2020-02-06T13:55:21Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "c70f82b8027fe2155980d12961659c110d7f21d7",
+    "line" : null,
+    "diffHunk" : "@@ -155,8 +160,12 @@ object UserConfiguration {\n               None\n             }, Some(_))"
+  },
+  {
+    "id" : "c726fab0-4aee-4cac-8a57-395729f5e938",
+    "prId" : 1851,
+    "comments" : [
+      {
+        "id" : "f2e62db7-66a6-4fab-8fb2-67051f3126c8",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "I'm curious if we can avoid this user configuration option by refining how we handle \"import build\". I would be OK with disabling the output panel popup for \"import build\" and instead attach a command to the status bar item to reveal the output panel. ",
+        "createdAt" : "2020-06-24T16:15:22Z",
+        "updatedAt" : "2020-06-24T16:18:41Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d0195b20-1b78-43f2-99f0-ced7adab3f97",
+        "parentId" : "f2e62db7-66a6-4fab-8fb2-67051f3126c8",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "That's an awesome idea! We could also make sure that the option is available also if the build import failed. Something like \"go to logs\".\n",
+        "createdAt" : "2020-06-24T16:27:51Z",
+        "updatedAt" : "2020-06-24T16:27:52Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4aa1fc28-514a-4838-945a-f21993e9f08d",
+        "parentId" : "f2e62db7-66a6-4fab-8fb2-67051f3126c8",
+        "author" : {
+          "login" : "ckipp01",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/13974112?u=7b6a2ddab8eec6f99e4e40ae9b81f71cb5ba92e5&v=4"
+        },
+        "body" : "Yea, I also agree, I think if we were able to avoid the configuration option by providing an action item to go to the logs, that would be great.",
+        "createdAt" : "2020-06-24T18:14:39Z",
+        "updatedAt" : "2020-06-24T18:14:40Z",
+        "lastEditedBy" : {
+          "login" : "ckipp01",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/13974112?u=7b6a2ddab8eec6f99e4e40ae9b81f71cb5ba92e5&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5a519594c3cabaa8b154b73270439bbfecfe6f5b",
+    "line" : 14,
+    "diffHunk" : "@@ -146,6 +147,15 @@ object UserConfiguration {\n            |\n            |\"\"\".stripMargin\n       ),\n+      UserConfigurationOption("
+  },
+  {
+    "id" : "5a08b2aa-6fab-4e56-9349-1d86ac7fb8dc",
+    "prId" : 1853,
+    "comments" : [
+      {
+        "id" : "1f07490d-d822-4364-8b02-c8ce96a9be88",
+        "parentId" : null,
+        "author" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "body" : "you can do `Some(...)` (it is impossible to be null here.",
+        "createdAt" : "2020-06-25T16:26:39Z",
+        "updatedAt" : "2020-06-25T18:58:20Z",
+        "lastEditedBy" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "e18bdaa8-ff56-4aec-b4c5-7107f63e583e",
+        "parentId" : "1f07490d-d822-4364-8b02-c8ce96a9be88",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "fixed!",
+        "createdAt" : "2020-06-25T18:58:44Z",
+        "updatedAt" : "2020-06-25T18:58:44Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "260dcc28a1d6bb9ca8ef07702ee8d2697b212ea8",
+    "line" : null,
+    "diffHunk" : "@@ -205,6 +215,28 @@ object UserConfiguration {\n             Some(value)\n         }\n       }\n+\n+    def getStringListKey(key: String): Option[List[String]] =\n+      getKey[List[String]](\n+        key,\n+        { elem =>\n+          if (elem.isJsonArray()) {\n+            val parsed = elem.getAsJsonArray().asScala.flatMap { value =>\n+              Try(value.getAsJsonPrimitive().getAsString()) match {\n+                case Failure(exception) =>\n+                  errors += s\"json error: values in '$key' should have value of type string but obtained $value\"\n+                  None\n+                case Success(value) =>\n+                  Some(value)\n+              }\n+            }\n+            Option(parsed.toList)"
+  },
+  {
+    "id" : "a4f79da2-2283-439a-92c7-a8b46ce3bf5a",
+    "prId" : 1853,
+    "comments" : [
+      {
+        "id" : "9112c0fa-498b-4c5a-9a49-de67b764599c",
+        "parentId" : null,
+        "author" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "body" : "It doesn't matter much but I would check if it actually has any value or not and if it has but is not JsonArray I would do `errors += ...`\r\n\r\nIt might be helpful to catch potential error when other clients will start sending this value but will serialize it e.g. as String not array.\r\n\r\n But this is super edge case, you can completely ignore this.",
+        "createdAt" : "2020-06-25T16:31:58Z",
+        "updatedAt" : "2020-06-25T18:58:20Z",
+        "lastEditedBy" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "39a69275-e28c-4862-91ae-f6ab99a2506e",
+        "parentId" : "9112c0fa-498b-4c5a-9a49-de67b764599c",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Added an additional error when we don't have a list.",
+        "createdAt" : "2020-06-25T18:59:04Z",
+        "updatedAt" : "2020-06-25T18:59:04Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "260dcc28a1d6bb9ca8ef07702ee8d2697b212ea8",
+    "line" : 46,
+    "diffHunk" : "@@ -205,6 +215,28 @@ object UserConfiguration {\n             Some(value)\n         }\n       }\n+\n+    def getStringListKey(key: String): Option[List[String]] =\n+      getKey[List[String]](\n+        key,\n+        { elem =>\n+          if (elem.isJsonArray()) {\n+            val parsed = elem.getAsJsonArray().asScala.flatMap { value =>\n+              Try(value.getAsJsonPrimitive().getAsString()) match {\n+                case Failure(exception) =>\n+                  errors += s\"json error: values in '$key' should have value of type string but obtained $value\"\n+                  None\n+                case Success(value) =>\n+                  Some(value)\n+              }\n+            }\n+            Option(parsed.toList)\n+          } else {\n+            None"
+  },
+  {
+    "id" : "1ef6a431-eb70-4d04-a7d6-00643deae967",
+    "prId" : 1853,
+    "comments" : [
+      {
+        "id" : "cdc95bde-af4b-4581-ba1a-881982a7af11",
+        "parentId" : null,
+        "author" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "body" : "this is invalid json, it should be `[\"-Xmx1G\"]`",
+        "createdAt" : "2020-06-25T16:38:40Z",
+        "updatedAt" : "2020-06-25T18:58:20Z",
+        "lastEditedBy" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "8576b5d9-b322-4978-96f9-93ad856a579b",
+        "parentId" : "cdc95bde-af4b-4581-ba1a-881982a7af11",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "fixed",
+        "createdAt" : "2020-06-25T18:59:14Z",
+        "updatedAt" : "2020-06-25T18:59:15Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "260dcc28a1d6bb9ca8ef07702ee8d2697b212ea8",
+    "line" : null,
+    "diffHunk" : "@@ -107,6 +108,15 @@ object UserConfiguration {\n           |separators (even on Windows).\n           |\"\"\".stripMargin\n       ),\n+      UserConfigurationOption(\n+        \"ammonite-jvm-properties\",\n+        \"\"\"`[]`.\"\"\",\n+        \"['-Xmx1G']\","
+  },
+  {
+    "id" : "53cf693e-0c05-44c6-8211-142e14c48708",
+    "prId" : 1853,
+    "comments" : [
+      {
+        "id" : "2222a220-bdcd-48ec-9eb0-1bee616b5522",
+        "parentId" : null,
+        "author" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "body" : "I noticed with other parameters there is always a dot in the end, any idea why? Just curious",
+        "createdAt" : "2020-06-25T17:23:00Z",
+        "updatedAt" : "2020-06-25T18:58:20Z",
+        "lastEditedBy" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7e90218d-90b6-4465-8ea4-04eaa61f3580",
+        "parentId" : "2222a220-bdcd-48ec-9eb0-1bee616b5522",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Not sure if really needed, but this is rendered here: https://scalameta.org/metals/docs/editors/vim.html#gradle-script",
+        "createdAt" : "2020-06-25T18:52:33Z",
+        "updatedAt" : "2020-06-25T18:58:20Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "161ef7dd-1557-4463-994e-454d9d3619e3",
+        "parentId" : "2222a220-bdcd-48ec-9eb0-1bee616b5522",
+        "author" : {
+          "login" : "ckipp01",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/13974112?u=7b6a2ddab8eec6f99e4e40ae9b81f71cb5ba92e5&v=4"
+        },
+        "body" : "🤔 I don't think the dot is needed.",
+        "createdAt" : "2020-06-25T19:07:54Z",
+        "updatedAt" : "2020-06-25T19:09:34Z",
+        "lastEditedBy" : {
+          "login" : "ckipp01",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/13974112?u=7b6a2ddab8eec6f99e4e40ae9b81f71cb5ba92e5&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "260dcc28a1d6bb9ca8ef07702ee8d2697b212ea8",
+    "line" : 14,
+    "diffHunk" : "@@ -107,6 +108,15 @@ object UserConfiguration {\n           |separators (even on Windows).\n           |\"\"\".stripMargin\n       ),\n+      UserConfigurationOption(\n+        \"ammonite-jvm-properties\",\n+        \"\"\"`[]`.\"\"\","
+  },
+  {
+    "id" : "fc9ea026-b164-40e6-813b-243b9823a9c1",
+    "prId" : 1994,
+    "comments" : [
+      {
+        "id" : "21bec719-3635-4e63-94e7-3c7c2988c4ed",
+        "parentId" : null,
+        "author" : {
+          "login" : "ckipp01",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/13974112?u=7b6a2ddab8eec6f99e4e40ae9b81f71cb5ba92e5&v=4"
+        },
+        "body" : "```suggestion\r\n        \"If true, Metals will not generate `metals.sbt` files under the assumption that sbt-bloop is already manually installed in the sbt build. Build import will fail with a 'not valid command bloopInstall' error in case Bloop is not manually installed in the build when using this option.\"\r\n```",
+        "createdAt" : "2020-08-15T08:22:46Z",
+        "updatedAt" : "2020-08-15T09:57:45Z",
+        "lastEditedBy" : {
+          "login" : "ckipp01",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/13974112?u=7b6a2ddab8eec6f99e4e40ae9b81f71cb5ba92e5&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "39dd62ff-8bfa-4dca-835a-9f4d0e654820",
+        "parentId" : "21bec719-3635-4e63-94e7-3c7c2988c4ed",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Fixed!",
+        "createdAt" : "2020-08-15T09:57:55Z",
+        "updatedAt" : "2020-08-15T09:57:55Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "c459aa1344190279bc63ad595f72dc9272b31217",
+    "line" : null,
+    "diffHunk" : "@@ -122,7 +122,7 @@ object UserConfiguration {\n         \"false\",\n         \"false\",\n         \"Don't generate Bloop plugin file for sbt\",\n-        \"If true, Metals will not generate a `project/metals.sbt` file under the assumption that sbt-bloop is already manually installed in the sbt build. Build import will fail with a 'not valid command bloopInstall' error in case Bloop is not manually installed in the build when using this option.\"\n+        \"If true, Metals will not generate a `metals.sbt` files under the assumption that sbt-bloop is already manually installed in the sbt build. Build import will fail with a 'not valid command bloopInstall' error in case Bloop is not manually installed in the build when using this option.\""
+  },
+  {
+    "id" : "e5ce2eae-767b-45a0-8497-849a7f627fa1",
+    "prId" : 2012,
+    "comments" : [
+      {
+        "id" : "6f78218a-6231-4b4d-b819-bd56985969d8",
+        "parentId" : null,
+        "author" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "body" : "this will drop '.' from last package, you want to drop last '.' from each package.",
+        "createdAt" : "2020-08-31T06:52:42Z",
+        "updatedAt" : "2020-09-01T08:04:55Z",
+        "lastEditedBy" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "bedea53d-324d-47d2-bdfe-3b0ea417c757",
+        "parentId" : "6f78218a-6231-4b4d-b819-bd56985969d8",
+        "author" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "body" : "`defaultExclusions.map(_.dropRight(1)).mkString(\"\\n\").replace(\"/\", \".\")`",
+        "createdAt" : "2020-08-31T08:40:10Z",
+        "updatedAt" : "2020-09-01T08:04:55Z",
+        "lastEditedBy" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "c99d7abd-1f59-4178-802e-df8f24e7695e",
+        "parentId" : "6f78218a-6231-4b4d-b819-bd56985969d8",
+        "author" : {
+          "login" : "ckipp01",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/13974112?u=7b6a2ddab8eec6f99e4e40ae9b81f71cb5ba92e5&v=4"
+        },
+        "body" : "ah duh, of course. good catch.",
+        "createdAt" : "2020-08-31T17:51:18Z",
+        "updatedAt" : "2020-09-01T08:04:55Z",
+        "lastEditedBy" : {
+          "login" : "ckipp01",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/13974112?u=7b6a2ddab8eec6f99e4e40ae9b81f71cb5ba92e5&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "742d615938b7ae27e2a94fdcb0daa3d765c5a4ba",
+    "line" : null,
+    "diffHunk" : "@@ -49,6 +48,10 @@ object UserConfiguration {\n \n   def default: UserConfiguration = UserConfiguration()\n \n+  private val defaultExclusion = new ExcludedPackagesHandler(() =>\n+    UserConfiguration()\n+  ).defaultExclusions.mkString(\"\\n\").replace(\"/\", \".\").dropRight(1)"
+  }
+]

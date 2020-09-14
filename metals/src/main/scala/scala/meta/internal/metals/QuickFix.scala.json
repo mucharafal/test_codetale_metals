@@ -1,0 +1,77 @@
+[
+  {
+    "id" : "09659fac-942b-4f79-914a-c84fededc93e",
+    "prId" : 1065,
+    "comments" : [
+      {
+        "id" : "8a7bee31-dffa-4784-9bf2-14333fcdef52",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Can we quickly return if the diagnostic range does not contain the current position?",
+        "createdAt" : "2019-12-11T11:45:23Z",
+        "updatedAt" : "2019-12-11T15:30:45Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "b5a3c7ec-4631-4263-a55d-d2edaa8fa3b8",
+        "parentId" : "8a7bee31-dffa-4784-9bf2-14333fcdef52",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "`encloses` should be easy to use here.",
+        "createdAt" : "2019-12-11T11:52:04Z",
+        "updatedAt" : "2019-12-11T15:30:45Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "55807f61-379b-476c-93a0-da3c20b05266",
+        "parentId" : "8a7bee31-dffa-4784-9bf2-14333fcdef52",
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "done, take a look!",
+        "createdAt" : "2019-12-11T15:14:52Z",
+        "updatedAt" : "2019-12-11T15:30:45Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "1e046b2b878d476d389f19bdcaa73ae4b7c121c9",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,66 @@\n+package scala.meta.internal.metals\n+\n+import scala.concurrent.Future\n+import scala.meta.pc.CancelToken\n+import org.eclipse.{lsp4j => l}\n+import scala.concurrent.ExecutionContext\n+import scala.meta.internal.metals.MetalsEnrichments._\n+\n+trait QuickFix {\n+  def contribute(\n+      params: l.CodeActionParams,\n+      compilers: Compilers,\n+      token: CancelToken\n+  )(implicit ec: ExecutionContext): Future[Seq[l.CodeAction]]\n+}\n+\n+object QuickFix {\n+\n+  object ImportMissingSymbol extends QuickFix {\n+\n+    override def contribute(\n+        params: l.CodeActionParams,\n+        compilers: Compilers,\n+        token: CancelToken\n+    )(implicit ec: ExecutionContext): Future[Seq[l.CodeAction]] = {\n+\n+      def importMissingSymbol(\n+          diagnostic: l.Diagnostic,\n+          name: String\n+      ): Future[Seq[l.CodeAction]] = {\n+        val textDocumentPositionParams = new l.TextDocumentPositionParams(\n+          params.getTextDocument(),\n+          diagnostic.getRange.getEnd()\n+        )\n+        compilers\n+          .autoImports(textDocumentPositionParams, name, token)\n+          .map { imports =>\n+            imports.asScala.map { i =>\n+              val uri = params.getTextDocument().getUri()\n+              val edit = new l.WorkspaceEdit(Map(uri -> i.edits).asJava)\n+\n+              val codeAction = new l.CodeAction()\n+\n+              codeAction.setTitle(\n+                s\"Import '$name' from package '${i.packageName}'\"\n+              )\n+              codeAction.setKind(l.CodeActionKind.QuickFix)\n+              codeAction.setDiagnostics(List(diagnostic).asJava)\n+              codeAction.setEdit(edit)\n+\n+              codeAction\n+            }\n+          }\n+      }\n+\n+      Future\n+        .sequence(params.getContext().getDiagnostics().asScala.collect {\n+          case d @ ScalacDiagnostic.SymbolNotFound(name) =>"
+  }
+]

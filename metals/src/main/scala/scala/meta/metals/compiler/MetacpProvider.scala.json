@@ -1,0 +1,30 @@
+[
+  {
+    "id" : "4c13e517-0830-43a1-b054-f5392b49d5bd",
+    "prId" : 275,
+    "comments" : [
+      {
+        "id" : "8046f0b0-2a9f-4d81-bb49-0179cac9e761",
+        "parentId" : null,
+        "author" : {
+          "login" : "ShaneDelmore",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/4604933?v=4"
+        },
+        "body" : "This whole file was a pleasure to read.",
+        "createdAt" : "2018-04-21T01:15:17Z",
+        "updatedAt" : "2018-05-06T12:40:25Z",
+        "lastEditedBy" : {
+          "login" : "ShaneDelmore",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/4604933?v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "42765d7effb4a73998347fa6fb448b3c5e13c5ab",
+    "line" : 78,
+    "diffHunk" : "@@ -0,0 +1,114 @@\n+package scala.meta.metals.compiler\n+\n+import java.io.File\n+import java.io.OutputStream\n+import java.io.PrintStream\n+import java.nio.file.Files\n+import java.util\n+import java.util.Collections\n+import java.util.function\n+import scala.meta.AbsolutePath\n+import scala.meta.Classpath\n+import scala.meta.cli.Metacp\n+import scala.meta.metacp\n+import scala.meta.metacp.Reporter\n+import scala.meta.metacp.Settings\n+import scalafix.internal.util.LazySymbolTable\n+import scalafix.internal.util.SymbolTable\n+\n+class MetacpProvider {\n+  private val classpaths =\n+    Collections.synchronizedMap(new util.HashMap[AbsolutePath, AbsolutePath]())\n+  private val settings =\n+    Settings().withPar(false).withScalaLibrarySynthetics(false)\n+  private val reporter = Reporter()\n+  private val synthetics = Metacp\n+    .process(Settings().withScalaLibrarySynthetics(true), reporter)\n+    .get\n+    .shallow\n+    .head\n+  private val empty = AbsolutePath(Files.createTempDirectory(\"metals\"))\n+  private val processEntry = new function.Function[AbsolutePath, AbsolutePath] {\n+    override def apply(t: AbsolutePath): AbsolutePath = {\n+      val result = Metacp.process(\n+        settings.withClasspath(Classpath(t :: Nil)),\n+        reporter\n+      )\n+      result match {\n+        case Some(Classpath(entry :: Nil)) =>\n+          entry\n+        case _ =>\n+          empty\n+      }\n+    }\n+  }\n+\n+  def process(classpath: Classpath): Classpath = {\n+    Classpath(synthetics :: classpath.shallow.map { entry =>\n+      if (entry.isDirectory) entry\n+      else classpaths.computeIfAbsent(entry, processEntry)\n+    })\n+  }\n+\n+}\n+\n+object ClasspathOps {\n+\n+  def bootClasspath: Option[Classpath] = sys.props.collectFirst {\n+    case (k, v) if k.endsWith(\".boot.class.path\") => Classpath(v)\n+  }\n+\n+  val devNull = new PrintStream(new OutputStream {\n+    override def write(b: Int): Unit = ()\n+  })\n+\n+  /** Process classpath with metacp to build semanticdbs of global symbols. **/\n+  def toMetaClasspath(\n+      sclasspath: Classpath,\n+      cacheDirectory: Option[AbsolutePath] = None,\n+      parallel: Boolean = true,\n+      out: PrintStream = devNull\n+  ): Option[Classpath] = {\n+    val (processed, toProcess) = sclasspath.shallow.partition { path =>\n+      path.isDirectory &&\n+      path.resolve(\"META-INF\").resolve(\"semanticdb.semanticidx\").isFile\n+    }\n+    val withJDK = Classpath(\n+      bootClasspath.fold(sclasspath.shallow)(_.shallow ::: toProcess)\n+    )\n+    val default = metacp.Settings()\n+    val settings = default\n+      .withClasspath(withJDK)\n+      .withScalaLibrarySynthetics(true)\n+      .withCacheDir(cacheDirectory.getOrElse(default.cacheDir))\n+      .withPar(parallel)\n+    val reporter = metacp\n+      .Reporter()\n+      .withOut(devNull) // out prints classpath of proccessed classpath, which is not relevant for scalafix.\n+      .withErr(out)\n+    val mclasspath = scala.meta.cli.Metacp.process(settings, reporter)\n+    mclasspath.map(x => Classpath(x.shallow ++ processed))\n+  }\n+\n+  def newSymbolTable(\n+      classpath: Classpath,\n+      cacheDirectory: Option[AbsolutePath] = None,\n+      parallel: Boolean = true,\n+      out: PrintStream = System.out\n+  ): Option[SymbolTable] = {\n+    toMetaClasspath(classpath, cacheDirectory, parallel, out)\n+      .map(new LazySymbolTable(_))\n+  }\n+\n+  def getCurrentClasspath: Classpath = {\n+    Thread.currentThread.getContextClassLoader match {\n+      case url: java.net.URLClassLoader =>\n+        val classpath = url.getURLs.map(_.getFile).mkString(File.pathSeparator)\n+        Classpath(classpath)\n+      case els =>\n+        throw new IllegalStateException(\n+          s\"Expected java.net.URLClassLoader, obtained $els\"\n+        )\n+    }\n+  }\n+}"
+  }
+]

@@ -1,0 +1,214 @@
+[
+  {
+    "id" : "ccd9f340-5c81-4680-b289-e3d12b86f06c",
+    "prId" : 727,
+    "comments" : [
+      {
+        "id" : "00d2ec8d-43bd-4250-ad72-0c9ab032e8de",
+        "parentId" : null,
+        "author" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "body" : "Unless there is a reasonable fear that the previous implementation would kill the performance of the entire app, this is a huge overkill. The names carry no immediate meaning with them and the state transitions are a mystery. If it were to stay, then there should also be an FSM diagram to clear that out.\r\n\r\nAnyway, is there a reason for such a complex machine?",
+        "createdAt" : "2019-05-23T15:52:12Z",
+        "updatedAt" : "2019-05-24T09:56:49Z",
+        "lastEditedBy" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "8674f0e7-bb54-4d19-902b-4288208f51e1",
+        "parentId" : "00d2ec8d-43bd-4250-ad72-0c9ab032e8de",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "I've refactored the state machine into a separate file and given the states more readable names. I personally find the new approach easier to maintain and evolve since we're conceptually doing a simpler task, we filter out a few bytes from the process output and emit lines as soon as we find a `\\n`. The previous implementation had multiple layers of conversions that were difficult to follow and extend without adding yet another full iteration on the character output stream.",
+        "createdAt" : "2019-05-23T18:31:04Z",
+        "updatedAt" : "2019-05-24T09:56:49Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "ec9c0395fa83c2e41f0331e8f4bddea0b2709085",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,117 @@\n+// This file contains adapted source code from tut, see NOTICE.md for LICENSE.\n+// Original source: https://github.com/tpolecat/tut/blob/e692c74afe7cb9f144f464b97f100c11367c7dfa/modules/core/src/main/scala/tut/AnsiFilterStream.scala\n+package scala.meta.internal.metals\n+\n+import java.lang.StringBuilder\n+import java.nio.ByteBuffer\n+import java.nio.charset.StandardCharsets\n+import java.nio.CharBuffer\n+import scala.collection.mutable\n+\n+/**\n+ * Converts a stream of strings (with potential ANSI codes and newlines) into a callback for indvidual lines\n+ * where each individual line has no newline \\n characters.\n+ *\n+ * @param onLine The callback handler when a single line has been consumed from the input.\n+ */\n+class LineListener(onLine: String => Unit) {\n+  private var buffer = new StringBuilder()\n+\n+  /** Clear buffered output. */\n+  def flush(): Unit = {\n+    if (buffer.length() > 0) {\n+      onLine(buffer.toString())\n+      buffer = new StringBuilder()\n+    }\n+  }\n+\n+  def appendString(text: String): this.type = {\n+    appendBytes(\n+      StandardCharsets.UTF_8.encode(CharBuffer.wrap(text.toCharArray()))\n+    )\n+  }\n+\n+  def appendBytes(bytes: ByteBuffer): this.type = {\n+    val chars = StandardCharsets.UTF_8.decode(bytes)\n+    while (chars.hasRemaining()) {\n+      val ch = chars.get()\n+      // Strategy is, accumulate values as long as we're in a non-terminal state, then either discard\n+      // them if we reach T (which means we accumulated an ANSI escape sequence) or print them out if\n+      // we reach F.\n+      state.apply(ch) match {\n+        case F =>\n+          stack.foreach { i =>\n+            onCharacter(i)\n+          }\n+          onCharacter(ch)\n+          resetState()\n+        case T =>\n+          resetState()\n+        case L =>\n+          flush()\n+          resetState()\n+        case s =>\n+          stack += ch\n+          state = s\n+      }\n+    }\n+    this\n+  }\n+\n+  private def onCharacter(char: Char): Unit = {\n+    if (char == '\\n') {\n+      flush()\n+    } else {\n+      buffer.append(char)\n+    }\n+  }\n+\n+  case class State(apply: Int => State)"
+  },
+  {
+    "id" : "8662a635-5538-492e-a9b1-07bee3763069",
+    "prId" : 727,
+    "comments" : [
+      {
+        "id" : "14ede3d4-2870-42ea-983b-0671d7a1b453",
+        "parentId" : null,
+        "author" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "body" : "variables in the middle of a class are a cause of confusion. If you feel they should not be at the top because they do not \"fit togetger\", then that is a clear reason for extracting a new class if I ever saw one.",
+        "createdAt" : "2019-05-23T15:53:48Z",
+        "updatedAt" : "2019-05-24T09:56:49Z",
+        "lastEditedBy" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "84d72a2b-fd11-4add-8fab-1f0d57b351de",
+        "parentId" : "14ede3d4-2870-42ea-983b-0671d7a1b453",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "The stack and the state variables are now next to the string builder buffer.",
+        "createdAt" : "2019-05-23T18:31:22Z",
+        "updatedAt" : "2019-05-24T09:56:49Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "ec9c0395fa83c2e41f0331e8f4bddea0b2709085",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,117 @@\n+// This file contains adapted source code from tut, see NOTICE.md for LICENSE.\n+// Original source: https://github.com/tpolecat/tut/blob/e692c74afe7cb9f144f464b97f100c11367c7dfa/modules/core/src/main/scala/tut/AnsiFilterStream.scala\n+package scala.meta.internal.metals\n+\n+import java.lang.StringBuilder\n+import java.nio.ByteBuffer\n+import java.nio.charset.StandardCharsets\n+import java.nio.CharBuffer\n+import scala.collection.mutable\n+\n+/**\n+ * Converts a stream of strings (with potential ANSI codes and newlines) into a callback for indvidual lines\n+ * where each individual line has no newline \\n characters.\n+ *\n+ * @param onLine The callback handler when a single line has been consumed from the input.\n+ */\n+class LineListener(onLine: String => Unit) {\n+  private var buffer = new StringBuilder()\n+\n+  /** Clear buffered output. */\n+  def flush(): Unit = {\n+    if (buffer.length() > 0) {\n+      onLine(buffer.toString())\n+      buffer = new StringBuilder()\n+    }\n+  }\n+\n+  def appendString(text: String): this.type = {\n+    appendBytes(\n+      StandardCharsets.UTF_8.encode(CharBuffer.wrap(text.toCharArray()))\n+    )\n+  }\n+\n+  def appendBytes(bytes: ByteBuffer): this.type = {\n+    val chars = StandardCharsets.UTF_8.decode(bytes)\n+    while (chars.hasRemaining()) {\n+      val ch = chars.get()\n+      // Strategy is, accumulate values as long as we're in a non-terminal state, then either discard\n+      // them if we reach T (which means we accumulated an ANSI escape sequence) or print them out if\n+      // we reach F.\n+      state.apply(ch) match {\n+        case F =>\n+          stack.foreach { i =>\n+            onCharacter(i)\n+          }\n+          onCharacter(ch)\n+          resetState()\n+        case T =>\n+          resetState()\n+        case L =>\n+          flush()\n+          resetState()\n+        case s =>\n+          stack += ch\n+          state = s\n+      }\n+    }\n+    this\n+  }\n+\n+  private def onCharacter(char: Char): Unit = {\n+    if (char == '\\n') {\n+      flush()\n+    } else {\n+      buffer.append(char)\n+    }\n+  }\n+\n+  case class State(apply: Int => State)\n+\n+  val S: State = State {\n+    case 27 => I0\n+    case 13 => R // \\r\n+    case _ => F\n+  }\n+\n+  val R: State = State {\n+    case 10 => L // drop \\r from \\r\\n\n+    case _ => F\n+  }\n+  val L: State = State(_ => L)\n+\n+  val F: State = State(_ => F)\n+\n+  val T: State = State(_ => T)\n+\n+  val I0: State = State {\n+    case '[' => I1\n+    case _ => F\n+  }\n+\n+  val I1: State = State {\n+    case '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' => I2\n+    case _ => F\n+  }\n+\n+  val I2: State = State {\n+    case '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' => I2\n+    case ';' => I1\n+    case '@' | 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H' | 'I' | 'J' | 'K' |\n+        'L' | 'M' | 'N' | 'O' | 'P' | 'Q' | 'R' | 'S' | 'T' | 'U' | 'V' | 'W' |\n+        'X' | 'Y' | 'Z' | '[' | '\\\\' | ']' | '^' | '_' | '`' | 'a' | 'b' | 'c' |\n+        'd' | 'e' | 'f' | 'g' | 'h' | 'i' | 'j' | 'k' | 'l' | 'm' | 'n' | 'o' |\n+        'p' | 'q' | 'r' | 's' | 't' | 'u' | 'v' | 'w' | 'x' | 'y' | 'z' | '{' |\n+        '|' | '}' | '~' =>\n+      T // end of ANSI escape\n+    case _ => F\n+  }\n+\n+  private var stack = mutable.ListBuffer.empty[Char]"
+  },
+  {
+    "id" : "e965fa3b-52d2-4450-a3c6-c4ea7baed38b",
+    "prId" : 727,
+    "comments" : [
+      {
+        "id" : "dd50a44f-924d-48d1-9083-5f99859e60ee",
+        "parentId" : null,
+        "author" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "body" : "what about non ANSI characters? where are they handled? ",
+        "createdAt" : "2019-05-23T15:54:58Z",
+        "updatedAt" : "2019-05-24T09:56:49Z",
+        "lastEditedBy" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "6a352d69-83f9-4702-8aba-eebd59c2765a",
+        "parentId" : "dd50a44f-924d-48d1-9083-5f99859e60ee",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "They're handled by `Start`, the new names should make it clearer\r\n\r\n```scala\r\n  val Start: AnsiStateMachine = AnsiStateMachine {\r\n    case 27 => Ansi1\r\n    case 13 => CarriageReturn // \\r\r\n    case _ => Print\r\n  }\r\n```",
+        "createdAt" : "2019-05-23T18:32:00Z",
+        "updatedAt" : "2019-05-24T09:56:49Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "ec9c0395fa83c2e41f0331e8f4bddea0b2709085",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,121 @@\n+// This file contains adapted source code from tut, see NOTICE.md for LICENSE.\n+// Original source: https://github.com/tpolecat/tut/blob/e692c74afe7cb9f144f464b97f100c11367c7dfa/modules/core/src/main/scala/tut/AnsiFilterStream.scala\n+package scala.meta.internal.metals\n+\n+import java.lang.StringBuilder\n+import java.nio.ByteBuffer\n+import java.nio.charset.StandardCharsets\n+import java.nio.CharBuffer\n+import scala.collection.mutable\n+\n+/**\n+ * Converts a stream of strings (with potential ANSI codes and newlines) into a callback for indvidual lines\n+ * where each individual line has no newline \\n characters.\n+ *\n+ * @param onLine The callback handler when a single line has been consumed from the input.\n+ */\n+class LineListener(onLine: String => Unit) {\n+  private var buffer = new StringBuilder()\n+  private def onCharacter(char: Char): Unit = {\n+    if (char == '\\n') {\n+      flush()\n+    } else {\n+      buffer.append(char)\n+    }\n+  }\n+\n+  /** Clear buffered output. */\n+  def flush(): Unit = {\n+    onLine(buffer.toString())\n+    buffer = new StringBuilder()\n+  }\n+\n+  /** Clear buffered output, if there exists any. */\n+  def flushIfNonEmpty(): Unit = {\n+    if (buffer.length() > 0) {\n+      flush()\n+    }\n+  }\n+\n+  def appendString(text: String): this.type = {\n+    appendBytes(\n+      StandardCharsets.UTF_8.encode(CharBuffer.wrap(text.toCharArray()))\n+    )\n+  }\n+\n+  def appendBytes(bytes: ByteBuffer): this.type = {\n+    val chars = StandardCharsets.UTF_8.decode(bytes)\n+    while (chars.hasRemaining()) {\n+      val ch = chars.get()\n+      // Strategy is, accumulate values as long as we're in a non-terminal state, then either discard\n+      // them if we reach T (which means we accumulated an ANSI escape sequence) or print them out if\n+      // we reach F.\n+      state.apply(ch) match {\n+        case F =>\n+          stack.foreach { i =>\n+            onCharacter(i)\n+          }\n+          onCharacter(ch)\n+          resetState()\n+        case T =>\n+          resetState()\n+        case L =>\n+          flush()\n+          resetState()\n+        case s =>\n+          stack += ch\n+          state = s\n+      }\n+    }\n+    this\n+  }\n+\n+  case class State(apply: Int => State)\n+\n+  val S: State = State {\n+    case 27 => I0\n+    case 13 => R // \\r\n+    case _ => F\n+  }\n+\n+  val R: State = State {\n+    case 10 => L // drop \\r from \\r\\n\n+    case _ => F\n+  }\n+  val L: State = State(_ => L)\n+\n+  val F: State = State(_ => F)\n+\n+  val T: State = State(_ => T)\n+\n+  val I0: State = State {\n+    case '[' => I1\n+    case _ => F\n+  }\n+\n+  val I1: State = State {\n+    case '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' => I2\n+    case _ => F\n+  }\n+\n+  val I2: State = State {\n+    case '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' => I2\n+    case ';' => I1\n+    case '@' | 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H' | 'I' | 'J' | 'K' |\n+        'L' | 'M' | 'N' | 'O' | 'P' | 'Q' | 'R' | 'S' | 'T' | 'U' | 'V' | 'W' |\n+        'X' | 'Y' | 'Z' | '[' | '\\\\' | ']' | '^' | '_' | '`' | 'a' | 'b' | 'c' |\n+        'd' | 'e' | 'f' | 'g' | 'h' | 'i' | 'j' | 'k' | 'l' | 'm' | 'n' | 'o' |\n+        'p' | 'q' | 'r' | 's' | 't' | 'u' | 'v' | 'w' | 'x' | 'y' | 'z' | '{' |\n+        '|' | '}' | '~' =>\n+      T // end of ANSI escape"
+  },
+  {
+    "id" : "74e3ffc1-0ada-4bed-8556-959918daff58",
+    "prId" : 727,
+    "comments" : [
+      {
+        "id" : "6f0ef642-51e6-438b-a36f-bad5e12f1c09",
+        "parentId" : null,
+        "author" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "body" : "at first I did not notice it was a small `s` - more readable would be:\r\n```scala\r\ncase state =>\r\n  stack += ch\r\n  this.state = state\r\n```\r\n\r\nor even `newState`, `nextState` and so on.\r\n`l`, `b`, `i`, `n` are fine with a well specified meaning like project-wide abbreviation for `lsp`, `bsp` etc. There is no gain here except a few keystrokes",
+        "createdAt" : "2019-05-23T15:59:34Z",
+        "updatedAt" : "2019-05-24T09:56:49Z",
+        "lastEditedBy" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "1753d36f-9686-44f7-8394-bace11fb68fa",
+        "parentId" : "6f0ef642-51e6-438b-a36f-bad5e12f1c09",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "I've renamed it to `other`",
+        "createdAt" : "2019-05-23T18:32:10Z",
+        "updatedAt" : "2019-05-24T09:56:49Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "ec9c0395fa83c2e41f0331e8f4bddea0b2709085",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,121 @@\n+// This file contains adapted source code from tut, see NOTICE.md for LICENSE.\n+// Original source: https://github.com/tpolecat/tut/blob/e692c74afe7cb9f144f464b97f100c11367c7dfa/modules/core/src/main/scala/tut/AnsiFilterStream.scala\n+package scala.meta.internal.metals\n+\n+import java.lang.StringBuilder\n+import java.nio.ByteBuffer\n+import java.nio.charset.StandardCharsets\n+import java.nio.CharBuffer\n+import scala.collection.mutable\n+\n+/**\n+ * Converts a stream of strings (with potential ANSI codes and newlines) into a callback for indvidual lines\n+ * where each individual line has no newline \\n characters.\n+ *\n+ * @param onLine The callback handler when a single line has been consumed from the input.\n+ */\n+class LineListener(onLine: String => Unit) {\n+  private var buffer = new StringBuilder()\n+  private def onCharacter(char: Char): Unit = {\n+    if (char == '\\n') {\n+      flush()\n+    } else {\n+      buffer.append(char)\n+    }\n+  }\n+\n+  /** Clear buffered output. */\n+  def flush(): Unit = {\n+    onLine(buffer.toString())\n+    buffer = new StringBuilder()\n+  }\n+\n+  /** Clear buffered output, if there exists any. */\n+  def flushIfNonEmpty(): Unit = {\n+    if (buffer.length() > 0) {\n+      flush()\n+    }\n+  }\n+\n+  def appendString(text: String): this.type = {\n+    appendBytes(\n+      StandardCharsets.UTF_8.encode(CharBuffer.wrap(text.toCharArray()))\n+    )\n+  }\n+\n+  def appendBytes(bytes: ByteBuffer): this.type = {\n+    val chars = StandardCharsets.UTF_8.decode(bytes)\n+    while (chars.hasRemaining()) {\n+      val ch = chars.get()\n+      // Strategy is, accumulate values as long as we're in a non-terminal state, then either discard\n+      // them if we reach T (which means we accumulated an ANSI escape sequence) or print them out if\n+      // we reach F.\n+      state.apply(ch) match {\n+        case F =>\n+          stack.foreach { i =>\n+            onCharacter(i)\n+          }\n+          onCharacter(ch)\n+          resetState()\n+        case T =>\n+          resetState()\n+        case L =>\n+          flush()\n+          resetState()\n+        case s =>"
+  }
+]

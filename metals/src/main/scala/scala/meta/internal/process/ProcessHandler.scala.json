@@ -1,0 +1,49 @@
+[
+  {
+    "id" : "39137087-497f-4a1f-ad55-71cc1fae6e2d",
+    "prId" : 1145,
+    "comments" : [
+      {
+        "id" : "00acc9ed-2ae0-4ddc-80ac-33ddf6cbcaf8",
+        "parentId" : null,
+        "author" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "body" : "doesn't `trySuccess` cover the condition already?",
+        "createdAt" : "2019-12-05T08:21:15Z",
+        "updatedAt" : "2019-12-05T11:14:30Z",
+        "lastEditedBy" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2b87c611-6756-484d-bf85-3acfcb12e26b",
+        "parentId" : "00acc9ed-2ae0-4ddc-80ac-33ddf6cbcaf8",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "This code is unchanged in this PR, it just moved causing a diff. Please open an issue if you want to follow up on this.",
+        "createdAt" : "2019-12-05T10:30:41Z",
+        "updatedAt" : "2019-12-05T11:14:30Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c032fa899f1747d53cf2025b6e1cf03227b19980",
+    "line" : 56,
+    "diffHunk" : "@@ -0,0 +1,72 @@\n+package scala.meta.internal.process\n+\n+import java.nio.ByteBuffer\n+import java.util.concurrent.CompletableFuture\n+import java.util.concurrent.TimeUnit\n+import com.zaxxer.nuprocess.NuAbstractProcessHandler\n+import com.zaxxer.nuprocess.NuProcess\n+import scala.concurrent.Promise\n+import scala.meta.internal.ansi.LineListener\n+\n+object ProcessHandler {\n+  def apply(\n+      joinErrorWithInfo: Boolean\n+  ): ProcessHandler = {\n+    val stdout = new LineListener(line => scribe.info(line))\n+    val stderr =\n+      if (joinErrorWithInfo) stdout\n+      else new LineListener(line => scribe.error(line))\n+    new ProcessHandler(stdout, stderr)\n+  }\n+\n+  /**\n+   * First tries to destroy the process gracefully, with fallback to forcefully.\n+   */\n+  def destroyProcess(process: NuProcess): Unit = {\n+    process.destroy(false)\n+    val exit = process.waitFor(2, TimeUnit.SECONDS)\n+    if (exit == Integer.MIN_VALUE) {\n+      // timeout exceeded, kill process forcefully.\n+      process.destroy(true)\n+      process.waitFor(2, TimeUnit.SECONDS)\n+    }\n+  }\n+}\n+\n+/**\n+ * Converts running system processing into Future[BloopInstallResult].\n+ */\n+class ProcessHandler(\n+    val stdout: LineListener,\n+    val stderr: LineListener\n+) extends NuAbstractProcessHandler {\n+  var response: Option[CompletableFuture[_]] = None\n+  val completeProcess: Promise[Int] =\n+    Promise[Int]()\n+\n+  override def onStart(nuProcess: NuProcess): Unit = {\n+    nuProcess.closeStdin(false)\n+  }\n+\n+  override def onExit(statusCode: Int): Unit = {\n+    stdout.flushIfNonEmpty()\n+    stderr.flushIfNonEmpty()\n+    if (!completeProcess.isCompleted) {\n+      completeProcess.trySuccess(statusCode)\n+    }"
+  }
+]

@@ -1,0 +1,311 @@
+[
+  {
+    "id" : "9c7baa03-073f-4867-a0f4-2b054dffddb0",
+    "prId" : 1466,
+    "comments" : [
+      {
+        "id" : "5aa23f63-b852-43d0-938d-79621c966928",
+        "parentId" : null,
+        "author" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "body" : "Could you split the method somehow?",
+        "createdAt" : "2020-03-18T09:31:18Z",
+        "updatedAt" : "2020-04-03T11:50:57Z",
+        "lastEditedBy" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "7014afb0-4197-4f77-8b4c-cc25efecddaf",
+        "parentId" : "5aa23f63-b852-43d0-938d-79621c966928",
+        "author" : {
+          "login" : "alekseiAlefirov",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/10850363?v=4"
+        },
+        "body" : "I've moved finding class and build target data into new class `BuildTargetClassesFinder`.\r\n`findMainClassAndItsBuildTarget` and `findTestClassAndItsBuildTarget` can also probably can be refactored, especially since they follow the same scenario, just main/test is different, but I'm a bit afraid, it eventually get complex-easy (instead of a simple-hard).",
+        "createdAt" : "2020-03-20T16:58:32Z",
+        "updatedAt" : "2020-04-03T11:50:57Z",
+        "lastEditedBy" : {
+          "login" : "alekseiAlefirov",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/10850363?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "d72fc182a42fd127dd0593dfbb3028ac615338b9",
+    "line" : null,
+    "diffHunk" : "@@ -105,6 +112,155 @@ object DebugServer {\n     }\n   }\n \n+  def resolveMainClassParams(\n+      params: DebugUnresolvedMainClassParams,\n+      buildTargets: BuildTargets,\n+      buildTargetClasses: BuildTargetClasses,\n+      showWarningMessage: String => Unit\n+  ): Try[b.DebugSessionParams] = {\n+    val classAndTarget = Option(params.buildTarget).fold {\n+      val classes =\n+        buildTargetClasses.findMainClassByName(params.mainClass)\n+      if (classes.nonEmpty) Success {\n+        val classAndTarget = classes.head\n+        if (classes.length > 1) {\n+          val className = classAndTarget._1.getClassName()\n+          val targetName =\n+            buildTargets.info(classAndTarget._2).get.getDisplayName\n+          val anotherTargets = classes.tail\n+            .map {\n+              case (_, id) =>\n+                buildTargets.info(id).get.getDisplayName\n+            }\n+          showWarningMessage(\n+            UnresolvedDebugSessionParams\n+              .runningClassMultipleBuildTargetsMessage(\n+                className,\n+                targetName,\n+                anotherTargets,\n+                \"main\"\n+              )\n+          )\n+        }\n+        classAndTarget\n+      }\n+      else\n+        Failure(new ClassNotFoundException(params.mainClass))\n+    } { targetName =>\n+      buildTargets\n+        .findByDisplayName(targetName)\n+        .fold {\n+          Failure[(b.ScalaMainClass, b.BuildTargetIdentifier)](\n+            new BuildTargetNotFoundException(targetName)\n+          ): Try[(b.ScalaMainClass, b.BuildTargetIdentifier)]\n+        } { target =>\n+          buildTargetClasses\n+            .classesOf(target.getId())\n+            .mainClasses\n+            .values\n+            .find(\n+              _.getClassName == params.mainClass\n+            )\n+            .fold {\n+              Failure[(b.ScalaMainClass, b.BuildTargetIdentifier)](\n+                new ClassNotFoundInBuildTargetException(\n+                  params.mainClass,\n+                  targetName\n+                )\n+              ): Try[(b.ScalaMainClass, b.BuildTargetIdentifier)]\n+            } { clazz => Success(clazz -> target.getId()) }\n+        }\n+    }\n+    classAndTarget.map {\n+      case (clazz, target) =>\n+        clazz.setArguments(Option(params.args).getOrElse(List().asJava))\n+        clazz.setJvmOptions(Option(params.jvmOptions).getOrElse(List().asJava))\n+        val dataKind =\n+          b.DebugSessionParamsDataKind.SCALA_MAIN_CLASS\n+        val data = clazz.toJson\n+        new b.DebugSessionParams(\n+          singletonList(target),\n+          dataKind,\n+          data\n+        )\n+    }\n+  }"
+  },
+  {
+    "id" : "ed723417-347a-47ec-adae-8766ab32fc3f",
+    "prId" : 1466,
+    "comments" : [
+      {
+        "id" : "f5d2fc25-da0d-4f82-af54-6e204b618dc1",
+        "parentId" : null,
+        "author" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "body" : "Could you split the method somehow?\r\n\r\n",
+        "createdAt" : "2020-03-18T09:31:47Z",
+        "updatedAt" : "2020-04-03T11:50:57Z",
+        "lastEditedBy" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "ab121865-701a-441b-9401-fca0a6d93288",
+        "parentId" : "f5d2fc25-da0d-4f82-af54-6e204b618dc1",
+        "author" : {
+          "login" : "alekseiAlefirov",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/10850363?v=4"
+        },
+        "body" : "> I've moved finding class and build target data into new class BuildTargetClassesFinder.\r\nfindMainClassAndItsBuildTarget and findTestClassAndItsBuildTarget can also probably can be refactored, especially since they follow the same scenario, just main/test is different, but I'm a bit afraid, it eventually get complex-easy (instead of a simple-hard).",
+        "createdAt" : "2020-03-20T16:59:23Z",
+        "updatedAt" : "2020-04-03T11:50:57Z",
+        "lastEditedBy" : {
+          "login" : "alekseiAlefirov",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/10850363?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "d72fc182a42fd127dd0593dfbb3028ac615338b9",
+    "line" : null,
+    "diffHunk" : "@@ -105,6 +112,155 @@ object DebugServer {\n     }\n   }\n \n+  def resolveMainClassParams(\n+      params: DebugUnresolvedMainClassParams,\n+      buildTargets: BuildTargets,\n+      buildTargetClasses: BuildTargetClasses,\n+      showWarningMessage: String => Unit\n+  ): Try[b.DebugSessionParams] = {\n+    val classAndTarget = Option(params.buildTarget).fold {\n+      val classes =\n+        buildTargetClasses.findMainClassByName(params.mainClass)\n+      if (classes.nonEmpty) Success {\n+        val classAndTarget = classes.head\n+        if (classes.length > 1) {\n+          val className = classAndTarget._1.getClassName()\n+          val targetName =\n+            buildTargets.info(classAndTarget._2).get.getDisplayName\n+          val anotherTargets = classes.tail\n+            .map {\n+              case (_, id) =>\n+                buildTargets.info(id).get.getDisplayName\n+            }\n+          showWarningMessage(\n+            UnresolvedDebugSessionParams\n+              .runningClassMultipleBuildTargetsMessage(\n+                className,\n+                targetName,\n+                anotherTargets,\n+                \"main\"\n+              )\n+          )\n+        }\n+        classAndTarget\n+      }\n+      else\n+        Failure(new ClassNotFoundException(params.mainClass))\n+    } { targetName =>\n+      buildTargets\n+        .findByDisplayName(targetName)\n+        .fold {\n+          Failure[(b.ScalaMainClass, b.BuildTargetIdentifier)](\n+            new BuildTargetNotFoundException(targetName)\n+          ): Try[(b.ScalaMainClass, b.BuildTargetIdentifier)]\n+        } { target =>\n+          buildTargetClasses\n+            .classesOf(target.getId())\n+            .mainClasses\n+            .values\n+            .find(\n+              _.getClassName == params.mainClass\n+            )\n+            .fold {\n+              Failure[(b.ScalaMainClass, b.BuildTargetIdentifier)](\n+                new ClassNotFoundInBuildTargetException(\n+                  params.mainClass,\n+                  targetName\n+                )\n+              ): Try[(b.ScalaMainClass, b.BuildTargetIdentifier)]\n+            } { clazz => Success(clazz -> target.getId()) }\n+        }\n+    }\n+    classAndTarget.map {\n+      case (clazz, target) =>\n+        clazz.setArguments(Option(params.args).getOrElse(List().asJava))\n+        clazz.setJvmOptions(Option(params.jvmOptions).getOrElse(List().asJava))\n+        val dataKind =\n+          b.DebugSessionParamsDataKind.SCALA_MAIN_CLASS\n+        val data = clazz.toJson\n+        new b.DebugSessionParams(\n+          singletonList(target),\n+          dataKind,\n+          data\n+        )\n+    }\n+  }\n+\n+  def resolveTestClassParams(\n+      params: DebugUnresolvedTestClassParams,\n+      buildTargets: BuildTargets,\n+      buildTargetClasses: BuildTargetClasses,\n+      showWarningMessage: String => Unit\n+  ): Try[b.DebugSessionParams] = {\n+    val classAndTarget = Option(params.buildTarget).fold {\n+      val classes =\n+        buildTargetClasses.findTestClassByName(params.testClass)\n+      if (classes.nonEmpty) Success {\n+        val classAndTarget = classes.head\n+        if (classes.length > 1) {\n+          val targetName =\n+            buildTargets.info(classAndTarget._2).get.getDisplayName\n+          val anotherTargets = classes.tail\n+            .map {\n+              case (_, id) =>\n+                buildTargets.info(id).get.getDisplayName\n+            }\n+          showWarningMessage(\n+            UnresolvedDebugSessionParams\n+              .runningClassMultipleBuildTargetsMessage(\n+                classAndTarget._1,\n+                targetName,\n+                anotherTargets,\n+                \"test\"\n+              )\n+          )\n+        }\n+        classAndTarget\n+      }\n+      else\n+        Failure(new ClassNotFoundException(params.testClass))\n+    } { targetName =>\n+      buildTargets\n+        .findByDisplayName(targetName)\n+        .fold {\n+          Failure[(String, b.BuildTargetIdentifier)](\n+            new BuildTargetNotFoundException(targetName)\n+          ): Try[(String, b.BuildTargetIdentifier)]\n+        } { target =>\n+          buildTargetClasses\n+            .classesOf(target.getId())\n+            .testClasses\n+            .values\n+            .find(\n+              _ == params.testClass\n+            )\n+            .fold {\n+              Failure[(String, b.BuildTargetIdentifier)](\n+                new ClassNotFoundInBuildTargetException(\n+                  params.testClass,\n+                  targetName\n+                )\n+              ): Try[(String, b.BuildTargetIdentifier)]\n+            } { clazz =>\n+              Success(\n+                clazz -> target.getId()\n+              )\n+            }\n+        }\n+    }\n+    classAndTarget.map {\n+      case (clazz, target) =>\n+        val dataKind =\n+          b.DebugSessionParamsDataKind.SCALA_TEST_SUITES\n+        val data = singletonList(clazz).toJson\n+        new b.DebugSessionParams(\n+          singletonList(target),\n+          dataKind,\n+          data\n+        )\n+    }\n+  }"
+  },
+  {
+    "id" : "ea5e469c-ca67-4dc5-a34b-a9fdda9bc897",
+    "prId" : 1466,
+    "comments" : [
+      {
+        "id" : "d2f767da-961c-42af-845a-f15324175e5f",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "`BuildTargetNotFoundException` will not be needed here. User would need reimport the build to change them.",
+        "createdAt" : "2020-03-30T15:36:24Z",
+        "updatedAt" : "2020-04-03T11:50:57Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "8385bf19-3300-4e09-9c0a-b2aade63c547",
+        "parentId" : "d2f767da-961c-42af-845a-f15324175e5f",
+        "author" : {
+          "login" : "alekseiAlefirov",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/10850363?v=4"
+        },
+        "body" : "good one, fixed",
+        "createdAt" : "2020-03-31T14:23:10Z",
+        "updatedAt" : "2020-04-03T11:50:57Z",
+        "lastEditedBy" : {
+          "login" : "alekseiAlefirov",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/10850363?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "d72fc182a42fd127dd0593dfbb3028ac615338b9",
+    "line" : null,
+    "diffHunk" : "@@ -133,6 +221,42 @@ object DebugServer {\n     socket\n   }\n \n+  private def withRebuildRetry[A](\n+      f: () => Try[A],\n+      compilations: Compilations,\n+      buildTargets: BuildTargets,\n+      buildTargetClasses: BuildTargetClasses\n+  )(implicit ec: ExecutionContext): Future[A] = {\n+    Future.fromTry(f()).recoverWith {\n+      case _: ClassNotFoundException | _: BuildTargetNotFoundException =>"
+  },
+  {
+    "id" : "14994404-11bc-4652-b54e-66ec2041f1ce",
+    "prId" : 1466,
+    "comments" : [
+      {
+        "id" : "c47d821d-1c8e-4246-97ef-a786e39e5cf1",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Let's maybe move these new methods to `BuildTargetClassesFinder` with other than `params` method parameters added to the constructor? Also, with client instead of showWarningMessage.",
+        "createdAt" : "2020-03-30T15:39:51Z",
+        "updatedAt" : "2020-04-03T11:50:57Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "8476d880-e4c6-431d-943e-1aadf0b882f1",
+        "parentId" : "c47d821d-1c8e-4246-97ef-a786e39e5cf1",
+        "author" : {
+          "login" : "alekseiAlefirov",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/10850363?v=4"
+        },
+        "body" : "I am not sure. This method takes some debug parameters to resolve them to other parameters and reports about running debug on one class, if multiple found. So it's more about debug, then about finding, which is extracted to `Finder`",
+        "createdAt" : "2020-03-31T14:25:05Z",
+        "updatedAt" : "2020-04-03T11:50:57Z",
+        "lastEditedBy" : {
+          "login" : "alekseiAlefirov",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/10850363?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "d8782969-97cd-4086-bcdc-ec8aba7dde58",
+        "parentId" : "c47d821d-1c8e-4246-97ef-a786e39e5cf1",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Then maybe this should not actually be an object but maybe `DebugProvider`  class? Start also takes a lot of parameters, which are not specific to the actual function invocation.",
+        "createdAt" : "2020-03-31T15:49:13Z",
+        "updatedAt" : "2020-04-03T11:50:57Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "886d3256-df76-41f3-be31-682eebff7494",
+        "parentId" : "c47d821d-1c8e-4246-97ef-a786e39e5cf1",
+        "author" : {
+          "login" : "alekseiAlefirov",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/10850363?v=4"
+        },
+        "body" : "`DebugProvider` class created, all code from `DebugServer` object moved to it.",
+        "createdAt" : "2020-03-31T18:53:11Z",
+        "updatedAt" : "2020-04-03T11:50:57Z",
+        "lastEditedBy" : {
+          "login" : "alekseiAlefirov",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/10850363?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "d72fc182a42fd127dd0593dfbb3028ac615338b9",
+    "line" : null,
+    "diffHunk" : "@@ -105,6 +114,85 @@ object DebugServer {\n     }\n   }\n \n+  def resolveMainClassParams(\n+      params: DebugUnresolvedMainClassParams,\n+      buildTargetClassesFinder: BuildTargetClassesFinder,"
+  },
+  {
+    "id" : "00dcb91a-efa7-4e65-ae00-429ce6a632b1",
+    "prId" : 1466,
+    "comments" : [
+      {
+        "id" : "b7ba0128-15b3-4cfb-ace6-64c57e8f526a",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "I think even if we manage to find the build target we should still run compile on it.\r\n\r\nSo, do the same, but on single target first. If that fails, compile all targets.",
+        "createdAt" : "2020-03-30T15:49:09Z",
+        "updatedAt" : "2020-04-03T11:50:57Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "2cb245b7-97b8-4cfd-8900-14812b83f5b1",
+        "parentId" : "b7ba0128-15b3-4cfb-ace6-64c57e8f526a",
+        "author" : {
+          "login" : "alekseiAlefirov",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/10850363?v=4"
+        },
+        "body" : "sure, added narrowed recovery for `ClassNotFoundInBuildTargetException`",
+        "createdAt" : "2020-03-31T14:26:07Z",
+        "updatedAt" : "2020-04-03T11:50:57Z",
+        "lastEditedBy" : {
+          "login" : "alekseiAlefirov",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/10850363?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "d72fc182a42fd127dd0593dfbb3028ac615338b9",
+    "line" : null,
+    "diffHunk" : "@@ -133,6 +221,42 @@ object DebugServer {\n     socket\n   }\n \n+  private def withRebuildRetry[A](\n+      f: () => Try[A],\n+      compilations: Compilations,\n+      buildTargets: BuildTargets,\n+      buildTargetClasses: BuildTargetClasses\n+  )(implicit ec: ExecutionContext): Future[A] = {\n+    Future.fromTry(f()).recoverWith {\n+      case _: ClassNotFoundException | _: BuildTargetNotFoundException =>\n+        val allTargets = buildTargets.all.toSeq.map(_.info.getId())\n+        for {\n+          _ <- compilations.compileTargets(allTargets)"
+  }
+]

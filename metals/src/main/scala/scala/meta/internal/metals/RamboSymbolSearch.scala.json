@@ -1,0 +1,64 @@
+[
+  {
+    "id" : "aee43752-878e-44b9-bc2b-ae1d102f3c59",
+    "prId" : 1507,
+    "comments" : [
+      {
+        "id" : "6237c125-25c6-4320-bc9e-f2e10a011df2",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Let's move this to the `Embedded` object where we download other jars. We should also update the `DownloadDependencies` class to cache scala-library sources.",
+        "createdAt" : "2020-03-18T11:50:33Z",
+        "updatedAt" : "2020-03-18T17:05:15Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "bc5ad5a4d7f4d65dd1e932b52c1df0195974cc29",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,86 @@\n+package scala.meta.internal.metals\n+\n+import scala.meta.pc.SymbolSearch\n+import scala.meta.pc.SymbolDocumentation\n+import java.{util => ju}\n+import org.eclipse.lsp4j.Location\n+import scala.meta.pc.SymbolSearchVisitor\n+import scala.meta.pc.SymbolSearch.Result\n+\n+import coursierapi.Dependency\n+import coursierapi.Fetch\n+import scala.meta.internal.mtags.OnDemandSymbolIndex\n+import scala.meta.io.AbsolutePath\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.internal.mtags.Symbol\n+import scala.collection.concurrent.TrieMap\n+import scala.meta.internal.mtags.Mtags\n+\n+class RamboSymbolSearch(workspace: AbsolutePath) extends SymbolSearch {\n+\n+  private val dependencySourceCache =\n+    new TrieMap[AbsolutePath, ju.List[String]]()\n+\n+  private val scalaVersion = BuildInfo.scala212\n+\n+  private val fetch = Fetch"
+  },
+  {
+    "id" : "64647651-4c26-4658-88a9-ef0bfeca90e0",
+    "prId" : 1507,
+    "comments" : [
+      {
+        "id" : "ac478ef1-240f-4a86-936a-80bebff468b5",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "This logic looks duplicated from some other location, could we share the code somehow?",
+        "createdAt" : "2020-03-18T11:51:18Z",
+        "updatedAt" : "2020-03-18T17:05:15Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "bc5ad5a4d7f4d65dd1e932b52c1df0195974cc29",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,86 @@\n+package scala.meta.internal.metals\n+\n+import scala.meta.pc.SymbolSearch\n+import scala.meta.pc.SymbolDocumentation\n+import java.{util => ju}\n+import org.eclipse.lsp4j.Location\n+import scala.meta.pc.SymbolSearchVisitor\n+import scala.meta.pc.SymbolSearch.Result\n+\n+import coursierapi.Dependency\n+import coursierapi.Fetch\n+import scala.meta.internal.mtags.OnDemandSymbolIndex\n+import scala.meta.io.AbsolutePath\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.internal.mtags.Symbol\n+import scala.collection.concurrent.TrieMap\n+import scala.meta.internal.mtags.Mtags\n+\n+class RamboSymbolSearch(workspace: AbsolutePath) extends SymbolSearch {\n+\n+  private val dependencySourceCache =\n+    new TrieMap[AbsolutePath, ju.List[String]]()\n+\n+  private val scalaVersion = BuildInfo.scala212\n+\n+  private val fetch = Fetch\n+    .create()\n+    .withMainArtifacts()\n+    .withClassifiers(Set(\"sources\", \"_\").asJava)\n+    .withDependencies(\n+      Dependency.of(\"org.scala-lang\", \"scala-library\", scalaVersion)\n+    )\n+\n+  private val jars = fetch\n+    .fetch()\n+    .asScala\n+    .map(file => AbsolutePath(file.toPath))\n+\n+  private val (sources, classpath) =\n+    jars.partition(_.toString.endsWith(\"-sources.jar\"))\n+\n+  private val scalaDependency =\n+    ClasspathSearch.fromClasspath(classpath.toList.map(_.toNIO))\n+\n+  private val index = OnDemandSymbolIndex()\n+  sources.foreach(index.addSourceJar)\n+\n+  private val docs = new Docstrings(index)\n+\n+  def documentation(symbol: String): ju.Optional[SymbolDocumentation] =\n+    docs.documentation(symbol)\n+\n+  def definition(x: String): ju.List[Location] = {\n+    index\n+      .definition(Symbol(x))\n+      .map { definition =>\n+        val destinationPath = definition.path.toFileOnDisk(workspace)"
+  }
+]

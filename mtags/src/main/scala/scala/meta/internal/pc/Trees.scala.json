@@ -1,0 +1,30 @@
+[
+  {
+    "id" : "f4959e56-b23b-4d9b-b742-015aaf50a067",
+    "prId" : 978,
+    "comments" : [
+      {
+        "id" : "aee05af3-dc90-412c-8557-81acc7f2c586",
+        "parentId" : null,
+        "author" : {
+          "login" : "alekseiAlefirov",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/10850363?v=4"
+        },
+        "body" : "no longer just `Hover`, probably",
+        "createdAt" : "2020-04-02T13:02:43Z",
+        "updatedAt" : "2020-04-02T17:08:31Z",
+        "lastEditedBy" : {
+          "login" : "alekseiAlefirov",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/10850363?v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "316b10f8dae0939ba80f4ffb8eb60ae0b0fad9ea",
+    "line" : 63,
+    "diffHunk" : "@@ -0,0 +1,86 @@\n+package scala.meta.internal.pc\n+\n+import scala.meta.pc.OffsetParams\n+\n+trait Trees { this: MetalsGlobal =>\n+\n+  lazy val isForName: Set[Name] = Set[Name](\n+    nme.map,\n+    nme.withFilter,\n+    nme.flatMap,\n+    nme.foreach\n+  )\n+\n+  def createCompilationUnit(\n+      params: OffsetParams\n+  ): (RichCompilationUnit, Position, Tree) = {\n+    val unit = addCompilationUnit(\n+      code = params.text(),\n+      filename = params.filename(),\n+      cursor = None\n+    )\n+    val pos = unit.position(params.offset())\n+    val tree = typedHoverTreeAt(pos)\n+    (unit, pos, tree)\n+  }\n+\n+  def expandRangeToEnclosingApply(pos: Position): Tree = {\n+    def tryTail(enclosing: List[Tree]): Option[Tree] = enclosing match {\n+      case TreeApply(qual, _) :: tail if qual.pos.includes(pos) =>\n+        tryTail(tail).orElse(Some(enclosing.head))\n+      case (_: New) :: (_: Select) :: next =>\n+        tryTail(next)\n+      case _ =>\n+        None\n+    }\n+\n+    lastVisistedParentTrees match {\n+      case head :: tail =>\n+        tryTail(tail) match {\n+          case Some(value) =>\n+            typedTreeAt(value.pos)\n+          case None =>\n+            head\n+        }\n+      case _ =>\n+        EmptyTree\n+    }\n+  }\n+\n+  def isForSynthetic(gtree: Tree): Boolean = {\n+    def isForComprehensionSyntheticName(select: Select): Boolean = {\n+      select.pos == select.qualifier.pos && isForName(select.name)\n+    }\n+\n+    gtree match {\n+      case Apply(fun, List(_: Function)) => isForSynthetic(fun)\n+      case TypeApply(fun, _) => isForSynthetic(fun)\n+      case gtree: Select if isForComprehensionSyntheticName(gtree) => true\n+      case _ => false\n+    }\n+  }\n+\n+  def typedHoverTreeAt(pos: Position): Tree = {"
+  }
+]

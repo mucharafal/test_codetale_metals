@@ -1,0 +1,49 @@
+[
+  {
+    "id" : "22861a3c-bec5-4439-a563-435d5f4c394a",
+    "prId" : 1590,
+    "comments" : [
+      {
+        "id" : "e72ebd18-8469-46d3-a467-7f00eb7e81a7",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Shouldn't we try to change both files to contain new names and assert that both new names are picked up from another file after only compiling `a`?\r\n\r\nI think that would test the same thing and not require the additional `loadedPresentationCompilerCount`",
+        "createdAt" : "2020-04-08T13:19:39Z",
+        "updatedAt" : "2020-04-08T13:23:08Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "9d707aaf-0f10-4ee0-8e3b-b19294fd2467",
+        "parentId" : "e72ebd18-8469-46d3-a467-7f00eb7e81a7",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "I agree with the principle that we should reproduce the user-facing situation instead of testing against implementation details. My concern with reproducing the exact scenario is that we'll end up with a flaky test. \r\n\r\nIt's critical that we reset the presentation compiler for getting good user experience and I think it will be helpful in the future to have `isLoaded()` as a toolkit to test related fixes. \r\n\r\n\r\n",
+        "createdAt" : "2020-04-08T13:40:04Z",
+        "updatedAt" : "2020-04-08T13:40:04Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "cde53f30621ebb2fd6e640b81e837fb5f4e5dabf",
+    "line" : 49,
+    "diffHunk" : "@@ -0,0 +1,52 @@\n+package tests\n+\n+import scala.concurrent.Future\n+\n+class CompilersLspSuite extends BaseCompletionLspSuite(\"compilers\") {\n+  test(\"reset-pc\") {\n+    cleanWorkspace()\n+    for {\n+      _ <- server.initialize(\n+        \"\"\"/metals.json\n+          |{\n+          |  \"a\": {},\n+          |  \"b\": { \"dependsOn\": [\"a\"] }\n+          |}\n+          |/a/src/main/scala/a/A.scala\n+          |package a\n+          |object A {\n+          |  // @@\n+          |  def completeThisUniqueName() = 42\n+          |}\n+          |/b/src/main/scala/b/B.scala\n+          |package b\n+          |object B {\n+          |  // @@\n+          |  def completeThisUniqueName() = 42\n+          |}\n+          |\"\"\".stripMargin\n+      )\n+      _ <- server.didOpen(\"a/src/main/scala/a/A.scala\")\n+      _ <- server.didOpen(\"b/src/main/scala/b/B.scala\")\n+      _ = assertNoDiagnostics()\n+      _ <- Future.sequence(\n+        List('a', 'b').map(project =>\n+          assertCompletion(\n+            \"completeThisUniqueNa@@\",\n+            \"completeThisUniqueName(): Int\",\n+            project = project\n+          )\n+        )\n+      )\n+      _ = assertEquals(2, server.server.loadedPresentationCompilerCount())\n+      _ <- server.didSave(\"b/src/main/scala/b/B.scala\")(_ =>\n+        \"package b; object B\"\n+      )\n+      _ <- server.didSave(\"a/src/main/scala/a/A.scala\")(_ =>\n+        \"package a; object A\"\n+      )\n+      _ = assertNoDiagnostics()\n+      _ = assertEquals(0, server.server.loadedPresentationCompilerCount())"
+  }
+]

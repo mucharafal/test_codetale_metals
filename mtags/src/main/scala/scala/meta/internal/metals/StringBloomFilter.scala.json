@@ -1,0 +1,161 @@
+[
+  {
+    "id" : "ad4182d7-51a1-4e74-9ceb-c8a9e2eb0de9",
+    "prId" : 792,
+    "comments" : [
+      {
+        "id" : "073c7dd1-d7c9-4046-a250-7d2af1dfe5a3",
+        "parentId" : null,
+        "author" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "body" : "could we use something else than `xx` ? maybe `hash64` ?",
+        "createdAt" : "2019-06-24T08:54:57Z",
+        "updatedAt" : "2019-06-24T14:17:49Z",
+        "lastEditedBy" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "e6e5513a-ea53-4c36-8caf-159fe3b84f20",
+        "parentId" : "073c7dd1-d7c9-4046-a250-7d2af1dfe5a3",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "renamed to `streamingHash`, the `xx64` was copy pasted from the lz4 docs 😅 ",
+        "createdAt" : "2019-06-24T14:12:56Z",
+        "updatedAt" : "2019-06-24T20:18:34Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "ece0028f633300c35b2ce322e42f85adf07c5c2d",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,115 @@\n+package scala.meta.internal.metals\n+\n+import net.jpountz.xxhash.XXHashFactory\n+import com.google.common.hash.BloomFilter\n+import com.google.common.hash.Funnels\n+\n+/**\n+ * A wrapper around a bloom filter that is optimized for fast insertions of\n+ * strings with shared prefixes.\n+ *\n+ * To index a classpath, Metals walks through all possible prefixes of a given\n+ * classfile path. For example, given the string \"InputStream.class\" Metals\n+ * builds a bloom filter containing the set of the following strings: I, In,\n+ * Inp, Inpu, Input, S, St, Str, Stre, Strea and Stream.\n+ *\n+ * The naive approach to construct a bloom filter of all those prefix strings\n+ * is to create a `BloomFilter[CharSequence]` and insert all those prefixes.\n+ * This approach has sub-optimal performance because it requires a quadratic\n+ * number of iterations on the characters of the classfile path.\n+ *\n+ * This class implements an optimized approach to build that bloom filter in a\n+ * way that requires only a linear pass on the characters of the classfile\n+ * path. The trick is to construct a `BloomFilter[Long]` instead of\n+ * `BloomFilter[CharSequence]` and incrementally build the hashcode of each\n+ * prefix string as we iterate over each character in the string.\n+ *\n+ * Additionally, this class exposes a `mightContain(Long)` method that speeds\n+ * up search queries by allowing the client to pre-compute the hash of the\n+ * query string and re-use `mightContain` calls to multiple bloom filters. For\n+ * every single fuzzy symbol search (which happens on every single scope\n+ * completion request) we usually perform several thousant bloom filter\n+ * `mightContain` calls so should also help avoid a non-trivial amount of\n+ * unnecessary hashing.\n+ */\n+class StringBloomFilter(estimatedSize: Int) {\n+  private val bloom: BloomFilter[java.lang.Long] =\n+    BloomFilter.create(Funnels.longFunnel(), Integer.valueOf(estimatedSize))\n+  // NOTE(olafur): we don't use the XXHashFactory.fastestInstance() instance\n+  // because the docstring warns about using the native hash instance in\n+  // applications where multiple isolated classloaders run on the same JVM,\n+  // which is the case in Metals where we isolate the mtags classloader for\n+  // Scala 2.11/2.12/2.13.\n+  private val factory = XXHashFactory.fastestJavaInstance()\n+  private val xx64 = factory.newStreamingHash64(1234)"
+  },
+  {
+    "id" : "3a1a1fd3-464d-4e22-90a3-7435b19cad58",
+    "prId" : 792,
+    "comments" : [
+      {
+        "id" : "76c9f4d2-c39a-48aa-93ca-c4d4f9bdb59a",
+        "parentId" : null,
+        "author" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "body" : "why not a `buffer`",
+        "createdAt" : "2019-06-24T08:55:07Z",
+        "updatedAt" : "2019-06-24T14:17:49Z",
+        "lastEditedBy" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "dfeba66a-979e-4025-865f-a4dc6ba41ccf",
+        "parentId" : "76c9f4d2-c39a-48aa-93ca-c4d4f9bdb59a",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Renamed to `buffer`. The lz4 API only accepts `Array[Byte]` in the `update()` method.",
+        "createdAt" : "2019-06-24T14:14:37Z",
+        "updatedAt" : "2019-06-24T20:18:34Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "ece0028f633300c35b2ce322e42f85adf07c5c2d",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,115 @@\n+package scala.meta.internal.metals\n+\n+import net.jpountz.xxhash.XXHashFactory\n+import com.google.common.hash.BloomFilter\n+import com.google.common.hash.Funnels\n+\n+/**\n+ * A wrapper around a bloom filter that is optimized for fast insertions of\n+ * strings with shared prefixes.\n+ *\n+ * To index a classpath, Metals walks through all possible prefixes of a given\n+ * classfile path. For example, given the string \"InputStream.class\" Metals\n+ * builds a bloom filter containing the set of the following strings: I, In,\n+ * Inp, Inpu, Input, S, St, Str, Stre, Strea and Stream.\n+ *\n+ * The naive approach to construct a bloom filter of all those prefix strings\n+ * is to create a `BloomFilter[CharSequence]` and insert all those prefixes.\n+ * This approach has sub-optimal performance because it requires a quadratic\n+ * number of iterations on the characters of the classfile path.\n+ *\n+ * This class implements an optimized approach to build that bloom filter in a\n+ * way that requires only a linear pass on the characters of the classfile\n+ * path. The trick is to construct a `BloomFilter[Long]` instead of\n+ * `BloomFilter[CharSequence]` and incrementally build the hashcode of each\n+ * prefix string as we iterate over each character in the string.\n+ *\n+ * Additionally, this class exposes a `mightContain(Long)` method that speeds\n+ * up search queries by allowing the client to pre-compute the hash of the\n+ * query string and re-use `mightContain` calls to multiple bloom filters. For\n+ * every single fuzzy symbol search (which happens on every single scope\n+ * completion request) we usually perform several thousant bloom filter\n+ * `mightContain` calls so should also help avoid a non-trivial amount of\n+ * unnecessary hashing.\n+ */\n+class StringBloomFilter(estimatedSize: Int) {\n+  private val bloom: BloomFilter[java.lang.Long] =\n+    BloomFilter.create(Funnels.longFunnel(), Integer.valueOf(estimatedSize))\n+  // NOTE(olafur): we don't use the XXHashFactory.fastestInstance() instance\n+  // because the docstring warns about using the native hash instance in\n+  // applications where multiple isolated classloaders run on the same JVM,\n+  // which is the case in Metals where we isolate the mtags classloader for\n+  // Scala 2.11/2.12/2.13.\n+  private val factory = XXHashFactory.fastestJavaInstance()\n+  private val xx64 = factory.newStreamingHash64(1234)\n+  // Chars are 16 bit so we need two bytes per character.\n+  private val array = new Array[Byte](2)"
+  },
+  {
+    "id" : "5bfa3138-974e-4867-bb7b-bc1711b1b2e9",
+    "prId" : 792,
+    "comments" : [
+      {
+        "id" : "27224009-74b3-4973-a4a1-52cb62de7772",
+        "parentId" : null,
+        "author" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "body" : "can we move this method closer to where it is used? (below the `putCharIncrementally`)\r\ncurrently it does not follow the \"granularity\"/abstraction level of other methods",
+        "createdAt" : "2019-06-24T08:57:37Z",
+        "updatedAt" : "2019-06-24T14:17:49Z",
+        "lastEditedBy" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "ed3bad3e-e9ef-4302-97b6-e71de1cdfea5",
+        "parentId" : "27224009-74b3-4973-a4a1-52cb62de7772",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Moved under `putCharIncrementally`",
+        "createdAt" : "2019-06-24T14:13:37Z",
+        "updatedAt" : "2019-06-24T20:18:34Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "ece0028f633300c35b2ce322e42f85adf07c5c2d",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,115 @@\n+package scala.meta.internal.metals\n+\n+import net.jpountz.xxhash.XXHashFactory\n+import com.google.common.hash.BloomFilter\n+import com.google.common.hash.Funnels\n+\n+/**\n+ * A wrapper around a bloom filter that is optimized for fast insertions of\n+ * strings with shared prefixes.\n+ *\n+ * To index a classpath, Metals walks through all possible prefixes of a given\n+ * classfile path. For example, given the string \"InputStream.class\" Metals\n+ * builds a bloom filter containing the set of the following strings: I, In,\n+ * Inp, Inpu, Input, S, St, Str, Stre, Strea and Stream.\n+ *\n+ * The naive approach to construct a bloom filter of all those prefix strings\n+ * is to create a `BloomFilter[CharSequence]` and insert all those prefixes.\n+ * This approach has sub-optimal performance because it requires a quadratic\n+ * number of iterations on the characters of the classfile path.\n+ *\n+ * This class implements an optimized approach to build that bloom filter in a\n+ * way that requires only a linear pass on the characters of the classfile\n+ * path. The trick is to construct a `BloomFilter[Long]` instead of\n+ * `BloomFilter[CharSequence]` and incrementally build the hashcode of each\n+ * prefix string as we iterate over each character in the string.\n+ *\n+ * Additionally, this class exposes a `mightContain(Long)` method that speeds\n+ * up search queries by allowing the client to pre-compute the hash of the\n+ * query string and re-use `mightContain` calls to multiple bloom filters. For\n+ * every single fuzzy symbol search (which happens on every single scope\n+ * completion request) we usually perform several thousant bloom filter\n+ * `mightContain` calls so should also help avoid a non-trivial amount of\n+ * unnecessary hashing.\n+ */\n+class StringBloomFilter(estimatedSize: Int) {\n+  private val bloom: BloomFilter[java.lang.Long] =\n+    BloomFilter.create(Funnels.longFunnel(), Integer.valueOf(estimatedSize))\n+  // NOTE(olafur): we don't use the XXHashFactory.fastestInstance() instance\n+  // because the docstring warns about using the native hash instance in\n+  // applications where multiple isolated classloaders run on the same JVM,\n+  // which is the case in Metals where we isolate the mtags classloader for\n+  // Scala 2.11/2.12/2.13.\n+  private val factory = XXHashFactory.fastestJavaInstance()\n+  private val xx64 = factory.newStreamingHash64(1234)\n+  // Chars are 16 bit so we need two bytes per character.\n+  private val array = new Array[Byte](2)\n+\n+  /** Resets the hash value. */\n+  def reset(): Unit = xx64.reset()\n+\n+  /** Returns the current hash value. */\n+  def value(): Long = xx64.getValue()\n+\n+  private def updateHashCode(char: Char): Unit = {"
+  }
+]

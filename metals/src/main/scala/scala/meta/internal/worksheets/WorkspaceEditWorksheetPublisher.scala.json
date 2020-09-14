@@ -1,0 +1,168 @@
+[
+  {
+    "id" : "54b74e27-0eaf-4bb6-9463-561d042c9ddb",
+    "prId" : 1089,
+    "comments" : [
+      {
+        "id" : "77465ed3-66b0-4db5-bda2-8886760c5423",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "let's move these to the toplevel, we're already in the worksheets package.",
+        "createdAt" : "2019-12-06T13:40:04Z",
+        "updatedAt" : "2019-12-06T16:11:03Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8e49ad82-e6f9-4bb9-a5a0-ea40646e85bc",
+        "parentId" : "77465ed3-66b0-4db5-bda2-8886760c5423",
+        "author" : {
+          "login" : "alekseiAlefirov",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/10850363?v=4"
+        },
+        "body" : "but `RenderResult` does not really make sense outside of the class, don't you think?",
+        "createdAt" : "2019-12-06T14:22:21Z",
+        "updatedAt" : "2019-12-06T16:11:03Z",
+        "lastEditedBy" : {
+          "login" : "alekseiAlefirov",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/10850363?v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c2b310420ce80e33b8c8e4977b94f75be9e4f986",
+    "line" : 167,
+    "diffHunk" : "@@ -0,0 +1,168 @@\n+package scala.meta.internal.worksheets\n+\n+import scala.meta.internal.metals.MetalsLanguageClient\n+import mdoc.interfaces.EvaluatedWorksheet\n+import scala.meta.io.AbsolutePath\n+import org.eclipse.lsp4j.WorkspaceEdit\n+import org.eclipse.lsp4j.ApplyWorkspaceEditParams\n+import org.eclipse.lsp4j.TextEdit\n+import org.eclipse.lsp4j.jsonrpc.messages.{Either => JEither}\n+import org.eclipse.lsp4j.MarkedString\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import mdoc.interfaces.EvaluatedWorksheetStatement\n+import scala.meta.inputs.Input\n+import org.eclipse.lsp4j.{Position, Range}\n+import scala.meta.internal.metals.Buffers\n+import org.eclipse.lsp4j.Hover\n+import scala.meta.internal.metals.TokenEditDistance\n+import WorkspaceEditWorksheetPublisher._\n+\n+class WorkspaceEditWorksheetPublisher(buffers: Buffers)\n+    extends WorksheetPublisher {\n+\n+  private var hoverMessages = Map.empty[AbsolutePath, HoverMap]\n+\n+  override def publish(\n+      languageClient: MetalsLanguageClient,\n+      path: AbsolutePath,\n+      worksheet: EvaluatedWorksheet\n+  ): Unit = {\n+    (render(path) _ andThen publish(path, languageClient))(worksheet)\n+  }\n+\n+  override def hover(path: AbsolutePath, position: Position): Option[Hover] = {\n+    for {\n+      messages <- hoverMessages.get(path)\n+      distance = TokenEditDistance.fromBuffer(\n+        path,\n+        messages.textSnapshot,\n+        buffers\n+      )\n+      snapshotPosition <- distance\n+        .toOriginal(position.getLine(), position.getCharacter())\n+        .toPosition(position)\n+      message <- getHoverMessage(snapshotPosition, messages.hovers)\n+    } yield\n+      new Hover(\n+        List(\n+          JEither.forRight[String, MarkedString](\n+            new MarkedString(\"scala\", message)\n+          )\n+        ).asJava\n+      )\n+  }\n+\n+  private def render(\n+      path: AbsolutePath\n+  )(worksheet: EvaluatedWorksheet): RenderResult = {\n+    val source = path.toInputFromBuffers(buffers)\n+    val editsWithDetails =\n+      worksheet.statements.asScala\n+        .map(statement => renderEdit(statement, source))\n+\n+    val edits =\n+      editsWithDetails.map(ed => new TextEdit(ed.range, ed.text)).toList\n+    val hovers = editsWithDetails.map(\n+      ed =>\n+        HoverMessage(\n+          ed.range\n+            .copy(endCharacter = ed.range.getEnd.getCharacter + ed.text.length),\n+          ed.details\n+        )\n+    )\n+    val hoverMap = HoverMap(updateWithEdits(source.text, edits), hovers)\n+\n+    RenderResult(edits, hoverMap)\n+  }\n+\n+  private def publish(\n+      path: AbsolutePath,\n+      languageClient: MetalsLanguageClient\n+  )(rendered: RenderResult): Unit = {\n+    hoverMessages = hoverMessages.updated(path, rendered.hovers)\n+\n+    val params = new ApplyWorkspaceEditParams(\n+      new WorkspaceEdit(\n+        Map(path.toURI.toString -> (rendered.edits.asJava)).asJava\n+      )\n+    )\n+    languageClient.applyEdit(params)\n+  }\n+\n+  private def renderEdit(\n+      statement: EvaluatedWorksheetStatement,\n+      source: Input\n+  ): RenderEditResult = {\n+    val startPosition =\n+      new Position(statement.position.endLine, statement.position.endColumn)\n+    val endPosition =\n+      locatePreviousEdit(statement, source).getOrElse(startPosition)\n+\n+    RenderEditResult(\n+      new Range(startPosition, endPosition),\n+      renderMessage(statement),\n+      statement.details()\n+    )\n+  }\n+\n+  private def renderMessage(statement: EvaluatedWorksheetStatement): String = {\n+    import statement._\n+    val out = new StringBuilder()\n+    out.append(\"  /*>  \")\n+    out.append(summary())\n+    out.append(if (!isSummaryComplete()) \"...\" else \"\")\n+    out.append(\"  */\")\n+    out.result()\n+  }\n+\n+  private def locatePreviousEdit(\n+      statement: EvaluatedWorksheetStatement,\n+      source: Input\n+  ): Option[Position] = {\n+    val editPattern = \"\"\"\\A\\s*/\\*>[\\S\\s]*?\\*/\"\"\".r\n+    val offset = source.lineToOffset(statement.position.endLine) + statement.position.endColumn\n+    val text = source.text.drop(offset)\n+    editPattern\n+      .findFirstMatchIn(text)\n+      .map(m => {\n+        val p = source.toOffsetPosition(offset + m.end)\n+        new Position(p.endLine, p.endColumn)\n+      })\n+  }\n+\n+  private def getHoverMessage(\n+      position: Position,\n+      hovers: Seq[HoverMessage]\n+  ): Option[String] = {\n+    hovers.find(_.range.encloses(position)).map(_.message)\n+  }\n+\n+  private def updateWithEdits(text: String, edits: List[TextEdit]): String = {\n+    val editsMap = edits.map(e => e.getRange().getStart().getLine() -> e).toMap\n+\n+    text.lines.zipWithIndex\n+      .map {\n+        case (line, i) =>\n+          editsMap.get(i) match {\n+            case Some(edit) =>\n+              val before =\n+                line.substring(0, edit.getRange.getStart.getCharacter)\n+              val after = line.substring(edit.getRange.getEnd.getCharacter)\n+              before + edit.getNewText() + after\n+            case None => line\n+          }\n+      }\n+      .mkString(\"\\n\")\n+  }\n+\n+}\n+\n+object WorkspaceEditWorksheetPublisher {\n+\n+  case class HoverMessage(range: Range, message: String)"
+  },
+  {
+    "id" : "7f4e63b7-b05e-413f-a5ca-554c3b9fc9db",
+    "prId" : 1089,
+    "comments" : [
+      {
+        "id" : "4c752d4e-20ef-4467-a789-7d43d9b5d3e0",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "nit: let's avoid infix operations `a op b` for non-symbol operators. I'm not sure what the correct refactoring is but something like this below would be easier to read\r\n\r\n```suggestion\r\n    publish(path, languageClient, render(path, worksheet))\r\n```",
+        "createdAt" : "2019-12-06T13:41:58Z",
+        "updatedAt" : "2019-12-06T16:11:03Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "d8c731af-f28b-440c-8e3c-c98e18434f9a",
+        "parentId" : "4c752d4e-20ef-4467-a789-7d43d9b5d3e0",
+        "author" : {
+          "login" : "alekseiAlefirov",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/10850363?v=4"
+        },
+        "body" : "done. Named `rendered` result and then passed it to `publish`",
+        "createdAt" : "2019-12-06T16:14:30Z",
+        "updatedAt" : "2019-12-06T16:14:30Z",
+        "lastEditedBy" : {
+          "login" : "alekseiAlefirov",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/10850363?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "c2b310420ce80e33b8c8e4977b94f75be9e4f986",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,168 @@\n+package scala.meta.internal.worksheets\n+\n+import scala.meta.internal.metals.MetalsLanguageClient\n+import mdoc.interfaces.EvaluatedWorksheet\n+import scala.meta.io.AbsolutePath\n+import org.eclipse.lsp4j.WorkspaceEdit\n+import org.eclipse.lsp4j.ApplyWorkspaceEditParams\n+import org.eclipse.lsp4j.TextEdit\n+import org.eclipse.lsp4j.jsonrpc.messages.{Either => JEither}\n+import org.eclipse.lsp4j.MarkedString\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import mdoc.interfaces.EvaluatedWorksheetStatement\n+import scala.meta.inputs.Input\n+import org.eclipse.lsp4j.{Position, Range}\n+import scala.meta.internal.metals.Buffers\n+import org.eclipse.lsp4j.Hover\n+import scala.meta.internal.metals.TokenEditDistance\n+import WorkspaceEditWorksheetPublisher._\n+\n+class WorkspaceEditWorksheetPublisher(buffers: Buffers)\n+    extends WorksheetPublisher {\n+\n+  private var hoverMessages = Map.empty[AbsolutePath, HoverMap]\n+\n+  override def publish(\n+      languageClient: MetalsLanguageClient,\n+      path: AbsolutePath,\n+      worksheet: EvaluatedWorksheet\n+  ): Unit = {\n+    (render(path) _ andThen publish(path, languageClient))(worksheet)"
+  },
+  {
+    "id" : "ee27f3d5-ec1c-4b49-8921-96eb5a82589d",
+    "prId" : 1561,
+    "comments" : [
+      {
+        "id" : "6fa10ce6-61e4-4d04-a98e-0cc74c711206",
+        "parentId" : null,
+        "author" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "body" : "I don't remember where exactly but when you did similar change you wrapped whole body in ```scala block, shouldn't it be similar here?",
+        "createdAt" : "2020-03-28T20:46:09Z",
+        "updatedAt" : "2020-03-29T12:41:57Z",
+        "lastEditedBy" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7b65ce8a-3f70-426c-9816-f888b04450e0",
+        "parentId" : "6fa10ce6-61e4-4d04-a98e-0cc74c711206",
+        "author" : {
+          "login" : "ckipp01",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/13974112?u=7b6a2ddab8eec6f99e4e40ae9b81f71cb5ba92e5&v=4"
+        },
+        "body" : "I ended up making that happen in the apply method of `HoverMarkup`, so it is happening there :)",
+        "createdAt" : "2020-03-28T20:47:07Z",
+        "updatedAt" : "2020-03-29T12:41:57Z",
+        "lastEditedBy" : {
+          "login" : "ckipp01",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/13974112?u=7b6a2ddab8eec6f99e4e40ae9b81f71cb5ba92e5&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a81fcb62-13be-401a-b681-850d87a0a9a6",
+        "parentId" : "6fa10ce6-61e4-4d04-a98e-0cc74c711206",
+        "author" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "body" : "perfect! 🥇 ",
+        "createdAt" : "2020-03-28T20:50:08Z",
+        "updatedAt" : "2020-03-29T12:41:57Z",
+        "lastEditedBy" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ccc307a6cf459e197d161c82c20a4a935b9baa9d",
+    "line" : 37,
+    "diffHunk" : "@@ -44,11 +46,10 @@ class WorkspaceEditWorksheetPublisher(buffers: Buffers)\n         .toPosition(position)\n       message <- getHoverMessage(snapshotPosition, messages.hovers)\n     } yield new Hover(\n-      List(\n-        JEither.forRight[String, MarkedString](\n-          new MarkedString(\"scala\", message)\n-        )\n-      ).asJava\n+      new MarkupContent(\n+        MarkupKind.MARKDOWN,\n+        HoverMarkup(message)"
+  }
+]

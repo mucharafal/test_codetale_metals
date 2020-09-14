@@ -1,0 +1,478 @@
+[
+  {
+    "id" : "8c30372c-4336-42c8-b67a-f4741c4ae6ee",
+    "prId" : 1048,
+    "comments" : [
+      {
+        "id" : "f794c1f8-ec79-4912-853e-9efac4c042d0",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "😍 ",
+        "createdAt" : "2019-11-07T04:36:32Z",
+        "updatedAt" : "2019-11-11T16:33:17Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "32617da1c138d4dd74af7289c14ff3aeb1bc9654",
+    "line" : 331,
+    "diffHunk" : "@@ -0,0 +1,432 @@\n+package tests\n+import scala.concurrent.Future\n+\n+object RenameSuite extends BaseLspSuite(\"rename\") {\n+\n+  renamed(\n+    \"basic\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |object Main{\n+       |  val <<toRename>> = 123\n+       |}\n+       |/a/src/main/scala/a/Main2.scala\n+       |package a\n+       |object Main2{\n+       |  val toRename = Main.<<toR@@ename>>\n+       |}\n+       |\"\"\".stripMargin,\n+    newName = \"otherRename\"\n+  )\n+\n+  renamed(\n+    \"unapply\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |object <<F@@oo>> {\n+       |  def unapply(s: String): Option[String] = Some(\"\")\n+       |}\n+       |\n+       |object Main{\n+       |  \"foo\" match {\n+       |    case <<Foo>>(s) => ()\n+       |  }\n+       |}\n+       |\"\"\".stripMargin,\n+    newName = \"Bar\"\n+  )\n+\n+  renamed(\n+    \"unapply-param\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |object Foo {\n+       |  def unapply(<<nam@@e>>: String): Option[String] = Some(<<name>>)\n+       |}\n+       |\n+       |object Main{\n+       |  \"foo\" match {\n+       |    case Foo(name) => ()\n+       |  }\n+       |}\n+       |\"\"\".stripMargin,\n+    newName = \"str\"\n+  )\n+\n+  renamed(\n+    \"local\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |object Main{\n+       |  def hello() = {\n+       |    val <<toRen@@ame>> = 123\n+       |    <<toRename>>\n+       |  }\n+       |}\n+       |\"\"\".stripMargin,\n+    newName = \"otherRename\"\n+  )\n+\n+  renamed(\n+    \"method\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |object Main{\n+       |  def <<met@@hod>>(abc : String) = true\n+       |\n+       |  if(<<method>>(\"\")) println(\"Is true!\")\n+       |}\n+       |\"\"\".stripMargin,\n+    newName = \"truth\"\n+  )\n+\n+  renamed(\n+    \"self-type\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |trait <<A@@BC>>\n+       |trait Alphabet{\n+       |  this: <<ABC>> =>\n+       |}\n+       |object Main{\n+       |  val a = new Alphabet with <<ABC>>\n+       |}\n+       |\"\"\".stripMargin,\n+    newName = \"Animal\"\n+  )\n+\n+  renamed(\n+    \"method-inheritance\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |trait Hello{\n+       |  def <<method>>(abc : String) : Boolean\n+       |}\n+       |\n+       |class GoodMorning extends Hello {\n+       |  def <<met@@hod>>(abc : String) = true\n+       |}\n+       |\"\"\".stripMargin,\n+    newName = \"truth\"\n+  )\n+\n+  renamed(\n+    \"long-inheritance\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |trait A[T, S] {\n+       |  def <<method>>(abc : T) : S\n+       |}\n+       |\n+       |abstract class B[T] extends A[T, Boolean] {\n+       |  def <<method>>(abc : T) : Boolean\n+       |}\n+       |\n+       |abstract class C extends B[String] {\n+       |  def <<meth@@od>>(abc : String) : Boolean = false\n+       |}\n+       |\"\"\".stripMargin,\n+    newName = \"truth\"\n+  )\n+\n+  renamed(\n+    \"multiple-inheritance\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |trait A {\n+       |  def <<method>>(abc : String) : Boolean\n+       |}\n+       |\n+       |trait B {\n+       |  def <<method>>(abc : String) : Boolean = true\n+       |}\n+       |\n+       |abstract class C extends B with A {\n+       |  override def <<meth@@od>>(abc : String) : Boolean = false\n+       |}\n+       |\"\"\".stripMargin,\n+    newName = \"truth\"\n+  )\n+\n+  renamed(\n+    \"apply\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |object User{\n+       |  def <<ap@@ply>>(name : String) = name\n+       |}\n+       |object Main{\n+       |  val toRename = User##.##<<>>(\"abc\")\n+       |}\n+       |\"\"\".stripMargin,\n+    newName = \"name\"\n+  )\n+\n+  same(\n+    \"colon-bad\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |class User{\n+       |  def <<:@@:>>(name : String) = name\n+       |}\n+       |object Main{\n+       |  val user = new User()\n+       |  \"\" <<::>> user\n+       |}\n+       |\"\"\".stripMargin\n+  )\n+\n+  renamed(\n+    \"colon-good\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |class User{\n+       |  def <<:@@:>>(name : String) = name\n+       |}\n+       |object Main{\n+       |  val user = new User()\n+       |  \"\" <<::>> user\n+       |}\n+       |\"\"\".stripMargin,\n+    newName = \"method:\"\n+  )\n+\n+  same(\n+    \"unary-bad\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |class User{\n+       |  def <<unary_!>> = false\n+       |}\n+       |object Main{\n+       |  val user = new User()\n+       |  <<@@!>>user\n+       |}\n+       |\"\"\".stripMargin\n+  )\n+\n+  same(\n+    \"unary-bad2\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |class User{\n+       |  def <<u@@nary_!>> = false\n+       |}\n+       |object Main{\n+       |  val user = new User()\n+       |  <<!>>user\n+       |}\n+       |\"\"\".stripMargin\n+  )\n+\n+  same(\n+    \"java-classes\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |class MyException extends Exce@@ption\n+       |class NewException extends RuntimeException\n+       |class NewException2 extends RuntimeException\n+       |\"\"\".stripMargin\n+  )\n+\n+  renamed(\n+    \"inheritance\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |abstract class <<An@@imal>>\n+       |class Dog extends <<Animal>>\n+       |class Cat extends <<Animal>>\n+       |\"\"\".stripMargin,\n+    newName = \"Tree\"\n+  )\n+\n+  renamed(\n+    \"companion\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |class <<Main>>{}\n+       |object <<M@@ain>>\n+       |\"\"\".stripMargin,\n+    newName = \"Tree\"\n+  )\n+\n+  renamed(\n+    \"companion2\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |class <<Ma@@in>>{}\n+       |object <<Main>>\n+       |\"\"\".stripMargin,\n+    newName = \"Tree\"\n+  )\n+\n+  renamed(\n+    \"many-files\",\n+    \"\"\"|/a/src/main/scala/a/A.scala\n+       |package a\n+       |object A {\n+       |  def <<ren@@ameIt>>(a : String) = \"\"\n+       |}\n+       |/a/src/main/scala/a/B.scala\n+       |package a\n+       |object B {\n+       |  val str = A.<<renameIt>>(\"\")\n+       |}\n+       |/a/src/main/scala/a/C.scala\n+       |package a\n+       |object C {\n+       |  val str = A.<<renameIt>>(\"\")\n+       |}\n+       |/a/src/main/scala/a/D.scala\n+       |package a\n+       |object D {\n+       |  val str = A.<<renameIt>>(\"\")\n+       |}\n+       |/a/src/main/scala/a/E.scala\n+       |package a\n+       |object E {\n+       |  val str = A.<<renameIt>>(\"\")\n+       |}\n+       |\"\"\".stripMargin,\n+    newName = \"iAmRenamed\",\n+    nonOpened = Set(\n+      \"a/src/main/scala/a/C.scala\",\n+      \"a/src/main/scala/a/D.scala\",\n+      \"a/src/main/scala/a/E.scala\"\n+    )\n+  )\n+\n+  renamed(\n+    \"anon\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |trait Methodable[T] {\n+       |  def <<method>>(asf: T): Int\n+       |}\n+       |\n+       |trait Alphabet extends Methodable[String] {\n+       |  def <<method>>(adf: String) = 123\n+       |}\n+       |\n+       |object Main {\n+       |  val a = new Alphabet {\n+       |    override def <<me@@thod>>(adf: String): Int = 321"
+  },
+  {
+    "id" : "36bf566f-572e-4c50-a8b8-25b895a6ba2a",
+    "prId" : 1048,
+    "comments" : [
+      {
+        "id" : "f562752c-9f60-43f7-b214-ed232f059bc5",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "To stress that we correctly use edit distance, can we artificially add a newline to the top of all open files before applying the rename? The output of the rewrites should be the same, but it will stress that we use token edit distance since the line numbers have shifted.",
+        "createdAt" : "2019-11-07T04:43:53Z",
+        "updatedAt" : "2019-11-11T16:33:17Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "b51cb725-cfbf-4255-9ccd-78551438e6a2",
+        "parentId" : "f562752c-9f60-43f7-b214-ed232f059bc5",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Each file is now modified in tests.",
+        "createdAt" : "2019-11-10T22:08:27Z",
+        "updatedAt" : "2019-11-11T16:33:17Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "32617da1c138d4dd74af7289c14ff3aeb1bc9654",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,432 @@\n+package tests\n+import scala.concurrent.Future\n+\n+object RenameSuite extends BaseLspSuite(\"rename\") {\n+\n+  renamed(\n+    \"basic\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |object Main{\n+       |  val <<toRename>> = 123\n+       |}\n+       |/a/src/main/scala/a/Main2.scala\n+       |package a\n+       |object Main2{\n+       |  val toRename = Main.<<toR@@ename>>\n+       |}\n+       |\"\"\".stripMargin,\n+    newName = \"otherRename\"\n+  )\n+\n+  renamed(\n+    \"unapply\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |object <<F@@oo>> {\n+       |  def unapply(s: String): Option[String] = Some(\"\")\n+       |}\n+       |\n+       |object Main{\n+       |  \"foo\" match {\n+       |    case <<Foo>>(s) => ()\n+       |  }\n+       |}\n+       |\"\"\".stripMargin,\n+    newName = \"Bar\"\n+  )\n+\n+  renamed(\n+    \"unapply-param\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |object Foo {\n+       |  def unapply(<<nam@@e>>: String): Option[String] = Some(<<name>>)\n+       |}\n+       |\n+       |object Main{\n+       |  \"foo\" match {\n+       |    case Foo(name) => ()\n+       |  }\n+       |}\n+       |\"\"\".stripMargin,\n+    newName = \"str\"\n+  )\n+\n+  renamed(\n+    \"local\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |object Main{\n+       |  def hello() = {\n+       |    val <<toRen@@ame>> = 123\n+       |    <<toRename>>\n+       |  }\n+       |}\n+       |\"\"\".stripMargin,\n+    newName = \"otherRename\"\n+  )\n+\n+  renamed(\n+    \"method\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |object Main{\n+       |  def <<met@@hod>>(abc : String) = true\n+       |\n+       |  if(<<method>>(\"\")) println(\"Is true!\")\n+       |}\n+       |\"\"\".stripMargin,\n+    newName = \"truth\"\n+  )\n+\n+  renamed(\n+    \"self-type\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |trait <<A@@BC>>\n+       |trait Alphabet{\n+       |  this: <<ABC>> =>\n+       |}\n+       |object Main{\n+       |  val a = new Alphabet with <<ABC>>\n+       |}\n+       |\"\"\".stripMargin,\n+    newName = \"Animal\"\n+  )\n+\n+  renamed(\n+    \"method-inheritance\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |trait Hello{\n+       |  def <<method>>(abc : String) : Boolean\n+       |}\n+       |\n+       |class GoodMorning extends Hello {\n+       |  def <<met@@hod>>(abc : String) = true\n+       |}\n+       |\"\"\".stripMargin,\n+    newName = \"truth\"\n+  )\n+\n+  renamed(\n+    \"long-inheritance\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |trait A[T, S] {\n+       |  def <<method>>(abc : T) : S\n+       |}\n+       |\n+       |abstract class B[T] extends A[T, Boolean] {\n+       |  def <<method>>(abc : T) : Boolean\n+       |}\n+       |\n+       |abstract class C extends B[String] {\n+       |  def <<meth@@od>>(abc : String) : Boolean = false\n+       |}\n+       |\"\"\".stripMargin,\n+    newName = \"truth\"\n+  )\n+\n+  renamed(\n+    \"multiple-inheritance\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |trait A {\n+       |  def <<method>>(abc : String) : Boolean\n+       |}\n+       |\n+       |trait B {\n+       |  def <<method>>(abc : String) : Boolean = true\n+       |}\n+       |\n+       |abstract class C extends B with A {\n+       |  override def <<meth@@od>>(abc : String) : Boolean = false\n+       |}\n+       |\"\"\".stripMargin,\n+    newName = \"truth\"\n+  )\n+\n+  renamed(\n+    \"apply\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |object User{\n+       |  def <<ap@@ply>>(name : String) = name\n+       |}\n+       |object Main{\n+       |  val toRename = User##.##<<>>(\"abc\")\n+       |}\n+       |\"\"\".stripMargin,\n+    newName = \"name\"\n+  )\n+\n+  same(\n+    \"colon-bad\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |class User{\n+       |  def <<:@@:>>(name : String) = name\n+       |}\n+       |object Main{\n+       |  val user = new User()\n+       |  \"\" <<::>> user\n+       |}\n+       |\"\"\".stripMargin\n+  )\n+\n+  renamed(\n+    \"colon-good\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |class User{\n+       |  def <<:@@:>>(name : String) = name\n+       |}\n+       |object Main{\n+       |  val user = new User()\n+       |  \"\" <<::>> user\n+       |}\n+       |\"\"\".stripMargin,\n+    newName = \"method:\"\n+  )\n+\n+  same(\n+    \"unary-bad\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |class User{\n+       |  def <<unary_!>> = false\n+       |}\n+       |object Main{\n+       |  val user = new User()\n+       |  <<@@!>>user\n+       |}\n+       |\"\"\".stripMargin\n+  )\n+\n+  same(\n+    \"unary-bad2\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |class User{\n+       |  def <<u@@nary_!>> = false\n+       |}\n+       |object Main{\n+       |  val user = new User()\n+       |  <<!>>user\n+       |}\n+       |\"\"\".stripMargin\n+  )\n+\n+  same(\n+    \"java-classes\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |class MyException extends Exce@@ption\n+       |class NewException extends RuntimeException\n+       |class NewException2 extends RuntimeException\n+       |\"\"\".stripMargin\n+  )\n+\n+  renamed(\n+    \"inheritance\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |abstract class <<An@@imal>>\n+       |class Dog extends <<Animal>>\n+       |class Cat extends <<Animal>>\n+       |\"\"\".stripMargin,\n+    newName = \"Tree\"\n+  )\n+\n+  renamed(\n+    \"companion\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |class <<Main>>{}\n+       |object <<M@@ain>>\n+       |\"\"\".stripMargin,\n+    newName = \"Tree\"\n+  )\n+\n+  renamed(\n+    \"companion2\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |class <<Ma@@in>>{}\n+       |object <<Main>>\n+       |\"\"\".stripMargin,\n+    newName = \"Tree\"\n+  )\n+\n+  renamed(\n+    \"many-files\",\n+    \"\"\"|/a/src/main/scala/a/A.scala\n+       |package a\n+       |object A {\n+       |  def <<ren@@ameIt>>(a : String) = \"\"\n+       |}\n+       |/a/src/main/scala/a/B.scala\n+       |package a\n+       |object B {\n+       |  val str = A.<<renameIt>>(\"\")\n+       |}\n+       |/a/src/main/scala/a/C.scala\n+       |package a\n+       |object C {\n+       |  val str = A.<<renameIt>>(\"\")\n+       |}\n+       |/a/src/main/scala/a/D.scala\n+       |package a\n+       |object D {\n+       |  val str = A.<<renameIt>>(\"\")\n+       |}\n+       |/a/src/main/scala/a/E.scala\n+       |package a\n+       |object E {\n+       |  val str = A.<<renameIt>>(\"\")\n+       |}\n+       |\"\"\".stripMargin,\n+    newName = \"iAmRenamed\",\n+    nonOpened = Set(\n+      \"a/src/main/scala/a/C.scala\",\n+      \"a/src/main/scala/a/D.scala\",\n+      \"a/src/main/scala/a/E.scala\"\n+    )\n+  )\n+\n+  renamed(\n+    \"anon\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |trait Methodable[T] {\n+       |  def <<method>>(asf: T): Int\n+       |}\n+       |\n+       |trait Alphabet extends Methodable[String] {\n+       |  def <<method>>(adf: String) = 123\n+       |}\n+       |\n+       |object Main {\n+       |  val a = new Alphabet {\n+       |    override def <<me@@thod>>(adf: String): Int = 321\n+       |  }\n+       |}\n+       |\"\"\".stripMargin,\n+    newName = \"renamed\"\n+  )\n+\n+  // currently not working due to issues in SemanticDB\n+  // renamed(\n+  //   \"macro-annotation\",\n+  //   \"\"\"|/a/src/main/scala/a/Main.scala\n+  //      |package a\n+  //      |import io.circe.generic.JsonCodec\n+  //      |trait LivingBeing\n+  //      |@JsonCodec sealed trait <<An@@imal>> extends LivingBeing\n+  //      |object Animal {\n+  //      |  case object Dog extends <<Animal>>\n+  //      |  case object Cat extends <<Animal>>\n+  //      |}\n+  //      |\"\"\".stripMargin,\n+  //   newName = \"Tree\"\n+  // )\n+  // renamed(\n+  //   \"classof\",\n+  //   \"\"\"|/a/src/main/scala/a/Main.scala\n+  //      |package a\n+  //      |trait <<A@@BC>>\n+  //      |object Main{\n+  //      |  val a = classOf[<<A@@BC>>]\n+  //      |}\n+  //      |\"\"\".stripMargin,\n+  //   newName = \"Animal\"\n+  // )\n+\n+  def renamed(\n+      name: String,\n+      input: String,\n+      newName: String,\n+      nonOpened: Set[String] = Set.empty\n+  ): Unit =\n+    check(name, input, newName, notRenamed = false, nonOpened = nonOpened)\n+\n+  def same(\n+      name: String,\n+      input: String\n+  ): Unit =\n+    check(\n+      name,\n+      input,\n+      \"SHOULD_NOT_BE_RENAMED\",\n+      notRenamed = true\n+    )\n+\n+  def check(\n+      name: String,\n+      input: String,\n+      newName: String,\n+      notRenamed: Boolean = false,\n+      nonOpened: Set[String] = Set.empty\n+  ): Unit = {\n+    val allMarkersRegex = \"(<<|>>|@@|##.*##)\"\n+    val files = FileLayout.mapFromString(input)\n+    val expectedFiles = files.map {\n+      case (file, code) =>\n+        file -> {\n+          if (!notRenamed) {\n+            code\n+              .replaceAll(\"\\\\<\\\\<\\\\S*\\\\>\\\\>\", newName)\n+              .replaceAll(\"##\", \"\")\n+          } else {\n+            code.replaceAll(allMarkersRegex, \"\")\n+          }\n+        }\n+    }\n+    val base = files.map {\n+      case (fileName, code) =>\n+        fileName -> code.replaceAll(allMarkersRegex, \"\")\n+    }\n+\n+    val (filename, edit) = files\n+      .find(_._2.contains(\"@@\"))\n+      .getOrElse {\n+        throw new IllegalArgumentException(\n+          \"No `@@` was defined that specifies cursor position\"\n+        )\n+      }\n+\n+    testAsync(name) {\n+      cleanWorkspace()\n+      for {\n+        _ <- server.initialize(\n+          s\"\"\"/metals.json\n+             |{\"a\":\n+             |  {\n+             |    \"compilerPlugins\": [\n+             |      \"org.scalamacros:::paradise:2.1.1\"\n+             |    ],\n+             |    \"libraryDependencies\": [\n+             |      \"org.scalatest::scalatest:3.0.5\",\n+             |      \"io.circe::circe-generic:0.12.0\"\n+             |    ]\n+             |  }\n+             |}\n+             |${input.replaceAll(allMarkersRegex, \"\")}\"\"\".stripMargin\n+        )\n+        _ <- Future.sequence("
+  },
+  {
+    "id" : "eabf299e-e7cc-45f7-9728-3996a2f64871",
+    "prId" : 1048,
+    "comments" : [
+      {
+        "id" : "f32f84c8-e9b0-47f6-be53-9690ddb85310",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Can we add test cases that stress the following scenarios?\r\n\r\n* Rename symbol across different build targets\r\n* Rename symbol across Scala/Java (just document that Java files are left unchanged)\r\n* Rename symbol in project with compile error still works (we use an old semanticdb snapshot)",
+        "createdAt" : "2019-11-07T04:47:13Z",
+        "updatedAt" : "2019-11-11T16:33:17Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "03d54f52-f4fc-4b65-ac1a-efe9f791a0c6",
+        "parentId" : "f32f84c8-e9b0-47f6-be53-9690ddb85310",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Sure, will add that to the tests. It would be super useful to have that explicit.",
+        "createdAt" : "2019-11-07T10:18:21Z",
+        "updatedAt" : "2019-11-11T16:33:17Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "5402518e-d5cb-4e78-a92d-59b79a7ae351",
+        "parentId" : "f32f84c8-e9b0-47f6-be53-9690ddb85310",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "> Rename symbol across different build targets\r\n\r\nAdded \r\n\r\n> Rename symbol across Scala/Java\r\n\r\nAlso added\r\n\r\n> Rename symbol in project with compile error still works\r\n\r\nAdded with a type error.",
+        "createdAt" : "2019-11-10T22:08:05Z",
+        "updatedAt" : "2019-11-11T16:33:17Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "32617da1c138d4dd74af7289c14ff3aeb1bc9654",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,432 @@\n+package tests\n+import scala.concurrent.Future\n+\n+object RenameSuite extends BaseLspSuite(\"rename\") {\n+\n+  renamed(\n+    \"basic\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |object Main{\n+       |  val <<toRename>> = 123\n+       |}\n+       |/a/src/main/scala/a/Main2.scala\n+       |package a\n+       |object Main2{\n+       |  val toRename = Main.<<toR@@ename>>\n+       |}\n+       |\"\"\".stripMargin,\n+    newName = \"otherRename\"\n+  )\n+\n+  renamed(\n+    \"unapply\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |object <<F@@oo>> {\n+       |  def unapply(s: String): Option[String] = Some(\"\")\n+       |}\n+       |\n+       |object Main{\n+       |  \"foo\" match {\n+       |    case <<Foo>>(s) => ()\n+       |  }\n+       |}\n+       |\"\"\".stripMargin,\n+    newName = \"Bar\"\n+  )\n+\n+  renamed(\n+    \"unapply-param\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |object Foo {\n+       |  def unapply(<<nam@@e>>: String): Option[String] = Some(<<name>>)\n+       |}\n+       |\n+       |object Main{\n+       |  \"foo\" match {\n+       |    case Foo(name) => ()\n+       |  }\n+       |}\n+       |\"\"\".stripMargin,\n+    newName = \"str\"\n+  )\n+\n+  renamed(\n+    \"local\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |object Main{\n+       |  def hello() = {\n+       |    val <<toRen@@ame>> = 123\n+       |    <<toRename>>\n+       |  }\n+       |}\n+       |\"\"\".stripMargin,\n+    newName = \"otherRename\"\n+  )\n+\n+  renamed(\n+    \"method\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |object Main{\n+       |  def <<met@@hod>>(abc : String) = true\n+       |\n+       |  if(<<method>>(\"\")) println(\"Is true!\")\n+       |}\n+       |\"\"\".stripMargin,\n+    newName = \"truth\"\n+  )\n+\n+  renamed(\n+    \"self-type\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |trait <<A@@BC>>\n+       |trait Alphabet{\n+       |  this: <<ABC>> =>\n+       |}\n+       |object Main{\n+       |  val a = new Alphabet with <<ABC>>\n+       |}\n+       |\"\"\".stripMargin,\n+    newName = \"Animal\"\n+  )\n+\n+  renamed(\n+    \"method-inheritance\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |trait Hello{\n+       |  def <<method>>(abc : String) : Boolean\n+       |}\n+       |\n+       |class GoodMorning extends Hello {\n+       |  def <<met@@hod>>(abc : String) = true\n+       |}\n+       |\"\"\".stripMargin,\n+    newName = \"truth\"\n+  )\n+\n+  renamed(\n+    \"long-inheritance\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |trait A[T, S] {\n+       |  def <<method>>(abc : T) : S\n+       |}\n+       |\n+       |abstract class B[T] extends A[T, Boolean] {\n+       |  def <<method>>(abc : T) : Boolean\n+       |}\n+       |\n+       |abstract class C extends B[String] {\n+       |  def <<meth@@od>>(abc : String) : Boolean = false\n+       |}\n+       |\"\"\".stripMargin,\n+    newName = \"truth\"\n+  )\n+\n+  renamed(\n+    \"multiple-inheritance\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |trait A {\n+       |  def <<method>>(abc : String) : Boolean\n+       |}\n+       |\n+       |trait B {\n+       |  def <<method>>(abc : String) : Boolean = true\n+       |}\n+       |\n+       |abstract class C extends B with A {\n+       |  override def <<meth@@od>>(abc : String) : Boolean = false\n+       |}\n+       |\"\"\".stripMargin,\n+    newName = \"truth\"\n+  )\n+\n+  renamed(\n+    \"apply\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |object User{\n+       |  def <<ap@@ply>>(name : String) = name\n+       |}\n+       |object Main{\n+       |  val toRename = User##.##<<>>(\"abc\")\n+       |}\n+       |\"\"\".stripMargin,\n+    newName = \"name\"\n+  )\n+\n+  same(\n+    \"colon-bad\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |class User{\n+       |  def <<:@@:>>(name : String) = name\n+       |}\n+       |object Main{\n+       |  val user = new User()\n+       |  \"\" <<::>> user\n+       |}\n+       |\"\"\".stripMargin\n+  )\n+\n+  renamed(\n+    \"colon-good\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |class User{\n+       |  def <<:@@:>>(name : String) = name\n+       |}\n+       |object Main{\n+       |  val user = new User()\n+       |  \"\" <<::>> user\n+       |}\n+       |\"\"\".stripMargin,\n+    newName = \"method:\"\n+  )\n+\n+  same(\n+    \"unary-bad\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |class User{\n+       |  def <<unary_!>> = false\n+       |}\n+       |object Main{\n+       |  val user = new User()\n+       |  <<@@!>>user\n+       |}\n+       |\"\"\".stripMargin\n+  )\n+\n+  same(\n+    \"unary-bad2\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |class User{\n+       |  def <<u@@nary_!>> = false\n+       |}\n+       |object Main{\n+       |  val user = new User()\n+       |  <<!>>user\n+       |}\n+       |\"\"\".stripMargin\n+  )\n+\n+  same(\n+    \"java-classes\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |class MyException extends Exce@@ption\n+       |class NewException extends RuntimeException\n+       |class NewException2 extends RuntimeException\n+       |\"\"\".stripMargin\n+  )\n+\n+  renamed(\n+    \"inheritance\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |abstract class <<An@@imal>>\n+       |class Dog extends <<Animal>>\n+       |class Cat extends <<Animal>>\n+       |\"\"\".stripMargin,\n+    newName = \"Tree\"\n+  )\n+\n+  renamed(\n+    \"companion\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |class <<Main>>{}\n+       |object <<M@@ain>>\n+       |\"\"\".stripMargin,\n+    newName = \"Tree\"\n+  )\n+\n+  renamed(\n+    \"companion2\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |class <<Ma@@in>>{}\n+       |object <<Main>>\n+       |\"\"\".stripMargin,\n+    newName = \"Tree\"\n+  )\n+\n+  renamed(\n+    \"many-files\",\n+    \"\"\"|/a/src/main/scala/a/A.scala\n+       |package a\n+       |object A {\n+       |  def <<ren@@ameIt>>(a : String) = \"\"\n+       |}\n+       |/a/src/main/scala/a/B.scala\n+       |package a\n+       |object B {\n+       |  val str = A.<<renameIt>>(\"\")\n+       |}\n+       |/a/src/main/scala/a/C.scala\n+       |package a\n+       |object C {\n+       |  val str = A.<<renameIt>>(\"\")\n+       |}\n+       |/a/src/main/scala/a/D.scala\n+       |package a\n+       |object D {\n+       |  val str = A.<<renameIt>>(\"\")\n+       |}\n+       |/a/src/main/scala/a/E.scala\n+       |package a\n+       |object E {\n+       |  val str = A.<<renameIt>>(\"\")\n+       |}\n+       |\"\"\".stripMargin,\n+    newName = \"iAmRenamed\",\n+    nonOpened = Set(\n+      \"a/src/main/scala/a/C.scala\",\n+      \"a/src/main/scala/a/D.scala\",\n+      \"a/src/main/scala/a/E.scala\"\n+    )\n+  )\n+\n+  renamed(\n+    \"anon\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |trait Methodable[T] {\n+       |  def <<method>>(asf: T): Int\n+       |}\n+       |\n+       |trait Alphabet extends Methodable[String] {\n+       |  def <<method>>(adf: String) = 123\n+       |}\n+       |\n+       |object Main {\n+       |  val a = new Alphabet {\n+       |    override def <<me@@thod>>(adf: String): Int = 321\n+       |  }\n+       |}\n+       |\"\"\".stripMargin,\n+    newName = \"renamed\"\n+  )\n+\n+  // currently not working due to issues in SemanticDB\n+  // renamed(\n+  //   \"macro-annotation\",\n+  //   \"\"\"|/a/src/main/scala/a/Main.scala\n+  //      |package a\n+  //      |import io.circe.generic.JsonCodec\n+  //      |trait LivingBeing\n+  //      |@JsonCodec sealed trait <<An@@imal>> extends LivingBeing\n+  //      |object Animal {\n+  //      |  case object Dog extends <<Animal>>\n+  //      |  case object Cat extends <<Animal>>\n+  //      |}\n+  //      |\"\"\".stripMargin,\n+  //   newName = \"Tree\"\n+  // )\n+  // renamed(\n+  //   \"classof\",\n+  //   \"\"\"|/a/src/main/scala/a/Main.scala\n+  //      |package a\n+  //      |trait <<A@@BC>>\n+  //      |object Main{\n+  //      |  val a = classOf[<<A@@BC>>]\n+  //      |}\n+  //      |\"\"\".stripMargin,\n+  //   newName = \"Animal\"\n+  // )\n+\n+  def renamed(\n+      name: String,\n+      input: String,\n+      newName: String,\n+      nonOpened: Set[String] = Set.empty\n+  ): Unit =\n+    check(name, input, newName, notRenamed = false, nonOpened = nonOpened)\n+\n+  def same(\n+      name: String,\n+      input: String\n+  ): Unit =\n+    check(\n+      name,\n+      input,\n+      \"SHOULD_NOT_BE_RENAMED\",\n+      notRenamed = true\n+    )\n+\n+  def check(\n+      name: String,\n+      input: String,\n+      newName: String,\n+      notRenamed: Boolean = false,\n+      nonOpened: Set[String] = Set.empty\n+  ): Unit = {\n+    val allMarkersRegex = \"(<<|>>|@@|##.*##)\"\n+    val files = FileLayout.mapFromString(input)\n+    val expectedFiles = files.map {\n+      case (file, code) =>\n+        file -> {\n+          if (!notRenamed) {\n+            code\n+              .replaceAll(\"\\\\<\\\\<\\\\S*\\\\>\\\\>\", newName)\n+              .replaceAll(\"##\", \"\")\n+          } else {\n+            code.replaceAll(allMarkersRegex, \"\")\n+          }\n+        }\n+    }\n+    val base = files.map {\n+      case (fileName, code) =>\n+        fileName -> code.replaceAll(allMarkersRegex, \"\")\n+    }\n+\n+    val (filename, edit) = files\n+      .find(_._2.contains(\"@@\"))\n+      .getOrElse {\n+        throw new IllegalArgumentException(\n+          \"No `@@` was defined that specifies cursor position\"\n+        )\n+      }\n+\n+    testAsync(name) {\n+      cleanWorkspace()\n+      for {\n+        _ <- server.initialize(\n+          s\"\"\"/metals.json\n+             |{\"a\":"
+  },
+  {
+    "id" : "068776dc-3dbf-4caf-868e-faa35f160abc",
+    "prId" : 1048,
+    "comments" : [
+      {
+        "id" : "dc49c0ba-1552-421b-8c33-8db88aca9c45",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : ":+1:",
+        "createdAt" : "2019-11-11T04:24:25Z",
+        "updatedAt" : "2019-11-11T16:33:17Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "32617da1c138d4dd74af7289c14ff3aeb1bc9654",
+    "line" : 104,
+    "diffHunk" : "@@ -0,0 +1,519 @@\n+package tests\n+import scala.concurrent.Future\n+\n+object RenameSuite extends BaseLspSuite(\"rename\") {\n+\n+  renamed(\n+    \"basic\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |object Main{\n+       |  val <<toRename>> = 123\n+       |}\n+       |/a/src/main/scala/a/Main2.scala\n+       |package a\n+       |object Main2{\n+       |  val toRename = Main.<<toR@@ename>>\n+       |}\n+       |\"\"\".stripMargin,\n+    newName = \"otherRename\"\n+  )\n+\n+  renamed(\n+    \"across-targets\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |object Main{\n+       |  val <<toRename>> = 123\n+       |}\n+       |/b/src/main/scala/b/Main2.scala\n+       |package b\n+       |import a.Main\n+       |object Main2{\n+       |  val toRename = Main.<<toR@@ename>>\n+       |}\n+       |\"\"\".stripMargin,\n+    newName = \"otherRename\"\n+  )\n+\n+  renamed(\n+    \"unapply\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |object <<F@@oo>> {\n+       |  def unapply(s: String): Option[String] = Some(\"\")\n+       |}\n+       |\n+       |object Main{\n+       |  \"foo\" match {\n+       |    case <<Foo>>(s) => ()\n+       |  }\n+       |}\n+       |\"\"\".stripMargin,\n+    newName = \"Bar\"\n+  )\n+\n+  renamed(\n+    \"unapply-param\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |object Foo {\n+       |  def unapply(<<nam@@e>>: String): Option[String] = Some(<<name>>)\n+       |}\n+       |\n+       |object Main{\n+       |  \"foo\" match {\n+       |    case Foo(name) => ()\n+       |  }\n+       |}\n+       |\"\"\".stripMargin,\n+    newName = \"str\"\n+  )\n+\n+  renamed(\n+    \"local\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |object Main{\n+       |  def hello() = {\n+       |    val <<toRen@@ame>> = 123\n+       |    <<toRename>>\n+       |  }\n+       |}\n+       |\"\"\".stripMargin,\n+    newName = \"otherRename\"\n+  )\n+\n+  renamed(\n+    \"method\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |object Main{\n+       |  def <<met@@hod>>(abc : String) = true\n+       |\n+       |  if(<<method>>(\"\")) println(\"Is true!\")\n+       |}\n+       |\"\"\".stripMargin,\n+    newName = \"truth\"\n+  )\n+\n+  renamed(\n+    \"self-type\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |trait <<A@@BC>>\n+       |trait Alphabet{\n+       |  this: <<ABC>> =>"
+  },
+  {
+    "id" : "f03e3260-5705-4044-9758-f99b02cc3611",
+    "prId" : 1048,
+    "comments" : [
+      {
+        "id" : "9aba6a94-0b40-4d30-bf13-e1339ccbca64",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Should we consider erroring in this case?",
+        "createdAt" : "2019-11-11T04:26:00Z",
+        "updatedAt" : "2019-11-11T16:33:17Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "41f5b98b-675d-4c36-8ddb-bbd0dc4c266d",
+        "parentId" : "9aba6a94-0b40-4d30-bf13-e1339ccbca64",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "We could, but the other way would be to use Metals to at least rename Scala occurrences and rename the rest by hand or via different LSP. \r\n\r\nI thinking maybe report a warning in that case?",
+        "createdAt" : "2019-11-11T12:13:45Z",
+        "updatedAt" : "2019-11-11T16:33:17Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "53f881b8-ad4e-4fff-a658-2616a96008b5",
+        "parentId" : "9aba6a94-0b40-4d30-bf13-e1339ccbca64",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "I added a warning in a case like that.",
+        "createdAt" : "2019-11-11T16:34:06Z",
+        "updatedAt" : "2019-11-11T16:34:06Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "32617da1c138d4dd74af7289c14ff3aeb1bc9654",
+    "line" : 348,
+    "diffHunk" : "@@ -0,0 +1,519 @@\n+package tests\n+import scala.concurrent.Future\n+\n+object RenameSuite extends BaseLspSuite(\"rename\") {\n+\n+  renamed(\n+    \"basic\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |object Main{\n+       |  val <<toRename>> = 123\n+       |}\n+       |/a/src/main/scala/a/Main2.scala\n+       |package a\n+       |object Main2{\n+       |  val toRename = Main.<<toR@@ename>>\n+       |}\n+       |\"\"\".stripMargin,\n+    newName = \"otherRename\"\n+  )\n+\n+  renamed(\n+    \"across-targets\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |object Main{\n+       |  val <<toRename>> = 123\n+       |}\n+       |/b/src/main/scala/b/Main2.scala\n+       |package b\n+       |import a.Main\n+       |object Main2{\n+       |  val toRename = Main.<<toR@@ename>>\n+       |}\n+       |\"\"\".stripMargin,\n+    newName = \"otherRename\"\n+  )\n+\n+  renamed(\n+    \"unapply\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |object <<F@@oo>> {\n+       |  def unapply(s: String): Option[String] = Some(\"\")\n+       |}\n+       |\n+       |object Main{\n+       |  \"foo\" match {\n+       |    case <<Foo>>(s) => ()\n+       |  }\n+       |}\n+       |\"\"\".stripMargin,\n+    newName = \"Bar\"\n+  )\n+\n+  renamed(\n+    \"unapply-param\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |object Foo {\n+       |  def unapply(<<nam@@e>>: String): Option[String] = Some(<<name>>)\n+       |}\n+       |\n+       |object Main{\n+       |  \"foo\" match {\n+       |    case Foo(name) => ()\n+       |  }\n+       |}\n+       |\"\"\".stripMargin,\n+    newName = \"str\"\n+  )\n+\n+  renamed(\n+    \"local\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |object Main{\n+       |  def hello() = {\n+       |    val <<toRen@@ame>> = 123\n+       |    <<toRename>>\n+       |  }\n+       |}\n+       |\"\"\".stripMargin,\n+    newName = \"otherRename\"\n+  )\n+\n+  renamed(\n+    \"method\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |object Main{\n+       |  def <<met@@hod>>(abc : String) = true\n+       |\n+       |  if(<<method>>(\"\")) println(\"Is true!\")\n+       |}\n+       |\"\"\".stripMargin,\n+    newName = \"truth\"\n+  )\n+\n+  renamed(\n+    \"self-type\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |trait <<A@@BC>>\n+       |trait Alphabet{\n+       |  this: <<ABC>> =>\n+       |}\n+       |object Main{\n+       |  val a = new Alphabet with <<ABC>>\n+       |}\n+       |\"\"\".stripMargin,\n+    newName = \"Animal\"\n+  )\n+\n+  renamed(\n+    \"method-inheritance\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |trait Hello{\n+       |  def <<method>>(abc : String) : Boolean\n+       |}\n+       |\n+       |class GoodMorning extends Hello {\n+       |  def <<met@@hod>>(abc : String) = true\n+       |}\n+       |\"\"\".stripMargin,\n+    newName = \"truth\"\n+  )\n+\n+  renamed(\n+    \"long-inheritance\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |trait A[T, S] {\n+       |  def <<method>>(abc : T) : S\n+       |}\n+       |\n+       |abstract class B[T] extends A[T, Boolean] {\n+       |  def <<method>>(abc : T) : Boolean\n+       |}\n+       |\n+       |abstract class C extends B[String] {\n+       |  def <<meth@@od>>(abc : String) : Boolean = false\n+       |}\n+       |\"\"\".stripMargin,\n+    newName = \"truth\"\n+  )\n+\n+  renamed(\n+    \"multiple-inheritance\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |trait A {\n+       |  def <<method>>(abc : String) : Boolean\n+       |}\n+       |\n+       |trait B {\n+       |  def <<method>>(abc : String) : Boolean = true\n+       |}\n+       |\n+       |abstract class C extends B with A {\n+       |  override def <<meth@@od>>(abc : String) : Boolean = false\n+       |}\n+       |\"\"\".stripMargin,\n+    newName = \"truth\"\n+  )\n+\n+  renamed(\n+    \"apply\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |object User{\n+       |  def <<ap@@ply>>(name : String) = name\n+       |}\n+       |object Main{\n+       |  val toRename = User##.##<<>>(\"abc\")\n+       |}\n+       |\"\"\".stripMargin,\n+    newName = \"name\"\n+  )\n+\n+  same(\n+    \"colon-bad\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |class User{\n+       |  def <<:@@:>>(name : String) = name\n+       |}\n+       |object Main{\n+       |  val user = new User()\n+       |  \"\" <<::>> user\n+       |}\n+       |\"\"\".stripMargin\n+  )\n+\n+  renamed(\n+    \"colon-good\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |class User{\n+       |  def <<:@@:>>(name : String) = name\n+       |}\n+       |object Main{\n+       |  val user = new User()\n+       |  \"\" <<::>> user\n+       |}\n+       |\"\"\".stripMargin,\n+    newName = \"method:\"\n+  )\n+\n+  same(\n+    \"unary-bad\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |class User{\n+       |  def <<unary_!>> = false\n+       |}\n+       |object Main{\n+       |  val user = new User()\n+       |  <<@@!>>user\n+       |}\n+       |\"\"\".stripMargin\n+  )\n+\n+  same(\n+    \"unary-bad2\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |class User{\n+       |  def <<u@@nary_!>> = false\n+       |}\n+       |object Main{\n+       |  val user = new User()\n+       |  <<!>>user\n+       |}\n+       |\"\"\".stripMargin\n+  )\n+\n+  same(\n+    \"java-classes\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |class MyException extends Exce@@ption\n+       |class NewException extends RuntimeException\n+       |class NewException2 extends RuntimeException\n+       |\"\"\".stripMargin\n+  )\n+\n+  renamed(\n+    \"inheritance\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |abstract class <<An@@imal>>\n+       |class Dog extends <<Animal>>\n+       |class Cat extends <<Animal>>\n+       |\"\"\".stripMargin,\n+    newName = \"Tree\"\n+  )\n+\n+  renamed(\n+    \"companion\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |class <<Main>>{}\n+       |object <<M@@ain>>\n+       |\"\"\".stripMargin,\n+    newName = \"Tree\",\n+    fileRenames =\n+      Map(\"a/src/main/scala/a/Main.scala\" -> \"a/src/main/scala/a/Tree.scala\")\n+  )\n+\n+  renamed(\n+    \"companion2\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |class <<Ma@@in>>{}\n+       |object <<Main>>\n+       |\"\"\".stripMargin,\n+    newName = \"Tree\",\n+    fileRenames =\n+      Map(\"a/src/main/scala/a/Main.scala\" -> \"a/src/main/scala/a/Tree.scala\")\n+  )\n+\n+  renamed(\n+    \"many-files\",\n+    \"\"\"|/a/src/main/scala/a/A.scala\n+       |package a\n+       |object A {\n+       |  def <<ren@@ameIt>>(a : String) = \"\"\n+       |}\n+       |/a/src/main/scala/a/B.scala\n+       |package a\n+       |object B {\n+       |  val str = A.<<renameIt>>(\"\")\n+       |}\n+       |/a/src/main/scala/a/C.scala\n+       |package a\n+       |object C {\n+       |  val str = A.<<renameIt>>(\"\")\n+       |}\n+       |/a/src/main/scala/a/D.scala\n+       |package a\n+       |object D {\n+       |  val str = A.<<renameIt>>(\"\")\n+       |}\n+       |/a/src/main/scala/a/E.scala\n+       |package a\n+       |object E {\n+       |  val str = A.<<renameIt>>(\"\")\n+       |}\n+       |\"\"\".stripMargin,\n+    newName = \"iAmRenamed\",\n+    nonOpened = Set(\n+      \"a/src/main/scala/a/C.scala\",\n+      \"a/src/main/scala/a/D.scala\",\n+      \"a/src/main/scala/a/E.scala\"\n+    )\n+  )\n+\n+  renamed(\n+    \"anon\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |trait Methodable[T] {\n+       |  def <<method>>(asf: T): Int\n+       |}\n+       |\n+       |trait Alphabet extends Methodable[String] {\n+       |  def <<method>>(adf: String) = 123\n+       |}\n+       |\n+       |object Main {\n+       |  val a = new Alphabet {\n+       |    override def <<me@@thod>>(adf: String): Int = 321\n+       |  }\n+       |}\n+       |\"\"\".stripMargin,\n+    newName = \"renamed\"\n+  )\n+\n+  renamed(\n+    \"java-unchanged\",\n+    \"\"\"|/a/src/main/java/a/Other.java\n+       |package a;\n+       |public class Other{\n+       |\n+       |}\n+       |/a/src/main/scala/a/Main.scala\n+       |package a\n+       |object Main{\n+       |  val other = new <<Oth@@er>>()"
+  },
+  {
+    "id" : "7b947a62-875a-4d34-89c9-a42f0fffd3a3",
+    "prId" : 1048,
+    "comments" : [
+      {
+        "id" : "9366d415-3aa8-4bc7-8543-d8dbe81d4764",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Missing test case: named parameter for case class fields\r\n\r\n```scala\r\ncase class Name(value: String)\r\nName(value = \"42\")\r\n  .copy(value = \"43\")\r\n  .value\r\nnew Name(value = \"44\")\r\n```",
+        "createdAt" : "2019-11-11T04:27:23Z",
+        "updatedAt" : "2019-11-11T16:33:17Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e963a3c4-6f0d-4efa-994c-69d6aa2756be",
+        "parentId" : "9366d415-3aa8-4bc7-8543-d8dbe81d4764",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "It seems that references are not being found for 42 nad 44. Added that test case.",
+        "createdAt" : "2019-11-11T12:20:36Z",
+        "updatedAt" : "2019-11-11T16:33:17Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "10ed517b-0134-4b36-9986-9ba6570703f6",
+        "parentId" : "9366d415-3aa8-4bc7-8543-d8dbe81d4764",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Seems to be the same issue as https://github.com/scalameta/scalameta/issues/1169",
+        "createdAt" : "2019-11-11T12:23:03Z",
+        "updatedAt" : "2019-11-11T16:33:17Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "32617da1c138d4dd74af7289c14ff3aeb1bc9654",
+    "line" : 54,
+    "diffHunk" : "@@ -0,0 +1,519 @@\n+package tests\n+import scala.concurrent.Future\n+\n+object RenameSuite extends BaseLspSuite(\"rename\") {\n+\n+  renamed(\n+    \"basic\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |object Main{\n+       |  val <<toRename>> = 123\n+       |}\n+       |/a/src/main/scala/a/Main2.scala\n+       |package a\n+       |object Main2{\n+       |  val toRename = Main.<<toR@@ename>>\n+       |}\n+       |\"\"\".stripMargin,\n+    newName = \"otherRename\"\n+  )\n+\n+  renamed(\n+    \"across-targets\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |object Main{\n+       |  val <<toRename>> = 123\n+       |}\n+       |/b/src/main/scala/b/Main2.scala\n+       |package b\n+       |import a.Main\n+       |object Main2{\n+       |  val toRename = Main.<<toR@@ename>>\n+       |}\n+       |\"\"\".stripMargin,\n+    newName = \"otherRename\"\n+  )\n+\n+  renamed(\n+    \"unapply\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |object <<F@@oo>> {\n+       |  def unapply(s: String): Option[String] = Some(\"\")\n+       |}\n+       |\n+       |object Main{\n+       |  \"foo\" match {\n+       |    case <<Foo>>(s) => ()\n+       |  }\n+       |}\n+       |\"\"\".stripMargin,\n+    newName = \"Bar\"\n+  )\n+"
+  },
+  {
+    "id" : "6c220184-2d6f-407e-8dfd-35c769fe6e98",
+    "prId" : 1075,
+    "comments" : [
+      {
+        "id" : "df438b65-04f3-497e-90c0-7f38c896e10c",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "I know this is the default, but I wanted to be explicit here",
+        "createdAt" : "2019-11-18T09:50:33Z",
+        "updatedAt" : "2019-11-18T11:29:17Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "19c1e17dcfa15ee254a7c6db58823bf97aa46dda",
+    "line" : 33,
+    "diffHunk" : "@@ -279,6 +279,29 @@ object RenameSuite extends BaseLspSuite(\"rename\") {\n       Map(\"a/src/main/scala/a/Main.scala\" -> \"a/src/main/scala/a/Tree.scala\")\n   )\n \n+  renamed(\n+    \"filename-exact-match\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |object <<Ma@@in>>\n+       |object TheMain\n+       |\"\"\".stripMargin,\n+    newName = \"Tree\",\n+    fileRenames =\n+      Map(\"a/src/main/scala/a/Main.scala\" -> \"a/src/main/scala/a/Tree.scala\")\n+  )\n+\n+  renamed(\n+    \"filename-exact-match-2\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |object Main\n+       |object <<The@@Main>>\n+       |\"\"\".stripMargin,\n+    newName = \"Tree\",\n+    fileRenames = Map.empty"
+  },
+  {
+    "id" : "06323d64-a292-4b67-a1e3-7d16d3ab74e5",
+    "prId" : 1075,
+    "comments" : [
+      {
+        "id" : "df278250-6184-4a1f-b8a0-aae4e810e175",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : ":heart_eyes: Thanks @gabro!",
+        "createdAt" : "2019-11-18T09:51:16Z",
+        "updatedAt" : "2019-11-18T11:29:17Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "19c1e17dcfa15ee254a7c6db58823bf97aa46dda",
+    "line" : 26,
+    "diffHunk" : "@@ -279,6 +279,29 @@ object RenameSuite extends BaseLspSuite(\"rename\") {\n       Map(\"a/src/main/scala/a/Main.scala\" -> \"a/src/main/scala/a/Tree.scala\")\n   )\n \n+  renamed(\n+    \"filename-exact-match\",\n+    \"\"\"|/a/src/main/scala/a/Main.scala\n+       |package a\n+       |object <<Ma@@in>>\n+       |object TheMain\n+       |\"\"\".stripMargin,\n+    newName = \"Tree\",\n+    fileRenames =\n+      Map(\"a/src/main/scala/a/Main.scala\" -> \"a/src/main/scala/a/Tree.scala\")\n+  )\n+\n+  renamed(\n+    \"filename-exact-match-2\","
+  },
+  {
+    "id" : "ff3f706c-b202-4043-8e51-826c16f12e63",
+    "prId" : 1075,
+    "comments" : [
+      {
+        "id" : "36678d20-0387-4614-a189-2d323511c866",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Unrelated to this PR, but I just noticed that this test suite should be called `RenameLspSuite`! cc/ @tgodzik ",
+        "createdAt" : "2019-11-18T11:02:46Z",
+        "updatedAt" : "2019-11-18T11:29:17Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "1a8fb2ee-8300-47b9-abfa-54a081f2741e",
+        "parentId" : "36678d20-0387-4614-a189-2d323511c866",
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "I can squeeze a fix in ;-)",
+        "createdAt" : "2019-11-18T11:03:29Z",
+        "updatedAt" : "2019-11-18T11:29:17Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "6701d97c-e01f-41fe-b39c-8abf5b33d8da",
+        "parentId" : "36678d20-0387-4614-a189-2d323511c866",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "You can use rename for the renaming of RenameLspSuite :O ",
+        "createdAt" : "2019-11-18T11:04:45Z",
+        "updatedAt" : "2019-11-18T11:29:17Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4ea0d90c-f999-464a-8e60-3f1da079fce5",
+        "parentId" : "36678d20-0387-4614-a189-2d323511c866",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "🤯 ",
+        "createdAt" : "2019-11-18T11:10:44Z",
+        "updatedAt" : "2019-11-18T11:29:17Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5633ab00-daaa-4292-be45-8dbfb19208fa",
+        "parentId" : "36678d20-0387-4614-a189-2d323511c866",
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "Done!\r\n\r\nI've renamed the object using the rename command, forgot to rename the file... but \"rename\" had my back! 😍",
+        "createdAt" : "2019-11-18T11:30:43Z",
+        "updatedAt" : "2019-11-18T11:30:43Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "19c1e17dcfa15ee254a7c6db58823bf97aa46dda",
+    "line" : 10,
+    "diffHunk" : "@@ -279,6 +279,29 @@ object RenameSuite extends BaseLspSuite(\"rename\") {\n       Map(\"a/src/main/scala/a/Main.scala\" -> \"a/src/main/scala/a/Tree.scala\")"
+  }
+]

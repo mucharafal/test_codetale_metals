@@ -1,0 +1,139 @@
+[
+  {
+    "id" : "c6cfbd60-a1c8-4345-8d79-f31164179e4e",
+    "prId" : 1250,
+    "comments" : [
+      {
+        "id" : "60f08582-b628-4b58-8e5a-722412e754b1",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "maybe you can do\r\n\r\n```scala\r\ntext.slice(pos.point - 3, 3) == \"/**\"\r\n```\r\n\r\n(I would double check the indexes :P )",
+        "createdAt" : "2020-01-09T12:35:12Z",
+        "updatedAt" : "2020-01-13T13:44:04Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "8939f1c6-da51-4864-9df8-ccd759fc037a",
+        "parentId" : "60f08582-b628-4b58-8e5a-722412e754b1",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "The current solution is fine. ",
+        "createdAt" : "2020-01-10T22:52:57Z",
+        "updatedAt" : "2020-01-13T13:44:04Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "cf8e6070092ac693251e01568b009a7f1bfce601",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,199 @@\n+package scala.meta.internal.pc\n+\n+import java.lang.StringBuilder\n+\n+import org.eclipse.{lsp4j => l}\n+\n+import scala.util.control.NonFatal\n+import scala.collection.immutable.Nil\n+\n+trait ScaladocCompletion { this: MetalsGlobal =>\n+\n+  /**\n+   * A scaladoc completion showing the parameters of the given associated definition.\n+   *\n+   * @param editRange the range in the original source file.\n+   * @param associatedDef the memberDef associated with the scaladoc to complete.\n+   *                      This class will construct scaladoc based on the params of this definition.\n+   * @param pos the position of the completion request.\n+   * @param text the text of the original source code.\n+   */\n+  case class Scaladoc(\n+      editRange: l.Range,\n+      associatedDef: MemberDef,\n+      pos: Position,\n+      text: String\n+  ) extends CompletionPosition {\n+    // The indent for gutter asterisks aligned in column three.\n+    // |/**\n+    // |  *\n+    private val scaladocIndent = \"  \"\n+\n+    override def contribute: List[Member] = {\n+      val necessaryIndent = inferIndent(pos)\n+      val indent = s\"${necessaryIndent}${scaladocIndent}\"\n+      val params: List[String] = getParams(associatedDef)\n+\n+      // Construct the following new text.\n+      // \"\"\"\n+      //\n+      //   * $0 <- move cursor here. Add an empty line below here, only if there's @param or @return line.\n+      //   *\n+      //   * @param param1\n+      //   * @param param2\n+      //   * @return\n+      //   */\n+      // \"\"\"\n+      val builder = new StringBuilder()\n+\n+      val hasConstructor = associatedDef.symbol.primaryConstructor.isDefined && !associatedDef.symbol.isAbstractClass\n+      val hasReturnValue =\n+        associatedDef.symbol.isMethod &&\n+          !(associatedDef.symbol.asMethod.returnType.finalResultType\n+            =:= typeOf[Unit])\n+\n+      // newline after `/**`\n+      builder.append(\"\\n\")\n+\n+      // * $0 <- move cursor here.\n+      builder.append(s\"${indent}*\")\n+      if (clientSupportsSnippets) builder.append(\" $0\\n\")\n+      else builder.append(\"\\n\")\n+\n+      // add empty line if there's parameter or \"@return\" or \"@constructor\" line.\n+      if (params.nonEmpty || hasReturnValue || hasConstructor)\n+        builder.append(s\"${indent}*\\n\")\n+\n+      // * @constructor\n+      if (hasConstructor) builder.append(s\"${indent}* @constructor\\n\")\n+\n+      // * @param p1\n+      // * @param p2\n+      params.foreach(param => builder.append(s\"${indent}* @param ${param}\\n\"))\n+\n+      // * @return\n+      // */\n+      if (hasReturnValue) builder.append(s\"${indent}* @return\\n\")\n+      builder.append(s\"${indent}*/\")\n+\n+      List(\n+        new TextEditMember(\n+          \"Scaladoc Comment\",\n+          new l.TextEdit(\n+            editRange,\n+            builder.toString()\n+          ),\n+          completionsSymbol(associatedDef.name.toString()),\n+          label = Some(\"/** */\"),\n+          detail = Some(\"Scaladoc Comment\")\n+        )\n+      )\n+    }\n+\n+    // Infers the indentation at the completion position by counting the number of leading\n+    // spaces in the line.\n+    // For example:\n+    // |\"\"\"\n+    // |object A {\n+    // |  /**<COMPLETE> // inferred indent is 4 spaces\n+    // |  def foo(x: Int) = ???\n+    // |}\n+    // |\"\"\"\n+    private def inferIndent(pos: Position): String = {\n+      if (metalsConfig.snippetAutoIndent()) {\n+        \"\"\n+      } else {\n+        // 3 is the length of \"/**$\" <- $ is a cursor\n+        \" \" * (pos.column - 4)\n+      }\n+    }\n+\n+    /**\n+     * Returns the parameter names of the given memberDef.\n+     *\n+     * @param memberDef The memberDef to construct scaladoc.\n+     */\n+    private def getParams(memberDef: MemberDef): List[String] = {\n+      memberDef match {\n+        case defdef: DefDef =>\n+          defdef.symbol.paramss.flatten\n+            .filter(!_.isSynthetic)\n+            .map(_.name.toString())\n+        case clazz: ClassDef =>\n+          // If the associated def is a class definition,\n+          // retrieve the constructor from the class, and caluculate the lines\n+          // from the constructor definition instead.\n+          clazz.symbol.primaryConstructor.paramss.flatten\n+            .filter(sym =>\n+              // FIXME: All synthetic params should be filtered out by checking SYNTHETIC flag.\n+              // evidence params for classs constructor look like they don't have SYNTHETIC flag.\n+              !sym.isSynthetic &&\n+                !sym.name.startsWith(nme.EVIDENCE_PARAM_PREFIX)\n+            )\n+            .map(_.name.toString())\n+        case _ => Nil\n+      }\n+    }\n+  }\n+\n+  /**\n+   * Check if the cursor is located just behind the opening comment.\n+   *\n+   * @param pos The cursor position\n+   * @param text The original text of the source file.\n+   */\n+  protected def isScaladocCompletion(pos: Position, text: String): Boolean = {\n+    try {\n+      pos.isDefined &&\n+      text.charAt(pos.point - 3) == '/' &&\n+      text.charAt(pos.point - 2) == '*' &&\n+      text.charAt(pos.point - 1) == '*'"
+  },
+  {
+    "id" : "8e87ad28-ac21-44ca-9d55-ca97dba382be",
+    "prId" : 1250,
+    "comments" : [
+      {
+        "id" : "91a04e96-da5c-471a-9bd0-e6d2680eb8bf",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "if you're happy with the workaround, I would change the `FIXME` into `NOTE`. We tend to avoid `FIXME` comments as much as possible (with a few exceptions that point to specific GitHub issues)",
+        "createdAt" : "2020-01-09T12:41:13Z",
+        "updatedAt" : "2020-01-13T13:44:04Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "cf8e6070092ac693251e01568b009a7f1bfce601",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,199 @@\n+package scala.meta.internal.pc\n+\n+import java.lang.StringBuilder\n+\n+import org.eclipse.{lsp4j => l}\n+\n+import scala.util.control.NonFatal\n+import scala.collection.immutable.Nil\n+\n+trait ScaladocCompletion { this: MetalsGlobal =>\n+\n+  /**\n+   * A scaladoc completion showing the parameters of the given associated definition.\n+   *\n+   * @param editRange the range in the original source file.\n+   * @param associatedDef the memberDef associated with the scaladoc to complete.\n+   *                      This class will construct scaladoc based on the params of this definition.\n+   * @param pos the position of the completion request.\n+   * @param text the text of the original source code.\n+   */\n+  case class Scaladoc(\n+      editRange: l.Range,\n+      associatedDef: MemberDef,\n+      pos: Position,\n+      text: String\n+  ) extends CompletionPosition {\n+    // The indent for gutter asterisks aligned in column three.\n+    // |/**\n+    // |  *\n+    private val scaladocIndent = \"  \"\n+\n+    override def contribute: List[Member] = {\n+      val necessaryIndent = inferIndent(pos)\n+      val indent = s\"${necessaryIndent}${scaladocIndent}\"\n+      val params: List[String] = getParams(associatedDef)\n+\n+      // Construct the following new text.\n+      // \"\"\"\n+      //\n+      //   * $0 <- move cursor here. Add an empty line below here, only if there's @param or @return line.\n+      //   *\n+      //   * @param param1\n+      //   * @param param2\n+      //   * @return\n+      //   */\n+      // \"\"\"\n+      val builder = new StringBuilder()\n+\n+      val hasConstructor = associatedDef.symbol.primaryConstructor.isDefined && !associatedDef.symbol.isAbstractClass\n+      val hasReturnValue =\n+        associatedDef.symbol.isMethod &&\n+          !(associatedDef.symbol.asMethod.returnType.finalResultType\n+            =:= typeOf[Unit])\n+\n+      // newline after `/**`\n+      builder.append(\"\\n\")\n+\n+      // * $0 <- move cursor here.\n+      builder.append(s\"${indent}*\")\n+      if (clientSupportsSnippets) builder.append(\" $0\\n\")\n+      else builder.append(\"\\n\")\n+\n+      // add empty line if there's parameter or \"@return\" or \"@constructor\" line.\n+      if (params.nonEmpty || hasReturnValue || hasConstructor)\n+        builder.append(s\"${indent}*\\n\")\n+\n+      // * @constructor\n+      if (hasConstructor) builder.append(s\"${indent}* @constructor\\n\")\n+\n+      // * @param p1\n+      // * @param p2\n+      params.foreach(param => builder.append(s\"${indent}* @param ${param}\\n\"))\n+\n+      // * @return\n+      // */\n+      if (hasReturnValue) builder.append(s\"${indent}* @return\\n\")\n+      builder.append(s\"${indent}*/\")\n+\n+      List(\n+        new TextEditMember(\n+          \"Scaladoc Comment\",\n+          new l.TextEdit(\n+            editRange,\n+            builder.toString()\n+          ),\n+          completionsSymbol(associatedDef.name.toString()),\n+          label = Some(\"/** */\"),\n+          detail = Some(\"Scaladoc Comment\")\n+        )\n+      )\n+    }\n+\n+    // Infers the indentation at the completion position by counting the number of leading\n+    // spaces in the line.\n+    // For example:\n+    // |\"\"\"\n+    // |object A {\n+    // |  /**<COMPLETE> // inferred indent is 4 spaces\n+    // |  def foo(x: Int) = ???\n+    // |}\n+    // |\"\"\"\n+    private def inferIndent(pos: Position): String = {\n+      if (metalsConfig.snippetAutoIndent()) {\n+        \"\"\n+      } else {\n+        // 3 is the length of \"/**$\" <- $ is a cursor\n+        \" \" * (pos.column - 4)\n+      }\n+    }\n+\n+    /**\n+     * Returns the parameter names of the given memberDef.\n+     *\n+     * @param memberDef The memberDef to construct scaladoc.\n+     */\n+    private def getParams(memberDef: MemberDef): List[String] = {\n+      memberDef match {\n+        case defdef: DefDef =>\n+          defdef.symbol.paramss.flatten\n+            .filter(!_.isSynthetic)\n+            .map(_.name.toString())\n+        case clazz: ClassDef =>\n+          // If the associated def is a class definition,\n+          // retrieve the constructor from the class, and caluculate the lines\n+          // from the constructor definition instead.\n+          clazz.symbol.primaryConstructor.paramss.flatten\n+            .filter(sym =>\n+              // FIXME: All synthetic params should be filtered out by checking SYNTHETIC flag.\n+              // evidence params for classs constructor look like they don't have SYNTHETIC flag.\n+              !sym.isSynthetic &&\n+                !sym.name.startsWith(nme.EVIDENCE_PARAM_PREFIX)"
+  },
+  {
+    "id" : "6f268fdf-c651-42be-8d22-f7042883fe67",
+    "prId" : 1250,
+    "comments" : [
+      {
+        "id" : "66e17cd4-a011-4977-9c98-eb7f83f192e2",
+        "parentId" : null,
+        "author" : {
+          "login" : "tanishiking",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/9353584?u=c3e5aba60a43901e7d2b7c0ea4caac06cde77049&v=4"
+        },
+        "body" : "I believed that we can filter out all synthetic parameter like `evidence$1: Ordering[T]` which is appended here https://github.com/scala/scala/blob/ba9701059216c629410f4f23a2175d20ad62484b/src/compiler/scala/tools/nsc/ast/parser/TreeBuilder.scala#L135\r\nBut only with `isSynthetic` filter, I couldn't filter out `evidence$1` from params and [this test](https://github.com/scalameta/metals/pull/1250/files#diff-a92ad42d0d97b9389b28fec32531915dR267) failed 🤔 \r\n\r\nI think I have to dig deeper into this phenomenon, but I just patched it with filtering by `EVIDENCE_PARAM_PREFIX` this for now, as a workaround.",
+        "createdAt" : "2020-01-09T12:47:43Z",
+        "updatedAt" : "2020-01-13T13:44:04Z",
+        "lastEditedBy" : {
+          "login" : "tanishiking",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/9353584?u=c3e5aba60a43901e7d2b7c0ea4caac06cde77049&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "e6fa96f9-699f-4368-88dd-38b5b0cc0dc0",
+        "parentId" : "66e17cd4-a011-4977-9c98-eb7f83f192e2",
+        "author" : {
+          "login" : "tanishiking",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/9353584?u=c3e5aba60a43901e7d2b7c0ea4caac06cde77049&v=4"
+        },
+        "body" : "I'm still not 100% sure, but maybe this happens because the scalac type checker doesn't keep tree modifiers in sync with symbol flags for a class constructor. (actually, there's only `IMPLICIT` flag remains on the symbol of `evidence` on class constructor).\r\n\r\nMaybe I can create an issue on `scala/bug` and fix (or maybe feature?) this,  but let me keep this workaround and note this behavior on a comment for now :)\r\n\r\n---\r\n\r\n\r\n- when a symbol for a method signature is created, modifiers that are defined as [ValueParameterFlags](https://github.com/scala/scala/blob/8514c3066ac8f71e676369e6163a1b2e6303f965/src/reflect/scala/reflect/internal/Flags.scala#L303-L307) survive during type checking.\r\n  - Assigning modifiers to value parameters [here]( https://github.com/scala/scala/blob/4f04e38f1d0a74048b4ea350e7c7ff377b6fa3d4/src/compiler/scala/tools/nsc/typechecker/Namers.scala#L1332-L1336)\r\n- but, it looks like type-checker doesn't use `ValueParameterFlags` as modifiers mask for a class constructor. Just assigning [inConstructorFlags]( https://github.com/scala/scala/blob/4f04e38f1d0a74048b4ea350e7c7ff377b6fa3d4/src/compiler/scala/tools/nsc/typechecker/Namers.scala#L409) maybe, and all modifiers from the tree don't remain in symbol definition.\r\n\r\nFYI: The PR that makes `evidence` (for method definition symbol) SYNTHETIC is here https://github.com/scala/scala/pull/2132",
+        "createdAt" : "2020-01-11T06:17:16Z",
+        "updatedAt" : "2020-01-13T13:44:04Z",
+        "lastEditedBy" : {
+          "login" : "tanishiking",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/9353584?u=c3e5aba60a43901e7d2b7c0ea4caac06cde77049&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "cf8e6070092ac693251e01568b009a7f1bfce601",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,199 @@\n+package scala.meta.internal.pc\n+\n+import java.lang.StringBuilder\n+\n+import org.eclipse.{lsp4j => l}\n+\n+import scala.util.control.NonFatal\n+import scala.collection.immutable.Nil\n+\n+trait ScaladocCompletion { this: MetalsGlobal =>\n+\n+  /**\n+   * A scaladoc completion showing the parameters of the given associated definition.\n+   *\n+   * @param editRange the range in the original source file.\n+   * @param associatedDef the memberDef associated with the scaladoc to complete.\n+   *                      This class will construct scaladoc based on the params of this definition.\n+   * @param pos the position of the completion request.\n+   * @param text the text of the original source code.\n+   */\n+  case class Scaladoc(\n+      editRange: l.Range,\n+      associatedDef: MemberDef,\n+      pos: Position,\n+      text: String\n+  ) extends CompletionPosition {\n+    // The indent for gutter asterisks aligned in column three.\n+    // |/**\n+    // |  *\n+    private val scaladocIndent = \"  \"\n+\n+    override def contribute: List[Member] = {\n+      val necessaryIndent = inferIndent(pos)\n+      val indent = s\"${necessaryIndent}${scaladocIndent}\"\n+      val params: List[String] = getParams(associatedDef)\n+\n+      // Construct the following new text.\n+      // \"\"\"\n+      //\n+      //   * $0 <- move cursor here. Add an empty line below here, only if there's @param or @return line.\n+      //   *\n+      //   * @param param1\n+      //   * @param param2\n+      //   * @return\n+      //   */\n+      // \"\"\"\n+      val builder = new StringBuilder()\n+\n+      val hasConstructor = associatedDef.symbol.primaryConstructor.isDefined && !associatedDef.symbol.isAbstractClass\n+      val hasReturnValue =\n+        associatedDef.symbol.isMethod &&\n+          !(associatedDef.symbol.asMethod.returnType.finalResultType\n+            =:= typeOf[Unit])\n+\n+      // newline after `/**`\n+      builder.append(\"\\n\")\n+\n+      // * $0 <- move cursor here.\n+      builder.append(s\"${indent}*\")\n+      if (clientSupportsSnippets) builder.append(\" $0\\n\")\n+      else builder.append(\"\\n\")\n+\n+      // add empty line if there's parameter or \"@return\" or \"@constructor\" line.\n+      if (params.nonEmpty || hasReturnValue || hasConstructor)\n+        builder.append(s\"${indent}*\\n\")\n+\n+      // * @constructor\n+      if (hasConstructor) builder.append(s\"${indent}* @constructor\\n\")\n+\n+      // * @param p1\n+      // * @param p2\n+      params.foreach(param => builder.append(s\"${indent}* @param ${param}\\n\"))\n+\n+      // * @return\n+      // */\n+      if (hasReturnValue) builder.append(s\"${indent}* @return\\n\")\n+      builder.append(s\"${indent}*/\")\n+\n+      List(\n+        new TextEditMember(\n+          \"Scaladoc Comment\",\n+          new l.TextEdit(\n+            editRange,\n+            builder.toString()\n+          ),\n+          completionsSymbol(associatedDef.name.toString()),\n+          label = Some(\"/** */\"),\n+          detail = Some(\"Scaladoc Comment\")\n+        )\n+      )\n+    }\n+\n+    // Infers the indentation at the completion position by counting the number of leading\n+    // spaces in the line.\n+    // For example:\n+    // |\"\"\"\n+    // |object A {\n+    // |  /**<COMPLETE> // inferred indent is 4 spaces\n+    // |  def foo(x: Int) = ???\n+    // |}\n+    // |\"\"\"\n+    private def inferIndent(pos: Position): String = {\n+      if (metalsConfig.snippetAutoIndent()) {\n+        \"\"\n+      } else {\n+        // 3 is the length of \"/**$\" <- $ is a cursor\n+        \" \" * (pos.column - 4)\n+      }\n+    }\n+\n+    /**\n+     * Returns the parameter names of the given memberDef.\n+     *\n+     * @param memberDef The memberDef to construct scaladoc.\n+     */\n+    private def getParams(memberDef: MemberDef): List[String] = {\n+      memberDef match {\n+        case defdef: DefDef =>\n+          defdef.symbol.paramss.flatten\n+            .filter(!_.isSynthetic)\n+            .map(_.name.toString())\n+        case clazz: ClassDef =>\n+          // If the associated def is a class definition,\n+          // retrieve the constructor from the class, and caluculate the lines\n+          // from the constructor definition instead.\n+          clazz.symbol.primaryConstructor.paramss.flatten\n+            .filter(sym =>\n+              // FIXME: All synthetic params should be filtered out by checking SYNTHETIC flag.\n+              // evidence params for classs constructor look like they don't have SYNTHETIC flag.\n+              !sym.isSynthetic &&\n+                !sym.name.startsWith(nme.EVIDENCE_PARAM_PREFIX)"
+  }
+]

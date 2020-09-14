@@ -1,0 +1,635 @@
+[
+  {
+    "id" : "95a319e7-eea1-43c7-aa90-b806d702618d",
+    "prId" : 728,
+    "comments" : [
+      {
+        "id" : "6eb64d26-5728-4c15-baa5-f2aaf9e7fc0b",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "`isCurrentlyCompiling`",
+        "createdAt" : "2019-05-23T13:25:24Z",
+        "updatedAt" : "2019-05-24T09:17:46Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "9d3f311622eae8bedf5d893e5016c35523e74815",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,121 @@\n+package scala.meta.internal.metals\n+import ch.epfl.scala.{bsp4j => b}\n+import scala.collection.concurrent.TrieMap\n+import scala.concurrent.ExecutionContext\n+import scala.concurrent.Future\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.io.AbsolutePath\n+\n+final class Compilations(\n+    buildTargets: BuildTargets,\n+    classes: BuildTargetClasses,\n+    workspace: () => AbsolutePath,\n+    buildServer: () => Option[BuildServerConnection]\n+)(implicit ec: ExecutionContext) {\n+\n+  // we are maintaining a separate queue for cascade compilation since those must happen ASAP\n+  private val compilationBatch = new CompilationBatch\n+  private val cascadeBatch = new CascadeCompilationBatch\n+\n+  private val isCompiling = TrieMap.empty[b.BuildTargetIdentifier, Boolean]\n+  private var lastCompile: collection.Set[b.BuildTargetIdentifier] = Set.empty\n+\n+  def currentlyCompiling: Iterable[b.BuildTargetIdentifier] = isCompiling.keys\n+  def currentlyCompiling(buildTarget: b.BuildTargetIdentifier): Boolean ="
+  },
+  {
+    "id" : "f0c86aed-463a-4703-9b17-0a53942f0239",
+    "prId" : 728,
+    "comments" : [
+      {
+        "id" : "798ee91e-48ca-48fd-a233-a5668673d9e2",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "`isPreviouslyCompiled`",
+        "createdAt" : "2019-05-23T13:25:31Z",
+        "updatedAt" : "2019-05-24T09:17:46Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "9d3f311622eae8bedf5d893e5016c35523e74815",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,121 @@\n+package scala.meta.internal.metals\n+import ch.epfl.scala.{bsp4j => b}\n+import scala.collection.concurrent.TrieMap\n+import scala.concurrent.ExecutionContext\n+import scala.concurrent.Future\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.io.AbsolutePath\n+\n+final class Compilations(\n+    buildTargets: BuildTargets,\n+    classes: BuildTargetClasses,\n+    workspace: () => AbsolutePath,\n+    buildServer: () => Option[BuildServerConnection]\n+)(implicit ec: ExecutionContext) {\n+\n+  // we are maintaining a separate queue for cascade compilation since those must happen ASAP\n+  private val compilationBatch = new CompilationBatch\n+  private val cascadeBatch = new CascadeCompilationBatch\n+\n+  private val isCompiling = TrieMap.empty[b.BuildTargetIdentifier, Boolean]\n+  private var lastCompile: collection.Set[b.BuildTargetIdentifier] = Set.empty\n+\n+  def currentlyCompiling: Iterable[b.BuildTargetIdentifier] = isCompiling.keys\n+  def currentlyCompiling(buildTarget: b.BuildTargetIdentifier): Boolean =\n+    isCompiling.contains(buildTarget)\n+\n+  def previouslyCompiled: Iterable[b.BuildTargetIdentifier] = lastCompile\n+  def previouslyCompiled(buildTarget: b.BuildTargetIdentifier): Boolean ="
+  },
+  {
+    "id" : "78f2b55c-0b2f-4b4e-bf1c-dcad0238f7e1",
+    "prId" : 728,
+    "comments" : [
+      {
+        "id" : "85c56727-d823-4100-8d30-5d46702e19ac",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Can we try to remove this class? This is a heavy abstraction IMO for a simple `Seq[BuildTargetIdentifier] => Seq[BuildTargetIdentifier]` function. \r\n\r\nI would prefer to keep\r\n```scala\r\nprivate val compile = new BatchedFunction[b.BuildTargetIdentifier, b.CompileResult](compile)\r\nprivate val cascade = new BatchedFunction[b.BuildTargetIdentifier, b.CompileResult](compile)\r\n```\r\nand then expand the targets at the call-site\r\n```scala\r\n def compileFiles(paths: Seq[AbsolutePath]): Future[b.CompileResult] =\r\n    compile(expand(paths))\r\n\r\n  def cascadeCompileFiles(paths: Seq[AbsolutePath]): Future[b.CompileResult] =\r\n    cascade(expand(paths).flatMap(inverseDependencies).distinct)\r\n```\r\nBenefits of this approach:\r\n- no need to come up with slightly different but new names for existing abstactions: `Batch` instead of `BatchedFunction`, `Batch.enqueue` instead of `BatchedFunction.apply`\r\n- uses no abstract methods like `Batch.resolve`, which are tricky to reason about in my experience",
+        "createdAt" : "2019-05-23T13:41:06Z",
+        "updatedAt" : "2019-05-24T09:17:46Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "9d3f311622eae8bedf5d893e5016c35523e74815",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,121 @@\n+package scala.meta.internal.metals\n+import ch.epfl.scala.{bsp4j => b}\n+import scala.collection.concurrent.TrieMap\n+import scala.concurrent.ExecutionContext\n+import scala.concurrent.Future\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.io.AbsolutePath\n+\n+final class Compilations(\n+    buildTargets: BuildTargets,\n+    classes: BuildTargetClasses,\n+    workspace: () => AbsolutePath,\n+    buildServer: () => Option[BuildServerConnection]\n+)(implicit ec: ExecutionContext) {\n+\n+  // we are maintaining a separate queue for cascade compilation since those must happen ASAP\n+  private val compilationBatch = new CompilationBatch\n+  private val cascadeBatch = new CascadeCompilationBatch\n+\n+  private val isCompiling = TrieMap.empty[b.BuildTargetIdentifier, Boolean]\n+  private var lastCompile: collection.Set[b.BuildTargetIdentifier] = Set.empty\n+\n+  def currentlyCompiling: Iterable[b.BuildTargetIdentifier] = isCompiling.keys\n+  def currentlyCompiling(buildTarget: b.BuildTargetIdentifier): Boolean =\n+    isCompiling.contains(buildTarget)\n+\n+  def previouslyCompiled: Iterable[b.BuildTargetIdentifier] = lastCompile\n+  def previouslyCompiled(buildTarget: b.BuildTargetIdentifier): Boolean =\n+    lastCompile.contains(buildTarget)\n+\n+  def compileFiles(paths: Seq[AbsolutePath]): Future[b.CompileResult] =\n+    compilationBatch.enqueue(paths)\n+\n+  def cascadeCompileFiles(paths: Seq[AbsolutePath]): Future[b.CompileResult] =\n+    cascadeBatch.enqueue(paths)\n+\n+  def cancel(): Unit = {\n+    compilationBatch.cancel()\n+    cascadeBatch.cancel()\n+  }\n+\n+  private abstract class Batch extends Cancelable {"
+  },
+  {
+    "id" : "12b54e35-6593-461f-93ed-744c08671c57",
+    "prId" : 907,
+    "comments" : [
+      {
+        "id" : "785d4cf5-5b1f-4d5b-a671-5892ccf012e2",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Let's not add new newlines maybe?",
+        "createdAt" : "2019-09-09T09:11:16Z",
+        "updatedAt" : "2019-09-12T11:15:17Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "601da257-ae24-4c48-8f56-d330af8ec8b3",
+        "parentId" : "785d4cf5-5b1f-4d5b-a671-5892ccf012e2",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "You can configure IntelliJ to never group imports and sort them alphabetically",
+        "createdAt" : "2019-09-10T13:57:20Z",
+        "updatedAt" : "2019-09-12T11:15:17Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "74378e93eaba51d7460f2ee6d0c2191c4a888503",
+    "line" : null,
+    "diffHunk" : "@@ -1,11 +1,13 @@\n package scala.meta.internal.metals\n+\n import ch.epfl.scala.{bsp4j => b}\n+\n import scala.collection.concurrent.TrieMap\n import scala.concurrent.ExecutionContext\n import scala.concurrent.Future\n+"
+  },
+  {
+    "id" : "f6892a6c-bcf8-40b8-9248-c9eb3f7d0a10",
+    "prId" : 907,
+    "comments" : [
+      {
+        "id" : "cd448f28-5972-443b-b0ab-2c83a67fdc6f",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Let's try to use Scala's `Future` operations over `CompletableFuture`. It's easy to mess up with the execution context in the Java API in my experience and it's not idiomatic to for example guard against `error == null`",
+        "createdAt" : "2019-09-10T14:00:02Z",
+        "updatedAt" : "2019-09-12T11:15:17Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "74378e93eaba51d7460f2ee6d0c2191c4a888503",
+    "line" : null,
+    "diffHunk" : "@@ -88,19 +90,17 @@ final class Compilations(\n   ): CancelableFuture[b.CompileResult] = {\n     val params = new b.CompileParams(targets.asJava)\n     targets.foreach(target => isCompiling(target) = true)\n-    val compilation = connection.compile(params)\n-    val task = for {\n-      result <- compilation.asScala\n-      _ <- {\n-        lastCompile = isCompiling.keySet\n+    val compilation = connection\n+      .compile(params)\n+      .whenComplete((_, error) => {"
+  },
+  {
+    "id" : "2d1618f1-b73d-490c-8e60-a777d7f381af",
+    "prId" : 1538,
+    "comments" : [
+      {
+        "id" : "f4db8cb7-888b-43e0-ac85-db61fffb9e7f",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "This will be used in another PR, so best to keep a list here.",
+        "createdAt" : "2020-03-31T16:55:14Z",
+        "updatedAt" : "2020-05-21T11:17:43Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f4d83cd6-57d5-438f-af00-89d1c4e10835",
+        "parentId" : "f4db8cb7-888b-43e0-ac85-db61fffb9e7f",
+        "author" : {
+          "login" : "alexarchambault",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/7063723?u=d5befca0ebfec0042dad7ef93973490eef750ff4&v=4"
+        },
+        "body" : "Just a bit of context about these changes.\r\n\r\nThe changes in this file mostly originate from https://github.com/scalameta/metals/commit/f621af1dc. One of the goals of https://github.com/scalameta/metals/commit/f621af1dc is to have `Compilations` be fine with several `BuildServerConnection`s.\r\n\r\nPreviously, when `compileTargets` or `compileFiles` were called, all compilation requests went through the same `BuildServerConnection`, returning a single `b.CompileResult` via a single `buildTarget/compile` call. So `compileFiles` and `compileTargets` could return a single `b.CompileResult`.\r\n\r\nNow, there can be up to one request per `BuildServerConnection`, so we may be handed several `b.CompileResult`.\r\n\r\nIt seemed not straightforward to make `b.CompileResult`s additive to fold them together (correct me if you think otherwise), so I went another route.\r\n\r\nI constrained the `Compilation` API (making `compileTargets` and `compileFiles` accept a single target, and / or return a `Future[Unit]` rather than a `Future[b.CompileResult]`), to allow to keep returning a single `b.CompileResult` in most cases (and `Unit` in the only remaining method accepting several files).\r\n\r\nAlternatively, we could constrain less those methods, but make them return a `Future[Map[BuildTargetIdentifier, b.CompileResult]]` instead. And users would have to pick the `b.CompileResult` they're interested in in the map.",
+        "createdAt" : "2020-04-02T20:08:01Z",
+        "updatedAt" : "2020-05-21T11:17:44Z",
+        "lastEditedBy" : {
+          "login" : "alexarchambault",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/7063723?u=d5befca0ebfec0042dad7ef93973490eef750ff4&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "0681fa0b1417b7ac622101d279667c6900a2506e",
+    "line" : 46,
+    "diffHunk" : "@@ -39,58 +46,97 @@ final class Compilations(\n     lastCompile.contains(buildTarget)\n \n   def compileTargets(\n-      targets: Seq[b.BuildTargetIdentifier]"
+  },
+  {
+    "id" : "ffaff9cd-7735-4e51-8f0a-47f26c7e9bec",
+    "prId" : 1538,
+    "comments" : [
+      {
+        "id" : "28dcf85a-79e9-435c-80e4-7ac32a1279e9",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Why the change? I think it's better to keep the result rather than just return unit.",
+        "createdAt" : "2020-03-31T16:57:04Z",
+        "updatedAt" : "2020-05-21T11:17:43Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "866945d3-546d-4ff0-ab7d-4e5c861c70eb",
+        "parentId" : "28dcf85a-79e9-435c-80e4-7ac32a1279e9",
+        "author" : {
+          "login" : "alexarchambault",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/7063723?u=d5befca0ebfec0042dad7ef93973490eef750ff4&v=4"
+        },
+        "body" : "See my comment above.",
+        "createdAt" : "2020-04-02T20:08:20Z",
+        "updatedAt" : "2020-05-21T11:17:44Z",
+        "lastEditedBy" : {
+          "login" : "alexarchambault",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/7063723?u=d5befca0ebfec0042dad7ef93973490eef750ff4&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "0681fa0b1417b7ac622101d279667c6900a2506e",
+    "line" : 69,
+    "diffHunk" : "@@ -39,58 +46,97 @@ final class Compilations(\n     lastCompile.contains(buildTarget)\n \n   def compileTargets(\n-      targets: Seq[b.BuildTargetIdentifier]\n+      target: b.BuildTargetIdentifier\n   ): Future[b.CompileResult] = {\n-    compileBatch(targets)\n+    compileBatch(target).map { results =>\n+      results.getOrElse(target, new b.CompileResult(b.StatusCode.CANCELLED))\n+    }\n+  }\n+\n+  def compileFile(path: AbsolutePath): Future[b.CompileResult] = {\n+    def empty = new b.CompileResult(b.StatusCode.CANCELLED)\n+    for {\n+      result <- {\n+        expand(path) match {\n+          case None => Future.successful(empty)\n+          case Some(target) =>\n+            compileBatch(target)\n+              .map(res => res.getOrElse(target, empty))\n+        }\n+      }\n+      _ <- compileWorksheets(Seq(path))\n+    } yield result\n   }\n \n-  def compileFiles(paths: Seq[AbsolutePath]): Future[b.CompileResult] = {\n+  def compileFiles(paths: Seq[AbsolutePath]): Future[Unit] = {"
+  },
+  {
+    "id" : "b8d8bd68-6066-496d-8fb9-0f7a72550a8f",
+    "prId" : 1538,
+    "comments" : [
+      {
+        "id" : "4328da04-6822-46ae-8891-cae1448d47a2",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Maybe use full value names. It will be easier to figure out.  Plus, let's try to avoid `_1`, `_2` etc.",
+        "createdAt" : "2020-03-31T17:00:54Z",
+        "updatedAt" : "2020-05-21T11:17:43Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "eb715b8f-ab3d-4f38-a6ee-d5bde0bf2c15",
+        "parentId" : "4328da04-6822-46ae-8891-cae1448d47a2",
+        "author" : {
+          "login" : "alexarchambault",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/7063723?u=d5befca0ebfec0042dad7ef93973490eef750ff4&v=4"
+        },
+        "body" : "Fixed.",
+        "createdAt" : "2020-04-05T22:13:35Z",
+        "updatedAt" : "2020-05-21T11:17:44Z",
+        "lastEditedBy" : {
+          "login" : "alexarchambault",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/7063723?u=d5befca0ebfec0042dad7ef93973490eef750ff4&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "0681fa0b1417b7ac622101d279667c6900a2506e",
+    "line" : null,
+    "diffHunk" : "@@ -39,58 +46,97 @@ final class Compilations(\n     lastCompile.contains(buildTarget)\n \n   def compileTargets(\n-      targets: Seq[b.BuildTargetIdentifier]\n+      target: b.BuildTargetIdentifier\n   ): Future[b.CompileResult] = {\n-    compileBatch(targets)\n+    compileBatch(target).map { results =>\n+      results.getOrElse(target, new b.CompileResult(b.StatusCode.CANCELLED))\n+    }\n+  }\n+\n+  def compileFile(path: AbsolutePath): Future[b.CompileResult] = {\n+    def empty = new b.CompileResult(b.StatusCode.CANCELLED)\n+    for {\n+      result <- {\n+        expand(path) match {\n+          case None => Future.successful(empty)\n+          case Some(target) =>\n+            compileBatch(target)\n+              .map(res => res.getOrElse(target, empty))\n+        }\n+      }\n+      _ <- compileWorksheets(Seq(path))\n+    } yield result\n   }\n \n-  def compileFiles(paths: Seq[AbsolutePath]): Future[b.CompileResult] = {\n+  def compileFiles(paths: Seq[AbsolutePath]): Future[Unit] = {\n     val targets = expand(paths)\n     for {\n       result <- compileBatch(targets)\n       _ <- compileWorksheets(paths)\n-    } yield result\n+    } yield ()\n   }\n \n-  def cascadeCompileFiles(paths: Seq[AbsolutePath]): Future[b.CompileResult] = {\n+  def cascadeCompileFiles(paths: Seq[AbsolutePath]): Future[Unit] = {\n     val targets =\n       expand(paths).flatMap(buildTargets.inverseDependencies).distinct\n     for {\n-      result <- cascadeBatch(targets)\n+      _ <- cascadeBatch(targets)\n       _ <- compileWorksheets(paths)\n-    } yield result\n+    } yield ()\n   }\n \n   def cancel(): Unit = {\n     compileBatch.cancelCurrentRequest()\n     cascadeBatch.cancelCurrentRequest()\n   }\n \n-  def expand(paths: Seq[AbsolutePath]): Seq[b.BuildTargetIdentifier] = {\n-    def isCompilable(path: AbsolutePath): Boolean =\n+  def expand(path: AbsolutePath): Option[b.BuildTargetIdentifier] = {\n+    val isCompilable =\n       path.isScalaOrJava && !path.isDependencySource(workspace())\n \n-    val compilablePaths = paths.filter(isCompilable)\n-    val targets = compilablePaths.flatMap(buildTargets.inverseSources).distinct\n+    if (isCompilable) {\n+      val targetOpt = buildTargets.inverseSources(path)\n \n-    if (targets.isEmpty && compilablePaths.nonEmpty) {\n-      scribe.warn(s\"no build target for: ${compilablePaths.mkString(\"\\n  \")}\")\n-    }\n+      if (targetOpt.isEmpty) {\n+        scribe.warn(s\"no build target for: $path\")\n+      }\n \n-    targets\n+      targetOpt\n+    } else\n+      None\n   }\n \n+  def expand(paths: Seq[AbsolutePath]): Seq[b.BuildTargetIdentifier] =\n+    paths.flatMap(expand(_)).distinct\n+\n   private def compile(\n       targets: Seq[b.BuildTargetIdentifier]\n-  ): CancelableFuture[b.CompileResult] = {\n-    val result = for {\n-      connection <- buildServer()\n-      if targets.nonEmpty\n-    } yield compile(connection, targets)\n-\n-    result.getOrElse {\n-      val result = new b.CompileResult(b.StatusCode.CANCELLED)\n-      Future.successful(result).asCancelable\n+  ): CancelableFuture[Map[BuildTargetIdentifier, b.CompileResult]] = {\n+\n+    val targetsByBuildServer = targets\n+      .flatMap(t => buildServer(t).map(_ -> t).toSeq)\n+      .groupBy(_._1)"
+  },
+  {
+    "id" : "46c43855-54b5-4528-abaf-88a69dfec7ae",
+    "prId" : 1538,
+    "comments" : [
+      {
+        "id" : "326c0dce-3079-401b-9882-d0308a72b45f",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "`buildServer, buildServerTargets`? `bs` has some quite unfortunate conotations. :sweat_smile: ",
+        "createdAt" : "2020-03-31T17:01:59Z",
+        "updatedAt" : "2020-05-21T11:17:43Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "575e9cb8-4dc1-4969-b67f-548ffe8dc228",
+        "parentId" : "326c0dce-3079-401b-9882-d0308a72b45f",
+        "author" : {
+          "login" : "alexarchambault",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/7063723?u=d5befca0ebfec0042dad7ef93973490eef750ff4&v=4"
+        },
+        "body" : "Fixed.",
+        "createdAt" : "2020-04-05T22:13:43Z",
+        "updatedAt" : "2020-05-21T11:17:44Z",
+        "lastEditedBy" : {
+          "login" : "alexarchambault",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/7063723?u=d5befca0ebfec0042dad7ef93973490eef750ff4&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "0681fa0b1417b7ac622101d279667c6900a2506e",
+    "line" : null,
+    "diffHunk" : "@@ -39,58 +46,97 @@ final class Compilations(\n     lastCompile.contains(buildTarget)\n \n   def compileTargets(\n-      targets: Seq[b.BuildTargetIdentifier]\n+      target: b.BuildTargetIdentifier\n   ): Future[b.CompileResult] = {\n-    compileBatch(targets)\n+    compileBatch(target).map { results =>\n+      results.getOrElse(target, new b.CompileResult(b.StatusCode.CANCELLED))\n+    }\n+  }\n+\n+  def compileFile(path: AbsolutePath): Future[b.CompileResult] = {\n+    def empty = new b.CompileResult(b.StatusCode.CANCELLED)\n+    for {\n+      result <- {\n+        expand(path) match {\n+          case None => Future.successful(empty)\n+          case Some(target) =>\n+            compileBatch(target)\n+              .map(res => res.getOrElse(target, empty))\n+        }\n+      }\n+      _ <- compileWorksheets(Seq(path))\n+    } yield result\n   }\n \n-  def compileFiles(paths: Seq[AbsolutePath]): Future[b.CompileResult] = {\n+  def compileFiles(paths: Seq[AbsolutePath]): Future[Unit] = {\n     val targets = expand(paths)\n     for {\n       result <- compileBatch(targets)\n       _ <- compileWorksheets(paths)\n-    } yield result\n+    } yield ()\n   }\n \n-  def cascadeCompileFiles(paths: Seq[AbsolutePath]): Future[b.CompileResult] = {\n+  def cascadeCompileFiles(paths: Seq[AbsolutePath]): Future[Unit] = {\n     val targets =\n       expand(paths).flatMap(buildTargets.inverseDependencies).distinct\n     for {\n-      result <- cascadeBatch(targets)\n+      _ <- cascadeBatch(targets)\n       _ <- compileWorksheets(paths)\n-    } yield result\n+    } yield ()\n   }\n \n   def cancel(): Unit = {\n     compileBatch.cancelCurrentRequest()\n     cascadeBatch.cancelCurrentRequest()\n   }\n \n-  def expand(paths: Seq[AbsolutePath]): Seq[b.BuildTargetIdentifier] = {\n-    def isCompilable(path: AbsolutePath): Boolean =\n+  def expand(path: AbsolutePath): Option[b.BuildTargetIdentifier] = {\n+    val isCompilable =\n       path.isScalaOrJava && !path.isDependencySource(workspace())\n \n-    val compilablePaths = paths.filter(isCompilable)\n-    val targets = compilablePaths.flatMap(buildTargets.inverseSources).distinct\n+    if (isCompilable) {\n+      val targetOpt = buildTargets.inverseSources(path)\n \n-    if (targets.isEmpty && compilablePaths.nonEmpty) {\n-      scribe.warn(s\"no build target for: ${compilablePaths.mkString(\"\\n  \")}\")\n-    }\n+      if (targetOpt.isEmpty) {\n+        scribe.warn(s\"no build target for: $path\")\n+      }\n \n-    targets\n+      targetOpt\n+    } else\n+      None\n   }\n \n+  def expand(paths: Seq[AbsolutePath]): Seq[b.BuildTargetIdentifier] =\n+    paths.flatMap(expand(_)).distinct\n+\n   private def compile(\n       targets: Seq[b.BuildTargetIdentifier]\n-  ): CancelableFuture[b.CompileResult] = {\n-    val result = for {\n-      connection <- buildServer()\n-      if targets.nonEmpty\n-    } yield compile(connection, targets)\n-\n-    result.getOrElse {\n-      val result = new b.CompileResult(b.StatusCode.CANCELLED)\n-      Future.successful(result).asCancelable\n+  ): CancelableFuture[Map[BuildTargetIdentifier, b.CompileResult]] = {\n+\n+    val targetsByBuildServer = targets\n+      .flatMap(t => buildServer(t).map(_ -> t).toSeq)\n+      .groupBy(_._1)\n+      .map {\n+        case (k, l) =>\n+          (k, l.map(_._2))\n+      }\n+\n+    targetsByBuildServer.toList match {\n+      case Nil =>\n+        Future\n+          .successful(Map.empty[BuildTargetIdentifier, b.CompileResult])\n+          .asCancelable\n+      case (bs, bsTargets) :: Nil =>"
+  },
+  {
+    "id" : "8ac271f2-cd68-44f4-873b-c10d3e19b299",
+    "prId" : 1538,
+    "comments" : [
+      {
+        "id" : "80ae0ded-c9df-4e6a-8b42-ab62e0099fc3",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "We already have `ignoreValue`, whic can be used here.",
+        "createdAt" : "2020-04-08T15:45:07Z",
+        "updatedAt" : "2020-05-21T11:17:44Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "b130c697-2ce0-4744-a37f-aca585d5cb37",
+        "parentId" : "80ae0ded-c9df-4e6a-8b42-ab62e0099fc3",
+        "author" : {
+          "login" : "alexarchambault",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/7063723?u=d5befca0ebfec0042dad7ef93973490eef750ff4&v=4"
+        },
+        "body" : "right",
+        "createdAt" : "2020-04-09T13:02:14Z",
+        "updatedAt" : "2020-05-21T11:17:44Z",
+        "lastEditedBy" : {
+          "login" : "alexarchambault",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/7063723?u=d5befca0ebfec0042dad7ef93973490eef750ff4&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "6e5f190f-6321-4595-988a-5d02505aae3e",
+        "parentId" : "80ae0ded-c9df-4e6a-8b42-ab62e0099fc3",
+        "author" : {
+          "login" : "alexarchambault",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/7063723?u=d5befca0ebfec0042dad7ef93973490eef750ff4&v=4"
+        },
+        "body" : "Should be fixed.",
+        "createdAt" : "2020-04-11T15:33:37Z",
+        "updatedAt" : "2020-05-21T11:17:44Z",
+        "lastEditedBy" : {
+          "login" : "alexarchambault",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/7063723?u=d5befca0ebfec0042dad7ef93973490eef750ff4&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "0681fa0b1417b7ac622101d279667c6900a2506e",
+    "line" : null,
+    "diffHunk" : "@@ -38,59 +45,110 @@ final class Compilations(\n   def wasPreviouslyCompiled(buildTarget: b.BuildTargetIdentifier): Boolean =\n     lastCompile.contains(buildTarget)\n \n+  def compileTarget(\n+      target: b.BuildTargetIdentifier\n+  ): Future[b.CompileResult] = {\n+    compileBatch(target).map { results =>\n+      results.getOrElse(target, new b.CompileResult(b.StatusCode.CANCELLED))\n+    }\n+  }\n+\n   def compileTargets(\n       targets: Seq[b.BuildTargetIdentifier]\n-  ): Future[b.CompileResult] = {\n-    compileBatch(targets)\n+  ): Future[Unit] = {\n+    compileBatch(targets).map(_ => ())"
+  },
+  {
+    "id" : "dedcbfac-6d69-4071-a461-e9a0acdf1f81",
+    "prId" : 1538,
+    "comments" : [
+      {
+        "id" : "6c472266-9d3e-4327-9ae7-4e66d26d60d2",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "`t` -> `target` ?",
+        "createdAt" : "2020-04-08T15:48:04Z",
+        "updatedAt" : "2020-05-21T11:17:44Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "024e2257-f425-45a1-9312-d3ac85831a08",
+        "parentId" : "6c472266-9d3e-4327-9ae7-4e66d26d60d2",
+        "author" : {
+          "login" : "alexarchambault",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/7063723?u=d5befca0ebfec0042dad7ef93973490eef750ff4&v=4"
+        },
+        "body" : "Fixed.",
+        "createdAt" : "2020-04-11T15:33:54Z",
+        "updatedAt" : "2020-05-21T11:17:44Z",
+        "lastEditedBy" : {
+          "login" : "alexarchambault",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/7063723?u=d5befca0ebfec0042dad7ef93973490eef750ff4&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "0681fa0b1417b7ac622101d279667c6900a2506e",
+    "line" : null,
+    "diffHunk" : "@@ -38,59 +45,110 @@ final class Compilations(\n   def wasPreviouslyCompiled(buildTarget: b.BuildTargetIdentifier): Boolean =\n     lastCompile.contains(buildTarget)\n \n+  def compileTarget(\n+      target: b.BuildTargetIdentifier\n+  ): Future[b.CompileResult] = {\n+    compileBatch(target).map { results =>\n+      results.getOrElse(target, new b.CompileResult(b.StatusCode.CANCELLED))\n+    }\n+  }\n+\n   def compileTargets(\n       targets: Seq[b.BuildTargetIdentifier]\n-  ): Future[b.CompileResult] = {\n-    compileBatch(targets)\n+  ): Future[Unit] = {\n+    compileBatch(targets).map(_ => ())\n   }\n \n-  def compileFiles(paths: Seq[AbsolutePath]): Future[b.CompileResult] = {\n+  def compileFile(path: AbsolutePath): Future[b.CompileResult] = {\n+    def empty = new b.CompileResult(b.StatusCode.CANCELLED)\n+    for {\n+      result <- {\n+        expand(path) match {\n+          case None => Future.successful(empty)\n+          case Some(target) =>\n+            compileBatch(target)\n+              .map(res => res.getOrElse(target, empty))\n+        }\n+      }\n+      _ <- compileWorksheets(Seq(path))\n+    } yield result\n+  }\n+\n+  def compileFiles(paths: Seq[AbsolutePath]): Future[Unit] = {\n     val targets = expand(paths)\n     for {\n       result <- compileBatch(targets)\n       _ <- compileWorksheets(paths)\n-    } yield result\n+    } yield ()\n   }\n \n-  def cascadeCompileFiles(paths: Seq[AbsolutePath]): Future[b.CompileResult] = {\n+  def cascadeCompileFiles(paths: Seq[AbsolutePath]): Future[Unit] = {\n     val targets =\n       expand(paths).flatMap(buildTargets.inverseDependencies).distinct\n     for {\n-      result <- cascadeBatch(targets)\n+      _ <- cascadeBatch(targets)\n       _ <- compileWorksheets(paths)\n-    } yield result\n+    } yield ()\n   }\n \n   def cancel(): Unit = {\n     compileBatch.cancelCurrentRequest()\n     cascadeBatch.cancelCurrentRequest()\n   }\n \n-  private def expand(paths: Seq[AbsolutePath]): Seq[b.BuildTargetIdentifier] = {\n-    def isCompilable(path: AbsolutePath): Boolean =\n+  private def expand(path: AbsolutePath): Option[b.BuildTargetIdentifier] = {\n+    val isCompilable =\n       path.isScalaOrJava && !path.isDependencySource(workspace())\n \n-    val compilablePaths = paths.filter(isCompilable)\n-    val targets = compilablePaths.flatMap(buildTargets.inverseSources).distinct\n+    if (isCompilable) {\n+      val targetOpt = buildTargets.inverseSources(path)\n \n-    if (targets.isEmpty && compilablePaths.nonEmpty) {\n-      scribe.warn(s\"no build target for: ${compilablePaths.mkString(\"\\n  \")}\")\n-    }\n+      if (targetOpt.isEmpty) {\n+        scribe.warn(s\"no build target for: $path\")\n+      }\n \n-    targets\n+      targetOpt\n+    } else\n+      None\n   }\n \n+  def expand(paths: Seq[AbsolutePath]): Seq[b.BuildTargetIdentifier] =\n+    paths.flatMap(expand(_)).distinct\n+\n   private def compile(\n       targets: Seq[b.BuildTargetIdentifier]\n-  ): CancelableFuture[b.CompileResult] = {\n-    val result = for {\n-      connection <- buildServer()\n-      if targets.nonEmpty\n-    } yield compile(connection, targets)\n-\n-    result.getOrElse {\n-      val result = new b.CompileResult(b.StatusCode.CANCELLED)\n-      Future.successful(result).asCancelable\n+  ): CancelableFuture[Map[BuildTargetIdentifier, b.CompileResult]] = {\n+\n+    val targetsByBuildServer = targets\n+      .flatMap(t => buildServer(t).map(_ -> t).toSeq)"
+  },
+  {
+    "id" : "3bc7a2f2-760d-4805-a614-630dfaedf461",
+    "prId" : 1538,
+    "comments" : [
+      {
+        "id" : "6dfe937d-f315-42f4-a6e4-03de19ab6b98",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "`l` -> `targetList`",
+        "createdAt" : "2020-04-09T09:46:37Z",
+        "updatedAt" : "2020-05-21T11:17:44Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "cdba10af-a586-484b-bb6f-2b6076e94057",
+        "parentId" : "6dfe937d-f315-42f4-a6e4-03de19ab6b98",
+        "author" : {
+          "login" : "alexarchambault",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/7063723?u=d5befca0ebfec0042dad7ef93973490eef750ff4&v=4"
+        },
+        "body" : "Fixed.",
+        "createdAt" : "2020-04-11T15:33:47Z",
+        "updatedAt" : "2020-05-21T11:17:44Z",
+        "lastEditedBy" : {
+          "login" : "alexarchambault",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/7063723?u=d5befca0ebfec0042dad7ef93973490eef750ff4&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "0681fa0b1417b7ac622101d279667c6900a2506e",
+    "line" : null,
+    "diffHunk" : "@@ -38,59 +45,110 @@ final class Compilations(\n   def wasPreviouslyCompiled(buildTarget: b.BuildTargetIdentifier): Boolean =\n     lastCompile.contains(buildTarget)\n \n+  def compileTarget(\n+      target: b.BuildTargetIdentifier\n+  ): Future[b.CompileResult] = {\n+    compileBatch(target).map { results =>\n+      results.getOrElse(target, new b.CompileResult(b.StatusCode.CANCELLED))\n+    }\n+  }\n+\n   def compileTargets(\n       targets: Seq[b.BuildTargetIdentifier]\n-  ): Future[b.CompileResult] = {\n-    compileBatch(targets)\n+  ): Future[Unit] = {\n+    compileBatch(targets).map(_ => ())\n   }\n \n-  def compileFiles(paths: Seq[AbsolutePath]): Future[b.CompileResult] = {\n+  def compileFile(path: AbsolutePath): Future[b.CompileResult] = {\n+    def empty = new b.CompileResult(b.StatusCode.CANCELLED)\n+    for {\n+      result <- {\n+        expand(path) match {\n+          case None => Future.successful(empty)\n+          case Some(target) =>\n+            compileBatch(target)\n+              .map(res => res.getOrElse(target, empty))\n+        }\n+      }\n+      _ <- compileWorksheets(Seq(path))\n+    } yield result\n+  }\n+\n+  def compileFiles(paths: Seq[AbsolutePath]): Future[Unit] = {\n     val targets = expand(paths)\n     for {\n       result <- compileBatch(targets)\n       _ <- compileWorksheets(paths)\n-    } yield result\n+    } yield ()\n   }\n \n-  def cascadeCompileFiles(paths: Seq[AbsolutePath]): Future[b.CompileResult] = {\n+  def cascadeCompileFiles(paths: Seq[AbsolutePath]): Future[Unit] = {\n     val targets =\n       expand(paths).flatMap(buildTargets.inverseDependencyLeaves).distinct\n     for {\n-      result <- cascadeBatch(targets)\n+      _ <- cascadeBatch(targets)\n       _ <- compileWorksheets(paths)\n-    } yield result\n+    } yield ()\n   }\n \n   def cancel(): Unit = {\n     compileBatch.cancelCurrentRequest()\n     cascadeBatch.cancelCurrentRequest()\n   }\n \n-  private def expand(paths: Seq[AbsolutePath]): Seq[b.BuildTargetIdentifier] = {\n-    def isCompilable(path: AbsolutePath): Boolean =\n+  private def expand(path: AbsolutePath): Option[b.BuildTargetIdentifier] = {\n+    val isCompilable =\n       path.isScalaOrJava && !path.isDependencySource(workspace())\n \n-    val compilablePaths = paths.filter(isCompilable)\n-    val targets = compilablePaths.flatMap(buildTargets.inverseSources).distinct\n+    if (isCompilable) {\n+      val targetOpt = buildTargets.inverseSources(path)\n \n-    if (targets.isEmpty && compilablePaths.nonEmpty) {\n-      scribe.warn(s\"no build target for: ${compilablePaths.mkString(\"\\n  \")}\")\n-    }\n+      if (targetOpt.isEmpty) {\n+        scribe.warn(s\"no build target for: $path\")\n+      }\n \n-    targets\n+      targetOpt\n+    } else\n+      None\n   }\n \n+  def expand(paths: Seq[AbsolutePath]): Seq[b.BuildTargetIdentifier] =\n+    paths.flatMap(expand(_)).distinct\n+\n   private def compile(\n       targets: Seq[b.BuildTargetIdentifier]\n-  ): CancelableFuture[b.CompileResult] = {\n-    val result = for {\n-      connection <- buildServer()\n-      if targets.nonEmpty\n-    } yield compile(connection, targets)\n-\n-    result.getOrElse {\n-      val result = new b.CompileResult(b.StatusCode.CANCELLED)\n-      Future.successful(result).asCancelable\n+  ): CancelableFuture[Map[BuildTargetIdentifier, b.CompileResult]] = {\n+\n+    val targetsByBuildServer = targets\n+      .flatMap(t => buildServer(t).map(_ -> t).toSeq)\n+      .groupBy {\n+        case (buildServer, _) =>\n+          buildServer\n+      }\n+      .map {\n+        case (buildServer, targets) =>\n+          val targets0 = targets.map {\n+            case (_, target) => target\n+          }\n+          (buildServer, targets0)\n+      }\n+\n+    targetsByBuildServer.toList match {\n+      case Nil =>\n+        Future\n+          .successful(Map.empty[BuildTargetIdentifier, b.CompileResult])\n+          .asCancelable\n+      case (buildServer, targets) :: Nil =>\n+        compile(buildServer, targets)\n+          .map(res => targets.map(target => target -> res).toMap)\n+      case l =>"
+  },
+  {
+    "id" : "cbbeaa6e-496f-46b0-b979-54b09a9c7906",
+    "prId" : 1677,
+    "comments" : [
+      {
+        "id" : "568b1a9a-7caf-43eb-906b-49600758e0ef",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Used to fully recompile a workspace.",
+        "createdAt" : "2020-04-29T17:22:00Z",
+        "updatedAt" : "2020-05-04T13:57:13Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "5c24d947-8c26-4907-ba3d-4f19683b84ea",
+        "parentId" : "568b1a9a-7caf-43eb-906b-49600758e0ef",
+        "author" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "body" : "if the `fully` part is more important, then maybe it should be called `compileAll` ?",
+        "createdAt" : "2020-05-04T09:10:51Z",
+        "updatedAt" : "2020-05-04T13:57:13Z",
+        "lastEditedBy" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "6e7233b3-f109-45dd-86f4-acd70bac8e84",
+        "parentId" : "568b1a9a-7caf-43eb-906b-49600758e0ef",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Changed to `recompileAll`",
+        "createdAt" : "2020-05-04T10:22:15Z",
+        "updatedAt" : "2020-05-04T13:57:13Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "38751291a84f683f8d8eb60ed8a73ce8657936c9",
+    "line" : null,
+    "diffHunk" : "@@ -66,6 +66,26 @@ final class Compilations(\n     cascadeBatch.cancelCurrentRequest()\n   }\n \n+  def recompile(): Future[Unit] = {"
+  }
+]

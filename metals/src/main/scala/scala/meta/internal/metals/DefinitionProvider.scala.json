@@ -1,0 +1,855 @@
+[
+  {
+    "id" : "17cebefe-7506-43b3-90b8-9076dd16b9cb",
+    "prId" : 337,
+    "comments" : [
+      {
+        "id" : "f183003e-38ec-409f-8cea-84c2fca4a19b",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "why?",
+        "createdAt" : "2018-11-21T22:36:41Z",
+        "updatedAt" : "2018-11-27T10:23:41Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "335743c1-c499-420c-b8c2-0fba62854eec",
+        "parentId" : "f183003e-38ec-409f-8cea-84c2fca4a19b",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Added a comment explaining why.",
+        "createdAt" : "2018-11-24T08:01:43Z",
+        "updatedAt" : "2018-11-27T10:23:41Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "8ab78d5883e2e77a843cca1ea641084e6e4a2875",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,188 @@\n+package scala.meta.internal.metals\n+\n+import java.util.Collections\n+import org.eclipse.lsp4j.TextDocumentPositionParams\n+import scala.meta.inputs.Input\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.internal.mtags.GlobalSymbolIndex\n+import scala.meta.internal.mtags.Mtags\n+import scala.meta.internal.mtags.MtagsEnrichments._\n+import scala.meta.internal.mtags.Semanticdbs\n+import scala.meta.internal.mtags.Symbol\n+import scala.meta.internal.mtags.SymbolDefinition\n+import scala.meta.internal.semanticdb.Scala._\n+import scala.meta.internal.semanticdb.TextDocument\n+import scala.meta.io.AbsolutePath\n+\n+/**\n+ * Implements goto definition that works even in code that doesn't parse.\n+ *\n+ * Uses token edit-distance to align identifiers in the current open\n+ * buffer with symbol occurrences from the latest SemanticDB snapshot.\n+ *\n+ * The implementation logic for converting positions between the latest\n+ * SemanticDB snapshot and current open buffer is quite hairy. We need\n+ * to convert positions in both the \"source\" (where definition request\n+ * is made) and the \"destination\" (location of the symbol definition).\n+ * This requires using token edit distance twice:\n+ *\n+ * - source: dirty buffer -> snapshot\n+ * - destination: snapshot -> dirty buffer\n+ */\n+final class DefinitionProvider(\n+    workspace: AbsolutePath,\n+    mtags: Mtags,\n+    buffers: Buffers,\n+    index: GlobalSymbolIndex,\n+    semanticdbs: Semanticdbs,\n+    icons: Icons\n+)(implicit statusBar: StatusBar) {\n+\n+  def definition(\n+      path: AbsolutePath,\n+      params: TextDocumentPositionParams\n+  ): DefinitionResult = {\n+    val result = semanticdbs.textDocument(path)\n+    result.documentIncludingStale match {\n+      case Some(doc) =>\n+        definitionFromSnapshot(path, params, doc)\n+      case _ =>\n+        statusBar.addMessage(s\"${icons.alert} No SemanticDB\")\n+        DefinitionResult.empty\n+    }\n+  }\n+\n+  private def definitionFromSnapshot(\n+      source: AbsolutePath,\n+      dirtyPosition: TextDocumentPositionParams,\n+      snapshot: TextDocument\n+  ): DefinitionResult = {\n+    // Step 1: convert dirty buffer position to snapshot position in \"source\"\n+    val bufferInput = source.toInputFromBuffers(buffers)\n+    val snapshotInput = Input.VirtualFile(bufferInput.path, snapshot.text)\n+    val sourceDistance = TokenEditDistance(snapshotInput, bufferInput)\n+    val snapshotPosition = sourceDistance.toOriginal(\n+      dirtyPosition.getPosition.getLine,\n+      dirtyPosition.getPosition.getCharacter\n+    )\n+\n+    // Step 2: find matching symbol occurrence in SemanticDB snapshot\n+    val occurrence = for {\n+      queryPosition <- snapshotPosition.foldResult(\n+        onPosition = pos => {\n+          dirtyPosition.getPosition.setLine(pos.startLine)\n+          dirtyPosition.getPosition.setCharacter(pos.startColumn)\n+          Some(dirtyPosition.getPosition)\n+        },\n+        onUnchanged = () => Some(dirtyPosition.getPosition),\n+        onNoMatch = () => None\n+      )\n+      occurrence <- snapshot.occurrences.find(_.encloses(queryPosition))\n+    } yield occurrence\n+\n+    // Step 3: find symbol definition\n+    val result: Option[DefinitionResult] = occurrence.flatMap { occ =>\n+      val isLocal = occ.symbol.isLocal || snapshot.definesSymbol(occ.symbol)\n+      if (isLocal) {\n+        // symbol is local so it is defined within the source.\n+        DefinitionDestination(\n+          snapshot,\n+          sourceDistance,\n+          occ.symbol,\n+          None,\n+          dirtyPosition.getTextDocument.getUri\n+        ).toResult\n+      } else {\n+        // symbol is global so it is defined in an external destination buffer.\n+        DefinitionDestination.fromSymbol(occ.symbol).flatMap(_.toResult)\n+      }\n+    }\n+\n+    result.getOrElse(DefinitionResult.empty(occurrence.fold(\"\")(_.symbol)))\n+  }\n+\n+  private case class DefinitionDestination(\n+      snapshot: TextDocument,\n+      distance: TokenEditDistance,\n+      symbol: String,\n+      path: Option[AbsolutePath],\n+      uri: String\n+  ) {\n+\n+    /** Converts snapshot position to dirty buffer position in the destination file */\n+    def toResult: Option[DefinitionResult] =\n+      for {\n+        location <- snapshot.definition(uri, symbol)\n+        revisedPosition = distance.toRevised(\n+          location.getRange.getStart.getLine,\n+          location.getRange.getStart.getCharacter\n+        )\n+        result <- revisedPosition.foldResult(\n+          pos => {\n+            val start = location.getRange.getStart\n+            start.setLine(pos.startLine)\n+            start.setCharacter(pos.startColumn)\n+            val end = location.getRange.getEnd\n+            end.setLine(pos.endLine)\n+            end.setCharacter(pos.endColumn)\n+            Some(location)\n+          },\n+          () => Some(location),\n+          () => None\n+        )\n+      } yield {\n+        DefinitionResult(\n+          Collections.singletonList(result),\n+          symbol,\n+          path,\n+          Some(snapshot)\n+        )\n+      }\n+  }\n+\n+  private object DefinitionDestination {\n+    def bestTextDocument(symbolDefinition: SymbolDefinition): TextDocument = {\n+      val defnRevisedInput = symbolDefinition.path.toInput\n+      // Read text file from disk instead of editor buffers."
+  },
+  {
+    "id" : "a13fc711-dfab-40b5-bac2-d8d51a5b27e0",
+    "prId" : 337,
+    "comments" : [
+      {
+        "id" : "b63495b5-bd00-45b5-9ed9-575fa921bd65",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "mutability hurts my head, I would prefer to bind a new `location` as `revisedLocation` to make the intent clear.",
+        "createdAt" : "2018-11-24T19:56:12Z",
+        "updatedAt" : "2018-11-27T10:23:41Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ef7ed82c-0c11-452b-9e1d-2b52f689988d",
+        "parentId" : "b63495b5-bd00-45b5-9ed9-575fa921bd65",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "I agree, it hurt my head too when writing this. Good catch, it is 100x better without setters",
+        "createdAt" : "2018-11-25T11:17:14Z",
+        "updatedAt" : "2018-11-27T10:23:41Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "8ab78d5883e2e77a843cca1ea641084e6e4a2875",
+    "line" : 129,
+    "diffHunk" : "@@ -0,0 +1,190 @@\n+package scala.meta.internal.metals\n+\n+import java.util.Collections\n+import org.eclipse.lsp4j.TextDocumentPositionParams\n+import scala.meta.inputs.Input\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.internal.mtags.GlobalSymbolIndex\n+import scala.meta.internal.mtags.Mtags\n+import scala.meta.internal.mtags.MtagsEnrichments._\n+import scala.meta.internal.mtags.Semanticdbs\n+import scala.meta.internal.mtags.Symbol\n+import scala.meta.internal.mtags.SymbolDefinition\n+import scala.meta.internal.semanticdb.Scala._\n+import scala.meta.internal.semanticdb.TextDocument\n+import scala.meta.io.AbsolutePath\n+\n+/**\n+ * Implements goto definition that works even in code that doesn't parse.\n+ *\n+ * Uses token edit-distance to align identifiers in the current open\n+ * buffer with symbol occurrences from the latest SemanticDB snapshot.\n+ *\n+ * The implementation logic for converting positions between the latest\n+ * SemanticDB snapshot and current open buffer is quite hairy. We need\n+ * to convert positions in both the \"source\" (where definition request\n+ * is made) and the \"destination\" (location of the symbol definition).\n+ * This requires using token edit distance twice:\n+ *\n+ * - source: dirty buffer -> snapshot\n+ * - destination: snapshot -> dirty buffer\n+ */\n+final class DefinitionProvider(\n+    workspace: AbsolutePath,\n+    mtags: Mtags,\n+    buffers: Buffers,\n+    index: GlobalSymbolIndex,\n+    semanticdbs: Semanticdbs,\n+    icons: Icons,\n+    statusBar: StatusBar\n+) {\n+\n+  def definition(\n+      path: AbsolutePath,\n+      params: TextDocumentPositionParams\n+  ): DefinitionResult = {\n+    val result = semanticdbs.textDocument(path)\n+    result.documentIncludingStale match {\n+      case Some(doc) =>\n+        definitionFromSnapshot(path, params, doc)\n+      case _ =>\n+        statusBar.addMessage(s\"${icons.alert} No SemanticDB\")\n+        DefinitionResult.empty\n+    }\n+  }\n+\n+  private def definitionFromSnapshot(\n+      source: AbsolutePath,\n+      dirtyPosition: TextDocumentPositionParams,\n+      snapshot: TextDocument\n+  ): DefinitionResult = {\n+    // Step 1: convert dirty buffer position to snapshot position in \"source\"\n+    val bufferInput = source.toInputFromBuffers(buffers)\n+    val snapshotInput = Input.VirtualFile(bufferInput.path, snapshot.text)\n+    val sourceDistance = TokenEditDistance(snapshotInput, bufferInput)\n+    val snapshotPosition = sourceDistance.toOriginal(\n+      dirtyPosition.getPosition.getLine,\n+      dirtyPosition.getPosition.getCharacter\n+    )\n+\n+    // Step 2: find matching symbol occurrence in SemanticDB snapshot\n+    val occurrence = for {\n+      queryPosition <- snapshotPosition.foldResult(\n+        onPosition = pos => {\n+          dirtyPosition.getPosition.setLine(pos.startLine)\n+          dirtyPosition.getPosition.setCharacter(pos.startColumn)\n+          Some(dirtyPosition.getPosition)\n+        },\n+        onUnchanged = () => Some(dirtyPosition.getPosition),\n+        onNoMatch = () => None\n+      )\n+      occurrence <- snapshot.occurrences.find(_.encloses(queryPosition))\n+    } yield occurrence\n+\n+    // Step 3: find symbol definition\n+    val result: Option[DefinitionResult] = occurrence.flatMap { occ =>\n+      val isLocal = occ.symbol.isLocal || snapshot.definesSymbol(occ.symbol)\n+      if (isLocal) {\n+        // symbol is local so it is defined within the source.\n+        DefinitionDestination(\n+          snapshot,\n+          sourceDistance,\n+          occ.symbol,\n+          None,\n+          dirtyPosition.getTextDocument.getUri\n+        ).toResult\n+      } else {\n+        // symbol is global so it is defined in an external destination buffer.\n+        DefinitionDestination.fromSymbol(occ.symbol).flatMap(_.toResult)\n+      }\n+    }\n+\n+    result.getOrElse(DefinitionResult.empty(occurrence.fold(\"\")(_.symbol)))\n+  }\n+\n+  private case class DefinitionDestination(\n+      snapshot: TextDocument,\n+      distance: TokenEditDistance,\n+      symbol: String,\n+      path: Option[AbsolutePath],\n+      uri: String\n+  ) {\n+\n+    /** Converts snapshot position to dirty buffer position in the destination file */\n+    def toResult: Option[DefinitionResult] =\n+      for {\n+        location <- snapshot.definition(uri, symbol)\n+        revisedPosition = distance.toRevised(\n+          location.getRange.getStart.getLine,\n+          location.getRange.getStart.getCharacter\n+        )\n+        result <- revisedPosition.foldResult(\n+          pos => {\n+            val start = location.getRange.getStart\n+            start.setLine(pos.startLine)\n+            start.setCharacter(pos.startColumn)\n+            val end = location.getRange.getEnd\n+            end.setLine(pos.endLine)\n+            end.setCharacter(pos.endColumn)\n+            Some(location)\n+          },\n+          () => Some(location),"
+  },
+  {
+    "id" : "890bb1dd-ed62-4d45-8095-f3111a171681",
+    "prId" : 337,
+    "comments" : [
+      {
+        "id" : "e1aac912-bee2-48b9-a1b9-d5b8e9175e6d",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "this pattern match could be replaced with `.getOrElse(parsed)` I think",
+        "createdAt" : "2018-11-24T19:57:44Z",
+        "updatedAt" : "2018-11-27T10:23:41Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "ab992b93-85b2-42a0-83bd-460e0e9615df",
+        "parentId" : "e1aac912-bee2-48b9-a1b9-d5b8e9175e6d",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Much better 👍 ",
+        "createdAt" : "2018-11-25T11:19:53Z",
+        "updatedAt" : "2018-11-27T10:23:41Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "8ab78d5883e2e77a843cca1ea641084e6e4a2875",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,190 @@\n+package scala.meta.internal.metals\n+\n+import java.util.Collections\n+import org.eclipse.lsp4j.TextDocumentPositionParams\n+import scala.meta.inputs.Input\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.internal.mtags.GlobalSymbolIndex\n+import scala.meta.internal.mtags.Mtags\n+import scala.meta.internal.mtags.MtagsEnrichments._\n+import scala.meta.internal.mtags.Semanticdbs\n+import scala.meta.internal.mtags.Symbol\n+import scala.meta.internal.mtags.SymbolDefinition\n+import scala.meta.internal.semanticdb.Scala._\n+import scala.meta.internal.semanticdb.TextDocument\n+import scala.meta.io.AbsolutePath\n+\n+/**\n+ * Implements goto definition that works even in code that doesn't parse.\n+ *\n+ * Uses token edit-distance to align identifiers in the current open\n+ * buffer with symbol occurrences from the latest SemanticDB snapshot.\n+ *\n+ * The implementation logic for converting positions between the latest\n+ * SemanticDB snapshot and current open buffer is quite hairy. We need\n+ * to convert positions in both the \"source\" (where definition request\n+ * is made) and the \"destination\" (location of the symbol definition).\n+ * This requires using token edit distance twice:\n+ *\n+ * - source: dirty buffer -> snapshot\n+ * - destination: snapshot -> dirty buffer\n+ */\n+final class DefinitionProvider(\n+    workspace: AbsolutePath,\n+    mtags: Mtags,\n+    buffers: Buffers,\n+    index: GlobalSymbolIndex,\n+    semanticdbs: Semanticdbs,\n+    icons: Icons,\n+    statusBar: StatusBar\n+) {\n+\n+  def definition(\n+      path: AbsolutePath,\n+      params: TextDocumentPositionParams\n+  ): DefinitionResult = {\n+    val result = semanticdbs.textDocument(path)\n+    result.documentIncludingStale match {\n+      case Some(doc) =>\n+        definitionFromSnapshot(path, params, doc)\n+      case _ =>\n+        statusBar.addMessage(s\"${icons.alert} No SemanticDB\")\n+        DefinitionResult.empty\n+    }\n+  }\n+\n+  private def definitionFromSnapshot(\n+      source: AbsolutePath,\n+      dirtyPosition: TextDocumentPositionParams,\n+      snapshot: TextDocument\n+  ): DefinitionResult = {\n+    // Step 1: convert dirty buffer position to snapshot position in \"source\"\n+    val bufferInput = source.toInputFromBuffers(buffers)\n+    val snapshotInput = Input.VirtualFile(bufferInput.path, snapshot.text)\n+    val sourceDistance = TokenEditDistance(snapshotInput, bufferInput)\n+    val snapshotPosition = sourceDistance.toOriginal(\n+      dirtyPosition.getPosition.getLine,\n+      dirtyPosition.getPosition.getCharacter\n+    )\n+\n+    // Step 2: find matching symbol occurrence in SemanticDB snapshot\n+    val occurrence = for {\n+      queryPosition <- snapshotPosition.foldResult(\n+        onPosition = pos => {\n+          dirtyPosition.getPosition.setLine(pos.startLine)\n+          dirtyPosition.getPosition.setCharacter(pos.startColumn)\n+          Some(dirtyPosition.getPosition)\n+        },\n+        onUnchanged = () => Some(dirtyPosition.getPosition),\n+        onNoMatch = () => None\n+      )\n+      occurrence <- snapshot.occurrences.find(_.encloses(queryPosition))\n+    } yield occurrence\n+\n+    // Step 3: find symbol definition\n+    val result: Option[DefinitionResult] = occurrence.flatMap { occ =>\n+      val isLocal = occ.symbol.isLocal || snapshot.definesSymbol(occ.symbol)\n+      if (isLocal) {\n+        // symbol is local so it is defined within the source.\n+        DefinitionDestination(\n+          snapshot,\n+          sourceDistance,\n+          occ.symbol,\n+          None,\n+          dirtyPosition.getTextDocument.getUri\n+        ).toResult\n+      } else {\n+        // symbol is global so it is defined in an external destination buffer.\n+        DefinitionDestination.fromSymbol(occ.symbol).flatMap(_.toResult)\n+      }\n+    }\n+\n+    result.getOrElse(DefinitionResult.empty(occurrence.fold(\"\")(_.symbol)))\n+  }\n+\n+  private case class DefinitionDestination(\n+      snapshot: TextDocument,\n+      distance: TokenEditDistance,\n+      symbol: String,\n+      path: Option[AbsolutePath],\n+      uri: String\n+  ) {\n+\n+    /** Converts snapshot position to dirty buffer position in the destination file */\n+    def toResult: Option[DefinitionResult] =\n+      for {\n+        location <- snapshot.definition(uri, symbol)\n+        revisedPosition = distance.toRevised(\n+          location.getRange.getStart.getLine,\n+          location.getRange.getStart.getCharacter\n+        )\n+        result <- revisedPosition.foldResult(\n+          pos => {\n+            val start = location.getRange.getStart\n+            start.setLine(pos.startLine)\n+            start.setCharacter(pos.startColumn)\n+            val end = location.getRange.getEnd\n+            end.setLine(pos.endLine)\n+            end.setCharacter(pos.endColumn)\n+            Some(location)\n+          },\n+          () => Some(location),\n+          () => None\n+        )\n+      } yield {\n+        DefinitionResult(\n+          Collections.singletonList(result),\n+          symbol,\n+          path,\n+          Some(snapshot)\n+        )\n+      }\n+  }\n+\n+  private object DefinitionDestination {\n+    def bestTextDocument(symbolDefinition: SymbolDefinition): TextDocument = {\n+      val defnRevisedInput = symbolDefinition.path.toInput\n+      // Read text file from disk instead of editor buffers because the file\n+      // on disk is more likely to parse.\n+      val parsed =\n+        mtags.index(symbolDefinition.path.toLanguage, defnRevisedInput)\n+      if (parsed.occurrences.isEmpty) {\n+        // Fall back to SemanticDB on disk, if any\n+        semanticdbs\n+          .textDocument(symbolDefinition.path)\n+          .documentIncludingStale match {\n+          case Some(d) => d\n+          case _ => parsed\n+        }"
+  },
+  {
+    "id" : "360b1b3b-5fcf-44c5-a783-bb55836bcb98",
+    "prId" : 621,
+    "comments" : [
+      {
+        "id" : "f5f14805-ef80-408e-8037-a2b722720d0a",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Can you configure IntelliJ to insert no empty lines in the imports and not use curly brace grouping? Otherwise I suspect we will conflict each other in every PR",
+        "createdAt" : "2019-04-02T14:35:33Z",
+        "updatedAt" : "2019-04-05T09:13:03Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "20472c80-d7ad-4409-b417-4e7692e5404d",
+        "parentId" : "f5f14805-ef80-408e-8037-a2b722720d0a",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Done",
+        "createdAt" : "2019-04-04T14:03:56Z",
+        "updatedAt" : "2019-04-05T09:13:03Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "6f03d2264f9c4e8e28d2e258ca99d24915c82e17",
+    "line" : null,
+    "diffHunk" : "@@ -1,7 +1,9 @@\n package scala.meta.internal.metals\n \n import java.util.Collections\n+"
+  },
+  {
+    "id" : "c79fd443-0ba6-4d52-8572-db7817241a74",
+    "prId" : 651,
+    "comments" : [
+      {
+        "id" : "0d45f8f2-6a68-46af-bab9-d38bd5b570b2",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "does it make sense to warn even in cases in which there's a fallback available?\r\nMaybe the warning could include info about whether Metals has found the fallback or not ",
+        "createdAt" : "2019-04-12T07:48:56Z",
+        "updatedAt" : "2019-04-12T09:54:09Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c7b8eab2-0ac7-46d2-a7a1-5a550f47fd80",
+        "parentId" : "0d45f8f2-6a68-46af-bab9-d38bd5b570b2",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "I decided to keep the warning and leave it to a separate PR to overall improve the UX (reduce warnings/noise) when semanticdb-scalac is not enabled.",
+        "createdAt" : "2019-04-12T07:50:32Z",
+        "updatedAt" : "2019-04-12T09:54:09Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ce3fba4e-baf1-4790-8dae-9dfc844dd74e",
+        "parentId" : "0d45f8f2-6a68-46af-bab9-d38bd5b570b2",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "This warning only happens when using \"rambo mode\" (editing a source file outside a build target).",
+        "createdAt" : "2019-04-12T07:51:01Z",
+        "updatedAt" : "2019-04-12T09:54:09Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "03137671-d8fe-496f-a083-36c2bc063967",
+        "parentId" : "0d45f8f2-6a68-46af-bab9-d38bd5b570b2",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "We don't have the classpath for those source files so I suspect definition/completions won't work very reliably.",
+        "createdAt" : "2019-04-12T07:51:47Z",
+        "updatedAt" : "2019-04-12T09:54:09Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "48e12f36-3d48-4522-b3c3-f502f86db34a",
+        "parentId" : "0d45f8f2-6a68-46af-bab9-d38bd5b570b2",
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "Got it, makes sense.\r\nIncidentally local completions now work in project/*.scala files, which was an unexpected treat 😅",
+        "createdAt" : "2019-04-12T07:52:54Z",
+        "updatedAt" : "2019-04-12T09:54:09Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f65050c7-aebc-4a5b-853f-bbd5d105e1b7",
+        "parentId" : "0d45f8f2-6a68-46af-bab9-d38bd5b570b2",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "After this PR goto definition will also work there for local variables :)",
+        "createdAt" : "2019-04-12T07:54:01Z",
+        "updatedAt" : "2019-04-12T09:54:09Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a2dbd8ce82a5565161c5e2376068dbc4b1651817",
+    "line" : 33,
+    "diffHunk" : "@@ -48,25 +48,27 @@ final class DefinitionProvider(\n       params: TextDocumentPositionParams,\n       token: CancelToken\n   ): DefinitionResult = {\n-    semanticdbs.textDocument(path).documentIncludingStale match {\n-      case Some(doc) =>\n-        definitionFromSnapshot(path, params, doc)\n-      case _ =>\n-        val fromCompilers =\n-          compilers()\n-            .definition(params, token)\n-            .getOrElse(Collections.emptyList())\n-        if (!fromCompilers.isEmpty()) {\n-          DefinitionResult(\n-            fromCompilers,\n-            \"\",\n-            None,\n-            None\n-          )\n-        } else {\n+    val fromSemanticdb =\n+      semanticdbs.textDocument(path).documentIncludingStale match {\n+        case Some(doc) =>\n+          definitionFromSnapshot(path, params, doc)\n+        case _ =>\n           warnings.noSemanticdb(path)"
+  },
+  {
+    "id" : "68944249-d7b1-43a9-b92f-e90242f9e4c8",
+    "prId" : 962,
+    "comments" : [
+      {
+        "id" : "03b4fcef-729b-4339-b917-23471ef77806",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "This position doesn’t need to be from edit distance since we parse top levels from the latest text contents of the file. ",
+        "createdAt" : "2019-10-05T10:17:44Z",
+        "updatedAt" : "2019-10-05T19:47:45Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "995c18d3e0d073e1c66f1accaf5efc94a5889a07",
+    "line" : null,
+    "diffHunk" : "@@ -88,10 +88,20 @@ final class DefinitionProvider(\n     // Find matching symbol occurrence in SemanticDB snapshot\n     val occurrence = for {\n       queryPosition <- snapshotPosition.toPosition(dirtyPosition.getPosition)\n-      occurrence <- snapshot.occurrences.find(\n-        _.encloses(queryPosition, includeLastCharacter)\n-      )\n+      occurrence <- snapshot.occurrences\n+        .find(\n+          _.encloses(queryPosition, includeLastCharacter)\n+        )\n+        .orElse(\n+          Mtags\n+            .allToplevels(source.toInput)\n+            .occurrences\n+            .find(\n+              _.encloses(queryPosition, includeLastCharacter)"
+  },
+  {
+    "id" : "f05437ea-d9ce-44c1-96a1-727dd3b32994",
+    "prId" : 965,
+    "comments" : [
+      {
+        "id" : "6390b63d-b142-4da0-b89e-2ace6642bc64",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "we can set it to true here ande remove from config since we don't plan to have different behaviour per client.",
+        "createdAt" : "2019-10-07T12:54:49Z",
+        "updatedAt" : "2019-10-07T15:52:52Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "44fd4ca621f4b83df172d3e0099e7a093eae82dd",
+    "line" : null,
+    "diffHunk" : "@@ -89,7 +89,7 @@ final class DefinitionProvider(\n     val occurrence = for {\n       queryPosition <- snapshotPosition.toPosition(dirtyPosition.getPosition)\n       occurrence <- snapshot.occurrences\n-        .find(_.encloses(queryPosition, includeLastCharacter))\n+        .find(_.encloses(queryPosition, config.includeLastCharacter))"
+  },
+  {
+    "id" : "b982ac54-3cee-4ec7-b738-413d92c3a42d",
+    "prId" : 1095,
+    "comments" : [
+      {
+        "id" : "e8276a10-47f8-4260-b3fb-3b9695c6b015",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "```suggestion\r\n        def mtagsOccurrence =\r\n```",
+        "createdAt" : "2019-12-01T20:55:27Z",
+        "updatedAt" : "2019-12-02T20:34:45Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "0cfe3c7e0b96620a4cdb9c4c993c7e3f984c8977",
+    "line" : null,
+    "diffHunk" : "@@ -86,10 +87,8 @@ final class DefinitionProvider(\n         currentDocument\n       )\n       symbolOccurrence <- {\n-        lazy val mtagsOccurrence = Mtags\n-          .allToplevels(source.toInput)\n-          .occurrences\n-          .find(_.encloses(dirtyPosition.getPosition))\n+        lazy val mtagsOccurrence ="
+  },
+  {
+    "id" : "b9814545-61b8-4e8f-bb7c-2116200d79fa",
+    "prId" : 1174,
+    "comments" : [
+      {
+        "id" : "883937b0-d597-4db7-985b-c64bdb8cde0e",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "nit: there's no need to write `private[internal]`, the package is already named \"internal\" ",
+        "createdAt" : "2019-12-15T10:45:31Z",
+        "updatedAt" : "2019-12-16T12:57:43Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "0d5f96fb977b6c73c44b8b5c061480393ecb1c82",
+    "line" : null,
+    "diffHunk" : "@@ -73,6 +73,22 @@ final class DefinitionProvider(\n       case Some(destination) => destination.locations\n     }\n \n+  /**\n+   * Returns VirtualFile that contains the definition of\n+   * the given symbol (of semanticdb).\n+   */\n+  private[internal] def definitionPathInputFromSymbol("
+  },
+  {
+    "id" : "e29b8cef-e08d-4b6b-9854-52a6d51d0634",
+    "prId" : 1388,
+    "comments" : [
+      {
+        "id" : "c1e4e121-dabe-488f-934e-ddef4636df35",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "This kind of fixes don't seem to be necessary, there is no established convention and if there is it's better done with scalafix etc.\r\n\r\nJust a comment for the future, no need to revert.",
+        "createdAt" : "2020-02-18T13:46:10Z",
+        "updatedAt" : "2020-02-24T14:38:50Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "40798305-3fed-45b4-ae54-01c55eaa6895",
+        "parentId" : "c1e4e121-dabe-488f-934e-ddef4636df35",
+        "author" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "body" : "okay I will keep things as they are in other places.\r\n\r\nAs a side note in scala world there is actually established convention:\r\nhttps://docs.scala-lang.org/style/naming-conventions.html#parentheses\r\nLess clear for using java in scala because you cannot forbid calling method with () but still good rule is \r\nside effects -> parenthesis\r\npure -> no parenthesis",
+        "createdAt" : "2020-02-18T20:14:33Z",
+        "updatedAt" : "2020-02-24T14:38:50Z",
+        "lastEditedBy" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "dc21706d9256807977910c1e5c5cb2280a9755ef",
+    "line" : 21,
+    "diffHunk" : "@@ -60,7 +60,7 @@ final class DefinitionProvider(\n           warnings.noSemanticdb(path)\n           DefinitionResult.empty\n       }\n-    if (fromSemanticdb.locations.isEmpty()) {\n+    if (fromSemanticdb.locations.isEmpty) {"
+  },
+  {
+    "id" : "58b9df7a-e1db-4196-8122-d9ec06b5cbfe",
+    "prId" : 1487,
+    "comments" : [
+      {
+        "id" : "ecfd44c5-ce00-4d49-812a-510cfca6f1bb",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Maybe we could do it the other way, switch the parameters in the rest to Position, and just add methods that extract position from TextDocumentParams",
+        "createdAt" : "2020-03-12T11:37:39Z",
+        "updatedAt" : "2020-03-24T16:45:28Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "55838e6c9f4127bc8d06a8d31a6df496a0b729a8",
+    "line" : 5,
+    "diffHunk" : "@@ -84,7 +85,20 @@ final class DefinitionProvider(\n       .definition(Symbol(sym))\n       .map(symDef => symDef.path.toInputFromBuffers(buffers))\n \n-  def symbolOccurence(\n+  def symbolOccurrence("
+  },
+  {
+    "id" : "1941b8c0-a5b4-45be-86da-87fe79d37215",
+    "prId" : 1523,
+    "comments" : [
+      {
+        "id" : "4c02461c-c0ed-403a-8b43-cd3676f1d7f7",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Nice improvement to readability 👍 ",
+        "createdAt" : "2020-04-04T08:00:30Z",
+        "updatedAt" : "2020-04-15T13:50:25Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "1142490703f832961ac0df1debd14b4f3b12ce7d",
+    "line" : 6,
+    "diffHunk" : "@@ -132,8 +132,7 @@ final class DefinitionProvider(\n       snapshot: TextDocument\n   ): ResolvedSymbolOccurrence = {\n     // Convert dirty buffer position to snapshot position in \"source\"\n-    val sourceDistance =\n-      TokenEditDistance.fromBuffer(source, snapshot.text, buffers)\n+    val sourceDistance = buffers.tokenEditDistance(source, snapshot.text)"
+  },
+  {
+    "id" : "03e8a7ef-4e0c-4da1-94c0-6985032f31ae",
+    "prId" : 1538,
+    "comments" : [
+      {
+        "id" : "9a8be4eb-dec6-428c-95e1-6b10c65cb5f1",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "You can just add `|| symbolDefinition.path.isAmmoniteScript` here",
+        "createdAt" : "2020-03-31T17:10:38Z",
+        "updatedAt" : "2020-05-21T11:17:43Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "98dc9734-75bf-4bba-ae2c-2c3937a6192e",
+        "parentId" : "9a8be4eb-dec6-428c-95e1-6b10c65cb5f1",
+        "author" : {
+          "login" : "alexarchambault",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/7063723?u=d5befca0ebfec0042dad7ef93973490eef750ff4&v=4"
+        },
+        "body" : "Done now (with conditions the other way around).",
+        "createdAt" : "2020-04-05T22:14:17Z",
+        "updatedAt" : "2020-05-21T11:17:44Z",
+        "lastEditedBy" : {
+          "login" : "alexarchambault",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/7063723?u=d5befca0ebfec0042dad7ef93973490eef750ff4&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "0681fa0b1417b7ac622101d279667c6900a2506e",
+    "line" : 7,
+    "diffHunk" : "@@ -229,15 +229,21 @@ class DestinationProvider(\n     val defnRevisedInput = symbolDefinition.path.toInput\n     // Read text file from disk instead of editor buffers because the file\n     // on disk is more likely to parse.\n-    val parsed =\n+    lazy val parsed =\n       mtags.index(symbolDefinition.path.toLanguage, defnRevisedInput)\n-    if (parsed.occurrences.isEmpty) {"
+  },
+  {
+    "id" : "8485cc12-2a78-4650-8197-ebcd82913c92",
+    "prId" : 1547,
+    "comments" : [
+      {
+        "id" : "433936ea-700d-4fc4-a3dd-8574b047ea97",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "I know `requests` is a synchronous http library (have you considered other async options, by the way?) but wouldn't it make sense for the API for `RemoteLanguageServer` to return futures?\r\n\r\nAlso, I'm not sure it has a huge impact, but it would probably make sense to mark it as `blocking` as in\r\n\r\n```suggestion\r\n          Future(blocking(remote.definition(params).getOrElse(fromSnapshot)))\r\n```",
+        "createdAt" : "2020-03-26T10:01:21Z",
+        "updatedAt" : "2020-03-27T19:26:28Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "d345f40d-066b-4559-9aa3-1b35b7728fcb",
+        "parentId" : "433936ea-700d-4fc4-a3dd-8574b047ea97",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "I considered using an async client like sttp but chose requests because it has a smaller footprint (total ~100kb). I refactored the `RemoteLanguageServer` API to return futures so that we can replace requests with an async client in the future. I didn't refactor `ReferencesProvider` to become async since it requires changing a large chunk of code and I'm not convinced it's worth the effort right now.",
+        "createdAt" : "2020-03-26T11:17:28Z",
+        "updatedAt" : "2020-03-27T19:26:28Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "cbaec7d3-d9d2-43d4-90af-c0ef49eedbe0",
+        "parentId" : "433936ea-700d-4fc4-a3dd-8574b047ea97",
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "Thanks for the explanation. I agree it's probably not worth it to refactor `ReferencesProvider` right now",
+        "createdAt" : "2020-03-26T11:18:54Z",
+        "updatedAt" : "2020-03-27T19:26:28Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "922329228964c110122b6e35a403b21a3c4d3f3e",
+    "line" : null,
+    "diffHunk" : "@@ -61,17 +63,28 @@ final class DefinitionProvider(\n       token: CancelToken\n   ): Future[DefinitionResult] = {\n     val fromSemanticdb =\n-      semanticdbs.textDocument(path).documentIncludingStale match {\n-        case Some(doc) =>\n-          definitionFromSnapshot(path, params, doc)\n-        case _ =>\n-          warnings.noSemanticdb(path)\n-          DefinitionResult.empty\n+      semanticdbs.textDocument(path).documentIncludingStale\n+    val fromSnapshot = fromSemanticdb match {\n+      case Some(doc) =>\n+        definitionFromSnapshot(path, params, doc)\n+      case _ =>\n+        DefinitionResult.empty\n+    }\n+    val fromCompiler =\n+      if (fromSnapshot.locations.isEmpty()) {\n+        if (remote.isEnabledForPath(path)) {\n+          Future(remote.definition(params).getOrElse(fromSnapshot))"
+  },
+  {
+    "id" : "b62c8520-e5e4-489c-a9b9-aa7b53c95651",
+    "prId" : 1547,
+    "comments" : [
+      {
+        "id" : "a31b3697-de3f-4625-894b-5026b2b621e6",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "I think we can do something like:\r\n\r\n```scala\r\n   val fromSemanticdb =\r\n      semanticdbs.textDocument(path).documentIncludingStale\r\n    val fromSnapshot = fromSemanticdb match {\r\n      case Some(doc) =>\r\n        definitionFromSnapshot(path, params, doc)\r\n      case _ =>\r\n        DefinitionResult.empty\r\n    }\r\n    val fromIndex =\r\n      if (fromSnapshot.locations.isEmpty() && remote.isEnabledForPath(path)) {\r\n          remote.definition(params).map(_.getOrElse(fromSnapshot))\r\n      } else {\r\n         fromSnapshot\r\n        }\r\n      } \r\n    if (fromIndex.locations.isEmpty()) {\r\n      compilers().definition(params, token)\r\n    } else {\r\n      if(fromIndex.isEmpty)  warnings.noSemanticdb(path)\r\n      Future.successful(fromIndex)\r\n    }\r\n```\r\n\r\nThis way it will also work for rambo mode, otherwise we assume that anything outside the build targets doesn't need any kind of compiler.",
+        "createdAt" : "2020-03-27T15:16:12Z",
+        "updatedAt" : "2020-03-27T19:26:28Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "ce0b0868-bdaa-4445-9ccb-e13f917c3280",
+        "parentId" : "a31b3697-de3f-4625-894b-5026b2b621e6",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "This was a great suggestion! Applied (with minor changes)\r\n",
+        "createdAt" : "2020-03-27T19:27:15Z",
+        "updatedAt" : "2020-03-27T19:27:15Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "922329228964c110122b6e35a403b21a3c4d3f3e",
+    "line" : null,
+    "diffHunk" : "@@ -61,17 +63,28 @@ final class DefinitionProvider(\n       token: CancelToken\n   ): Future[DefinitionResult] = {\n     val fromSemanticdb =\n-      semanticdbs.textDocument(path).documentIncludingStale match {\n-        case Some(doc) =>\n-          definitionFromSnapshot(path, params, doc)\n-        case _ =>\n-          warnings.noSemanticdb(path)\n-          DefinitionResult.empty\n+      semanticdbs.textDocument(path).documentIncludingStale\n+    val fromSnapshot = fromSemanticdb match {\n+      case Some(doc) =>\n+        definitionFromSnapshot(path, params, doc)\n+      case _ =>\n+        DefinitionResult.empty\n+    }\n+    val fromCompiler =\n+      if (fromSnapshot.locations.isEmpty()) {\n+        if (remote.isEnabledForPath(path)) {\n+          remote.definition(params).map(_.getOrElse(fromSnapshot))"
+  },
+  {
+    "id" : "8186796d-5548-4c88-80b9-f96edb7cdee2",
+    "prId" : 1547,
+    "comments" : [
+      {
+        "id" : "04cbd2a3-7153-4718-ab04-0899809fda09",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Maybe `Option[RemoteLanguageServer]` ? It will be more clear that it might not be available.",
+        "createdAt" : "2020-03-27T15:43:13Z",
+        "updatedAt" : "2020-03-27T19:26:28Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "65764cb9-e028-4cbf-ad96-ecc3104d182b",
+        "parentId" : "04cbd2a3-7153-4718-ab04-0899809fda09",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "The remote language server can be configured at runtime based on the `remoteLanguageServer` user option. The `isEnabledForPath` method is the way to determine if it's enabled or not.",
+        "createdAt" : "2020-03-27T15:50:06Z",
+        "updatedAt" : "2020-03-27T19:26:42Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "922329228964c110122b6e35a403b21a3c4d3f3e",
+    "line" : 14,
+    "diffHunk" : "@@ -44,7 +45,8 @@ final class DefinitionProvider(\n     icons: Icons,\n     statusBar: StatusBar,\n     warnings: Warnings,\n-    compilers: () => Compilers\n+    compilers: () => Compilers,\n+    remote: RemoteLanguageServer"
+  },
+  {
+    "id" : "5a97eaec-8676-4bb4-8a36-db62225e6a5a",
+    "prId" : 1547,
+    "comments" : [
+      {
+        "id" : "f3b3136a-f0ef-4f6d-be55-b8b708c604ed",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Is ` fromSemanticdb.isEmpty` needed?  If the `result.isEmpty` is true then ` fromSemanticdb.isEmpty` must also be true.",
+        "createdAt" : "2020-03-27T19:42:49Z",
+        "updatedAt" : "2020-03-27T19:45:33Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f7180525-b646-486e-b186-d8a183d23ae4",
+        "parentId" : "f3b3136a-f0ef-4f6d-be55-b8b708c604ed",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "We can get an empty result when the cursor is over a non-symbol position even if there’s a SemanticDB file. My goal was to try and isolate the “SemanticDB world” from the “remote language server world”",
+        "createdAt" : "2020-03-27T21:57:20Z",
+        "updatedAt" : "2020-03-27T21:57:20Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "922329228964c110122b6e35a403b21a3c4d3f3e",
+    "line" : 43,
+    "diffHunk" : "@@ -61,17 +63,28 @@ final class DefinitionProvider(\n       token: CancelToken\n   ): Future[DefinitionResult] = {\n     val fromSemanticdb =\n-      semanticdbs.textDocument(path).documentIncludingStale match {\n-        case Some(doc) =>\n-          definitionFromSnapshot(path, params, doc)\n-        case _ =>\n+      semanticdbs.textDocument(path).documentIncludingStale\n+    val fromSnapshot = fromSemanticdb match {\n+      case Some(doc) =>\n+        definitionFromSnapshot(path, params, doc)\n+      case _ =>\n+        DefinitionResult.empty\n+    }\n+    val fromIndex =\n+      if (fromSnapshot.isEmpty && remote.isEnabledForPath(path)) {\n+        remote.definition(params).map(_.getOrElse(fromSnapshot))\n+      } else {\n+        Future.successful(fromSnapshot)\n+      }\n+    fromIndex.flatMap { result =>\n+      if (result.isEmpty) {\n+        compilers().definition(params, token)\n+      } else {\n+        if (result.isEmpty && fromSemanticdb.isEmpty) {"
+  },
+  {
+    "id" : "9d7fbaad-7a5d-4018-996d-261ab4acca86",
+    "prId" : 1953,
+    "comments" : [
+      {
+        "id" : "10945a9d-056d-490c-b62f-d46529c95583",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "This is essencialy the same code.",
+        "createdAt" : "2020-07-28T16:34:12Z",
+        "updatedAt" : "2020-07-29T09:58:03Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "e5ae4deec700724213f99d4fbeee5535331d1873",
+    "line" : 14,
+    "diffHunk" : "@@ -253,16 +253,9 @@ class DestinationProvider(\n       symbolDefinition <- index.definition(Symbol(symbol))\n       if symbolDefinition.path.exists\n       destinationDoc = bestTextDocument(symbolDefinition)\n-      defnPathInput = symbolDefinition.path.toInputFromBuffers(buffers)\n-      defnOriginalInput = Input.VirtualFile(\n-        defnPathInput.path,\n-        destinationDoc.text\n-      )\n       destinationPath = symbolDefinition.path.toFileOnDisk(workspace)\n-      destinationDistance = TokenEditDistance(\n-        defnOriginalInput,\n-        defnPathInput\n-      )\n+      destinationDistance ="
+  }
+]

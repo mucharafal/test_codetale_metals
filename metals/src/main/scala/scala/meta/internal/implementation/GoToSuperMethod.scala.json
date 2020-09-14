@@ -1,0 +1,95 @@
+[
+  {
+    "id" : "2f293817-303f-4d24-853d-d7ba0933fe00",
+    "prId" : 1487,
+    "comments" : [
+      {
+        "id" : "c09a4e0a-fa80-4e03-be09-4244cf366abd",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "`si` -> `symbolInformation`",
+        "createdAt" : "2020-03-12T11:23:50Z",
+        "updatedAt" : "2020-03-24T16:45:28Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "55838e6c9f4127bc8d06a8d31a6df496a0b729a8",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,203 @@\n+package scala.meta.internal.implementation\n+\n+import org.eclipse.lsp4j.ExecuteCommandParams\n+import org.eclipse.lsp4j.Location\n+import org.eclipse.lsp4j.Position\n+import scala.concurrent.ExecutionContext\n+import scala.concurrent.Future\n+import scala.meta.internal.implementation.GoToSuperMethod.GoToSuperMethodParams\n+import scala.meta.internal.implementation.GoToSuperMethod.formatMethodSymbolForQuickPick\n+import scala.meta.internal.metals.BuildTargets\n+import scala.meta.internal.metals.ClientCommands\n+import scala.meta.internal.metals.CodeLensProvider.emptyLensGoSuperCache\n+import scala.meta.internal.metals.DefinitionProvider\n+import scala.meta.internal.metals.JsonParser._\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.internal.metals.MetalsLanguageClient\n+import scala.meta.internal.metals.MetalsQuickPickItem\n+import scala.meta.internal.metals.MetalsQuickPickParams\n+import scala.meta.internal.semanticdb.SymbolInformation\n+import scala.meta.internal.semanticdb.SymbolOccurrence\n+import scala.meta.internal.semanticdb.TextDocument\n+import scala.meta.io.AbsolutePath\n+\n+class GoToSuperMethod(\n+    client: MetalsLanguageClient,\n+    definitionProvider: DefinitionProvider,\n+    implementationProvider: ImplementationProvider,\n+    superMethodProvider: SuperMethodProvider,\n+    buildTargets: BuildTargets\n+)(\n+    implicit ec: ExecutionContext\n+) {\n+\n+  def getGoToSuperMethodCommand(\n+      commandParams: ExecuteCommandParams\n+  ): Option[ExecuteCommandParams] = {\n+    parseJsonParams(commandParams)\n+      .flatMap(getGoToSuperMethodLocation)\n+      .map(makeCommandParams)\n+  }\n+\n+  def jumpToSelectedSuperMethod(\n+      commandParams: ExecuteCommandParams\n+  ): Future[Unit] = {\n+    def execute(methodSymbols: List[String]): Future[Unit] = {\n+      askUserToSelectSuperMethod(methodSymbols)\n+        .map(\n+          _.flatMap(findDefinitionLocation)\n+            .map(makeCommandParams)\n+            .foreach(client.metalsExecuteClientCommand)\n+        )\n+    }\n+\n+    (for {\n+      params <- parseJsonParams(commandParams)\n+      methodsHierarchy <- getSuperMethodHierarchySymbols(params)\n+      if methodsHierarchy.nonEmpty\n+    } yield execute(methodsHierarchy)).getOrElse(Future.successful())\n+  }\n+\n+  def getGoToSuperMethodLocation(\n+      params: GoToSuperMethodParams\n+  ): Option[Location] = {\n+    for {\n+      filePath <- params.document.toAbsolutePathSafe\n+      (symbolOcc, textDocument) <- definitionProvider.symbolOccurrence(\n+        filePath,\n+        params.position\n+      )\n+      findSymbol = makeFindSymbolMethod(textDocument, filePath)\n+      symbolInformation <- findSymbol(symbolOcc.symbol)\n+      gotoSymbol <- {\n+        if (symbolOcc.role.isDefinition) {\n+          val docText = TextDocumentWithPath(textDocument, filePath)\n+          findSuperMethodSymbol(\n+            symbolInformation,\n+            symbolOcc.role,\n+            docText,\n+            findSymbol\n+          )\n+        } else {\n+          Some(symbolInformation.symbol)\n+        }\n+      }\n+      jumpToLocation <- findDefinitionLocation(gotoSymbol)\n+    } yield jumpToLocation\n+  }\n+\n+  private def askUserToSelectSuperMethod(\n+      methodSymbols: List[String]\n+  ): Future[Option[String]] = {\n+    client\n+      .metalsQuickPick(\n+        MetalsQuickPickParams(\n+          methodSymbols\n+            .map(symbol =>\n+              MetalsQuickPickItem(\n+                symbol,\n+                formatMethodSymbolForQuickPick(symbol)\n+              )\n+            )\n+            .asJava,\n+          placeHolder = \"Select super method to jump to\"\n+        )\n+      )\n+      .asScala\n+      .map {\n+        case pickResult if !pickResult.cancelled => Some(pickResult.itemId)\n+        case _ => None\n+      }\n+  }\n+\n+  def getSuperMethodHierarchySymbols(\n+      params: GoToSuperMethodParams\n+  ): Option[List[String]] = {\n+    for {\n+      filePath <- params.document.toAbsolutePathSafe\n+      (symbolOcc, textDocument) <- definitionProvider.symbolOccurrence(\n+        filePath,\n+        params.position\n+      )\n+      findSymbol = makeFindSymbolMethod(textDocument, filePath)\n+      symbolInformation <- findSymbol(symbolOcc.symbol)\n+      docText = TextDocumentWithPath(textDocument, filePath)\n+      hierarchy <- superMethodProvider.getSuperMethodHierarchy(\n+        symbolInformation,\n+        docText,\n+        symbolOcc.role,\n+        findSymbol\n+      )\n+    } yield hierarchy.map(_.symbol)\n+  }\n+\n+  private def makeFindSymbolMethod(\n+      textDocument: TextDocument,\n+      filePath: AbsolutePath\n+  ): String => Option[SymbolInformation] = {\n+    val global = new GlobalClassTable(buildTargets)\n+      .globalSymbolTableFor(filePath)\n+      .get\n+    si =>"
+  },
+  {
+    "id" : "33034c88-eb70-4cdb-a69b-cead19362e6e",
+    "prId" : 1487,
+    "comments" : [
+      {
+        "id" : "a0f48d82-07ee-4713-9556-9d0d68f42445",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Why is this needed? Let's maybe add a comment with examples",
+        "createdAt" : "2020-03-12T11:25:17Z",
+        "updatedAt" : "2020-03-24T16:45:28Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "55838e6c9f4127bc8d06a8d31a6df496a0b729a8",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,203 @@\n+package scala.meta.internal.implementation\n+\n+import org.eclipse.lsp4j.ExecuteCommandParams\n+import org.eclipse.lsp4j.Location\n+import org.eclipse.lsp4j.Position\n+import scala.concurrent.ExecutionContext\n+import scala.concurrent.Future\n+import scala.meta.internal.implementation.GoToSuperMethod.GoToSuperMethodParams\n+import scala.meta.internal.implementation.GoToSuperMethod.formatMethodSymbolForQuickPick\n+import scala.meta.internal.metals.BuildTargets\n+import scala.meta.internal.metals.ClientCommands\n+import scala.meta.internal.metals.CodeLensProvider.emptyLensGoSuperCache\n+import scala.meta.internal.metals.DefinitionProvider\n+import scala.meta.internal.metals.JsonParser._\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.internal.metals.MetalsLanguageClient\n+import scala.meta.internal.metals.MetalsQuickPickItem\n+import scala.meta.internal.metals.MetalsQuickPickParams\n+import scala.meta.internal.semanticdb.SymbolInformation\n+import scala.meta.internal.semanticdb.SymbolOccurrence\n+import scala.meta.internal.semanticdb.TextDocument\n+import scala.meta.io.AbsolutePath\n+\n+class GoToSuperMethod(\n+    client: MetalsLanguageClient,\n+    definitionProvider: DefinitionProvider,\n+    implementationProvider: ImplementationProvider,\n+    superMethodProvider: SuperMethodProvider,\n+    buildTargets: BuildTargets\n+)(\n+    implicit ec: ExecutionContext\n+) {\n+\n+  def getGoToSuperMethodCommand(\n+      commandParams: ExecuteCommandParams\n+  ): Option[ExecuteCommandParams] = {\n+    parseJsonParams(commandParams)\n+      .flatMap(getGoToSuperMethodLocation)\n+      .map(makeCommandParams)\n+  }\n+\n+  def jumpToSelectedSuperMethod(\n+      commandParams: ExecuteCommandParams\n+  ): Future[Unit] = {\n+    def execute(methodSymbols: List[String]): Future[Unit] = {\n+      askUserToSelectSuperMethod(methodSymbols)\n+        .map(\n+          _.flatMap(findDefinitionLocation)\n+            .map(makeCommandParams)\n+            .foreach(client.metalsExecuteClientCommand)\n+        )\n+    }\n+\n+    (for {\n+      params <- parseJsonParams(commandParams)\n+      methodsHierarchy <- getSuperMethodHierarchySymbols(params)\n+      if methodsHierarchy.nonEmpty\n+    } yield execute(methodsHierarchy)).getOrElse(Future.successful())\n+  }\n+\n+  def getGoToSuperMethodLocation(\n+      params: GoToSuperMethodParams\n+  ): Option[Location] = {\n+    for {\n+      filePath <- params.document.toAbsolutePathSafe\n+      (symbolOcc, textDocument) <- definitionProvider.symbolOccurrence(\n+        filePath,\n+        params.position\n+      )\n+      findSymbol = makeFindSymbolMethod(textDocument, filePath)\n+      symbolInformation <- findSymbol(symbolOcc.symbol)\n+      gotoSymbol <- {\n+        if (symbolOcc.role.isDefinition) {\n+          val docText = TextDocumentWithPath(textDocument, filePath)\n+          findSuperMethodSymbol(\n+            symbolInformation,\n+            symbolOcc.role,\n+            docText,\n+            findSymbol\n+          )\n+        } else {\n+          Some(symbolInformation.symbol)\n+        }\n+      }\n+      jumpToLocation <- findDefinitionLocation(gotoSymbol)\n+    } yield jumpToLocation\n+  }\n+\n+  private def askUserToSelectSuperMethod(\n+      methodSymbols: List[String]\n+  ): Future[Option[String]] = {\n+    client\n+      .metalsQuickPick(\n+        MetalsQuickPickParams(\n+          methodSymbols\n+            .map(symbol =>\n+              MetalsQuickPickItem(\n+                symbol,\n+                formatMethodSymbolForQuickPick(symbol)\n+              )\n+            )\n+            .asJava,\n+          placeHolder = \"Select super method to jump to\"\n+        )\n+      )\n+      .asScala\n+      .map {\n+        case pickResult if !pickResult.cancelled => Some(pickResult.itemId)\n+        case _ => None\n+      }\n+  }\n+\n+  def getSuperMethodHierarchySymbols(\n+      params: GoToSuperMethodParams\n+  ): Option[List[String]] = {\n+    for {\n+      filePath <- params.document.toAbsolutePathSafe\n+      (symbolOcc, textDocument) <- definitionProvider.symbolOccurrence(\n+        filePath,\n+        params.position\n+      )\n+      findSymbol = makeFindSymbolMethod(textDocument, filePath)\n+      symbolInformation <- findSymbol(symbolOcc.symbol)\n+      docText = TextDocumentWithPath(textDocument, filePath)\n+      hierarchy <- superMethodProvider.getSuperMethodHierarchy(\n+        symbolInformation,\n+        docText,\n+        symbolOcc.role,\n+        findSymbol\n+      )\n+    } yield hierarchy.map(_.symbol)\n+  }\n+\n+  private def makeFindSymbolMethod(\n+      textDocument: TextDocument,\n+      filePath: AbsolutePath\n+  ): String => Option[SymbolInformation] = {\n+    val global = new GlobalClassTable(buildTargets)\n+      .globalSymbolTableFor(filePath)\n+      .get\n+    si =>\n+      ImplementationProvider\n+        .findSymbol(textDocument, si)\n+        .orElse(\n+          implementationProvider\n+            .findSymbolInformation(si)\n+        )\n+        .orElse(\n+          global.info(si)\n+        )\n+  }\n+\n+  private def findSuperMethodSymbol(\n+      symbolInformation: SymbolInformation,\n+      role: SymbolOccurrence.Role,\n+      docText: TextDocumentWithPath,\n+      findSymbol: String => Option[SymbolInformation]\n+  ): Option[String] = {\n+    superMethodProvider.findSuperForMethodOrField(\n+      symbolInformation,\n+      docText,\n+      role,\n+      findSymbol,\n+      emptyLensGoSuperCache()\n+    )\n+  }\n+\n+  private def findDefinitionLocation(symbol: String): Option[Location] = {\n+    definitionProvider.fromSymbol(symbol).asScala.headOption\n+  }\n+\n+  private def makeCommandParams(location: Location): ExecuteCommandParams = {\n+    new ExecuteCommandParams(\n+      ClientCommands.GotoLocation.id,\n+      List[Object](location).asJava\n+    )\n+  }\n+\n+  private def parseJsonParams(\n+      commandParams: ExecuteCommandParams\n+  ): Option[GoToSuperMethodParams] = {\n+    for {\n+      args <- Option(commandParams.getArguments)\n+      argObject <- args.asScala.headOption\n+      superMethodParams <- argObject.toJsonObject\n+        .as[GoToSuperMethodParams]\n+        .toOption\n+    } yield superMethodParams\n+  }\n+}\n+\n+object GoToSuperMethod {\n+\n+  final case class GoToSuperMethodParams(document: String, position: Position)\n+\n+  def formatMethodSymbolForQuickPick(symbol: String): String = {\n+    val replaced = symbol\n+      .replace(\"/\", \".\")"
+  },
+  {
+    "id" : "d77b9445-506a-465f-acad-f8b6b3d80d8c",
+    "prId" : 1487,
+    "comments" : [
+      {
+        "id" : "199235b9-1789-4a99-8a2e-bafcaeef5a7c",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "`Supermethods`?",
+        "createdAt" : "2020-03-17T19:53:52Z",
+        "updatedAt" : "2020-03-24T16:45:28Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "55838e6c9f4127bc8d06a8d31a6df496a0b729a8",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,209 @@\n+package scala.meta.internal.implementation\n+\n+import org.eclipse.lsp4j.ExecuteCommandParams\n+import org.eclipse.lsp4j.Location\n+import org.eclipse.lsp4j.Position\n+import scala.concurrent.ExecutionContext\n+import scala.concurrent.Future\n+import scala.meta.internal.implementation.GoToSuperMethod.GoToSuperMethodParams\n+import scala.meta.internal.implementation.GoToSuperMethod.formatMethodSymbolForQuickPick\n+import scala.meta.internal.metals.BuildTargets\n+import scala.meta.internal.metals.ClientCommands\n+import scala.meta.internal.metals.DefinitionProvider\n+import scala.meta.internal.metals.JsonParser._\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.internal.metals.MetalsLanguageClient\n+import scala.meta.internal.metals.MetalsQuickPickItem\n+import scala.meta.internal.metals.MetalsQuickPickParams\n+import scala.meta.internal.metals.codelenses.SuperMethodLensesProvider.emptyLensGoSuperCache\n+import scala.meta.internal.semanticdb.SymbolInformation\n+import scala.meta.internal.semanticdb.SymbolOccurrence\n+import scala.meta.internal.semanticdb.TextDocument\n+import scala.meta.io.AbsolutePath\n+\n+class GoToSuperMethod("
+  }
+]

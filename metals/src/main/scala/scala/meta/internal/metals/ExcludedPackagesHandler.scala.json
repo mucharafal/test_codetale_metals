@@ -1,0 +1,218 @@
+[
+  {
+    "id" : "e042f6b2-8d65-4e30-9caa-15defa279737",
+    "prId" : 2012,
+    "comments" : [
+      {
+        "id" : "02680499-aeca-489f-bd4f-7932363ac680",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "I think this method-call here will need to be cached to avoid performance regressions. This is a fairly hot code path that's triggered for all completions and workspace/symbol.",
+        "createdAt" : "2020-08-24T12:12:36Z",
+        "updatedAt" : "2020-09-01T08:04:55Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "bc36481e-cff6-4e9d-84eb-58762f8c2887",
+        "parentId" : "02680499-aeca-489f-bd4f-7932363ac680",
+        "author" : {
+          "login" : "ckipp01",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/13974112?u=7b6a2ddab8eec6f99e4e40ae9b81f71cb5ba92e5&v=4"
+        },
+        "body" : "That was my original thought as well, but I've put logging in here to test, and this only ever seems to be hit on when we index. It's appears to not be hit on when triggering completions, symbol searches etc.",
+        "createdAt" : "2020-08-24T12:17:56Z",
+        "updatedAt" : "2020-09-01T08:04:55Z",
+        "lastEditedBy" : {
+          "login" : "ckipp01",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/13974112?u=7b6a2ddab8eec6f99e4e40ae9b81f71cb5ba92e5&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "d12da21d-4eb3-4905-aa97-f5ee05cb30da",
+        "parentId" : "02680499-aeca-489f-bd4f-7932363ac680",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "You’re right. It’s probably fine as it is. I would still try to optimize the foldLeft, I’m generally paranoid with using immutable collections on hot paths like indexing. ",
+        "createdAt" : "2020-08-29T10:42:40Z",
+        "updatedAt" : "2020-09-01T08:04:55Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "49c8159c-8eff-451d-a3c4-1f0c592022e8",
+        "parentId" : "02680499-aeca-489f-bd4f-7932363ac680",
+        "author" : {
+          "login" : "ckipp01",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/13974112?u=7b6a2ddab8eec6f99e4e40ae9b81f71cb5ba92e5&v=4"
+        },
+        "body" : "👍 totally. I was able to change this around a bit and cache it because when testing it on a large code base it was getting called hundreds of times. So that should be taken care of now.",
+        "createdAt" : "2020-08-29T10:43:54Z",
+        "updatedAt" : "2020-09-01T08:04:55Z",
+        "lastEditedBy" : {
+          "login" : "ckipp01",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/13974112?u=7b6a2ddab8eec6f99e4e40ae9b81f71cb5ba92e5&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "742d615938b7ae27e2a94fdcb0daa3d765c5a4ba",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,43 @@\n+package scala.meta.internal.metals\n+\n+/**\n+ * This class handles packages that should be excluded from indexing causing\n+ * them to not be recommended for completions, symbol searches, and code actions.\n+ *\n+ * @param userConfig access to user input for excluded packages\n+ */\n+class ExcludedPackagesHandler(userConfig: () => UserConfiguration) {\n+  val defaultExclusions: List[String] = List(\n+    \"META-INF/\", \"images/\", \"toolbarButtonGraphics/\", \"jdk/\", \"sun/\", \"javax/\",\n+    \"oracle/\", \"java/awt/desktop/\", \"org/jcp/\", \"org/omg/\", \"org/graalvm/\",\n+    \"com/oracle/\", \"com/sun/\", \"com/apple/\", \"apple/\"\n+  )\n+\n+  private def handleUserExclusions(pkgs: List[String]): List[String] = {\n+    pkgs.foldRight(defaultExclusions)((pkg, acc) => {\n+      val replaced = pkg.replace(\".\", \"/\")\n+      val formatted =\n+        if (replaced.endsWith(\"/\")) replaced\n+        else replaced + \"/\"\n+\n+      if (formatted.startsWith(\"--\")) {\n+        acc.filterNot(_.equals(formatted.drop(2)))\n+      } else {\n+        formatted :: acc\n+      }\n+    })\n+  }\n+\n+  /**\n+   * Should the given package be excluded from indexing\n+   *\n+   * @param pkg package to check against excluded list\n+   */\n+  def isExcludedPackage(pkg: String): Boolean = {\n+    val packagesToExclude: List[String] = userConfig().excludedPackages match {\n+      case Some(pkgs) => handleUserExclusions(pkgs)"
+  },
+  {
+    "id" : "005a121b-9961-401c-8535-375888b51c93",
+    "prId" : 2012,
+    "comments" : [
+      {
+        "id" : "0ee58be9-b4e2-436c-bf5f-247daf24a016",
+        "parentId" : null,
+        "author" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "body" : "WDYT:\r\n```scala\r\nclass ExcludedPackagesHandler(pkgs: List[String]) {\r\n  private var cached: List[String] = prepareCache(pkgs)\r\n\r\n  private def prepareCache(pkgs: List[String]): List[String] = ...\r\n\r\n  def update(pkgs: List[String]): Unit = {cached = prepareCache(pkgs) }\r\n\r\n  def isExcluded(pkg: String): Boolean = cached.exists(excluded => pkg.startsWith(excluded))\r\n}\r\n// instead of clear we would call update with new userExcludedPackages\r\n```\r\n\r\nthis way in 'isExcluded' we don't have to always convert ListBuffer->List, pattern match etc. it focuses on simplifying this method.",
+        "createdAt" : "2020-08-31T06:50:12Z",
+        "updatedAt" : "2020-09-01T08:04:55Z",
+        "lastEditedBy" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "0bef18d5-1faf-4722-a613-8765003b8c7e",
+        "parentId" : "0ee58be9-b4e2-436c-bf5f-247daf24a016",
+        "author" : {
+          "login" : "ckipp01",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/13974112?u=7b6a2ddab8eec6f99e4e40ae9b81f71cb5ba92e5&v=4"
+        },
+        "body" : "Thanks a lot for the review! I went ahead and took some of these suggestions because yea, it simplifies it for sure. I did still incorporate a cache though. Let me know what you think!",
+        "createdAt" : "2020-08-31T19:01:37Z",
+        "updatedAt" : "2020-09-01T08:04:55Z",
+        "lastEditedBy" : {
+          "login" : "ckipp01",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/13974112?u=7b6a2ddab8eec6f99e4e40ae9b81f71cb5ba92e5&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "742d615938b7ae27e2a94fdcb0daa3d765c5a4ba",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,58 @@\n+package scala.meta.internal.metals\n+\n+import scala.collection.mutable.ListBuffer\n+\n+/**\n+ * This class handles packages that should be excluded from indexing causing\n+ * them to not be recommended for completions, symbol searches, and code actions.\n+ *\n+ * @param userConfig access to user input for excluded packages\n+ */\n+class ExcludedPackagesHandler(userConfig: () => UserConfiguration) {"
+  },
+  {
+    "id" : "776604ba-6edf-45ec-9f3b-c8b067868492",
+    "prId" : 2012,
+    "comments" : [
+      {
+        "id" : "6389693d-5948-4d02-803e-85bf4fe4359c",
+        "parentId" : null,
+        "author" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "body" : "If we did:\r\n`def isExcludedPackage(pkg: String): Boolean = cachedExclusions.exists(excluded => pkg.startsWith(excluded))`\r\n\r\nIt would not work only in 1 case where we created this class but did not call update yet, because `cachedExclusions` would be empty list.\r\n\r\nBut if we did:\r\n`private var cachedExclusions: List[String] = prepareCache(pkgsToExclude)`\r\n\r\nThen this should work? \r\n\r\nFine as it now, just curious what you think?",
+        "createdAt" : "2020-09-01T07:11:39Z",
+        "updatedAt" : "2020-09-01T08:04:55Z",
+        "lastEditedBy" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d5b04b59-7001-4c91-8dd0-ad8ff7192974",
+        "parentId" : "6389693d-5948-4d02-803e-85bf4fe4359c",
+        "author" : {
+          "login" : "ckipp01",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/13974112?u=7b6a2ddab8eec6f99e4e40ae9b81f71cb5ba92e5&v=4"
+        },
+        "body" : "So my main reason for doing it this is that since this is created right after the user configuration, it will get the default user configuration value, which is `None`. Then if the user has any value set, it will run the update right away as soon as the initialize happens. My thinking was then that we'd run this twice no matter what whenever it was used. So my attempt to avoid that was to hold off on running the `prepareCache` until it's needed to index the first time, or when the `initialize` process happens and the change is picked up during the `didChangeConfiguration`. So I don't think it matters a ton, but again, was trying to avoid running `prepareCache` twice right in a row. I'm open to maybe changing this, but also don't see a downside of having it this way. WDYT?",
+        "createdAt" : "2020-09-01T07:55:07Z",
+        "updatedAt" : "2020-09-01T08:04:55Z",
+        "lastEditedBy" : {
+          "login" : "ckipp01",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/13974112?u=7b6a2ddab8eec6f99e4e40ae9b81f71cb5ba92e5&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "eb3fb2e7-c038-4d43-a16b-b714cf06fcde",
+        "parentId" : "6389693d-5948-4d02-803e-85bf4fe4359c",
+        "author" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "body" : "Ahh yes right!, I did not notice it will be called twice in that case, all good :+1:",
+        "createdAt" : "2020-09-01T08:04:41Z",
+        "updatedAt" : "2020-09-01T08:04:55Z",
+        "lastEditedBy" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "742d615938b7ae27e2a94fdcb0daa3d765c5a4ba",
+    "line" : 62,
+    "diffHunk" : "@@ -0,0 +1,71 @@\n+package scala.meta.internal.metals\n+\n+/**\n+ * This class handles packages that should be excluded from indexing causing\n+ * them to not be recommended for completions, symbol searches, and code actions.\n+ *\n+ * @param pkgsToExclude any exclusions that are in the `UserConfiguration` to start with.\n+ */\n+class ExcludedPackagesHandler(pkgsToExclude: Option[List[String]]) {\n+  val defaultExclusions: List[String] = List(\n+    \"META-INF/\", \"images/\", \"toolbarButtonGraphics/\", \"jdk/\", \"sun/\", \"javax/\",\n+    \"oracle/\", \"java/awt/desktop/\", \"org/jcp/\", \"org/omg/\", \"org/graalvm/\",\n+    \"com/oracle/\", \"com/sun/\", \"com/apple/\", \"apple/\"\n+  )\n+\n+  /**\n+   * Cached exclusions to make sure that we only have to process the list\n+   * once. This is only updated if the user changes the exclusions in the\n+   * UserConfiguration which is detected in the `workspace/didChangeConfiguration`.\n+   */\n+  private var cachedExclusions: List[String] = List.empty\n+\n+  /**\n+   * More than likely a user will give us exclusions in the following format:\n+   *\n+   * - `akka.actor.typed.javadsl`\n+   *\n+   * This will make sure that they are always formatted in the way we need them\n+   * to be when we are actually comparing them as paths:\n+   *\n+   * - `akka/actor/typed/javadsl/`\n+   *\n+   * @param pkgs pkgs to either add to or check against the defaults.\n+   */\n+  private def prepareCache(pkgs: List[String]): List[String] = {\n+    pkgs.foldLeft(defaultExclusions) { (exclusions, pkg) =>\n+      val replaced = pkg.replace(\".\", \"/\")\n+      val formatted =\n+        if (replaced.endsWith(\"/\")) replaced\n+        else replaced + \"/\"\n+\n+      if (formatted.startsWith(\"--\")) {\n+        exclusions.filterNot(_ == formatted.drop(2))\n+      } else {\n+        formatted :: exclusions\n+      }\n+    }\n+  }\n+\n+  def update(pkgs: List[String]): Unit = cachedExclusions = prepareCache(pkgs)\n+\n+  /**\n+   * Should the given package be excluded from indexing\n+   *\n+   * @param pkg package to check against excluded list\n+   */\n+  def isExcludedPackage(pkg: String): Boolean = {\n+    if (cachedExclusions.nonEmpty) {"
+  }
+]

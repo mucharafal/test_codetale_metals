@@ -1,0 +1,843 @@
+[
+  {
+    "id" : "eb133e11-d321-4437-8bff-f68e7d927d18",
+    "prId" : 1611,
+    "comments" : [
+      {
+        "id" : "a7c13e4e-cc64-40b6-898f-2bfdeb67af2b",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "`line.prefixLength(_ == ' ')`",
+        "createdAt" : "2020-04-30T13:53:33Z",
+        "updatedAt" : "2020-05-01T10:10:22Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "4d378e2f-3b82-4f77-82e8-81c07a0bca41",
+        "parentId" : "a7c13e4e-cc64-40b6-898f-2bfdeb67af2b",
+        "author" : {
+          "login" : "mlachkar",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/7843237?u=d2941da73011b9a49767ac863ce5bc20b7b10ed7&v=4"
+        },
+        "body" : "I didn't know this method, thanks",
+        "createdAt" : "2020-04-30T14:49:16Z",
+        "updatedAt" : "2020-05-01T10:10:22Z",
+        "lastEditedBy" : {
+          "login" : "mlachkar",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/7843237?u=d2941da73011b9a49767ac863ce5bc20b7b10ed7&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "b46663d2adf7dc3aaeb94c3d98b5ce7234add6b6",
+    "line" : null,
+    "diffHunk" : "@@ -109,57 +111,104 @@ object MultilineStringFormattingProvider {\n \n   private def multilineStringInTokens(\n       tokens: Tokens,\n-      startPos: meta.Position,\n-      endPos: meta.Position,\n-      sourceText: String\n+      startPos: StartPosition,\n+      endPos: EndPosition,\n+      sourceText: String,\n+      newlineAdded: Boolean\n   ): Boolean = {\n-    var tokenIndex = 0\n-    var stringFound = false\n-    var shouldAddPipes = false\n-    while (!stringFound && tokenIndex < tokens.size) {\n-      tokens(tokenIndex) match {\n-        case token: Constant.String if inToken(startPos, endPos, token) =>\n-          stringFound = true\n-          shouldAddPipes = isMultilineString(sourceText, token) &&\n-            hasStripMarginSuffix(tokenIndex, tokens)\n-        case start: Interpolation.Start if start.start < startPos.start =>\n-          var endIndex = tokenIndex + 1\n-          while (!tokens(endIndex)\n-              .isInstanceOf[Interpolation.End]) endIndex += 1\n-          val end = tokens(endIndex)\n-          stringFound = end.end > startPos.end\n-          shouldAddPipes =\n-            stringFound && isMultilineString(sourceText, start) &&\n-              hasStripMarginSuffix(endIndex, tokens)\n-        case _ =>\n-      }\n-      tokenIndex += 1\n+    if (pipeInScope(startPos, endPos, sourceText, newlineAdded)) {\n+      tokens.zipWithIndex\n+        .exists(\n+          shouldFormatMultiString(sourceText, tokens, startPos, endPos) orElse\n+            shouldFormatInterpolationString(sourceText, tokens, startPos) orElse {\n+            case _ => false\n+          }\n+        )\n+    } else false\n+  }\n+\n+  private def shouldFormatMultiString(\n+      sourceText: String,\n+      tokens: Tokens,\n+      start: StartPosition,\n+      end: EndPosition\n+  ): PartialFunction[(Token, Int), Boolean] = {\n+    case (token: Constant.String, index: Int) =>\n+      isMultilineString(sourceText, token) && hasStripMarginSuffix(\n+        index,\n+        tokens\n+      ) && inToken(start, end, token)\n+  }\n+  private def shouldFormatInterpolationString(\n+      sourceText: String,\n+      tokens: Tokens,\n+      start: StartPosition\n+  ): PartialFunction[(Token, Int), Boolean] = {\n+    case (token: Interpolation.Start, index: Int)\n+        if token.start < start.start => {\n+      var endIndex = index + 1\n+      while (!tokens(endIndex)\n+          .isInstanceOf[Interpolation.End]) endIndex += 1\n+      isMultilineString(sourceText, token) && hasStripMarginSuffix(\n+        endIndex,\n+        tokens\n+      )\n     }\n-    shouldAddPipes\n   }\n \n   private def withToken(\n       textId: TextDocumentIdentifier,\n       sourceText: String,\n-      range: Range,\n-      newlineAdded: Boolean\n-  )(fn: (String, meta.Position) => List[TextEdit]): List[TextEdit] = {\n+      range: Range\n+  )(\n+      fn: (\n+          StartPosition,\n+          EndPosition,\n+          String,\n+          Option[Tokens]\n+      ) => List[TextEdit]\n+  ): List[TextEdit] = {\n     val source = textId.getUri.toAbsolutePath\n     if (source.exists) {\n       val virtualFile = Input.VirtualFile(source.toString(), sourceText)\n       val startPos = range.getStart.toMeta(virtualFile)\n       val endPos = range.getEnd.toMeta(virtualFile)\n-      if (pipeInScope(startPos, endPos, sourceText, newlineAdded)) {\n-        val tokens =\n-          virtualFile.tokenize.toOption\n-        tokens\n-          .filter(multilineStringInTokens(_, startPos, endPos, sourceText))\n-          .map(_ => fn(sourceText, startPos))\n-          .getOrElse(Nil)\n-      } else Nil\n+      fn(startPos, endPos, sourceText, virtualFile.tokenize.toOption)\n     } else Nil\n   }\n \n+  private def doubleQuoteNotClosed(\n+      splitLines: Array[String],\n+      position: Position\n+  ): Boolean = {\n+    val lineBefore = splitLines(position.getLine - 1)\n+    lineBefore.count(_ == '\"') % 2 != 0\n+  }\n+\n+  private def fixStringNewline(\n+      position: Position,\n+      splitLines: Array[String]\n+  ): List[TextEdit] = {\n+    val precedentLine = position.getLine - 1\n+    val lastCharOfLineBefore = splitLines(precedentLine).size\n+    val endPrecedentLine = new Position(precedentLine, lastCharOfLineBefore)\n+    val textEditPrecedentLine = new TextEdit(\n+      new Range(endPrecedentLine, endPrecedentLine),\n+      \"\\\"\" + \" \" + \"+\"\n+    )\n+    val isPrecedentLineFirstLineOfString =\n+      if (precedentLine > 1)\n+        !splitLines(precedentLine - 1).trim.lastOption.contains('+')\n+      else true\n+    val defaultIndent = splitLines(precedentLine).takeWhile(_ == ' ').size"
+  },
+  {
+    "id" : "d6796ba8-6a94-4843-8535-97c10a5a4689",
+    "prId" : 1611,
+    "comments" : [
+      {
+        "id" : "4e3a74fc-ef40-4b09-84f9-1cc410cbd462",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "This will now fail with `\" \\n \\\" ` , we should fix this a bit to do:\r\n```scala\r\n  if (char == '\"') {\r\n    if (!escaped) {\r\n      lastQuote = i\r\n      quoteClosed = !quoteClosed\r\n    } else {\r\n      escaped = !escaped\r\n    }\r\n  } else if (char == '\\\\') {\r\n    escaped = !escaped\r\n  } else {\r\n    escaped = false\r\n  }\r\n```\r\nThe last part is important for `\\n` and such cases",
+        "createdAt" : "2020-05-01T06:58:06Z",
+        "updatedAt" : "2020-05-01T10:10:22Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "54aab6d3-ee0e-4682-bf27-e36e6c2abce7",
+        "parentId" : "4e3a74fc-ef40-4b09-84f9-1cc410cbd462",
+        "author" : {
+          "login" : "mlachkar",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/7843237?u=d2941da73011b9a49767ac863ce5bc20b7b10ed7&v=4"
+        },
+        "body" : "ok",
+        "createdAt" : "2020-05-01T08:31:32Z",
+        "updatedAt" : "2020-05-01T10:10:22Z",
+        "lastEditedBy" : {
+          "login" : "mlachkar",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/7843237?u=d2941da73011b9a49767ac863ce5bc20b7b10ed7&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "b46663d2adf7dc3aaeb94c3d98b5ce7234add6b6",
+    "line" : null,
+    "diffHunk" : "@@ -49,11 +52,29 @@ object MultilineStringFormattingProvider {\n     space * index\n   }\n \n+  private def getIndexOfLastQuote(line: String): Option[(Int, Boolean)] = {\n+    var lastQuote = -1\n+    var escaped = false\n+    var quoteClosed = true\n+    for (i <- 0 until line.size) {\n+      val char = line(i)\n+      if (char == '\"') {\n+        if (!escaped) {\n+          lastQuote = i\n+          quoteClosed = !quoteClosed\n+        } else {\n+          escaped = !escaped\n+        }\n+      }\n+      if (char == '\\\\') escaped = !escaped"
+  },
+  {
+    "id" : "d007d754-ef3c-418a-afd5-1fd3401bef57",
+    "prId" : 1611,
+    "comments" : [
+      {
+        "id" : "4afc773a-5a38-4948-871b-a0b4bb7ecdc4",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "MAybe we can make it a bit more clear:\r\n`getIndexOfLastQuote(lineBefore).exists{ case (_, quoteClosed) => !quoteClosed }`",
+        "createdAt" : "2020-05-01T07:01:36Z",
+        "updatedAt" : "2020-05-01T10:10:22Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "82b6fca0-dcd7-47ff-8c58-1202041b291b",
+        "parentId" : "4afc773a-5a38-4948-871b-a0b4bb7ecdc4",
+        "author" : {
+          "login" : "mlachkar",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/7843237?u=d2941da73011b9a49767ac863ce5bc20b7b10ed7&v=4"
+        },
+        "body" : "ok\r\n",
+        "createdAt" : "2020-05-01T08:32:01Z",
+        "updatedAt" : "2020-05-01T10:10:22Z",
+        "lastEditedBy" : {
+          "login" : "mlachkar",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/7843237?u=d2941da73011b9a49767ac863ce5bc20b7b10ed7&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "b46663d2adf7dc3aaeb94c3d98b5ce7234add6b6",
+    "line" : null,
+    "diffHunk" : "@@ -109,57 +130,111 @@ object MultilineStringFormattingProvider {\n \n   private def multilineStringInTokens(\n       tokens: Tokens,\n-      startPos: meta.Position,\n-      endPos: meta.Position,\n-      sourceText: String\n+      startPos: StartPosition,\n+      endPos: EndPosition,\n+      sourceText: String,\n+      newlineAdded: Boolean\n   ): Boolean = {\n-    var tokenIndex = 0\n-    var stringFound = false\n-    var shouldAddPipes = false\n-    while (!stringFound && tokenIndex < tokens.size) {\n-      tokens(tokenIndex) match {\n-        case token: Constant.String if inToken(startPos, endPos, token) =>\n-          stringFound = true\n-          shouldAddPipes = isMultilineString(sourceText, token) &&\n-            hasStripMarginSuffix(tokenIndex, tokens)\n-        case start: Interpolation.Start if start.start < startPos.start =>\n-          var endIndex = tokenIndex + 1\n-          while (!tokens(endIndex)\n-              .isInstanceOf[Interpolation.End]) endIndex += 1\n-          val end = tokens(endIndex)\n-          stringFound = end.end > startPos.end\n-          shouldAddPipes =\n-            stringFound && isMultilineString(sourceText, start) &&\n-              hasStripMarginSuffix(endIndex, tokens)\n-        case _ =>\n-      }\n-      tokenIndex += 1\n+    if (pipeInScope(startPos, endPos, sourceText, newlineAdded)) {\n+      tokens.zipWithIndex\n+        .exists(\n+          shouldFormatMultiString(sourceText, tokens, startPos, endPos) orElse\n+            shouldFormatInterpolationString(sourceText, tokens, startPos) orElse {\n+            case _ => false\n+          }\n+        )\n+    } else false\n+  }\n+\n+  private def shouldFormatMultiString(\n+      sourceText: String,\n+      tokens: Tokens,\n+      start: StartPosition,\n+      end: EndPosition\n+  ): PartialFunction[(Token, Int), Boolean] = {\n+    case (token: Constant.String, index: Int) =>\n+      isMultilineString(sourceText, token) && hasStripMarginSuffix(\n+        index,\n+        tokens\n+      ) && inToken(start, end, token)\n+  }\n+  private def shouldFormatInterpolationString(\n+      sourceText: String,\n+      tokens: Tokens,\n+      start: StartPosition\n+  ): PartialFunction[(Token, Int), Boolean] = {\n+    case (token: Interpolation.Start, index: Int)\n+        if token.start < start.start => {\n+      var endIndex = index + 1\n+      while (!tokens(endIndex)\n+          .isInstanceOf[Interpolation.End]) endIndex += 1\n+      isMultilineString(sourceText, token) && hasStripMarginSuffix(\n+        endIndex,\n+        tokens\n+      )\n     }\n-    shouldAddPipes\n   }\n \n   private def withToken(\n       textId: TextDocumentIdentifier,\n       sourceText: String,\n-      range: Range,\n-      newlineAdded: Boolean\n-  )(fn: (String, meta.Position) => List[TextEdit]): List[TextEdit] = {\n+      range: Range\n+  )(\n+      fn: (\n+          StartPosition,\n+          EndPosition,\n+          String,\n+          Option[Tokens]\n+      ) => List[TextEdit]\n+  ): List[TextEdit] = {\n     val source = textId.getUri.toAbsolutePath\n     if (source.exists) {\n       val virtualFile = Input.VirtualFile(source.toString(), sourceText)\n       val startPos = range.getStart.toMeta(virtualFile)\n       val endPos = range.getEnd.toMeta(virtualFile)\n-      if (pipeInScope(startPos, endPos, sourceText, newlineAdded)) {\n-        val tokens =\n-          virtualFile.tokenize.toOption\n-        tokens\n-          .filter(multilineStringInTokens(_, startPos, endPos, sourceText))\n-          .map(_ => fn(sourceText, startPos))\n-          .getOrElse(Nil)\n-      } else Nil\n+      fn(startPos, endPos, sourceText, virtualFile.tokenize.toOption)\n     } else Nil\n   }\n \n+  private def doubleQuoteNotClosed(\n+      splitLines: Array[String],\n+      position: Position\n+  ): Boolean = {\n+    val lineBefore = splitLines(position.getLine - 1)\n+    !getIndexOfLastQuote(lineBefore).exists(_._2)"
+  },
+  {
+    "id" : "80e153d4-2872-4f74-bb09-5bac06fb9515",
+    "prId" : 1611,
+    "comments" : [
+      {
+        "id" : "4ffd6077-f6b4-4d5c-9997-eb3983a9b333",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Maybe this can be a bit more clear also?\r\n```scala\r\n getIndexOfLastQuote(previousLine).map{\r\n  case (lastQuoteIndex, _) => \r\n    if (quoteIndex >0 && previousLine(quoteIndex - 1) == 's') \"s\" else \"\"\r\n}.getOrElse(\"\")\r\n```",
+        "createdAt" : "2020-05-01T07:03:49Z",
+        "updatedAt" : "2020-05-01T10:10:22Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "45cd8ec9-ab28-44a5-b3ca-c9ceed09eeb5",
+        "parentId" : "4ffd6077-f6b4-4d5c-9997-eb3983a9b333",
+        "author" : {
+          "login" : "mlachkar",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/7843237?u=d2941da73011b9a49767ac863ce5bc20b7b10ed7&v=4"
+        },
+        "body" : "ok",
+        "createdAt" : "2020-05-01T08:32:24Z",
+        "updatedAt" : "2020-05-01T10:10:22Z",
+        "lastEditedBy" : {
+          "login" : "mlachkar",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/7843237?u=d2941da73011b9a49767ac863ce5bc20b7b10ed7&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "b46663d2adf7dc3aaeb94c3d98b5ce7234add6b6",
+    "line" : null,
+    "diffHunk" : "@@ -109,57 +130,111 @@ object MultilineStringFormattingProvider {\n \n   private def multilineStringInTokens(\n       tokens: Tokens,\n-      startPos: meta.Position,\n-      endPos: meta.Position,\n-      sourceText: String\n+      startPos: StartPosition,\n+      endPos: EndPosition,\n+      sourceText: String,\n+      newlineAdded: Boolean\n   ): Boolean = {\n-    var tokenIndex = 0\n-    var stringFound = false\n-    var shouldAddPipes = false\n-    while (!stringFound && tokenIndex < tokens.size) {\n-      tokens(tokenIndex) match {\n-        case token: Constant.String if inToken(startPos, endPos, token) =>\n-          stringFound = true\n-          shouldAddPipes = isMultilineString(sourceText, token) &&\n-            hasStripMarginSuffix(tokenIndex, tokens)\n-        case start: Interpolation.Start if start.start < startPos.start =>\n-          var endIndex = tokenIndex + 1\n-          while (!tokens(endIndex)\n-              .isInstanceOf[Interpolation.End]) endIndex += 1\n-          val end = tokens(endIndex)\n-          stringFound = end.end > startPos.end\n-          shouldAddPipes =\n-            stringFound && isMultilineString(sourceText, start) &&\n-              hasStripMarginSuffix(endIndex, tokens)\n-        case _ =>\n-      }\n-      tokenIndex += 1\n+    if (pipeInScope(startPos, endPos, sourceText, newlineAdded)) {\n+      tokens.zipWithIndex\n+        .exists(\n+          shouldFormatMultiString(sourceText, tokens, startPos, endPos) orElse\n+            shouldFormatInterpolationString(sourceText, tokens, startPos) orElse {\n+            case _ => false\n+          }\n+        )\n+    } else false\n+  }\n+\n+  private def shouldFormatMultiString(\n+      sourceText: String,\n+      tokens: Tokens,\n+      start: StartPosition,\n+      end: EndPosition\n+  ): PartialFunction[(Token, Int), Boolean] = {\n+    case (token: Constant.String, index: Int) =>\n+      isMultilineString(sourceText, token) && hasStripMarginSuffix(\n+        index,\n+        tokens\n+      ) && inToken(start, end, token)\n+  }\n+  private def shouldFormatInterpolationString(\n+      sourceText: String,\n+      tokens: Tokens,\n+      start: StartPosition\n+  ): PartialFunction[(Token, Int), Boolean] = {\n+    case (token: Interpolation.Start, index: Int)\n+        if token.start < start.start => {\n+      var endIndex = index + 1\n+      while (!tokens(endIndex)\n+          .isInstanceOf[Interpolation.End]) endIndex += 1\n+      isMultilineString(sourceText, token) && hasStripMarginSuffix(\n+        endIndex,\n+        tokens\n+      )\n     }\n-    shouldAddPipes\n   }\n \n   private def withToken(\n       textId: TextDocumentIdentifier,\n       sourceText: String,\n-      range: Range,\n-      newlineAdded: Boolean\n-  )(fn: (String, meta.Position) => List[TextEdit]): List[TextEdit] = {\n+      range: Range\n+  )(\n+      fn: (\n+          StartPosition,\n+          EndPosition,\n+          String,\n+          Option[Tokens]\n+      ) => List[TextEdit]\n+  ): List[TextEdit] = {\n     val source = textId.getUri.toAbsolutePath\n     if (source.exists) {\n       val virtualFile = Input.VirtualFile(source.toString(), sourceText)\n       val startPos = range.getStart.toMeta(virtualFile)\n       val endPos = range.getEnd.toMeta(virtualFile)\n-      if (pipeInScope(startPos, endPos, sourceText, newlineAdded)) {\n-        val tokens =\n-          virtualFile.tokenize.toOption\n-        tokens\n-          .filter(multilineStringInTokens(_, startPos, endPos, sourceText))\n-          .map(_ => fn(sourceText, startPos))\n-          .getOrElse(Nil)\n-      } else Nil\n+      fn(startPos, endPos, sourceText, virtualFile.tokenize.toOption)\n     } else Nil\n   }\n \n+  private def doubleQuoteNotClosed(\n+      splitLines: Array[String],\n+      position: Position\n+  ): Boolean = {\n+    val lineBefore = splitLines(position.getLine - 1)\n+    !getIndexOfLastQuote(lineBefore).exists(_._2)\n+  }\n+\n+  private def fixStringNewline(\n+      position: Position,\n+      splitLines: Array[String]\n+  ): List[TextEdit] = {\n+    val previousLineNumber = position.getLine - 1\n+    val previousLine = splitLines(previousLineNumber)\n+    val previousLinePosition =\n+      new Position(previousLineNumber, previousLine.length)\n+    val textEditPrecedentLine = new TextEdit(\n+      new Range(previousLinePosition, previousLinePosition),\n+      \"\\\"\" + \" \" + \"+\"\n+    )\n+    val defaultIndent = previousLine.prefixLength(_ == ' ')\n+    val indent =\n+      if (previousLineNumber > 1 && !splitLines(previousLineNumber - 1).trim.lastOption\n+          .contains('+'))\n+        defaultIndent + 2\n+      else defaultIndent\n+    val interpolationString = {\n+      val quoteIndex = getIndexOfLastQuote(previousLine).map(_._1).getOrElse(-1)"
+  },
+  {
+    "id" : "a164a73b-fa75-40c0-a986-a5e07d5b8cad",
+    "prId" : 1753,
+    "comments" : [
+      {
+        "id" : "12164fa8-97ea-4f3f-a028-63f0fe0e1b11",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "This might fail if we have a whitespace somewhere between like `\"\"\"|\"\"\" stripMargin` That's why previously we used a while loop to skip over dot or whitespace.",
+        "createdAt" : "2020-05-15T15:07:37Z",
+        "updatedAt" : "2020-05-29T09:53:41Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "072af09f-8eae-401a-b938-3a3070dfeec0",
+        "parentId" : "12164fa8-97ea-4f3f-a028-63f0fe0e1b11",
+        "author" : {
+          "login" : "mlachkar",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/7843237?u=d2941da73011b9a49767ac863ce5bc20b7b10ed7&v=4"
+        },
+        "body" : "I didn't know we could have more than one space after the multiline string. \r\nRight now it works infact only if there is a space or \".\" after the multiline string. ",
+        "createdAt" : "2020-05-15T16:06:51Z",
+        "updatedAt" : "2020-05-29T09:53:41Z",
+        "lastEditedBy" : {
+          "login" : "mlachkar",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/7843237?u=d2941da73011b9a49767ac863ce5bc20b7b10ed7&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "60e701e5d87db159576e92e8239681d2abd92c6e",
+    "line" : null,
+    "diffHunk" : "@@ -23,19 +22,19 @@ object MultilineStringFormattingProvider {\n   type StartPosition = meta.Position\n   type EndPosition = meta.Position\n \n-  private def hasStripMarginSuffix(\n-      stringTokenIndex: Int,\n-      tokens: Tokens\n-  ): Boolean = {\n-    var methodIndex = stringTokenIndex + 1\n-    while (tokens(methodIndex).isWhiteSpaceOrComment ||\n-      tokens(methodIndex).isInstanceOf[Token.Dot]) methodIndex += 1\n-    tokens(methodIndex) match {\n-      case token: Token.Ident if token.value == stripMargin =>\n-        true\n-      case _ =>\n-        false\n-    }\n+  def hasStripMarginSuffix(token: Token): Boolean =\n+    !stripMargin.zipWithIndex\n+      .exists {\n+        case (char, index) =>\n+          token.input.chars(token.pos.end + index + 1) != char"
+  },
+  {
+    "id" : "a1a6f89a-938b-4a7b-b493-823481c330ce",
+    "prId" : 1753,
+    "comments" : [
+      {
+        "id" : "cf1078e2-d684-4dcc-b2f4-822caafd26ca",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "We could have one method like:\r\n```scala\r\nprivate def hasNQuotes(start: Int, text: String, n : Int): Boolean = {\r\n   (start until n).forall(text(_) == quote)\r\n}\r\n```\r\nand use it also in `isMultilineString`",
+        "createdAt" : "2020-05-15T15:11:51Z",
+        "updatedAt" : "2020-05-29T09:53:41Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "2e7a853c-513f-4fc0-8066-b07083074ec9",
+        "parentId" : "cf1078e2-d684-4dcc-b2f4-822caafd26ca",
+        "author" : {
+          "login" : "mlachkar",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/7843237?u=d2941da73011b9a49767ac863ce5bc20b7b10ed7&v=4"
+        },
+        "body" : "Ok ",
+        "createdAt" : "2020-05-15T16:07:39Z",
+        "updatedAt" : "2020-05-29T09:53:41Z",
+        "lastEditedBy" : {
+          "login" : "mlachkar",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/7843237?u=d2941da73011b9a49767ac863ce5bc20b7b10ed7&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "60e701e5d87db159576e92e8239681d2abd92c6e",
+    "line" : null,
+    "diffHunk" : "@@ -74,6 +73,18 @@ object MultilineStringFormattingProvider {\n     if (lastQuote != -1) Some((lastQuote, quoteClosed)) else None\n   }\n \n+  private def fourQuotes("
+  },
+  {
+    "id" : "681ce276-f02a-4895-8538-6498d8f2ae03",
+    "prId" : 1753,
+    "comments" : [
+      {
+        "id" : "86f04ea3-8640-4a55-b1bb-5996ec32a537",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Let's not use implicit here. They should never be used for simple types like strings or Boolean. It adds a level of complexity, you need to search for implicit rather than just have it there explicitly.  And this can also cause some unexpected bugs. Honestly, I think the simpler we can write the easier it will be for someone to read this in the future.\r\n\r\nLet's just add explicit values. You can also just use currying or overloaded functions if you don't want too write those values multiple times.\r\n\r\n```scala\r\nval fun =  isStringOrInterpolation(\r\n          start,\r\n          end,\r\n          andMultilineString = true,\r\n          andHadStripMargin = true,\r\n          andHasPipeInScope = true\r\n        )(List(indent(splitLines, position))).orElse(...)\r\n\r\nfun(sourceText, tokens, newlineAdded)\r\n```",
+        "createdAt" : "2020-05-15T15:26:06Z",
+        "updatedAt" : "2020-05-29T09:53:41Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "c50f0a84-af0d-4d89-b20d-c0fea7352350",
+        "parentId" : "86f04ea3-8640-4a55-b1bb-5996ec32a537",
+        "author" : {
+          "login" : "mlachkar",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/7843237?u=d2941da73011b9a49767ac863ce5bc20b7b10ed7&v=4"
+        },
+        "body" : "I agree with you about implicit, but It makes the call so long. It was just a proposition.",
+        "createdAt" : "2020-05-15T16:10:01Z",
+        "updatedAt" : "2020-05-29T09:53:41Z",
+        "lastEditedBy" : {
+          "login" : "mlachkar",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/7843237?u=d2941da73011b9a49767ac863ce5bc20b7b10ed7&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "60e701e5d87db159576e92e8239681d2abd92c6e",
+    "line" : null,
+    "diffHunk" : "@@ -131,57 +150,113 @@ object MultilineStringFormattingProvider {\n     pipeBetweenLastLineAndPos != -1 || pipeBetweenSelection != -1\n   }\n \n-  private def multilineStringInTokens(\n+  private def indentOnRangeFormatting(\n+      start: StartPosition,\n+      end: EndPosition,\n       tokens: Tokens,\n-      startPos: StartPosition,\n-      endPos: EndPosition,\n-      sourceText: String,\n-      newlineAdded: Boolean\n-  ): Boolean = {\n-    if (pipeInScope(startPos, endPos, sourceText, newlineAdded)) {\n-      tokens.zipWithIndex\n-        .exists(\n-          shouldFormatMultiString(sourceText, tokens, startPos, endPos) orElse\n-            shouldFormatInterpolationString(\n-              sourceText,\n-              tokens,\n-              startPos,\n-              endPos\n-            ) orElse {\n-            case _ => false\n-          }\n-        )\n-    } else false\n+      newlineAdded: Boolean,\n+      splitLines: Array[String],\n+      range: Range,\n+      text: String\n+  ): List[TextEdit] = {\n+    tokens.zipWithIndex\n+      .collectFirst {\n+        isStringOrInterpolation(\n+          start,\n+          end,\n+          andMultilineString = true,\n+          andHadStripMargin = true,\n+          andHasPipeInScope = true\n+        ) {\n+          indent(splitLines, start, range)\n+        }(text, newlineAdded, tokens)\n+      }\n+      .getOrElse(Nil)\n   }\n \n-  private def shouldFormatMultiString(\n-      sourceText: String,\n-      tokens: Tokens,\n-      start: StartPosition,\n-      end: EndPosition\n-  ): PartialFunction[(Token, Int), Boolean] = {\n-    case (token: Constant.String, index: Int) =>\n-      isMultilineString(sourceText, token) && hasStripMarginSuffix(\n-        index,\n-        tokens\n-      ) && inToken(start, end, token)\n+  private def isStringOrInterpolation(\n+      startPosition: StartPosition,\n+      endPosition: EndPosition,\n+      andMultilineString: Boolean,\n+      andHadStripMargin: Boolean,\n+      andHasPipeInScope: Boolean\n+  )(indent: => List[TextEdit])(\n+      implicit sourceText: String,\n+      newlineAdded: Boolean,\n+      tokens: Tokens\n+  ): PartialFunction[(Token, Int), List[TextEdit]] = {\n+    case (token: Token.Constant.String, _)\n+        if inToken(startPosition, endPosition, token)\n+          && (if (andMultilineString) isMultilineString(token) else true)\n+          && (if (andHadStripMargin) hasStripMarginSuffix(token) else true)\n+          && (if (andHasPipeInScope)\n+                pipeInScope(\n+                  startPosition,\n+                  endPosition,\n+                  sourceText,\n+                  newlineAdded\n+                )\n+              else true) =>\n+      indent\n+    case (token: Interpolation.Start, index: Int)\n+        if token.pos.start < startPosition.start && {\n+          var endIndex = index + 1\n+          while (!tokens(endIndex)\n+              .isInstanceOf[Interpolation.End]) endIndex += 1\n+          val endToken = tokens(endIndex)\n+          endToken.pos.end > endPosition.end &&\n+          (if (andMultilineString) isMultilineString(token) else true) &&\n+          (if (andHadStripMargin) hasStripMarginSuffix(endToken) else true) &&\n+          (if (andHasPipeInScope)\n+             pipeInScope(\n+               startPosition,\n+               endPosition,\n+               sourceText,\n+               newlineAdded\n+             )\n+           else true)\n+        } =>\n+      indent\n   }\n-  private def shouldFormatInterpolationString(\n-      sourceText: String,\n-      tokens: Tokens,\n+\n+  private def indentTokensOnTypeFormatting(\n       start: StartPosition,\n-      endPosition: EndPosition\n-  ): PartialFunction[(Token, Int), Boolean] = {\n-    case (token: Interpolation.Start, index: Int)\n-        if token.pos.start <= start.start => {\n-      var endIndex = index + 1\n-      while (!tokens(endIndex)\n-          .isInstanceOf[Interpolation.End]) endIndex += 1\n-      isMultilineString(sourceText, token) && hasStripMarginSuffix(\n-        endIndex,\n-        tokens\n-      ) && tokens(endIndex).pos.end > endPosition.end\n-    }\n+      end: EndPosition,\n+      tokens: Tokens,\n+      newlineAdded: Boolean,\n+      splitLines: Array[String],\n+      position: Position,\n+      text: String\n+  ): List[TextEdit] = {\n+    implicit val sourceText: String = text"
+  },
+  {
+    "id" : "3d659622-cb2a-44f9-b502-159d19a13fbb",
+    "prId" : 1753,
+    "comments" : [
+      {
+        "id" : "5b39b8b1-5faa-4ba4-808e-a66344fd2c08",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "I am not sure if we want to add `stripMargin` this automatically. It was previously done on purpose not to add it. The initial plan was to do it as in Intellij, but after some discussions it turns out it's not something that every developer wants and we shouldn't be forcing them.",
+        "createdAt" : "2020-05-15T15:27:44Z",
+        "updatedAt" : "2020-05-29T09:53:41Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "d14d0f8b-6b9a-42de-9ada-8dc6987e6119",
+        "parentId" : "5b39b8b1-5faa-4ba4-808e-a66344fd2c08",
+        "author" : {
+          "login" : "mlachkar",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/7843237?u=d2941da73011b9a49767ac863ce5bc20b7b10ed7&v=4"
+        },
+        "body" : "Ok, I didn't know that you changed your mind about the stripMargin. \r\nIn my case, every time I add a pipe, it's because I will add stripMargin. It's quite annoying to write it, sometimes by error, the completion puts instead stringPrefix in VSCode, and it's quite slow for this case in Intellij. \r\nIf the person doesn't want it, he will delete it. So it will depend on how many people do actually write the stripmargin compared to those who will delete it? \r\n",
+        "createdAt" : "2020-05-15T16:36:20Z",
+        "updatedAt" : "2020-05-29T09:53:41Z",
+        "lastEditedBy" : {
+          "login" : "mlachkar",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/7843237?u=d2941da73011b9a49767ac863ce5bc20b7b10ed7&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "57a1c60e-69c8-4937-8ff1-a93085c6e2cd",
+        "parentId" : "5b39b8b1-5faa-4ba4-808e-a66344fd2c08",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "It's a tough choice really. For me it would be useful, but I worry some people might be opposed. We could do a poll :D",
+        "createdAt" : "2020-05-15T17:00:15Z",
+        "updatedAt" : "2020-05-29T09:53:41Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "60e701e5d87db159576e92e8239681d2abd92c6e",
+    "line" : null,
+    "diffHunk" : "@@ -131,57 +150,113 @@ object MultilineStringFormattingProvider {\n     pipeBetweenLastLineAndPos != -1 || pipeBetweenSelection != -1\n   }\n \n-  private def multilineStringInTokens(\n+  private def indentOnRangeFormatting(\n+      start: StartPosition,\n+      end: EndPosition,\n       tokens: Tokens,\n-      startPos: StartPosition,\n-      endPos: EndPosition,\n-      sourceText: String,\n-      newlineAdded: Boolean\n-  ): Boolean = {\n-    if (pipeInScope(startPos, endPos, sourceText, newlineAdded)) {\n-      tokens.zipWithIndex\n-        .exists(\n-          shouldFormatMultiString(sourceText, tokens, startPos, endPos) orElse\n-            shouldFormatInterpolationString(\n-              sourceText,\n-              tokens,\n-              startPos,\n-              endPos\n-            ) orElse {\n-            case _ => false\n-          }\n-        )\n-    } else false\n+      newlineAdded: Boolean,\n+      splitLines: Array[String],\n+      range: Range,\n+      text: String\n+  ): List[TextEdit] = {\n+    tokens.zipWithIndex\n+      .collectFirst {\n+        isStringOrInterpolation(\n+          start,\n+          end,\n+          andMultilineString = true,\n+          andHadStripMargin = true,\n+          andHasPipeInScope = true\n+        ) {\n+          indent(splitLines, start, range)\n+        }(text, newlineAdded, tokens)\n+      }\n+      .getOrElse(Nil)\n   }\n \n-  private def shouldFormatMultiString(\n-      sourceText: String,\n-      tokens: Tokens,\n-      start: StartPosition,\n-      end: EndPosition\n-  ): PartialFunction[(Token, Int), Boolean] = {\n-    case (token: Constant.String, index: Int) =>\n-      isMultilineString(sourceText, token) && hasStripMarginSuffix(\n-        index,\n-        tokens\n-      ) && inToken(start, end, token)\n+  private def isStringOrInterpolation(\n+      startPosition: StartPosition,\n+      endPosition: EndPosition,\n+      andMultilineString: Boolean,\n+      andHadStripMargin: Boolean,\n+      andHasPipeInScope: Boolean\n+  )(indent: => List[TextEdit])(\n+      implicit sourceText: String,\n+      newlineAdded: Boolean,\n+      tokens: Tokens\n+  ): PartialFunction[(Token, Int), List[TextEdit]] = {\n+    case (token: Token.Constant.String, _)\n+        if inToken(startPosition, endPosition, token)\n+          && (if (andMultilineString) isMultilineString(token) else true)\n+          && (if (andHadStripMargin) hasStripMarginSuffix(token) else true)\n+          && (if (andHasPipeInScope)\n+                pipeInScope(\n+                  startPosition,\n+                  endPosition,\n+                  sourceText,\n+                  newlineAdded\n+                )\n+              else true) =>\n+      indent\n+    case (token: Interpolation.Start, index: Int)\n+        if token.pos.start < startPosition.start && {\n+          var endIndex = index + 1\n+          while (!tokens(endIndex)\n+              .isInstanceOf[Interpolation.End]) endIndex += 1\n+          val endToken = tokens(endIndex)\n+          endToken.pos.end > endPosition.end &&\n+          (if (andMultilineString) isMultilineString(token) else true) &&\n+          (if (andHadStripMargin) hasStripMarginSuffix(endToken) else true) &&\n+          (if (andHasPipeInScope)\n+             pipeInScope(\n+               startPosition,\n+               endPosition,\n+               sourceText,\n+               newlineAdded\n+             )\n+           else true)\n+        } =>\n+      indent\n   }\n-  private def shouldFormatInterpolationString(\n-      sourceText: String,\n-      tokens: Tokens,\n+\n+  private def indentTokensOnTypeFormatting(\n       start: StartPosition,\n-      endPosition: EndPosition\n-  ): PartialFunction[(Token, Int), Boolean] = {\n-    case (token: Interpolation.Start, index: Int)\n-        if token.pos.start <= start.start => {\n-      var endIndex = index + 1\n-      while (!tokens(endIndex)\n-          .isInstanceOf[Interpolation.End]) endIndex += 1\n-      isMultilineString(sourceText, token) && hasStripMarginSuffix(\n-        endIndex,\n-        tokens\n-      ) && tokens(endIndex).pos.end > endPosition.end\n-    }\n+      end: EndPosition,\n+      tokens: Tokens,\n+      newlineAdded: Boolean,\n+      splitLines: Array[String],\n+      position: Position,\n+      text: String\n+  ): List[TextEdit] = {\n+    implicit val sourceText: String = text\n+    implicit val tokensImplicit: Tokens = tokens\n+    implicit val newlineAddedImplicit: Boolean = newlineAdded\n+    tokens.zipWithIndex\n+      .collectFirst {\n+        isStringOrInterpolation(\n+          start,\n+          end,\n+          andMultilineString = true,\n+          andHadStripMargin = true,\n+          andHasPipeInScope = true\n+        )(List(indent(splitLines, position))) orElse {\n+          isStringOrInterpolation(\n+            start,\n+            end,\n+            andMultilineString = true,\n+            andHadStripMargin = false,\n+            andHasPipeInScope = true\n+          ) {\n+            val newPos =\n+              new Position(position.getLine, position.getCharacter + 3)\n+            List(\n+              indent(splitLines, position),\n+              new TextEdit(new Range(newPos, newPos), \".stripMargin\")"
+  },
+  {
+    "id" : "eedb8262-1579-4467-932d-dee586fb5875",
+    "prId" : 1753,
+    "comments" : [
+      {
+        "id" : "30d3ff54-efa2-4f2e-bd63-14c4855a9231",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Will it work if someone adds a quote inside existing quotes? `\"add new quote here\"`",
+        "createdAt" : "2020-05-15T15:28:34Z",
+        "updatedAt" : "2020-05-29T09:53:41Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "33f43fae-de70-4ba9-88c9-25f557fa5575",
+        "parentId" : "30d3ff54-efa2-4f2e-bd63-14c4855a9231",
+        "author" : {
+          "login" : "mlachkar",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/7843237?u=d2941da73011b9a49767ac863ce5bc20b7b10ed7&v=4"
+        },
+        "body" : "This can only be trigger if there are already 3 consecutive quotes and the fourth character being typed is a quote, and the file cannot be tokenized. ",
+        "createdAt" : "2020-05-15T16:15:14Z",
+        "updatedAt" : "2020-05-29T09:53:41Z",
+        "lastEditedBy" : {
+          "login" : "mlachkar",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/7843237?u=d2941da73011b9a49767ac863ce5bc20b7b10ed7&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7550b9a2-231a-4b3e-b456-e325255f4f27",
+        "parentId" : "30d3ff54-efa2-4f2e-bd63-14c4855a9231",
+        "author" : {
+          "login" : "mlachkar",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/7843237?u=d2941da73011b9a49767ac863ce5bc20b7b10ed7&v=4"
+        },
+        "body" : "Actually I just found one case where it will introduce a bug.\r\n\r\nIf there is already `line = \"\"\" whatever `\r\nand then the user will try to write 3 quotes. (it could be fixed by adding more constraint before doing the replacement) \r\nAlso, I wonder how many quotes are being written in other editors. For vscode it's will always write two quotes by two quotes, but maybe other editors will write one by one and we could replace when we have 3 consecutive quotes? ",
+        "createdAt" : "2020-05-15T16:33:36Z",
+        "updatedAt" : "2020-05-29T09:53:41Z",
+        "lastEditedBy" : {
+          "login" : "mlachkar",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/7843237?u=d2941da73011b9a49767ac863ce5bc20b7b10ed7&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e2d2665e-b6d0-429c-985d-822fc64763a9",
+        "parentId" : "30d3ff54-efa2-4f2e-bd63-14c4855a9231",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Maybe to be on the save side we should check how many quotes there are currently, if more than 2, find the end and fill until 6?",
+        "createdAt" : "2020-05-20T15:58:37Z",
+        "updatedAt" : "2020-05-29T09:53:41Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a79bac1f-c669-42be-acd5-62fdbca25491",
+        "parentId" : "30d3ff54-efa2-4f2e-bd63-14c4855a9231",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "if we have an existing string say:\r\n`val a = \"\"`\r\nand we add quotes before, we will get:\r\n`val a = \"\"\"\"`\r\nMaybe we should also create 6 quotes there?",
+        "createdAt" : "2020-05-28T12:24:30Z",
+        "updatedAt" : "2020-05-29T09:53:41Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f8bd576d-12e2-44f1-bf40-3e66f3be6367",
+        "parentId" : "30d3ff54-efa2-4f2e-bd63-14c4855a9231",
+        "author" : {
+          "login" : "mlachkar",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/7843237?u=d2941da73011b9a49767ac863ce5bc20b7b10ed7&v=4"
+        },
+        "body" : "It's clearly not a normal usage of this feature (adding quotes in the beginning ). I don't think we should take this usage into account.\r\nI don't know for the \"find the end and fill until 6\": it means it will only cover the 3 quotes case since you are not supposed to have 5 quotes except if you deleted two quotes ",
+        "createdAt" : "2020-05-28T14:49:27Z",
+        "updatedAt" : "2020-05-29T09:53:41Z",
+        "lastEditedBy" : {
+          "login" : "mlachkar",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/7843237?u=d2941da73011b9a49767ac863ce5bc20b7b10ed7&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "71034204-078e-4924-8167-83b7f395953b",
+        "parentId" : "30d3ff54-efa2-4f2e-bd63-14c4855a9231",
+        "author" : {
+          "login" : "mlachkar",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/7843237?u=d2941da73011b9a49767ac863ce5bc20b7b10ed7&v=4"
+        },
+        "body" : "4 seems like a good number for me, since 3 could be a typing error. ",
+        "createdAt" : "2020-05-28T14:51:40Z",
+        "updatedAt" : "2020-05-29T09:53:41Z",
+        "lastEditedBy" : {
+          "login" : "mlachkar",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/7843237?u=d2941da73011b9a49767ac863ce5bc20b7b10ed7&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e78923b9-5f90-41a2-81fc-e3c52a796148",
+        "parentId" : "30d3ff54-efa2-4f2e-bd63-14c4855a9231",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Ok, let's leave it this way. I might have been overthinking this. ",
+        "createdAt" : "2020-05-28T17:50:04Z",
+        "updatedAt" : "2020-05-29T09:53:41Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "60e701e5d87db159576e92e8239681d2abd92c6e",
+    "line" : 276,
+    "diffHunk" : "@@ -251,6 +325,12 @@ object MultilineStringFormattingProvider {\n     List(textEditPrecedentLine, textEditcurrentLine)\n   }\n \n+  private def repaceWithSixQuotes(pos: Position): List[TextEdit] = {\n+    val pos1 = new Position(pos.getLine, pos.getCharacter - 3)"
+  },
+  {
+    "id" : "51150bf9-8270-436e-8e64-ba4a0b2040a8",
+    "prId" : 1753,
+    "comments" : [
+      {
+        "id" : "198479a5-019d-432b-a175-1bf4aebd99a0",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Isn't `andHasPipeInScope` and `andMultilineString` always true? We can remove it then,",
+        "createdAt" : "2020-05-20T15:39:45Z",
+        "updatedAt" : "2020-05-29T09:53:41Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "2e11b931-d8ee-4f03-914e-7f8aaa4adc1e",
+        "parentId" : "198479a5-019d-432b-a175-1bf4aebd99a0",
+        "author" : {
+          "login" : "mlachkar",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/7843237?u=d2941da73011b9a49767ac863ce5bc20b7b10ed7&v=4"
+        },
+        "body" : "yes right !",
+        "createdAt" : "2020-05-20T16:26:47Z",
+        "updatedAt" : "2020-05-29T09:53:41Z",
+        "lastEditedBy" : {
+          "login" : "mlachkar",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/7843237?u=d2941da73011b9a49767ac863ce5bc20b7b10ed7&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "60e701e5d87db159576e92e8239681d2abd92c6e",
+    "line" : null,
+    "diffHunk" : "@@ -131,57 +159,110 @@ object MultilineStringFormattingProvider {\n     pipeBetweenLastLineAndPos != -1 || pipeBetweenSelection != -1\n   }\n \n-  private def multilineStringInTokens(\n+  private def indentOnRangeFormatting(\n+      start: StartPosition,\n+      end: EndPosition,\n       tokens: Tokens,\n-      startPos: StartPosition,\n-      endPos: EndPosition,\n-      sourceText: String,\n-      newlineAdded: Boolean\n-  ): Boolean = {\n-    if (pipeInScope(startPos, endPos, sourceText, newlineAdded)) {\n-      tokens.zipWithIndex\n-        .exists(\n-          shouldFormatMultiString(sourceText, tokens, startPos, endPos) orElse\n-            shouldFormatInterpolationString(\n-              sourceText,\n-              tokens,\n-              startPos,\n-              endPos\n-            ) orElse {\n-            case _ => false\n-          }\n+      newlineAdded: Boolean,\n+      splitLines: Array[String],\n+      range: Range,\n+      text: String\n+  ): List[TextEdit] = {\n+    tokens.zipWithIndex\n+      .collectFirst {\n+        isStringOrInterpolation(start, end, text, newlineAdded, tokens)(\n+          indent(splitLines, start, range)\n         )\n-    } else false\n+      }\n+      .getOrElse(Nil)\n   }\n \n-  private def shouldFormatMultiString(\n+  private def isStringOrInterpolation(\n+      startPosition: StartPosition,\n+      endPosition: EndPosition,\n       sourceText: String,\n+      newlineAdded: Boolean,\n       tokens: Tokens,\n-      start: StartPosition,\n-      end: EndPosition\n-  ): PartialFunction[(Token, Int), Boolean] = {\n-    case (token: Constant.String, index: Int) =>\n-      isMultilineString(sourceText, token) && hasStripMarginSuffix(\n-        index,\n-        tokens\n-      ) && inToken(start, end, token)\n+      andMultilineString: Boolean = true,\n+      andHadStripMargin: Boolean = true,\n+      andHasPipeInScope: Boolean = true"
+  },
+  {
+    "id" : "a6722fa0-2c99-4c1f-9389-a8f6ab78de67",
+    "prId" : 1753,
+    "comments" : [
+      {
+        "id" : "3585cc24-e693-4458-a90d-1fce7fe09542",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Let's maybe add a function that works `(tokenEnd : Int, hasStripMargin : Boolean) => Option[TextEdit]` like:\r\n```scala\r\nif (enableStripMargin && !hasStripMargin)  Some(new TextEdit(new Range(tokenEnd + 1, tokenEnd + 1), \".stripMargin\"))\r\nelse None\r\n```\r\nWhile checking for stripMargin and it's not set we can just add the textEdit with `stripMargin` using the information about where does the string end. Will be simpler than looking for `\"\"\"` ",
+        "createdAt" : "2020-05-20T15:49:53Z",
+        "updatedAt" : "2020-05-29T09:53:41Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "e74c13b2-4ab3-4a4a-83c8-6d2bf6cbd9a3",
+        "parentId" : "3585cc24-e693-4458-a90d-1fce7fe09542",
+        "author" : {
+          "login" : "mlachkar",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/7843237?u=d2941da73011b9a49767ac863ce5bc20b7b10ed7&v=4"
+        },
+        "body" : "The issue is that we dont know whre the token ends ... for the string it works, but for the interpolation, we loose the information of the EndToken.. I dont know how to do that, except If  I search again with a while for endToken",
+        "createdAt" : "2020-05-20T16:41:29Z",
+        "updatedAt" : "2020-05-29T09:53:41Z",
+        "lastEditedBy" : {
+          "login" : "mlachkar",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/7843237?u=d2941da73011b9a49767ac863ce5bc20b7b10ed7&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "3c25ae73-dbc6-4af3-9181-b39d0c64b901",
+        "parentId" : "3585cc24-e693-4458-a90d-1fce7fe09542",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "That's why I am thinking we should to that inside the case, where we have the end token. We can drop the partial function and just have a normal function returning a list of TextEdits and move searching for the end token from inside the case guard to the actual case. We return Nil if the end is not correct or `indent + stripMarginEdit(endToken.pos + 1)` otherwise",
+        "createdAt" : "2020-05-20T17:10:00Z",
+        "updatedAt" : "2020-05-29T09:53:41Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "60e701e5d87db159576e92e8239681d2abd92c6e",
+    "line" : null,
+    "diffHunk" : "@@ -131,57 +159,110 @@ object MultilineStringFormattingProvider {\n     pipeBetweenLastLineAndPos != -1 || pipeBetweenSelection != -1\n   }\n \n-  private def multilineStringInTokens(\n+  private def indentOnRangeFormatting(\n+      start: StartPosition,\n+      end: EndPosition,\n       tokens: Tokens,\n-      startPos: StartPosition,\n-      endPos: EndPosition,\n-      sourceText: String,\n-      newlineAdded: Boolean\n-  ): Boolean = {\n-    if (pipeInScope(startPos, endPos, sourceText, newlineAdded)) {\n-      tokens.zipWithIndex\n-        .exists(\n-          shouldFormatMultiString(sourceText, tokens, startPos, endPos) orElse\n-            shouldFormatInterpolationString(\n-              sourceText,\n-              tokens,\n-              startPos,\n-              endPos\n-            ) orElse {\n-            case _ => false\n-          }\n+      newlineAdded: Boolean,\n+      splitLines: Array[String],\n+      range: Range,\n+      text: String\n+  ): List[TextEdit] = {\n+    tokens.zipWithIndex\n+      .collectFirst {\n+        isStringOrInterpolation(start, end, text, newlineAdded, tokens)(\n+          indent(splitLines, start, range)\n         )\n-    } else false\n+      }\n+      .getOrElse(Nil)\n   }\n \n-  private def shouldFormatMultiString(\n+  private def isStringOrInterpolation(\n+      startPosition: StartPosition,\n+      endPosition: EndPosition,\n       sourceText: String,\n+      newlineAdded: Boolean,\n       tokens: Tokens,\n-      start: StartPosition,\n-      end: EndPosition\n-  ): PartialFunction[(Token, Int), Boolean] = {\n-    case (token: Constant.String, index: Int) =>\n-      isMultilineString(sourceText, token) && hasStripMarginSuffix(\n-        index,\n-        tokens\n-      ) && inToken(start, end, token)\n+      andMultilineString: Boolean = true,\n+      andHadStripMargin: Boolean = true,\n+      andHasPipeInScope: Boolean = true\n+  )(indent: => List[TextEdit]): PartialFunction[(Token, Int), List[TextEdit]] = {\n+    case (token: Token.Constant.String, index)\n+        if inToken(startPosition, endPosition, token)\n+          && (if (andMultilineString) isMultilineString(token) else true)\n+          && (if (andHadStripMargin) hasStripMarginSuffix(index, tokens)\n+              else true)\n+          && (if (andHasPipeInScope)\n+                pipeInScope(\n+                  startPosition,\n+                  endPosition,\n+                  sourceText,\n+                  newlineAdded\n+                )\n+              else true) =>\n+      indent\n+    case (token: Interpolation.Start, index: Int)\n+        if token.pos.start < startPosition.start && {\n+          var endIndex = index + 1\n+          while (!tokens(endIndex)\n+              .isInstanceOf[Interpolation.End]) endIndex += 1\n+          val endToken = tokens(endIndex)\n+          endToken.pos.end > endPosition.end &&\n+          (if (andMultilineString) isMultilineString(token) else true) &&\n+          (if (andHadStripMargin) hasStripMarginSuffix(endIndex, tokens)\n+           else true) &&\n+          (if (andHasPipeInScope)\n+             pipeInScope(\n+               startPosition,\n+               endPosition,\n+               sourceText,\n+               newlineAdded\n+             )\n+           else true)\n+        } =>\n+      indent\n   }\n-  private def shouldFormatInterpolationString(\n-      sourceText: String,\n-      tokens: Tokens,\n+\n+  private def indentTokensOnTypeFormatting(\n       start: StartPosition,\n-      endPosition: EndPosition\n-  ): PartialFunction[(Token, Int), Boolean] = {\n-    case (token: Interpolation.Start, index: Int)\n-        if token.pos.start <= start.start => {\n-      var endIndex = index + 1\n-      while (!tokens(endIndex)\n-          .isInstanceOf[Interpolation.End]) endIndex += 1\n-      isMultilineString(sourceText, token) && hasStripMarginSuffix(\n-        endIndex,\n-        tokens\n-      ) && tokens(endIndex).pos.end > endPosition.end\n-    }\n+      end: EndPosition,\n+      tokens: Tokens,\n+      newlineAdded: Boolean,\n+      splitLines: Array[String],\n+      position: Position,\n+      text: String,\n+      enableStripMargin: Boolean\n+  ): List[TextEdit] = {\n+    tokens.zipWithIndex\n+      .collectFirst {\n+        isStringOrInterpolation(start, end, text, newlineAdded, tokens)(\n+          List(indent(splitLines, position))\n+        ) orElse {\n+          isStringOrInterpolation(\n+            start,\n+            end,\n+            text,\n+            newlineAdded,\n+            tokens,\n+            andHadStripMargin = false\n+          ) {\n+            if (enableStripMargin) {"
+  },
+  {
+    "id" : "d40a794f-d088-4cc2-90da-d35dcc229ad7",
+    "prId" : 1753,
+    "comments" : [
+      {
+        "id" : "6ea9fe07-4201-4894-81d4-97afb4c35ec7",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "You can now use endToken this way:\r\n```scala\r\n      val newPos =\r\n        new scala.meta.inputs.Position.Range(\r\n          endToken.input,\r\n          endToken.end,\r\n          endToken.end\r\n        )\r\n\r\n      List(\r\n        indent(splitLines, position),\r\n        new TextEdit(newPos.toLSP, \".stripMargin\")\r\n      )\r\n```",
+        "createdAt" : "2020-05-28T12:19:41Z",
+        "updatedAt" : "2020-05-29T09:53:41Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "a47fcc69-1957-4e12-96b7-276a3f2341a5",
+        "parentId" : "6ea9fe07-4201-4894-81d4-97afb4c35ec7",
+        "author" : {
+          "login" : "mlachkar",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/7843237?u=d2941da73011b9a49767ac863ce5bc20b7b10ed7&v=4"
+        },
+        "body" : "yes .. sorry forgot this place",
+        "createdAt" : "2020-05-28T14:03:50Z",
+        "updatedAt" : "2020-05-29T09:53:41Z",
+        "lastEditedBy" : {
+          "login" : "mlachkar",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/7843237?u=d2941da73011b9a49767ac863ce5bc20b7b10ed7&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "80ef4ef2-7039-4cc2-aacd-36d6237e2b1a",
+        "parentId" : "6ea9fe07-4201-4894-81d4-97afb4c35ec7",
+        "author" : {
+          "login" : "mlachkar",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/7843237?u=d2941da73011b9a49767ac863ce5bc20b7b10ed7&v=4"
+        },
+        "body" : "ok",
+        "createdAt" : "2020-05-28T14:58:56Z",
+        "updatedAt" : "2020-05-29T09:53:41Z",
+        "lastEditedBy" : {
+          "login" : "mlachkar",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/7843237?u=d2941da73011b9a49767ac863ce5bc20b7b10ed7&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "60e701e5d87db159576e92e8239681d2abd92c6e",
+    "line" : null,
+    "diffHunk" : "@@ -74,6 +79,40 @@ object MultilineStringFormattingProvider {\n     if (lastQuote != -1) Some((lastQuote, quoteClosed)) else None\n   }\n \n+  private def fourQuotes(\n+      splitLines: Array[String],\n+      position: Position\n+  ): Boolean = {\n+    val currentLine = splitLines(position.getLine)\n+    val pos = position.getCharacter\n+    val onlyFour = 4\n+    hasNQuotes(pos - 3, currentLine, onlyFour) && currentLine.count(_ == quote) == onlyFour\n+  }\n+\n+  private def hasNQuotes(start: Int, text: String, n: Int): Boolean =\n+    (start until start + n).forall(i =>\n+      if (i < 0 || i > text.length) false else text(i) == quote\n+    )\n+\n+  private def indentWhenNoStripMargin(\n+      startToken: Token,\n+      endToken: Token,\n+      splitLines: Array[String],\n+      position: Position,\n+      enableStripMargin: Boolean\n+  ): List[TextEdit] = {\n+    if (enableStripMargin && startToken.pos.startLine == position.getLine - 1 && endToken.pos.endLine == position.getLine) {\n+      val positionOfLastQuote ="
+  },
+  {
+    "id" : "5e88e413-3b33-4cbe-87cb-be8d5c507390",
+    "prId" : 1753,
+    "comments" : [
+      {
+        "id" : "70b532a0-fc68-475e-ac3b-de94d84a290b",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "```suggestion\r\n  private def replaceWithSixQuotes(pos: Position): List[TextEdit] = {\r\n```",
+        "createdAt" : "2020-05-28T12:22:31Z",
+        "updatedAt" : "2020-05-29T09:53:41Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "60e701e5d87db159576e92e8239681d2abd92c6e",
+    "line" : null,
+    "diffHunk" : "@@ -251,6 +350,12 @@ object MultilineStringFormattingProvider {\n     List(textEditPrecedentLine, textEditcurrentLine)\n   }\n \n+  private def repaceWithSixQuotes(pos: Position): List[TextEdit] = {"
+  }
+]

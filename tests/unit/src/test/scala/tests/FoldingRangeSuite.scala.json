@@ -1,0 +1,127 @@
+[
+  {
+    "id" : "c5e0c408-9acc-4e1f-97c7-de50ffbbdb17",
+    "prId" : 632,
+    "comments" : [
+      {
+        "id" : "3a981d0d-6183-4371-a3f8-9f3e81fd3036",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Can we use `TextEdits.applyEdits(edits: List[TextEdit])`?\r\n\r\n```scala\r\nval insertions = for {\r\n      range <- actualRanges\r\n      insertion <- Seq(opening(range), closing(range))\r\n    } yield insertion\r\nTextEdits.applyEdits(insertions)\r\n\r\nprivate def opening(range: FoldingRange): l.TextEdit =\r\n    new l.TextEdit(\r\n      new l.Range(...),\r\n      s\">>${range.getKind}>>\"\r\n    )\r\n```\r\n\r\nWe might be able to avoid `MutableText` in that case.",
+        "createdAt" : "2019-04-04T10:19:46Z",
+        "updatedAt" : "2019-04-10T09:48:54Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "6139675f-76bd-4dab-a530-7189e8706e1f",
+        "parentId" : "3a981d0d-6183-4371-a3f8-9f3e81fd3036",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Note, by convention I try to use `import org.eclipse.{lsp4j => l}` and `l.Range` instead of `Range` (to avoid conflict with stdlib).",
+        "createdAt" : "2019-04-04T10:20:50Z",
+        "updatedAt" : "2019-04-10T09:48:54Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "828aff2a-70aa-453a-ae53-1a1336c355e0",
+        "parentId" : "3a981d0d-6183-4371-a3f8-9f3e81fd3036",
+        "author" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "body" : "`TextEdits` is part of the `cross` module - hence not visible in the `unit` module. I do not see any \"shared test\" module - what would be the best approach here? (because it does in fact seem to render the `MutableText` void)",
+        "createdAt" : "2019-04-04T11:48:52Z",
+        "updatedAt" : "2019-04-10T09:48:54Z",
+        "lastEditedBy" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "6c4aca50-50be-4f96-ade4-ee071e5de199",
+        "parentId" : "3a981d0d-6183-4371-a3f8-9f3e81fd3036",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Is it possible to move `TextEdits` to `mtest/main`?",
+        "createdAt" : "2019-04-04T11:52:15Z",
+        "updatedAt" : "2019-04-10T09:48:54Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "79793f51fa23f5e83e6e9dc8e633ae708eeb17a1",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,68 @@\n+package tests\n+\n+import java.nio.file.Paths\n+import java.util.UUID\n+import org.eclipse.lsp4j.FoldingRange\n+import tests.MutableText.Insert\n+import scala.meta.internal.metals.Buffers\n+import scala.meta.internal.metals.FoldingRangeProvider\n+import scala.meta.io.AbsolutePath\n+\n+object FoldingRangeSuite extends CustomInputExpectSuite(\"foldingRange\") {\n+  private val buffers = Buffers()\n+  private val trees = TestingTrees(buffers)\n+\n+  private val foldingRangeProvider =\n+    new FoldingRangeProvider(trees, foldOnlyLines = false)\n+\n+  override protected def obtainFrom(file: InputFile): String = {\n+    val scalaSource = file.input.text\n+      .replaceAll(\">>\\\\w+>>\", \"\")\n+      .replaceAll(\"<<\\\\w+<<\", \"\")\n+\n+    val actualRanges = findFoldingRangesFor(scalaSource)\n+    generateOutput(scalaSource, actualRanges)\n+  }\n+\n+  private def findFoldingRangesFor(source: String): Seq[FoldingRange] = {\n+    import collection.JavaConverters._\n+    val path = registerSource(source)\n+    foldingRangeProvider.getRangedFor(path).asScala\n+  }\n+\n+  private def registerSource(source: String): AbsolutePath = {\n+    val name = UUID.randomUUID().toString + \".scala\"\n+    val path = AbsolutePath(Paths.get(name))\n+    buffers.put(path, source)\n+    path\n+  }\n+\n+  private def generateOutput(\n+      scalaSource: String,\n+      actualRanges: Seq[FoldingRange]\n+  ): String = {\n+    val mutableText = MutableText(scalaSource)"
+  },
+  {
+    "id" : "eefa165f-b0d5-42c2-92bd-26ebdeab852c",
+    "prId" : 632,
+    "comments" : [
+      {
+        "id" : "9728f218-6679-4ea1-b097-ea0290b1bef1",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Nice job, this test suite looks great 👏 ",
+        "createdAt" : "2019-04-05T06:51:05Z",
+        "updatedAt" : "2019-04-10T09:48:55Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "79793f51fa23f5e83e6e9dc8e633ae708eeb17a1",
+    "line" : 12,
+    "diffHunk" : "@@ -0,0 +1,68 @@\n+package tests\n+\n+import java.nio.file.Paths\n+import java.util.UUID\n+import org.eclipse.lsp4j.FoldingRange\n+import org.eclipse.lsp4j.TextEdit\n+import org.eclipse.{lsp4j => l}\n+import tests.BuildInfo.testResourceDirectory\n+import scala.meta.internal.metals.Buffers\n+import scala.meta.internal.metals.FoldingRangeProvider\n+import scala.meta.io.AbsolutePath\n+\n+object FoldingRangeSuite extends DirectoryExpectSuite(\"foldingRange/expect\") {"
+  }
+]

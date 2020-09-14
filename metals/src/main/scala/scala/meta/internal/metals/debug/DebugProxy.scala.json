@@ -1,0 +1,277 @@
+[
+  {
+    "id" : "a267e6d0-0b7f-460f-b7b4-635d112fc05d",
+    "prId" : 935,
+    "comments" : [
+      {
+        "id" : "32d69b05-98b5-4e9e-bc61-d99c3437daf7",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Can we pack it into an Option like:\r\n```scala\r\n{ message =>\r\n    Option(message) match {\r\n      case _ if cancelled.get() =>\r\n      // ignore\r\n      case Some(OutputNotification()) if outputTerminated =>\r\n      // ignore. When restarting, the output keeps getting printed for a short while after the\r\n      // output window gets refreshed resulting in stale messages being printed on top, before\r\n      // any actual logs from the restarted process\r\n\r\n      case Some(msg) =>\r\n        client.consume(msg)\r\n      case None =>\r\n    }\r\n  }\r\n```",
+        "createdAt" : "2019-12-05T16:08:55Z",
+        "updatedAt" : "2019-12-05T19:30:31Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "58fcfb5e-205b-4dad-84bf-e36bb9e69b05",
+        "parentId" : "32d69b05-98b5-4e9e-bc61-d99c3437daf7",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "This change is unrelated to the PR, let's refactor it separately. I just wanted to fix a NPE",
+        "createdAt" : "2019-12-05T19:28:14Z",
+        "updatedAt" : "2019-12-05T19:30:31Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "a95ae87fd9621161d156685f32480fcb7bb451a4",
+    "line" : 5,
+    "diffHunk" : "@@ -45,7 +45,8 @@ private[debug] final class DebugProxy(\n       exitStatus.trySuccess(Restarted)\n       outputTerminated = true\n       server.consume(message)\n-\n+    case null =>"
+  },
+  {
+    "id" : "9ac7615b-1926-4e19-a1ec-4719d7576d88",
+    "prId" : 942,
+    "comments" : [
+      {
+        "id" : "ca5ae1c7-59b8-4a31-8034-cc8e8052139f",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Can we use `AtomicBoolean` instead?",
+        "createdAt" : "2019-09-30T13:11:06Z",
+        "updatedAt" : "2019-10-04T07:32:50Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "47ea581fbaa603a2dc171e3e913392f05fc4ba11",
+    "line" : null,
+    "diffHunk" : "@@ -14,13 +14,13 @@ import scala.meta.internal.metals.debug.DebugProxy._\n private[debug] final class DebugProxy(\n     client: RemoteEndpoint,\n     server: RemoteEndpoint\n-)(\n-    implicit ec: ExecutionContext\n-) {\n+)(implicit ec: ExecutionContext) {\n   private val exitStatus = Promise[ExitStatus]()\n   @volatile private var outputTerminated = false\n+  @volatile private var cancelled = false"
+  },
+  {
+    "id" : "8befac72-0b4d-47ed-b7b3-2f514852e192",
+    "prId" : 1163,
+    "comments" : [
+      {
+        "id" : "705b2fdc-f7de-4378-9181-40df4f282af1",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Can we pack this in option maybe? ",
+        "createdAt" : "2019-12-16T11:43:49Z",
+        "updatedAt" : "2019-12-18T11:36:11Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "04ef30f47759c2620cd886265e4c50169245a539",
+    "line" : 43,
+    "diffHunk" : "@@ -34,31 +42,57 @@ private[debug] final class DebugProxy(\n   }\n \n   private def listenToServer(): Unit = {\n-    Future(server.listen(handleServerMessage)).andThen { case _ => cancel() }\n+    Future(server.onReceived(handleServerMessage))\n+      .andThen { case _ => cancel() }\n   }\n \n   private val handleClientMessage: MessageConsumer = {\n+    case null =>"
+  },
+  {
+    "id" : "57ea69bd-1193-48e0-ad9a-35af6b7e1a7a",
+    "prId" : 1163,
+    "comments" : [
+      {
+        "id" : "bfa1a455-3048-4ba0-9dc9-7cb6d2b55df1",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Here also - pack it into option maybe?",
+        "createdAt" : "2019-12-16T12:01:11Z",
+        "updatedAt" : "2019-12-18T11:36:11Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "04ef30f47759c2620cd886265e4c50169245a539",
+    "line" : 71,
+    "diffHunk" : "@@ -34,31 +42,57 @@ private[debug] final class DebugProxy(\n   }\n \n   private def listenToServer(): Unit = {\n-    Future(server.listen(handleServerMessage)).andThen { case _ => cancel() }\n+    Future(server.onReceived(handleServerMessage))\n+      .andThen { case _ => cancel() }\n   }\n \n   private val handleClientMessage: MessageConsumer = {\n+    case null =>\n+      () // ignore\n     case _ if cancelled.get() =>\n-    // ignore\n-    case RestartRequest(message) =>\n+      () // ignore\n+    case request @ InitializeRequest(args) =>\n+      adapters.initialize(args)\n+      server.send(request)\n+    case request @ RestartRequest(_) =>\n       // set the status first, since the server can kill the connection\n       exitStatus.trySuccess(Restarted)\n       outputTerminated = true\n-      server.consume(message)\n-    case null =>\n-      () // do nothing\n+      server.send(request)\n+    case request @ SetBreakpointRequest(args) =>\n+      handleSetBreakpointsRequest(args)\n+        .map(DebugProtocol.syntheticResponse(request, _))\n+        .foreach(client.consume)\n+\n     case message =>\n-      server.consume(message)\n+      server.send(message)\n   }\n \n-  private val handleServerMessage: MessageConsumer = {\n+  private val handleServerMessage: Message => Unit = {"
+  },
+  {
+    "id" : "6dbc2eeb-227f-4821-b1d5-8c1ea3aa5f64",
+    "prId" : 1163,
+    "comments" : [
+      {
+        "id" : "fedeb39d-e838-4746-b0ce-fa3ff95197e8",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "```suggestion\r\n   message => Option(message).foreach{\r\n```",
+        "createdAt" : "2019-12-17T08:36:24Z",
+        "updatedAt" : "2019-12-18T11:36:11Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "04ef30f47759c2620cd886265e4c50169245a539",
+    "line" : 43,
+    "diffHunk" : "@@ -34,31 +42,57 @@ private[debug] final class DebugProxy(\n   }\n \n   private def listenToServer(): Unit = {\n-    Future(server.listen(handleServerMessage)).andThen { case _ => cancel() }\n+    Future(server.onReceived(handleServerMessage))\n+      .andThen { case _ => cancel() }\n   }\n \n   private val handleClientMessage: MessageConsumer = {\n+    case null =>"
+  },
+  {
+    "id" : "a158efc2-cf88-47a2-a527-62630e0a3cc6",
+    "prId" : 1208,
+    "comments" : [
+      {
+        "id" : "82c242cc-b3c1-4b51-a923-e7e0c0e160e9",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "What are we doing here?",
+        "createdAt" : "2019-12-19T13:18:21Z",
+        "updatedAt" : "2019-12-19T13:18:23Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "d3de6cea-0cc8-4aca-81b5-d1ad44f8c6b1",
+        "parentId" : "82c242cc-b3c1-4b51-a923-e7e0c0e160e9",
+        "author" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "body" : "java-debug is not setting the sources for breakpoints, so we have to do it manually :(",
+        "createdAt" : "2019-12-19T13:21:08Z",
+        "updatedAt" : "2019-12-19T13:21:08Z",
+        "lastEditedBy" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "4aa95593-0c5a-49a7-a623-36e07136ff2f",
+        "parentId" : "82c242cc-b3c1-4b51-a923-e7e0c0e160e9",
+        "author" : {
+          "login" : "jvican",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/2462974?u=247f9a0cfd142440687595dce462fabed087e912&v=4"
+        },
+        "body" : "Hmm, why is `java-debug` setting the sources for breakpoints in the former case and not now?",
+        "createdAt" : "2019-12-19T14:08:54Z",
+        "updatedAt" : "2019-12-19T14:10:56Z",
+        "lastEditedBy" : {
+          "login" : "jvican",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/2462974?u=247f9a0cfd142440687595dce462fabed087e912&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "5fa30675-390e-4af8-be94-12ba0fa7ab9f",
+        "parentId" : "82c242cc-b3c1-4b51-a923-e7e0c0e160e9",
+        "author" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "body" : "By former case you mean the library sources? I have to set them there as well: https://github.com/scalameta/metals/blob/master/metals/src/main/scala/scala/meta/internal/metals/debug/SetBreakpointsRequestHandler.scala#L50",
+        "createdAt" : "2019-12-19T14:15:28Z",
+        "updatedAt" : "2019-12-19T14:15:28Z",
+        "lastEditedBy" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "668cbfd7b9229828fe2d247981cfd38999f65c6e",
+    "line" : 25,
+    "diffHunk" : "@@ -60,9 +61,27 @@ private[debug] final class DebugProxy(\n       outputTerminated = true\n       server.send(request)\n     case request @ SetBreakpointRequest(args) =>\n-      handleSetBreakpointsRequest(args)\n-        .map(DebugProtocol.syntheticResponse(request, _))\n-        .foreach(client.consume)\n+      import scala.meta.internal.metals.MetalsEnrichments._\n+      val path = adapters.adaptPath(args.getSource.getPath).toAbsolutePath\n+      if (sourcePathProvider.isWorkspacePath(path)) {\n+        server\n+          .sendPartitioned(List(request))\n+          .map(_.map(DebugProtocol.parseResponse[SetBreakpointsResponse]))\n+          .map(_.head.get)\n+          .map { response =>\n+            val breakpoints = response.getBreakpoints\n+            if (breakpoints != null) {\n+              breakpoints.foreach(_.setSource(args.getSource))"
+  },
+  {
+    "id" : "e53e2794-89bb-4bf8-8ed9-3cb0ef138480",
+    "prId" : 1466,
+    "comments" : [
+      {
+        "id" : "ff4512ce-fb02-465b-a328-939480a1266a",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "This should fixed the issues with missing logs.",
+        "createdAt" : "2020-03-30T15:31:24Z",
+        "updatedAt" : "2020-04-03T11:50:57Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d72fc182a42fd127dd0593dfbb3028ac615338b9",
+    "line" : 5,
+    "diffHunk" : "@@ -152,7 +152,7 @@ private[debug] object DebugProxy {\n       endpoint: RemoteEndpoint,\n       name: String\n   ): RemoteEndpoint = {\n-    val trace = GlobalTrace.setup(name)\n+    val trace = GlobalTrace.setupTracePrinter(name)"
+  }
+]

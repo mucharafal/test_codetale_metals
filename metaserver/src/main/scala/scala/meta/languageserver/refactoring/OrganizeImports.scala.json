@@ -1,0 +1,205 @@
+[
+  {
+    "id" : "557dc7ec-6cf4-4859-92df-acc1886537c4",
+    "prId" : 154,
+    "comments" : [
+      {
+        "id" : "b24c9f68-9801-40d9-9c2b-bf7af89e8155",
+        "parentId" : null,
+        "author" : {
+          "login" : "ShaneDelmore",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/4604933?v=4"
+        },
+        "body" : "This reads to me like it is creating a single document database just to convert it to a different database format to then extract the single document provided initially?   Is this correct?   If so a method to name the purpose would be helpful, or just an extension method, toOtherDocumentType.",
+        "createdAt" : "2017-12-23T15:21:58Z",
+        "updatedAt" : "2017-12-29T12:34:28Z",
+        "lastEditedBy" : {
+          "login" : "ShaneDelmore",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/4604933?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "4732c14e-b74c-49ba-9829-c351943e53f4",
+        "parentId" : "b24c9f68-9801-40d9-9c2b-bf7af89e8155",
+        "author" : {
+          "login" : "ShaneDelmore",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/4604933?v=4"
+        },
+        "body" : "Also, while this is not new code introduced here schema.Database(...).toDb... is also confusing.  It reads as “Create a db then convert it to a db”.  ",
+        "createdAt" : "2017-12-23T15:23:17Z",
+        "updatedAt" : "2017-12-29T12:34:28Z",
+        "lastEditedBy" : {
+          "login" : "ShaneDelmore",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/4604933?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "bf1e3bb9-c3b5-4e34-82ff-e92c8afc0cf7",
+        "parentId" : "b24c9f68-9801-40d9-9c2b-bf7af89e8155",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "I've moved this to an extension method.\r\n\r\nThe API around scala.meta.Database / schema.Database conversions is quite awkward, we used to have fine grained conversions per type Document/Message/Synthetic but now it's all in a big fat method only to convert scala.meta.Database. language-server has been a great test on a lot of the scalameta APIs, I would love to incorporate some of our workarounds here into the core API",
+        "createdAt" : "2017-12-23T22:25:10Z",
+        "updatedAt" : "2017-12-29T12:34:28Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "fdc9c838e9c14f4d811f77cd7768c91f492170e0",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,65 @@\n+package scala.meta.languageserver.refactoring\n+\n+import scala.meta._\n+import org.langmeta.internal.semanticdb._\n+import org.langmeta.internal.semanticdb.schema\n+import scala.meta.languageserver.Parser\n+import scala.meta.languageserver.Uri\n+import scala.meta.languageserver.search.SymbolIndex\n+import scalafix.internal.rule.RemoveUnusedImports\n+import scalafix.languageserver.ScalafixEnrichments._\n+import scalafix.languageserver.ScalafixPatchEnrichments._\n+import scalafix.rule.RuleCtx\n+import scalafix.util.SemanticdbIndex\n+import com.typesafe.scalalogging.LazyLogging\n+import langserver.messages.ApplyWorkspaceEditParams\n+import langserver.messages.InvalidParamsResponseError\n+import langserver.types.TextDocumentIdentifier\n+import langserver.types.WorkspaceEdit\n+import play.api.libs.json.JsValue\n+import play.api.libs.json.Json\n+\n+object OrganizeImports extends LazyLogging {\n+\n+  val empty = ApplyWorkspaceEditParams(None, WorkspaceEdit(Map.empty))\n+\n+  def removeUnused(\n+      arguments: Option[Seq[JsValue]],\n+      index: SymbolIndex\n+  ): ApplyWorkspaceEditParams = {\n+    val result = for {\n+      as <- arguments\n+      argument <- as.headOption\n+      textDocument <- Json.fromJson[TextDocumentIdentifier](argument).asOpt\n+    } yield removeUnused(Uri(textDocument), index)\n+    result.getOrElse(\n+      throw InvalidParamsResponseError(\n+        s\"Unable to parse TextDocumentIdentifier from $arguments\"\n+      )\n+    )\n+  }\n+\n+  def removeUnused(uri: Uri, index: SymbolIndex): ApplyWorkspaceEditParams = {\n+    index.documentIndex.getDocument(uri) match {\n+      case Some(document) =>\n+        removeUnused(\n+          uri,\n+          schema.Database(document :: Nil).toDb(None).documents.head"
+  },
+  {
+    "id" : "b28bd0db-ab15-45f0-a53b-b48678b02867",
+    "prId" : 164,
+    "comments" : [
+      {
+        "id" : "7877b181-00d1-46ce-aaf4-c85f47b5abc0",
+        "parentId" : null,
+        "author" : {
+          "login" : "xeno-by",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/609152?u=20bb3a58b554d0984a33eaa519c5cf3fd09e88fc&v=4"
+        },
+        "body" : "Why does this have to be a task if the result is returned immediately? Also, if this has to be a task, then why not wrap the computation of `result`?",
+        "createdAt" : "2018-01-04T05:20:10Z",
+        "updatedAt" : "2018-01-04T21:40:31Z",
+        "lastEditedBy" : {
+          "login" : "xeno-by",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/609152?u=20bb3a58b554d0984a33eaa519c5cf3fd09e88fc&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "6dbb06bb-6254-4fae-84d0-038711a28fd4",
+        "parentId" : "7877b181-00d1-46ce-aaf4-c85f47b5abc0",
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "I agree, I would either wrap the whole thing in `Task` or use `Task.now` if this is synchronous.",
+        "createdAt" : "2018-01-04T10:01:33Z",
+        "updatedAt" : "2018-01-04T21:40:31Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "91848703d00af951b1f55d62236ec4f5ae50851b",
+    "line" : null,
+    "diffHunk" : "@@ -25,17 +26,24 @@ object OrganizeImports extends LazyLogging {\n   def removeUnused(\n       arguments: Option[Seq[JsValue]],\n       index: SymbolIndex\n-  ): ApplyWorkspaceEditParams = {\n+  ): Task[Either[Response.Error, ApplyWorkspaceEditParams]] = {\n     val result = for {\n       as <- arguments\n       argument <- as.headOption\n       textDocument <- Json.fromJson[TextDocumentIdentifier](argument).asOpt\n     } yield removeUnused(Uri(textDocument), index)\n-    result.getOrElse(\n-      throw InvalidParamsResponseError(\n-        s\"Unable to parse TextDocumentIdentifier from $arguments\"\n-      )\n-    )\n+    Task {"
+  },
+  {
+    "id" : "d21c1c31-563f-45e6-9655-99b365d69d42",
+    "prId" : 164,
+    "comments" : [
+      {
+        "id" : "895b04d1-1dfe-4082-a232-9799a6e139c6",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "😇 \r\n\r\n```scala\r\nimport cats.syntax.either._\r\n\r\nEither.fromOption(\r\n  result,\r\n  Left(\r\n    Response.invalidParams(\r\n      s\"Unable to parse TextDocumentIdentifier from $arguments\"\r\n  )\r\n)\r\n```",
+        "createdAt" : "2018-01-04T11:50:37Z",
+        "updatedAt" : "2018-01-04T21:40:31Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "d4ad8325-98f5-410a-8d04-73b1f4ed82e9",
+        "parentId" : "895b04d1-1dfe-4082-a232-9799a6e139c6",
+        "author" : {
+          "login" : "ShaneDelmore",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/4604933?v=4"
+        },
+        "body" : "👍 ",
+        "createdAt" : "2018-01-04T16:32:22Z",
+        "updatedAt" : "2018-01-04T21:40:31Z",
+        "lastEditedBy" : {
+          "login" : "ShaneDelmore",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/4604933?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "4b6e6539-14b9-4fa3-8318-32592d4d57d3",
+        "parentId" : "895b04d1-1dfe-4082-a232-9799a6e139c6",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Nice! Only gripe with these APIs is finding the right imports, I just want to type `Either.fromOpt<TAB>` and have the editor insert the import. Only if we had a language server to do this for us 🤔 ",
+        "createdAt" : "2018-01-04T21:18:50Z",
+        "updatedAt" : "2018-01-04T21:41:51Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "91848703d00af951b1f55d62236ec4f5ae50851b",
+    "line" : null,
+    "diffHunk" : "@@ -25,17 +26,24 @@ object OrganizeImports extends LazyLogging {\n   def removeUnused(\n       arguments: Option[Seq[JsValue]],\n       index: SymbolIndex\n-  ): ApplyWorkspaceEditParams = {\n+  ): Task[Either[Response.Error, ApplyWorkspaceEditParams]] = {\n     val result = for {\n       as <- arguments\n       argument <- as.headOption\n       textDocument <- Json.fromJson[TextDocumentIdentifier](argument).asOpt\n     } yield removeUnused(Uri(textDocument), index)\n-    result.getOrElse(\n-      throw InvalidParamsResponseError(\n-        s\"Unable to parse TextDocumentIdentifier from $arguments\"\n-      )\n-    )\n+    Task {\n+      result match {"
+  }
+]

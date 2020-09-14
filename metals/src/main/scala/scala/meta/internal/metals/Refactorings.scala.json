@@ -1,0 +1,660 @@
+[
+  {
+    "id" : "c14fff9a-bb4e-4757-9245-5bcfa9288f80",
+    "prId" : 1079,
+    "comments" : [
+      {
+        "id" : "38719979-94b7-4ce7-b706-24c78fabd5fa",
+        "parentId" : null,
+        "author" : {
+          "login" : "PeterPerhac",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/1763911?u=535e9767bdabee0809d32818a0210044d410e6f6&v=4"
+        },
+        "body" : "can use `collectFirst` here",
+        "createdAt" : "2019-11-21T20:52:29Z",
+        "updatedAt" : "2019-12-31T17:11:21Z",
+        "lastEditedBy" : {
+          "login" : "PeterPerhac",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/1763911?u=535e9767bdabee0809d32818a0210044d410e6f6&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "89aca41816462ba01562e42601693aeb33124189",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,128 @@\n+package scala.meta.internal.metals\n+\n+import scala.concurrent.{Future, ExecutionContext}\n+import scala.meta._\n+import scala.meta.pc.CancelToken\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.internal.mtags._\n+import scala.meta.internal.semanticdb.{SymbolOccurrence, TextDocument}\n+import org.eclipse.{lsp4j => l}\n+\n+trait Refactoring {\n+  def contribute(\n+      params: l.CodeActionParams,\n+      trees: Trees,\n+      buffers: Buffers,\n+      semanticdbs: Semanticdbs,\n+      symbolSearch: MetalsSymbolSearch,\n+      token: CancelToken\n+  )(implicit ec: ExecutionContext): Future[Seq[l.CodeAction]]\n+}\n+\n+object Refactoring {\n+\n+  object UseNamedArguments extends Refactoring {\n+\n+    override def contribute(\n+        params: l.CodeActionParams,\n+        trees: Trees,\n+        buffers: Buffers,\n+        semanticdbs: Semanticdbs,\n+        symbolSearch: MetalsSymbolSearch,\n+        token: CancelToken\n+    )(implicit ec: ExecutionContext): Future[Seq[l.CodeAction]] = {\n+      scribe.info(\"Running contribute for UseNamedArguments\")\n+\n+      def findMethodApplyTreeUnderCursor(\n+          root: Tree,\n+          range: Position\n+      ): Option[Term.Apply] = {\n+        root.collect {\n+          case t @ Term.Apply(_, _)\n+              if t.pos.start <= range.start && t.pos.end >= range.end =>\n+            t\n+        }.headOption"
+  },
+  {
+    "id" : "05c8ffd0-e075-47b1-a7ce-359a1f424dba",
+    "prId" : 1079,
+    "comments" : [
+      {
+        "id" : "6f849c73-f2e1-4132-86d0-c88b149e4207",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Let's remove the debugs when it's ready to be merged.",
+        "createdAt" : "2019-12-17T11:04:56Z",
+        "updatedAt" : "2019-12-31T17:11:21Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "89aca41816462ba01562e42601693aeb33124189",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,128 @@\n+package scala.meta.internal.metals\n+\n+import scala.concurrent.{Future, ExecutionContext}\n+import scala.meta._\n+import scala.meta.pc.CancelToken\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.internal.mtags._\n+import scala.meta.internal.semanticdb.{SymbolOccurrence, TextDocument}\n+import org.eclipse.{lsp4j => l}\n+\n+trait Refactoring {\n+  def contribute(\n+      params: l.CodeActionParams,\n+      trees: Trees,\n+      buffers: Buffers,\n+      semanticdbs: Semanticdbs,\n+      symbolSearch: MetalsSymbolSearch,\n+      token: CancelToken\n+  )(implicit ec: ExecutionContext): Future[Seq[l.CodeAction]]\n+}\n+\n+object Refactoring {\n+\n+  object UseNamedArguments extends Refactoring {\n+\n+    override def contribute(\n+        params: l.CodeActionParams,\n+        trees: Trees,\n+        buffers: Buffers,\n+        semanticdbs: Semanticdbs,\n+        symbolSearch: MetalsSymbolSearch,\n+        token: CancelToken\n+    )(implicit ec: ExecutionContext): Future[Seq[l.CodeAction]] = {\n+      scribe.debug(\"Running contribute for UseNamedArguments\")\n+\n+      def findMethodApplyTreeUnderCursor(\n+          root: Tree,\n+          range: Position\n+      ): Option[Term.Apply] =\n+        root\n+          .collect {\n+            case t @ Term.Apply(_, _)\n+                if t.pos.start <= range.start && t.pos.end >= range.end =>\n+              t\n+          }\n+          .sortBy(_.pos.start)\n+          .lastOption\n+\n+      def findSymbolTree(tree: Tree): Term.Name = tree match {\n+        case x @ Term.Name(_) => x\n+        case Term.Select(t, x) => x\n+        case Term.Apply(x, _) => findSymbolTree(x)\n+      }\n+\n+      def findSymbolOccurrence(\n+          textDocument: TextDocument,\n+          symbolTreePos: Position\n+      ): Option[SymbolOccurrence] =\n+        textDocument.occurrences.find(so =>\n+          so.getRange.startLine == symbolTreePos.startLine &&\n+            so.getRange.startCharacter == symbolTreePos.startColumn\n+        )\n+\n+      def buildEdits(\n+          methodApplyTree: Term.Apply,\n+          paramNames: List[String]\n+      ): List[l.TextEdit] = {\n+        methodApplyTree.args.zip(paramNames).flatMap {\n+          case (Term.Assign(_, _), _) =>\n+            // already a named argument, no edit needed\n+            None\n+          case (term, paramName) =>\n+            val position =\n+              new l.Position(term.pos.startLine, term.pos.startColumn)\n+            val text = s\"$paramName = \"\n+            val edit = new l.TextEdit(new l.Range(position, position), text)\n+            Some(edit)\n+        }\n+\n+      }\n+\n+      val path = params.getTextDocument().getUri().toAbsolutePath\n+\n+      Future {\n+        (for {\n+          bufferContent <- buffers.get(path)\n+          rootTree <- trees.get(path)\n+          metaRange = params\n+            .getRange()\n+            .toMeta(Input.VirtualFile(path.toString, bufferContent))\n+          methodApplyTree <- findMethodApplyTreeUnderCursor(rootTree, metaRange)\n+          _ = scribe.debug(s\"Tree under cursor: ${methodApplyTree.structure}\")"
+  },
+  {
+    "id" : "45693b97-33cd-465a-995f-cec0d95b053d",
+    "prId" : 1079,
+    "comments" : [
+      {
+        "id" : "ae6c4168-8f93-43c0-9d42-be7b6e1af644",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "You might be able to use `DefinitionProvider.positionOccurrence`, it covers also edit distance etc.",
+        "createdAt" : "2019-12-17T11:14:26Z",
+        "updatedAt" : "2019-12-31T17:11:21Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "89aca41816462ba01562e42601693aeb33124189",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,128 @@\n+package scala.meta.internal.metals\n+\n+import scala.concurrent.{Future, ExecutionContext}\n+import scala.meta._\n+import scala.meta.pc.CancelToken\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.internal.mtags._\n+import scala.meta.internal.semanticdb.{SymbolOccurrence, TextDocument}\n+import org.eclipse.{lsp4j => l}\n+\n+trait Refactoring {\n+  def contribute(\n+      params: l.CodeActionParams,\n+      trees: Trees,\n+      buffers: Buffers,\n+      semanticdbs: Semanticdbs,\n+      symbolSearch: MetalsSymbolSearch,\n+      token: CancelToken\n+  )(implicit ec: ExecutionContext): Future[Seq[l.CodeAction]]\n+}\n+\n+object Refactoring {\n+\n+  object UseNamedArguments extends Refactoring {\n+\n+    override def contribute(\n+        params: l.CodeActionParams,\n+        trees: Trees,\n+        buffers: Buffers,\n+        semanticdbs: Semanticdbs,\n+        symbolSearch: MetalsSymbolSearch,\n+        token: CancelToken\n+    )(implicit ec: ExecutionContext): Future[Seq[l.CodeAction]] = {\n+      scribe.debug(\"Running contribute for UseNamedArguments\")\n+\n+      def findMethodApplyTreeUnderCursor(\n+          root: Tree,\n+          range: Position\n+      ): Option[Term.Apply] =\n+        root\n+          .collect {\n+            case t @ Term.Apply(_, _)\n+                if t.pos.start <= range.start && t.pos.end >= range.end =>\n+              t\n+          }\n+          .sortBy(_.pos.start)\n+          .lastOption\n+\n+      def findSymbolTree(tree: Tree): Term.Name = tree match {\n+        case x @ Term.Name(_) => x\n+        case Term.Select(t, x) => x\n+        case Term.Apply(x, _) => findSymbolTree(x)\n+      }\n+\n+      def findSymbolOccurrence(\n+          textDocument: TextDocument,\n+          symbolTreePos: Position\n+      ): Option[SymbolOccurrence] =\n+        textDocument.occurrences.find(so =>\n+          so.getRange.startLine == symbolTreePos.startLine &&\n+            so.getRange.startCharacter == symbolTreePos.startColumn\n+        )\n+\n+      def buildEdits(\n+          methodApplyTree: Term.Apply,\n+          paramNames: List[String]\n+      ): List[l.TextEdit] = {\n+        methodApplyTree.args.zip(paramNames).flatMap {\n+          case (Term.Assign(_, _), _) =>\n+            // already a named argument, no edit needed\n+            None\n+          case (term, paramName) =>\n+            val position =\n+              new l.Position(term.pos.startLine, term.pos.startColumn)\n+            val text = s\"$paramName = \"\n+            val edit = new l.TextEdit(new l.Range(position, position), text)\n+            Some(edit)\n+        }\n+\n+      }\n+\n+      val path = params.getTextDocument().getUri().toAbsolutePath\n+\n+      Future {\n+        (for {\n+          bufferContent <- buffers.get(path)\n+          rootTree <- trees.get(path)\n+          metaRange = params\n+            .getRange()\n+            .toMeta(Input.VirtualFile(path.toString, bufferContent))\n+          methodApplyTree <- findMethodApplyTreeUnderCursor(rootTree, metaRange)\n+          _ = scribe.debug(s\"Tree under cursor: ${methodApplyTree.structure}\")\n+          textDocument <- semanticdbs.textDocument(path).documentIncludingStale\n+          symbolTree = findSymbolTree(methodApplyTree)\n+          _ = scribe.debug(\n+            s\"Symbol tree: $symbolTree, position: ${symbolTree.pos}\"\n+          )\n+          symbolOccurrence <- findSymbolOccurrence(textDocument, symbolTree.pos)"
+  },
+  {
+    "id" : "5206ec03-eba8-4075-984e-16c25bab4208",
+    "prId" : 1079,
+    "comments" : [
+      {
+        "id" : "4c30e85c-db54-41d4-9f0a-08d7a995b78d",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "The position here might need to be adjusted using EditDistance for not saved files - you can get it from the `DefinitionProvider.positionOccurence`",
+        "createdAt" : "2019-12-17T15:34:58Z",
+        "updatedAt" : "2019-12-31T17:11:21Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "561c7a72-45c0-40e3-a638-b267728eeed0",
+        "parentId" : "4c30e85c-db54-41d4-9f0a-08d7a995b78d",
+        "author" : {
+          "login" : "cb372",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/106760?v=4"
+        },
+        "body" : "I don't think we need to do any adjustment here? Because we are getting the offsets from a tree given to us by `Trees`, which uses `Buffers` to take account of unsaved edits.\r\n\r\nI'll try to write a test for files with unsaved edits to confirm this. That's the only test I haven't been able to write yet.",
+        "createdAt" : "2019-12-18T12:36:42Z",
+        "updatedAt" : "2019-12-31T17:11:21Z",
+        "lastEditedBy" : {
+          "login" : "cb372",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/106760?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "00011aa9-97d6-4193-a3c9-c328f42ce7cd",
+        "parentId" : "4c30e85c-db54-41d4-9f0a-08d7a995b78d",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Right! I think it should be fine then. This is being tested for example in https://github.com/scalameta/metals/blob/2475a952a4eaf7f3b5e41246e091c3757f244908/tests/unit/src/test/scala/tests/RenameLspSuite.scala#L604-L609\r\nbut this test doesn't need to be added inside of this PR I think.",
+        "createdAt" : "2019-12-18T12:40:35Z",
+        "updatedAt" : "2019-12-31T17:11:21Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "23fafc05-dec0-4d7c-8791-92e317d3c9b7",
+        "parentId" : "4c30e85c-db54-41d4-9f0a-08d7a995b78d",
+        "author" : {
+          "login" : "cb372",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/106760?v=4"
+        },
+        "body" : "I've confirmed via manual testing in VSCode that the code action does the right thing when the file has unsaved edits. I tried to write a unit test for it, but after 2 hours of battling I only succeeded in writing a test that proves the opposite 😢 \r\n\r\nI'll open an issue for writing the test.",
+        "createdAt" : "2019-12-29T23:16:29Z",
+        "updatedAt" : "2019-12-31T17:11:21Z",
+        "lastEditedBy" : {
+          "login" : "cb372",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/106760?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "89aca41816462ba01562e42601693aeb33124189",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,128 @@\n+package scala.meta.internal.metals\n+\n+import scala.concurrent.{Future, ExecutionContext}\n+import scala.meta._\n+import scala.meta.pc.CancelToken\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.internal.mtags._\n+import scala.meta.internal.semanticdb.{SymbolOccurrence, TextDocument}\n+import org.eclipse.{lsp4j => l}\n+\n+trait Refactoring {\n+  def contribute(\n+      params: l.CodeActionParams,\n+      trees: Trees,\n+      buffers: Buffers,\n+      semanticdbs: Semanticdbs,\n+      symbolSearch: MetalsSymbolSearch,\n+      token: CancelToken\n+  )(implicit ec: ExecutionContext): Future[Seq[l.CodeAction]]\n+}\n+\n+object Refactoring {\n+\n+  object UseNamedArguments extends Refactoring {\n+\n+    override def contribute(\n+        params: l.CodeActionParams,\n+        trees: Trees,\n+        buffers: Buffers,\n+        semanticdbs: Semanticdbs,\n+        symbolSearch: MetalsSymbolSearch,\n+        token: CancelToken\n+    )(implicit ec: ExecutionContext): Future[Seq[l.CodeAction]] = {\n+      scribe.debug(\"Running contribute for UseNamedArguments\")\n+\n+      def findMethodApplyTreeUnderCursor(\n+          root: Tree,\n+          range: Position\n+      ): Option[Term.Apply] =\n+        root\n+          .collect {\n+            case t @ Term.Apply(_, _)\n+                if t.pos.start <= range.start && t.pos.end >= range.end =>\n+              t\n+          }\n+          .sortBy(_.pos.start)\n+          .lastOption\n+\n+      def findSymbolTree(tree: Tree): Term.Name = tree match {\n+        case x @ Term.Name(_) => x\n+        case Term.Select(t, x) => x\n+        case Term.Apply(x, _) => findSymbolTree(x)\n+      }\n+\n+      def findSymbolOccurrence(\n+          textDocument: TextDocument,\n+          symbolTreePos: Position\n+      ): Option[SymbolOccurrence] =\n+        textDocument.occurrences.find(so =>\n+          so.getRange.startLine == symbolTreePos.startLine &&\n+            so.getRange.startCharacter == symbolTreePos.startColumn\n+        )\n+\n+      def buildEdits(\n+          methodApplyTree: Term.Apply,\n+          paramNames: List[String]\n+      ): List[l.TextEdit] = {\n+        methodApplyTree.args.zip(paramNames).flatMap {\n+          case (Term.Assign(_, _), _) =>\n+            // already a named argument, no edit needed\n+            None\n+          case (term, paramName) =>\n+            val position ="
+  },
+  {
+    "id" : "200dbae5-18d9-4ecf-9ab8-da1eb714c232",
+    "prId" : 1079,
+    "comments" : [
+      {
+        "id" : "97cae102-f0be-4e38-aaa1-2a6003393de5",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "probably remove as well",
+        "createdAt" : "2019-12-17T15:37:27Z",
+        "updatedAt" : "2019-12-31T17:11:21Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "89aca41816462ba01562e42601693aeb33124189",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,128 @@\n+package scala.meta.internal.metals\n+\n+import scala.concurrent.{Future, ExecutionContext}\n+import scala.meta._\n+import scala.meta.pc.CancelToken\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.internal.mtags._\n+import scala.meta.internal.semanticdb.{SymbolOccurrence, TextDocument}\n+import org.eclipse.{lsp4j => l}\n+\n+trait Refactoring {\n+  def contribute(\n+      params: l.CodeActionParams,\n+      trees: Trees,\n+      buffers: Buffers,\n+      semanticdbs: Semanticdbs,\n+      symbolSearch: MetalsSymbolSearch,\n+      token: CancelToken\n+  )(implicit ec: ExecutionContext): Future[Seq[l.CodeAction]]\n+}\n+\n+object Refactoring {\n+\n+  object UseNamedArguments extends Refactoring {\n+\n+    override def contribute(\n+        params: l.CodeActionParams,\n+        trees: Trees,\n+        buffers: Buffers,\n+        semanticdbs: Semanticdbs,\n+        symbolSearch: MetalsSymbolSearch,\n+        token: CancelToken\n+    )(implicit ec: ExecutionContext): Future[Seq[l.CodeAction]] = {\n+      scribe.debug(\"Running contribute for UseNamedArguments\")"
+  },
+  {
+    "id" : "a01e8d4f-fa10-400e-828e-1f7a589f76ce",
+    "prId" : 1079,
+    "comments" : [
+      {
+        "id" : "1b0c7013-221b-42b7-adcd-b35861c778e7",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "IIRC there it should be possible to do `range.encloses(t.pos)`",
+        "createdAt" : "2019-12-17T15:38:05Z",
+        "updatedAt" : "2019-12-31T17:11:21Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "02d5e884-5bb9-4865-b70b-1d68a8a28326",
+        "parentId" : "1b0c7013-221b-42b7-adcd-b35861c778e7",
+        "author" : {
+          "login" : "cb372",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/106760?v=4"
+        },
+        "body" : "Thanks, I'll have a look",
+        "createdAt" : "2019-12-23T12:43:22Z",
+        "updatedAt" : "2019-12-31T17:11:21Z",
+        "lastEditedBy" : {
+          "login" : "cb372",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/106760?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "89aca41816462ba01562e42601693aeb33124189",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,128 @@\n+package scala.meta.internal.metals\n+\n+import scala.concurrent.{Future, ExecutionContext}\n+import scala.meta._\n+import scala.meta.pc.CancelToken\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.internal.mtags._\n+import scala.meta.internal.semanticdb.{SymbolOccurrence, TextDocument}\n+import org.eclipse.{lsp4j => l}\n+\n+trait Refactoring {\n+  def contribute(\n+      params: l.CodeActionParams,\n+      trees: Trees,\n+      buffers: Buffers,\n+      semanticdbs: Semanticdbs,\n+      symbolSearch: MetalsSymbolSearch,\n+      token: CancelToken\n+  )(implicit ec: ExecutionContext): Future[Seq[l.CodeAction]]\n+}\n+\n+object Refactoring {\n+\n+  object UseNamedArguments extends Refactoring {\n+\n+    override def contribute(\n+        params: l.CodeActionParams,\n+        trees: Trees,\n+        buffers: Buffers,\n+        semanticdbs: Semanticdbs,\n+        symbolSearch: MetalsSymbolSearch,\n+        token: CancelToken\n+    )(implicit ec: ExecutionContext): Future[Seq[l.CodeAction]] = {\n+      scribe.debug(\"Running contribute for UseNamedArguments\")\n+\n+      def findMethodApplyTreeUnderCursor(\n+          root: Tree,\n+          range: Position\n+      ): Option[Term.Apply] =\n+        root\n+          .collect {\n+            case t @ Term.Apply(_, _)\n+                if t.pos.start <= range.start && t.pos.end >= range.end =>"
+  },
+  {
+    "id" : "49e56751-7d25-4843-8ba1-1cfee3376565",
+    "prId" : 1079,
+    "comments" : [
+      {
+        "id" : "750c753c-8378-496e-bf17-3e299bda31b9",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "random thought: I'm not sure I see the purpose of having distinct `Refactoring` and `Quickfix` interface, especially when their `contribute` method is basically the same (and it's currently a bit of a kitchen sink).\r\n\r\n(That was my design, yes, I'm second guessing myself :D )\r\n\r\nShould we just have a single `CodeActionKind` interface and go from where?\r\n\r\nWhat do you think @cb372 @tgodzik ?",
+        "createdAt" : "2019-12-23T09:54:46Z",
+        "updatedAt" : "2019-12-31T17:11:21Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "6c50154c-8505-4e3d-bfb8-5c9101284513",
+        "parentId" : "750c753c-8378-496e-bf17-3e299bda31b9",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "I think that the distinction only makes sense on the frontend really.  There is nothing really that distinguishes quick fixes from refactoring inside Metals.",
+        "createdAt" : "2019-12-23T11:33:21Z",
+        "updatedAt" : "2019-12-31T17:11:21Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "5932194f-f349-4003-872d-75169d994b2d",
+        "parentId" : "750c753c-8378-496e-bf17-3e299bda31b9",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Although, might be good to actually have it separate and force the correct type for `refactorings` value. It doesn't really make much difference to me.",
+        "createdAt" : "2019-12-23T11:57:13Z",
+        "updatedAt" : "2019-12-31T17:11:21Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "f577c49d-3856-4f28-bbe0-1774ef5a098d",
+        "parentId" : "750c753c-8378-496e-bf17-3e299bda31b9",
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "> force the correct type for refactorings value\r\n\r\nwhat do you mean?\r\n\r\n\r\n\r\n> I think that the distinction only makes sense on the frontend really.\r\n\r\nI agree with this, hence my proposal to unify the interface into `CodeActionKind`",
+        "createdAt" : "2019-12-23T12:14:26Z",
+        "updatedAt" : "2019-12-31T17:11:21Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "0bef33f0-82a3-4540-8c45-1dd1b9c2d159",
+        "parentId" : "750c753c-8378-496e-bf17-3e299bda31b9",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "> > force the correct type for refactorings value\r\n> \r\n> what do you mean?\r\n> \r\n> > I think that the distinction only makes sense on the frontend really.\r\n> \r\n> I agree with this, hence my proposal to unify the interface into `CodeActionKind`\r\n\r\nI just meant we could do:\r\n```\r\ndef refactorings: Seq[Refactoring] =\r\n```\r\nto make sure everything is correctly returned and we could set the action kind for each of the refactorings. It would just kind of be a logical divide there.",
+        "createdAt" : "2019-12-23T12:17:51Z",
+        "updatedAt" : "2019-12-31T17:11:21Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "9bd2c0db-acac-4f3f-9016-b31adb54f724",
+        "parentId" : "750c753c-8378-496e-bf17-3e299bda31b9",
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "Regardless of the type, we can still \"force\" the code action `kind` when grouping them:\r\n\r\n```scala\r\ndef quickfixes = List(...)\r\n  .flatMap(_.contribute(...))\r\n  .map(_.setKind(CodeActionKind.QuickFix))\r\n```\r\n\r\nI don't think we need to encode it in the type since it's a fairly innocuous mistake and the risk of getting this wrong is low.\r\n\r\n",
+        "createdAt" : "2019-12-23T14:11:08Z",
+        "updatedAt" : "2019-12-31T17:11:21Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "89aca41816462ba01562e42601693aeb33124189",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,182 @@\n+package scala.meta.internal.metals\n+\n+import scala.concurrent.{Future, ExecutionContext}\n+import scala.meta._\n+import scala.meta.pc.CancelToken\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.internal.mtags._\n+import scala.meta.internal.semanticdb.TextDocument\n+import org.eclipse.{lsp4j => l}\n+\n+trait Refactoring {"
+  },
+  {
+    "id" : "2ab955ec-0f60-4aab-a8f3-96fb38fd4bdc",
+    "prId" : 1079,
+    "comments" : [
+      {
+        "id" : "b3e2bcfa-6e54-4cc4-9f98-36fec4e993e1",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "ditto",
+        "createdAt" : "2019-12-23T09:55:43Z",
+        "updatedAt" : "2019-12-31T17:11:21Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "89aca41816462ba01562e42601693aeb33124189",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,182 @@\n+package scala.meta.internal.metals\n+\n+import scala.concurrent.{Future, ExecutionContext}\n+import scala.meta._\n+import scala.meta.pc.CancelToken\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.internal.mtags._\n+import scala.meta.internal.semanticdb.TextDocument\n+import org.eclipse.{lsp4j => l}\n+\n+trait Refactoring {\n+  def contribute(\n+      params: l.CodeActionParams,\n+      trees: Trees,\n+      buffers: Buffers,\n+      semanticdbs: Semanticdbs,\n+      symbolSearch: MetalsSymbolSearch,\n+      definitionProvider: DefinitionProvider,\n+      token: CancelToken\n+  )(implicit ec: ExecutionContext): Future[Seq[l.CodeAction]]\n+}\n+\n+object Refactoring {\n+\n+  object UseNamedArguments extends Refactoring {\n+\n+    val title = \"Use named arguments\"\n+\n+    override def contribute(\n+        params: l.CodeActionParams,\n+        trees: Trees,\n+        buffers: Buffers,\n+        semanticdbs: Semanticdbs,\n+        symbolSearch: MetalsSymbolSearch,\n+        definitionProvider: DefinitionProvider,\n+        token: CancelToken\n+    )(implicit ec: ExecutionContext): Future[Seq[l.CodeAction]] = {\n+\n+      def findMethodApplyOrCtorTreeUnderCursor(\n+          root: Tree,\n+          range: Position\n+      ): Option[Tree] =\n+        root\n+          .collect {\n+            case t @ Term.Apply(_, _)\n+                if t.pos.start <= range.start && t.pos.end >= range.end =>\n+              t\n+            case t @ Init(_, _, _)\n+                if t.pos.start <= range.start && t.pos.end >= range.end =>"
+  },
+  {
+    "id" : "a2164952-79c2-414f-83b6-b55b29d059eb",
+    "prId" : 1079,
+    "comments" : [
+      {
+        "id" : "c4459b91-9a63-40fb-9910-06818234eae8",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "is this exhaustive?",
+        "createdAt" : "2019-12-23T09:56:14Z",
+        "updatedAt" : "2019-12-31T17:11:21Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "25b7ecc0-24e6-43cd-876c-5923094d2d84",
+        "parentId" : "c4459b91-9a63-40fb-9910-06818234eae8",
+        "author" : {
+          "login" : "cb372",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/106760?v=4"
+        },
+        "body" : "errr, probably...\r\n\r\nI wrote this by manually trying a bunch of different kinds of method/constructor calls and looking at the scalameta tree, so there's no guarantee I covered every possible case. Scala always has the potential to surprise.\r\n\r\nI'll change this method to return an Option and add a catch-all `case _ => None`.",
+        "createdAt" : "2019-12-23T12:46:34Z",
+        "updatedAt" : "2019-12-31T17:11:21Z",
+        "lastEditedBy" : {
+          "login" : "cb372",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/106760?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "89aca41816462ba01562e42601693aeb33124189",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,182 @@\n+package scala.meta.internal.metals\n+\n+import scala.concurrent.{Future, ExecutionContext}\n+import scala.meta._\n+import scala.meta.pc.CancelToken\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.internal.mtags._\n+import scala.meta.internal.semanticdb.TextDocument\n+import org.eclipse.{lsp4j => l}\n+\n+trait Refactoring {\n+  def contribute(\n+      params: l.CodeActionParams,\n+      trees: Trees,\n+      buffers: Buffers,\n+      semanticdbs: Semanticdbs,\n+      symbolSearch: MetalsSymbolSearch,\n+      definitionProvider: DefinitionProvider,\n+      token: CancelToken\n+  )(implicit ec: ExecutionContext): Future[Seq[l.CodeAction]]\n+}\n+\n+object Refactoring {\n+\n+  object UseNamedArguments extends Refactoring {\n+\n+    val title = \"Use named arguments\"\n+\n+    override def contribute(\n+        params: l.CodeActionParams,\n+        trees: Trees,\n+        buffers: Buffers,\n+        semanticdbs: Semanticdbs,\n+        symbolSearch: MetalsSymbolSearch,\n+        definitionProvider: DefinitionProvider,\n+        token: CancelToken\n+    )(implicit ec: ExecutionContext): Future[Seq[l.CodeAction]] = {\n+\n+      def findMethodApplyOrCtorTreeUnderCursor(\n+          root: Tree,\n+          range: Position\n+      ): Option[Tree] =\n+        root\n+          .collect {\n+            case t @ Term.Apply(_, _)\n+                if t.pos.start <= range.start && t.pos.end >= range.end =>\n+              t\n+            case t @ Init(_, _, _)\n+                if t.pos.start <= range.start && t.pos.end >= range.end =>\n+              t\n+          }\n+          .sortBy(_.pos.start)\n+          .lastOption\n+\n+      def findSymbolTree(tree: Tree): Name = tree match {\n+        case x @ Term.Name(_) => x\n+        case x @ Type.Name(_) => x\n+        case Term.Select(_, x) => x\n+        case Term.Apply(x, _) => findSymbolTree(x)\n+        case Term.ApplyType(x, _) => findSymbolTree(x)\n+        case Type.Apply(x, _) => findSymbolTree(x)\n+        case Init(x, _, _) => findSymbolTree(x)"
+  },
+  {
+    "id" : "85cd268e-63e1-4e34-92ae-62e5bfe192e8",
+    "prId" : 1079,
+    "comments" : [
+      {
+        "id" : "4832aaa8-f60d-4188-90cd-708575fa2a9e",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "can you extract the regex to a local val and give it a meaningful name?",
+        "createdAt" : "2019-12-23T09:56:50Z",
+        "updatedAt" : "2019-12-31T17:11:21Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "89aca41816462ba01562e42601693aeb33124189",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,182 @@\n+package scala.meta.internal.metals\n+\n+import scala.concurrent.{Future, ExecutionContext}\n+import scala.meta._\n+import scala.meta.pc.CancelToken\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.internal.mtags._\n+import scala.meta.internal.semanticdb.TextDocument\n+import org.eclipse.{lsp4j => l}\n+\n+trait Refactoring {\n+  def contribute(\n+      params: l.CodeActionParams,\n+      trees: Trees,\n+      buffers: Buffers,\n+      semanticdbs: Semanticdbs,\n+      symbolSearch: MetalsSymbolSearch,\n+      definitionProvider: DefinitionProvider,\n+      token: CancelToken\n+  )(implicit ec: ExecutionContext): Future[Seq[l.CodeAction]]\n+}\n+\n+object Refactoring {\n+\n+  object UseNamedArguments extends Refactoring {\n+\n+    val title = \"Use named arguments\"\n+\n+    override def contribute(\n+        params: l.CodeActionParams,\n+        trees: Trees,\n+        buffers: Buffers,\n+        semanticdbs: Semanticdbs,\n+        symbolSearch: MetalsSymbolSearch,\n+        definitionProvider: DefinitionProvider,\n+        token: CancelToken\n+    )(implicit ec: ExecutionContext): Future[Seq[l.CodeAction]] = {\n+\n+      def findMethodApplyOrCtorTreeUnderCursor(\n+          root: Tree,\n+          range: Position\n+      ): Option[Tree] =\n+        root\n+          .collect {\n+            case t @ Term.Apply(_, _)\n+                if t.pos.start <= range.start && t.pos.end >= range.end =>\n+              t\n+            case t @ Init(_, _, _)\n+                if t.pos.start <= range.start && t.pos.end >= range.end =>\n+              t\n+          }\n+          .sortBy(_.pos.start)\n+          .lastOption\n+\n+      def findSymbolTree(tree: Tree): Name = tree match {\n+        case x @ Term.Name(_) => x\n+        case x @ Type.Name(_) => x\n+        case Term.Select(_, x) => x\n+        case Term.Apply(x, _) => findSymbolTree(x)\n+        case Term.ApplyType(x, _) => findSymbolTree(x)\n+        case Type.Apply(x, _) => findSymbolTree(x)\n+        case Init(x, _, _) => findSymbolTree(x)\n+      }\n+\n+      def resolveSymbol(\n+          textDocumentId: l.TextDocumentIdentifier,\n+          path: AbsolutePath,\n+          textDocument: TextDocument,\n+          symbolTreePos: Position\n+      ): ResolvedSymbolOccurrence = {\n+        val tdpp = new l.TextDocumentPositionParams(\n+          textDocumentId,\n+          symbolTreePos.toLSP.getStart\n+        )\n+        definitionProvider.positionOccurrence(path, tdpp, textDocument)\n+      }\n+\n+      def tweakSymbol(symbol: String): String = {\n+        if (symbol.endsWith(\".\") && !symbol.matches(\"\"\".*\\((\\+\\d+)?\\)\\.$\"\"\")) {"
+  },
+  {
+    "id" : "6da96a29-6258-4c1a-ba0a-f4d0e1353671",
+    "prId" : 1079,
+    "comments" : [
+      {
+        "id" : "becbde2a-e996-4f7b-8fbe-76adabeb06c2",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "remove TODO once it's done (it's also ok to open an issue for it if it gets complicated)",
+        "createdAt" : "2019-12-23T09:57:34Z",
+        "updatedAt" : "2019-12-31T17:11:21Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "84f1d00e-bf7e-4251-85f4-9d0a8469192c",
+        "parentId" : "becbde2a-e996-4f7b-8fbe-76adabeb06c2",
+        "author" : {
+          "login" : "cb372",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/106760?v=4"
+        },
+        "body" : "Based on discussion with @tgodzik I was leaving this as a \"TODO one day when we get around to it\". But I'll have a go at writing a test as part of this PR. If it's too hard, I'll remove the TODO and open an issue.",
+        "createdAt" : "2019-12-23T12:48:45Z",
+        "updatedAt" : "2019-12-31T17:11:21Z",
+        "lastEditedBy" : {
+          "login" : "cb372",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/106760?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "89aca41816462ba01562e42601693aeb33124189",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,182 @@\n+package scala.meta.internal.metals\n+\n+import scala.concurrent.{Future, ExecutionContext}\n+import scala.meta._\n+import scala.meta.pc.CancelToken\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.internal.mtags._\n+import scala.meta.internal.semanticdb.TextDocument\n+import org.eclipse.{lsp4j => l}\n+\n+trait Refactoring {\n+  def contribute(\n+      params: l.CodeActionParams,\n+      trees: Trees,\n+      buffers: Buffers,\n+      semanticdbs: Semanticdbs,\n+      symbolSearch: MetalsSymbolSearch,\n+      definitionProvider: DefinitionProvider,\n+      token: CancelToken\n+  )(implicit ec: ExecutionContext): Future[Seq[l.CodeAction]]\n+}\n+\n+object Refactoring {\n+\n+  object UseNamedArguments extends Refactoring {\n+\n+    val title = \"Use named arguments\"\n+\n+    override def contribute(\n+        params: l.CodeActionParams,\n+        trees: Trees,\n+        buffers: Buffers,\n+        semanticdbs: Semanticdbs,\n+        symbolSearch: MetalsSymbolSearch,\n+        definitionProvider: DefinitionProvider,\n+        token: CancelToken\n+    )(implicit ec: ExecutionContext): Future[Seq[l.CodeAction]] = {\n+\n+      def findMethodApplyOrCtorTreeUnderCursor(\n+          root: Tree,\n+          range: Position\n+      ): Option[Tree] =\n+        root\n+          .collect {\n+            case t @ Term.Apply(_, _)\n+                if t.pos.start <= range.start && t.pos.end >= range.end =>\n+              t\n+            case t @ Init(_, _, _)\n+                if t.pos.start <= range.start && t.pos.end >= range.end =>\n+              t\n+          }\n+          .sortBy(_.pos.start)\n+          .lastOption\n+\n+      def findSymbolTree(tree: Tree): Name = tree match {\n+        case x @ Term.Name(_) => x\n+        case x @ Type.Name(_) => x\n+        case Term.Select(_, x) => x\n+        case Term.Apply(x, _) => findSymbolTree(x)\n+        case Term.ApplyType(x, _) => findSymbolTree(x)\n+        case Type.Apply(x, _) => findSymbolTree(x)\n+        case Init(x, _, _) => findSymbolTree(x)\n+      }\n+\n+      def resolveSymbol(\n+          textDocumentId: l.TextDocumentIdentifier,\n+          path: AbsolutePath,\n+          textDocument: TextDocument,\n+          symbolTreePos: Position\n+      ): ResolvedSymbolOccurrence = {\n+        val tdpp = new l.TextDocumentPositionParams(\n+          textDocumentId,\n+          symbolTreePos.toLSP.getStart\n+        )\n+        definitionProvider.positionOccurrence(path, tdpp, textDocument)\n+      }\n+\n+      def tweakSymbol(symbol: String): String = {\n+        if (symbol.endsWith(\".\") && !symbol.matches(\"\"\".*\\((\\+\\d+)?\\)\\.$\"\"\")) {\n+          /*\n+           * We've probably been given a companion object symbol\n+           * e.g. in the case (@@ = cursor)\n+           *\n+           * case class Foo(a: Int, b: Int)\n+           * val x = Fo@@o(1, 2)\n+           *\n+           * the definition provider gives us the symbol of the companion\n+           * object. This is no good to us, so we try to replace it with\n+           * the case class's symbol.\n+           * In other words we turn \"example/Foo.\" into \"example/Foo#\"\n+           */\n+          symbol.stripSuffix(\".\") ++ \"#\"\n+        } else {\n+          symbol\n+        }\n+      }\n+\n+      def buildEdits(\n+          tree: Tree,\n+          paramNames: List[String],\n+          editDistance: TokenEditDistance\n+      ): List[l.TextEdit] = {\n+        // TODO write tests to confirm whether we need to offset by edit distance or not"
+  },
+  {
+    "id" : "fd9bea23-a310-459c-8f91-acffcc70c9a2",
+    "prId" : 1079,
+    "comments" : [
+      {
+        "id" : "a3ab4eb4-5f39-4eb0-a108-bc14646e76a8",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Can we move each refactoring into a separate source file and into the package `scala.meta.internal.codeactions`? We may end up with hundreds of code actions, which would be nice to maintain in separate source files.",
+        "createdAt" : "2019-12-27T19:49:18Z",
+        "updatedAt" : "2019-12-31T17:11:21Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "f527aa40-cd46-4a2b-8614-53324baa64fd",
+        "parentId" : "a3ab4eb4-5f39-4eb0-a108-bc14646e76a8",
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "👍 I was thinking the same, makes sense! \nIf only we had a “move package” code action 😅",
+        "createdAt" : "2019-12-27T19:52:54Z",
+        "updatedAt" : "2019-12-31T17:11:21Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "8ebe40d0-08b6-4986-bf63-0376af84bc1e",
+        "parentId" : "a3ab4eb4-5f39-4eb0-a108-bc14646e76a8",
+        "author" : {
+          "login" : "cb372",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/106760?v=4"
+        },
+        "body" : "Done 👍 ",
+        "createdAt" : "2019-12-28T20:43:00Z",
+        "updatedAt" : "2019-12-31T17:11:21Z",
+        "lastEditedBy" : {
+          "login" : "cb372",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/106760?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "89aca41816462ba01562e42601693aeb33124189",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,175 @@\n+package scala.meta.internal.metals\n+\n+import scala.concurrent.{Future, ExecutionContext}\n+import scala.meta._\n+import scala.meta.pc.CancelToken\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.internal.mtags._\n+import scala.meta.internal.semanticdb.TextDocument\n+import org.eclipse.{lsp4j => l}\n+\n+object Refactorings {\n+\n+  object UseNamedArguments extends CodeAction {"
+  }
+]

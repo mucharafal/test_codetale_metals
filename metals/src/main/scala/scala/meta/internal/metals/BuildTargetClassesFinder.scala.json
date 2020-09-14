@@ -1,0 +1,55 @@
+[
+  {
+    "id" : "e42db6b2-0ff1-4168-ab95-5ad88ee01ddb",
+    "prId" : 1466,
+    "comments" : [
+      {
+        "id" : "c2d37b02-3bc6-4e6c-8541-cefa60e9279b",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "This looks like the only difference between the 2 functions is here and two lines below. Can w reuse the code and just add maybe a function `Classes => Option[T]`?",
+        "createdAt" : "2020-03-30T15:24:01Z",
+        "updatedAt" : "2020-04-03T11:50:57Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "15a9f0c4-e824-42b4-b1d9-26fecb677477",
+        "parentId" : "c2d37b02-3bc6-4e6c-8541-cefa60e9279b",
+        "author" : {
+          "login" : "alekseiAlefirov",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/10850363?v=4"
+        },
+        "body" : "okay, I've added\r\n```\r\nprivate def findClassAndBuildTarget[A](\r\n      className: String,\r\n      buildTarget: Option[String],\r\n      findClassesByName: String => List[(A, b.BuildTargetIdentifier)],\r\n      classesByBuildTarget: b.BuildTargetIdentifier => Iterable[A],\r\n      getClassName: A => String\r\n  ): Try[List[(A, b.BuildTarget)]]\r\n```\r\nto generalize them",
+        "createdAt" : "2020-03-31T14:22:30Z",
+        "updatedAt" : "2020-04-03T11:50:57Z",
+        "lastEditedBy" : {
+          "login" : "alekseiAlefirov",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/10850363?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "d72fc182a42fd127dd0593dfbb3028ac615338b9",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,111 @@\n+package scala.meta.internal.metals\n+\n+import ch.epfl.scala.{bsp4j => b}\n+import scala.util.Failure\n+import scala.util.Success\n+import scala.util.Try\n+\n+class BuildTargetClassesFinder(\n+    buildTargets: BuildTargets,\n+    buildTargetClasses: BuildTargetClasses\n+) {\n+\n+  //In case of success returns non-empty list\n+  def findMainClassAndItsBuildTarget(\n+      className: String,\n+      buildTarget: Option[String]\n+  ): Try[List[(b.ScalaMainClass, b.BuildTarget)]] =\n+    buildTarget.fold {\n+      val classes =\n+        buildTargetClasses.findMainClassByName(className).collect {\n+          case (clazz, BuildTargetIdOf(buildTarget)) => (clazz, buildTarget)\n+        }\n+      if (classes.nonEmpty) Success(classes)\n+      else\n+        Failure(new ClassNotFoundException(className))\n+    } { targetName =>\n+      buildTargets\n+        .findByDisplayName(targetName)\n+        .fold[Try[List[(b.ScalaMainClass, b.BuildTarget)]]] {\n+          Failure(\n+            new BuildTargetNotFoundException(targetName)\n+          )\n+        } { target =>\n+          buildTargetClasses\n+            .classesOf(target.getId())\n+            .mainClasses\n+            .values\n+            .find(\n+              _.getClassName == className\n+            )\n+            .fold[Try[List[(b.ScalaMainClass, b.BuildTarget)]]] {\n+              Failure(\n+                new ClassNotFoundInBuildTargetException(\n+                  className,\n+                  targetName\n+                )\n+              )\n+            } { clazz => Success(List(clazz -> target)) }\n+        }\n+    }\n+\n+  //In case of success returns non-empty list\n+  def findTestClassAndItsBuildTarget(\n+      className: String,\n+      buildTarget: Option[String]\n+  ): Try[List[(String, b.BuildTarget)]] =\n+    buildTarget.fold {\n+      val classes =\n+        buildTargetClasses.findTestClassByName(className).collect {\n+          case (clazz, BuildTargetIdOf(buildTarget)) => (clazz, buildTarget)\n+        }\n+      if (classes.nonEmpty) Success(classes)\n+      else\n+        Failure(new ClassNotFoundException(className))\n+    } { targetName =>\n+      buildTargets\n+        .findByDisplayName(targetName)\n+        .fold[Try[List[(String, b.BuildTarget)]]] {\n+          Failure(\n+            new BuildTargetNotFoundException(targetName)\n+          )\n+        } { target =>\n+          buildTargetClasses\n+            .classesOf(target.getId())\n+            .testClasses"
+  }
+]

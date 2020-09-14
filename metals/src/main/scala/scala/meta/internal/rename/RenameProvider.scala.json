@@ -1,0 +1,1782 @@
+[
+  {
+    "id" : "a0724a6e-1574-4d31-979a-c622cb92d72e",
+    "prId" : 1048,
+    "comments" : [
+      {
+        "id" : "8b2362b3-7081-4cde-978d-1fac50c12682",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Calling this message has no side-effect\r\n```suggestion\r\n      client.logMessage(forbiddenColonRename(name, newName))\r\n```",
+        "createdAt" : "2019-11-07T04:34:23Z",
+        "updatedAt" : "2019-11-11T16:33:17Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "9c9cbf2b-6360-4a9e-a56a-91092fa11c0b",
+        "parentId" : "8b2362b3-7081-4cde-978d-1fac50c12682",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Fixed",
+        "createdAt" : "2019-11-10T22:09:43Z",
+        "updatedAt" : "2019-11-11T16:33:17Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "32617da1c138d4dd74af7289c14ff3aeb1bc9654",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,275 @@\n+package scala.meta.internal.rename\n+import scala.meta.internal.metals.ReferenceProvider\n+import org.eclipse.lsp4j.RenameParams\n+import org.eclipse.lsp4j.WorkspaceEdit\n+import scala.meta.internal.implementation.ImplementationProvider\n+import org.eclipse.lsp4j.TextDocumentPositionParams\n+import org.eclipse.lsp4j.ReferenceParams\n+import org.eclipse.lsp4j.TextDocumentIdentifier\n+import org.eclipse.lsp4j.TextEdit\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import org.eclipse.lsp4j.Position\n+import org.eclipse.lsp4j.ReferenceContext\n+import scala.meta.internal.metals.DefinitionProvider\n+import scala.meta.internal.mtags.{Symbol => MSymbol}\n+import scala.meta.internal.mtags.Semanticdbs\n+import scala.meta.internal.semanticdb.Scala._\n+import scala.meta.internal.mtags.GlobalSymbolIndex\n+import scala.meta.io.AbsolutePath\n+import scala.meta.internal.metals.Directories\n+import org.eclipse.lsp4j.Location\n+import scala.meta.internal.metals.MetalsLanguageClient\n+import org.eclipse.lsp4j.MessageParams\n+import org.eclipse.lsp4j.MessageType\n+import scala.meta.internal.metals.Buffers\n+import java.net.URI\n+import java.nio.file.Paths\n+import scala.meta.internal.metals.TextEdits\n+import scala.meta.internal.metals.Compilations\n+import scala.meta.internal.metals.ReferencesResult\n+\n+final class RenameProvider(\n+    referenceProvider: ReferenceProvider,\n+    implementationProvider: ImplementationProvider,\n+    definitionProvider: DefinitionProvider,\n+    semanticdbs: Semanticdbs,\n+    index: GlobalSymbolIndex,\n+    workspace: AbsolutePath,\n+    client: MetalsLanguageClient,\n+    buffers: Buffers,\n+    compilations: Compilations\n+) {\n+\n+  def rename(params: RenameParams): WorkspaceEdit = {\n+    if (!compilations.currentlyCompiling.isEmpty) {\n+      client.showMessage(isCompiling)\n+      new WorkspaceEdit()\n+    } else {\n+      val source = params.getTextDocument.getUri.toAbsolutePath\n+      val textParams = new TextDocumentPositionParams(\n+        params.getTextDocument(),\n+        params.getPosition()\n+      )\n+\n+      val refParams =\n+        toReferenceParams(params.getTextDocument(), params.getPosition())\n+\n+      val symbolOccurence =\n+        definitionProvider.symbolOccurence(source, textParams)\n+\n+      val allReferences = for {\n+        (occurence, semanticDb) <- symbolOccurence.toIterable\n+        if canRenameSymbol(occurence.symbol, params.getNewName())\n+        parentSymbols = implementationProvider\n+          .symbolParent(occurence.symbol, semanticDb)\n+        txtParams <- if (parentSymbols.isEmpty) List(textParams)\n+        else parentSymbols.map(toTextParams)\n+        currentReferences = referenceProvider.references(\n+          toReferenceParams(txtParams)\n+        )\n+        companionRefs = companionReferences(occurence.symbol)\n+        implReferences = implementations(\n+          txtParams,\n+          !occurence.symbol.desc.isType\n+        )\n+        refResult <- currentReferences +: (implReferences ++ companionRefs)\n+        loc <- refResult.locations\n+      } yield loc\n+\n+      val isApply =\n+        symbolOccurence.exists(occ => occ._1.symbol.desc.name.value == \"apply\")\n+\n+      val allChanges = for {\n+        (uri, locs) <- allReferences.toList.distinct.groupBy(_.getUri())\n+      } yield {\n+        val textEdits = for (loc <- locs) yield {\n+          textEdit(isApply, loc, params.getNewName())\n+        }\n+        Seq(uri -> textEdits.toList)\n+      }\n+      val fileChanges = allChanges.flatten.toMap\n+\n+      val (openedEdits, closedEdits) = fileChanges.partition {\n+        case (file, edits) =>\n+          val path = AbsolutePath(Paths.get(new URI(file)))\n+          buffers.contains(path)\n+      }\n+\n+      changeClosedFiles(closedEdits)\n+\n+      new WorkspaceEdit(\n+        openedEdits.map {\n+          case (file, edits) => file -> edits.asJava\n+        }.asJava\n+      )\n+    }\n+  }\n+\n+  private def companionReferences(sym: String): List[ReferencesResult] = {\n+    val results = for {\n+      companionSymbol <- companion(sym).toIterable\n+      loc <- definitionProvider.fromSymbol(companionSymbol).asScala\n+    } yield referenceProvider.references(toReferenceParams(loc))\n+    results.toList\n+  }\n+\n+  private def companion(sym: String) = {\n+    val termOrType = sym.desc match {\n+      case Descriptor.Type(name) =>\n+        Some(Descriptor.Term(name))\n+      case Descriptor.Term(name) =>\n+        Some(Descriptor.Type(name))\n+      case other =>\n+        None\n+    }\n+\n+    termOrType.map(\n+      name =>\n+        Symbols.Global(\n+          sym.owner,\n+          name\n+        )\n+    )\n+  }\n+\n+  private def changeClosedFiles(fileEdits: Map[String, List[TextEdit]]) = {\n+    fileEdits.toArray.par.foreach {\n+      case (file, changes) =>\n+        val path = AbsolutePath(Paths.get(new URI(file)))\n+        val text = path.readText\n+        val newText = TextEdits.applyEdits(text, changes)\n+        path.writeText(newText)\n+    }\n+  }\n+\n+  private def implementations(\n+      textParams: TextDocumentPositionParams,\n+      shouldCheckImplementation: Boolean\n+  ) = {\n+    if (shouldCheckImplementation) {\n+      for (loc <- implementationProvider.implementations(textParams))\n+        yield {\n+          val locParams = toReferenceParams(loc)\n+          referenceProvider.references(locParams)\n+        }\n+    } else {\n+      Nil\n+    }\n+  }\n+\n+  private def canRenameSymbol(symbol: String, newName: String) = {\n+    val forbiddenMethods = Set(\"equals\", \"hashCode\", \"unapply\", \"unary_!\", \"!\")\n+    val desc = symbol.desc\n+    val name = desc.name.value\n+    val isForbidden = forbiddenMethods(name)\n+    if (isForbidden) {\n+      client.logMessage(forbiddenRename(name, newName))\n+    }\n+    val colonNotAllowed = name.endsWith(\":\") && !newName.endsWith(\":\")\n+    if (colonNotAllowed) {\n+      forbiddenColonRename(name, newName)"
+  },
+  {
+    "id" : "4792b6fd-17fc-4a6e-9a29-1fe2ef7e5805",
+    "prId" : 1048,
+    "comments" : [
+      {
+        "id" : "a40d18f4-eed8-458a-b3cb-73c401ad79a4",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Instead of lazy val you can write a method\r\n```suggestion\r\n    def isFromWorkspace = index\r\n```",
+        "createdAt" : "2019-11-07T04:35:14Z",
+        "updatedAt" : "2019-11-11T16:33:17Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "d628b643-05f2-47cd-9868-ed35f79cf54f",
+        "parentId" : "a40d18f4-eed8-458a-b3cb-73c401ad79a4",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Fixed",
+        "createdAt" : "2019-11-10T22:09:52Z",
+        "updatedAt" : "2019-11-11T16:33:17Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "32617da1c138d4dd74af7289c14ff3aeb1bc9654",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,275 @@\n+package scala.meta.internal.rename\n+import scala.meta.internal.metals.ReferenceProvider\n+import org.eclipse.lsp4j.RenameParams\n+import org.eclipse.lsp4j.WorkspaceEdit\n+import scala.meta.internal.implementation.ImplementationProvider\n+import org.eclipse.lsp4j.TextDocumentPositionParams\n+import org.eclipse.lsp4j.ReferenceParams\n+import org.eclipse.lsp4j.TextDocumentIdentifier\n+import org.eclipse.lsp4j.TextEdit\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import org.eclipse.lsp4j.Position\n+import org.eclipse.lsp4j.ReferenceContext\n+import scala.meta.internal.metals.DefinitionProvider\n+import scala.meta.internal.mtags.{Symbol => MSymbol}\n+import scala.meta.internal.mtags.Semanticdbs\n+import scala.meta.internal.semanticdb.Scala._\n+import scala.meta.internal.mtags.GlobalSymbolIndex\n+import scala.meta.io.AbsolutePath\n+import scala.meta.internal.metals.Directories\n+import org.eclipse.lsp4j.Location\n+import scala.meta.internal.metals.MetalsLanguageClient\n+import org.eclipse.lsp4j.MessageParams\n+import org.eclipse.lsp4j.MessageType\n+import scala.meta.internal.metals.Buffers\n+import java.net.URI\n+import java.nio.file.Paths\n+import scala.meta.internal.metals.TextEdits\n+import scala.meta.internal.metals.Compilations\n+import scala.meta.internal.metals.ReferencesResult\n+\n+final class RenameProvider(\n+    referenceProvider: ReferenceProvider,\n+    implementationProvider: ImplementationProvider,\n+    definitionProvider: DefinitionProvider,\n+    semanticdbs: Semanticdbs,\n+    index: GlobalSymbolIndex,\n+    workspace: AbsolutePath,\n+    client: MetalsLanguageClient,\n+    buffers: Buffers,\n+    compilations: Compilations\n+) {\n+\n+  def rename(params: RenameParams): WorkspaceEdit = {\n+    if (!compilations.currentlyCompiling.isEmpty) {\n+      client.showMessage(isCompiling)\n+      new WorkspaceEdit()\n+    } else {\n+      val source = params.getTextDocument.getUri.toAbsolutePath\n+      val textParams = new TextDocumentPositionParams(\n+        params.getTextDocument(),\n+        params.getPosition()\n+      )\n+\n+      val refParams =\n+        toReferenceParams(params.getTextDocument(), params.getPosition())\n+\n+      val symbolOccurence =\n+        definitionProvider.symbolOccurence(source, textParams)\n+\n+      val allReferences = for {\n+        (occurence, semanticDb) <- symbolOccurence.toIterable\n+        if canRenameSymbol(occurence.symbol, params.getNewName())\n+        parentSymbols = implementationProvider\n+          .symbolParent(occurence.symbol, semanticDb)\n+        txtParams <- if (parentSymbols.isEmpty) List(textParams)\n+        else parentSymbols.map(toTextParams)\n+        currentReferences = referenceProvider.references(\n+          toReferenceParams(txtParams)\n+        )\n+        companionRefs = companionReferences(occurence.symbol)\n+        implReferences = implementations(\n+          txtParams,\n+          !occurence.symbol.desc.isType\n+        )\n+        refResult <- currentReferences +: (implReferences ++ companionRefs)\n+        loc <- refResult.locations\n+      } yield loc\n+\n+      val isApply =\n+        symbolOccurence.exists(occ => occ._1.symbol.desc.name.value == \"apply\")\n+\n+      val allChanges = for {\n+        (uri, locs) <- allReferences.toList.distinct.groupBy(_.getUri())\n+      } yield {\n+        val textEdits = for (loc <- locs) yield {\n+          textEdit(isApply, loc, params.getNewName())\n+        }\n+        Seq(uri -> textEdits.toList)\n+      }\n+      val fileChanges = allChanges.flatten.toMap\n+\n+      val (openedEdits, closedEdits) = fileChanges.partition {\n+        case (file, edits) =>\n+          val path = AbsolutePath(Paths.get(new URI(file)))\n+          buffers.contains(path)\n+      }\n+\n+      changeClosedFiles(closedEdits)\n+\n+      new WorkspaceEdit(\n+        openedEdits.map {\n+          case (file, edits) => file -> edits.asJava\n+        }.asJava\n+      )\n+    }\n+  }\n+\n+  private def companionReferences(sym: String): List[ReferencesResult] = {\n+    val results = for {\n+      companionSymbol <- companion(sym).toIterable\n+      loc <- definitionProvider.fromSymbol(companionSymbol).asScala\n+    } yield referenceProvider.references(toReferenceParams(loc))\n+    results.toList\n+  }\n+\n+  private def companion(sym: String) = {\n+    val termOrType = sym.desc match {\n+      case Descriptor.Type(name) =>\n+        Some(Descriptor.Term(name))\n+      case Descriptor.Term(name) =>\n+        Some(Descriptor.Type(name))\n+      case other =>\n+        None\n+    }\n+\n+    termOrType.map(\n+      name =>\n+        Symbols.Global(\n+          sym.owner,\n+          name\n+        )\n+    )\n+  }\n+\n+  private def changeClosedFiles(fileEdits: Map[String, List[TextEdit]]) = {\n+    fileEdits.toArray.par.foreach {\n+      case (file, changes) =>\n+        val path = AbsolutePath(Paths.get(new URI(file)))\n+        val text = path.readText\n+        val newText = TextEdits.applyEdits(text, changes)\n+        path.writeText(newText)\n+    }\n+  }\n+\n+  private def implementations(\n+      textParams: TextDocumentPositionParams,\n+      shouldCheckImplementation: Boolean\n+  ) = {\n+    if (shouldCheckImplementation) {\n+      for (loc <- implementationProvider.implementations(textParams))\n+        yield {\n+          val locParams = toReferenceParams(loc)\n+          referenceProvider.references(locParams)\n+        }\n+    } else {\n+      Nil\n+    }\n+  }\n+\n+  private def canRenameSymbol(symbol: String, newName: String) = {\n+    val forbiddenMethods = Set(\"equals\", \"hashCode\", \"unapply\", \"unary_!\", \"!\")\n+    val desc = symbol.desc\n+    val name = desc.name.value\n+    val isForbidden = forbiddenMethods(name)\n+    if (isForbidden) {\n+      client.logMessage(forbiddenRename(name, newName))\n+    }\n+    val colonNotAllowed = name.endsWith(\":\") && !newName.endsWith(\":\")\n+    if (colonNotAllowed) {\n+      forbiddenColonRename(name, newName)\n+    }\n+    symbolIsLocal(symbol) && (!desc.isMethod || (!colonNotAllowed && !isForbidden))\n+  }\n+\n+  private def symbolIsLocal(symbol: String): Boolean = {\n+\n+    lazy val isFromWorkspace = index"
+  },
+  {
+    "id" : "57cd836f-5fd9-40ba-9a2c-93ad7b1ae9a5",
+    "prId" : 1048,
+    "comments" : [
+      {
+        "id" : "60885437-ce8d-45c5-b586-e0ad4569c600",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Duplicate logic from `isDependencySource` in https://github.com/scalameta/metals/blob/f54ca4951c4f0ba16b87c13d7308f475305ac81f/metals/src/main/scala/scala/meta/internal/metals/MetalsEnrichments.scala#L252",
+        "createdAt" : "2019-11-11T04:22:04Z",
+        "updatedAt" : "2019-11-11T16:33:17Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "f22f68f9-8d0b-4090-90d2-d1096744d9fa",
+        "parentId" : "60885437-ce8d-45c5-b586-e0ad4569c600",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "The second part is negated, so I didn't really see any sensible way to reuse it. I will move it to the extension method and extract the two conditions.",
+        "createdAt" : "2019-11-11T12:08:24Z",
+        "updatedAt" : "2019-11-11T16:33:17Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "32617da1c138d4dd74af7289c14ff3aeb1bc9654",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,342 @@\n+package scala.meta.internal.rename\n+import scala.meta.internal.metals.ReferenceProvider\n+import org.eclipse.lsp4j.RenameParams\n+import org.eclipse.lsp4j.WorkspaceEdit\n+import scala.meta.internal.implementation.ImplementationProvider\n+import org.eclipse.lsp4j.TextDocumentPositionParams\n+import org.eclipse.lsp4j.ReferenceParams\n+import org.eclipse.lsp4j.TextDocumentIdentifier\n+import org.eclipse.lsp4j.TextEdit\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import org.eclipse.lsp4j.Position\n+import org.eclipse.lsp4j.ReferenceContext\n+import scala.meta.internal.metals.DefinitionProvider\n+import scala.meta.internal.mtags.{Symbol => MSymbol}\n+import scala.meta.internal.mtags.Semanticdbs\n+import scala.meta.internal.semanticdb.Scala._\n+import scala.meta.internal.mtags.GlobalSymbolIndex\n+import scala.meta.io.AbsolutePath\n+import scala.meta.internal.metals.Directories\n+import org.eclipse.lsp4j.Location\n+import scala.meta.internal.metals.MetalsLanguageClient\n+import org.eclipse.lsp4j.MessageParams\n+import org.eclipse.lsp4j.MessageType\n+import org.eclipse.lsp4j.{Range => LSPRange}\n+import org.eclipse.lsp4j.jsonrpc.messages.{Either => LSPEither}\n+import scala.meta.internal.metals.Buffers\n+import java.net.URI\n+import java.nio.file.Paths\n+import scala.meta.internal.metals.TextEdits\n+import scala.meta.internal.metals.Compilations\n+import scala.meta.internal.metals.ReferencesResult\n+import org.eclipse.lsp4j.TextDocumentEdit\n+import org.eclipse.lsp4j.VersionedTextDocumentIdentifier\n+import org.eclipse.lsp4j.ResourceOperation\n+import org.eclipse.lsp4j.RenameFile\n+\n+final class RenameProvider(\n+    referenceProvider: ReferenceProvider,\n+    implementationProvider: ImplementationProvider,\n+    definitionProvider: DefinitionProvider,\n+    semanticdbs: Semanticdbs,\n+    index: GlobalSymbolIndex,\n+    workspace: AbsolutePath,\n+    client: MetalsLanguageClient,\n+    buffers: Buffers,\n+    compilations: Compilations\n+) {\n+\n+  def prepareRename(params: TextDocumentPositionParams): Option[LSPRange] = {\n+    if (!compilations.currentlyCompiling.isEmpty) {\n+      client.showMessage(isCompiling)\n+      None\n+    } else {\n+      val source = params.getTextDocument.getUri.toAbsolutePath\n+      val symbolOccurence =\n+        definitionProvider.symbolOccurence(source, params)\n+      for {\n+        (occurence, semanticDb) <- symbolOccurence\n+        if canRenameSymbol(occurence.symbol, None)\n+        range <- occurence.range\n+      } yield range.toLSP\n+    }\n+  }\n+\n+  def rename(params: RenameParams): WorkspaceEdit = {\n+    if (!compilations.currentlyCompiling.isEmpty) {\n+      client.showMessage(isCompiling)\n+      new WorkspaceEdit()\n+    } else {\n+      val source = params.getTextDocument.getUri.toAbsolutePath\n+      val textParams = new TextDocumentPositionParams(\n+        params.getTextDocument(),\n+        params.getPosition()\n+      )\n+\n+      val refParams =\n+        toReferenceParams(params.getTextDocument(), params.getPosition())\n+\n+      val symbolOccurence =\n+        definitionProvider.symbolOccurence(source, textParams)\n+\n+      val allReferences = for {\n+        (occurence, semanticDb) <- symbolOccurence.toIterable\n+        if canRenameSymbol(occurence.symbol, Option(params.getNewName()))\n+        parentSymbols = implementationProvider\n+          .topMethodParents(occurence.symbol, semanticDb)\n+        txtParams <- if (parentSymbols.isEmpty) List(textParams)\n+        else parentSymbols.map(toTextParams)\n+        currentReferences = referenceProvider.references(\n+          toReferenceParams(txtParams)\n+        )\n+        companionRefs = companionReferences(occurence.symbol)\n+        implReferences = implementations(\n+          txtParams,\n+          !occurence.symbol.desc.isType\n+        )\n+        refResult <- currentReferences +: (implReferences ++ companionRefs)\n+        loc <- refResult.locations\n+      } yield loc\n+\n+      def isOccurence(fn: String => Boolean): Boolean = {\n+        symbolOccurence.exists {\n+          case (occ, _) => fn(occ.symbol)\n+        }\n+      }\n+\n+      val allChanges = for {\n+        (uri, locs) <- allReferences.toList.distinct.groupBy(_.getUri())\n+      } yield {\n+        val textEdits = for (loc <- locs) yield {\n+          textEdit(isOccurence, loc, params.getNewName())\n+        }\n+        Seq(uri -> textEdits.toList)\n+      }\n+      val fileChanges = allChanges.flatten.toMap\n+      val (openedEdits, closedEdits) = fileChanges.partition {\n+        case (file, edits) =>\n+          val path = AbsolutePath(Paths.get(new URI(file)))\n+          buffers.contains(path)\n+      }\n+\n+      changeClosedFiles(closedEdits)\n+\n+      val edits = documentEdits(openedEdits)\n+      val renames =\n+        fileRenames(isOccurence, fileChanges.keySet, params.getNewName())\n+      new WorkspaceEdit((edits ++ renames).asJava)\n+    }\n+  }\n+\n+  private def documentEdits(\n+      openedEdits: Map[String, List[TextEdit]]\n+  ): List[LSPEither[TextDocumentEdit, ResourceOperation]] = {\n+    openedEdits.map {\n+      case (file, edits) =>\n+        val textId = new VersionedTextDocumentIdentifier()\n+        textId.setUri(file)\n+        val ed = new TextDocumentEdit(textId, edits.asJava)\n+        LSPEither.forLeft[TextDocumentEdit, ResourceOperation](ed)\n+    }.toList\n+  }\n+\n+  private def fileRenames(\n+      isOccurence: (String => Boolean) => Boolean,\n+      fileChanges: Set[String],\n+      newName: String\n+  ): Option[LSPEither[TextDocumentEdit, ResourceOperation]] = {\n+    fileChanges\n+      .find { file =>\n+        isOccurence(str => {\n+          (str.desc.isType || str.desc.isTerm) && file.endsWith(\n+            str.desc.name.value + \".scala\"\n+          )\n+        })\n+      }\n+      .map { file =>\n+        val newFile =\n+          file.replaceAll(\"/[^/]+\\\\.scala$\", s\"/$newName.scala\")\n+        LSPEither.forRight[TextDocumentEdit, ResourceOperation](\n+          new RenameFile(file, newFile)\n+        )\n+      }\n+  }\n+\n+  private def companionReferences(sym: String): List[ReferencesResult] = {\n+    val results = for {\n+      companionSymbol <- companion(sym).toIterable\n+      loc <- definitionProvider.fromSymbol(companionSymbol).asScala\n+    } yield referenceProvider.references(toReferenceParams(loc))\n+    results.toList\n+  }\n+\n+  private def companion(sym: String) = {\n+    val termOrType = sym.desc match {\n+      case Descriptor.Type(name) =>\n+        Some(Descriptor.Term(name))\n+      case Descriptor.Term(name) =>\n+        Some(Descriptor.Type(name))\n+      case other =>\n+        None\n+    }\n+\n+    termOrType.map(\n+      name =>\n+        Symbols.Global(\n+          sym.owner,\n+          name\n+        )\n+    )\n+  }\n+\n+  private def changeClosedFiles(fileEdits: Map[String, List[TextEdit]]) = {\n+    fileEdits.toArray.par.foreach {\n+      case (file, changes) =>\n+        val path = AbsolutePath(Paths.get(new URI(file)))\n+        val text = path.readText\n+        val newText = TextEdits.applyEdits(text, changes)\n+        path.writeText(newText)\n+    }\n+  }\n+\n+  private def implementations(\n+      textParams: TextDocumentPositionParams,\n+      shouldCheckImplementation: Boolean\n+  ) = {\n+    if (shouldCheckImplementation) {\n+      for (loc <- implementationProvider.implementations(textParams))\n+        yield {\n+          val locParams = toReferenceParams(loc)\n+          referenceProvider.references(locParams)\n+        }\n+    } else {\n+      Nil\n+    }\n+  }\n+\n+  private def canRenameSymbol(symbol: String, newName: Option[String]) = {\n+    val forbiddenMethods = Set(\"equals\", \"hashCode\", \"unapply\", \"unary_!\", \"!\")\n+    val desc = symbol.desc\n+    val name = desc.name.value\n+    val isForbidden = forbiddenMethods(name)\n+    if (isForbidden) {\n+      client.showMessage(forbiddenRename(name, newName))\n+    }\n+    val colonNotAllowed = name.endsWith(\":\") && newName.exists(!_.endsWith(\":\"))\n+    if (colonNotAllowed) {\n+      client.showMessage(forbiddenColonRename(name, newName))\n+    }\n+    symbolIsLocal(symbol) && (!desc.isMethod || (!colonNotAllowed && !isForbidden))\n+  }\n+\n+  private def symbolIsLocal(symbol: String): Boolean = {\n+\n+    def isFromWorkspace =\n+      index\n+        .definition(MSymbol(symbol))\n+        .exists { definition =>\n+          workspace.toNIO.getFileSystem == definition.path.toNIO.getFileSystem &&"
+  },
+  {
+    "id" : "286620c9-8a7f-43e2-84e6-776ea992ca78",
+    "prId" : 1075,
+    "comments" : [
+      {
+        "id" : "0d0ec9b6-75a0-472d-bcb6-2b3536f48119",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Using just `s\"/${str.desc.name.value}.scala\"` will also work since it's a uri, but not sure which is the best way.",
+        "createdAt" : "2019-11-18T09:57:21Z",
+        "updatedAt" : "2019-11-18T11:29:17Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "05dad094-dfb1-4d36-80c6-5be4cc39b159",
+        "parentId" : "0d0ec9b6-75a0-472d-bcb6-2b3536f48119",
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "Ah, I wasn't sure. I assumed we would get the full path here, e.g. `/src/main/scala/foo/FooBar.scala`, is that not the case?",
+        "createdAt" : "2019-11-18T09:58:52Z",
+        "updatedAt" : "2019-11-18T11:29:17Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "a167cbdc-c8f9-441f-801e-b2bd9d6c3139",
+        "parentId" : "0d0ec9b6-75a0-472d-bcb6-2b3536f48119",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "It should be a full uri: `file://<path-to-workspace>/a/src/main/scala/foo/FooBar.scala`\r\n\r\nYou might need to use `Paths.get(new URI(file)))`, though not 100% sure",
+        "createdAt" : "2019-11-18T10:02:56Z",
+        "updatedAt" : "2019-11-18T11:29:17Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "4a86c1b3-1b56-475d-8c0f-bd035b576996",
+        "parentId" : "0d0ec9b6-75a0-472d-bcb6-2b3536f48119",
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "`Paths.get` has an overload that accepts strings. Here's my quick test in the REPL:\r\n\r\n```scala\r\nscala> import java.nio.file.Paths\r\nimport java.nio.file.Paths\r\n\r\nscala> Paths.get(\"/foo/bar/baz/Foo.scala\").getFileName().toString\r\nres1: String = Foo.scala\r\n```\r\n\r\n(our `.filename` is short for `.getFileName().toString`)",
+        "createdAt" : "2019-11-18T10:04:52Z",
+        "updatedAt" : "2019-11-18T11:29:17Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "19c1e17dcfa15ee254a7c6db58823bf97aa46dda",
+    "line" : null,
+    "diffHunk" : "@@ -147,9 +147,8 @@ final class RenameProvider(\n     fileChanges\n       .find { file =>\n         isOccurence(str => {\n-          (str.desc.isType || str.desc.isTerm) && file.endsWith(\n-            str.desc.name.value + \".scala\"\n-          )\n+          (str.desc.isType || str.desc.isTerm) &&\n+            Paths.get(file).filename == str.desc.name.value + \".scala\""
+  },
+  {
+    "id" : "fd49fe3d-9de7-4778-979b-63c4b012ec22",
+    "prId" : 1075,
+    "comments" : [
+      {
+        "id" : "876b6af2-3fc9-4c43-8988-b8f38ef34a52",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Since we know `file` is a URI, can we do this instead?\r\n```suggestion\r\n           file.endsWith(s\"/${str.desc.name.value}.scala\")\r\n```",
+        "createdAt" : "2019-11-18T10:54:14Z",
+        "updatedAt" : "2019-11-18T11:29:17Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "667021f6-6e10-46d9-9d4f-641b1f15ae38",
+        "parentId" : "876b6af2-3fc9-4c43-8988-b8f38ef34a52",
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "That's what @tgodzik suggested too. If you both think it's a good idea, I'll fix it this way!",
+        "createdAt" : "2019-11-18T10:56:42Z",
+        "updatedAt" : "2019-11-18T11:29:17Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "19c1e17dcfa15ee254a7c6db58823bf97aa46dda",
+    "line" : null,
+    "diffHunk" : "@@ -147,9 +147,8 @@ final class RenameProvider(\n     fileChanges\n       .find { file =>\n         isOccurence(str => {\n-          (str.desc.isType || str.desc.isTerm) && file.endsWith(\n-            str.desc.name.value + \".scala\"\n-          )\n+          (str.desc.isType || str.desc.isTerm) &&\n+            Paths.get(new URI(file)).filename == str.desc.name.value + \".scala\""
+  },
+  {
+    "id" : "a2505d77-848f-48cd-80ab-6ae62314efa1",
+    "prId" : 1075,
+    "comments" : [
+      {
+        "id" : "32faebdb-62e1-4f44-8109-a74dc2e0671e",
+        "parentId" : null,
+        "author" : {
+          "login" : "kubukoz",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/894884?u=0540420b474e1a76cf318b145d2d0363f66946d0&v=4"
+        },
+        "body" : "Double `and`",
+        "createdAt" : "2019-11-18T11:15:58Z",
+        "updatedAt" : "2019-11-18T11:29:17Z",
+        "lastEditedBy" : {
+          "login" : "kubukoz",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/894884?u=0540420b474e1a76cf318b145d2d0363f66946d0&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "9558a548-9d53-4fa9-bd52-73e7a6bf7e6e",
+        "parentId" : "32faebdb-62e1-4f44-8109-a74dc2e0671e",
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "thanks :) I hadn't actually changed those lines in this PR, but I'll take the chance to fix it",
+        "createdAt" : "2019-11-18T11:29:37Z",
+        "updatedAt" : "2019-11-18T11:29:38Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "19c1e17dcfa15ee254a7c6db58823bf97aa46dda",
+    "line" : null,
+    "diffHunk" : "@@ -324,14 +323,14 @@ final class RenameProvider(\n   ): MessageParams = {\n     val renamed = name.map(n => s\"to $n\").getOrElse(\"\")\n     val message =\n-      s\"\"\"|Cannot rename $old $renamed since it will change the semantics and \n+      s\"\"\"|Cannot rename $old $renamed since it will change the semantics and"
+  },
+  {
+    "id" : "cff8877f-e49d-4392-a055-2e2fbc2b78af",
+    "prId" : 1075,
+    "comments" : [
+      {
+        "id" : "0d0f4e5f-13da-49b2-9fce-790f585a54e4",
+        "parentId" : null,
+        "author" : {
+          "login" : "kubukoz",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/894884?u=0540420b474e1a76cf318b145d2d0363f66946d0&v=4"
+        },
+        "body" : "`from $old to $renamed`?",
+        "createdAt" : "2019-11-18T11:16:17Z",
+        "updatedAt" : "2019-11-18T11:29:17Z",
+        "lastEditedBy" : {
+          "login" : "kubukoz",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/894884?u=0540420b474e1a76cf318b145d2d0363f66946d0&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "19c1e17dcfa15ee254a7c6db58823bf97aa46dda",
+    "line" : null,
+    "diffHunk" : "@@ -342,8 +341,8 @@ final class RenameProvider(\n   ): MessageParams = {\n     val renamed = name.map(n => s\"to $n\").getOrElse(\"\")\n     val message =\n-      s\"\"\"|Cannot rename from $old $renamed since it will change the semantics and \n-          |and might break your code. \n+      s\"\"\"|Cannot rename from $old $renamed since it will change the semantics and"
+  },
+  {
+    "id" : "b08990d0-71b3-4eb2-a3e9-9727db134c76",
+    "prId" : 1077,
+    "comments" : [
+      {
+        "id" : "7bc00328-4af9-4b17-976e-d384a957b2fd",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "This will miss references to synthetic `.apply`, which we do want to rename",
+        "createdAt" : "2019-11-19T15:12:15Z",
+        "updatedAt" : "2019-12-03T20:06:16Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "ab555417-6d4c-48e9-a202-cf6a4a5cae9a",
+        "parentId" : "7bc00328-4af9-4b17-976e-d384a957b2fd",
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "right, I forgot to \"de-focus\" the tests locally. I'll think of a solution",
+        "createdAt" : "2019-11-19T15:13:25Z",
+        "updatedAt" : "2019-12-03T20:06:16Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "507d18d9-5ac6-48df-a408-a03d5dcf3b5b",
+        "parentId" : "7bc00328-4af9-4b17-976e-d384a957b2fd",
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "I've pushed a fix, which is the simplest thing I could think of: decide whether to include or not the synthetics based on the occurrence.\r\n\r\nThis way we can decide for which symbols we want to include the synthetics, e.g. we do want them for `apply`",
+        "createdAt" : "2019-11-19T17:53:15Z",
+        "updatedAt" : "2019-12-03T20:06:16Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "86a99b04d6c567b76fc8a7915453ac24ce3156a9",
+    "line" : null,
+    "diffHunk" : "@@ -86,7 +86,8 @@ final class RenameProvider(\n         txtParams <- if (parentSymbols.isEmpty) List(textParams)\n         else parentSymbols.map(toTextParams)\n         currentReferences = referenceProvider.references(\n-          toReferenceParams(txtParams)\n+          toReferenceParams(txtParams),\n+          includeSynthetics = false"
+  },
+  {
+    "id" : "58440889-85d1-42b6-9eb6-05b02caff4e4",
+    "prId" : 1077,
+    "comments" : [
+      {
+        "id" : "252a5609-e391-46ef-af07-acd36498a1c6",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "Include the synthetics occurrences of `apply` because we want to rename them, but exclude anything else",
+        "createdAt" : "2019-11-19T17:54:32Z",
+        "updatedAt" : "2019-12-03T20:06:16Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "86a99b04d6c567b76fc8a7915453ac24ce3156a9",
+    "line" : null,
+    "diffHunk" : "@@ -86,7 +86,8 @@ final class RenameProvider(\n         txtParams <- if (parentSymbols.isEmpty) List(textParams)\n         else parentSymbols.map(toTextParams)\n         currentReferences = referenceProvider.references(\n-          toReferenceParams(txtParams)\n+          toReferenceParams(txtParams),\n+          includeSynthetics = _.symbol.desc.name.value == \"apply\""
+  },
+  {
+    "id" : "f05c76bf-76fa-4d9b-a0cf-dab7a41427cf",
+    "prId" : 1095,
+    "comments" : [
+      {
+        "id" : "902fbef5-24ec-41ac-9bff-076551fcccf8",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Can you clarify what `strictCheck = true` does?",
+        "createdAt" : "2019-12-01T21:01:19Z",
+        "updatedAt" : "2019-12-02T20:34:45Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "473379f9-03f8-438d-bfad-67d96396d9b1",
+        "parentId" : "902fbef5-24ec-41ac-9bff-076551fcccf8",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "I added a check that looks into what is underneath a range - anything there should be contained in the symbol itself. So string `Animal` should be contained in symbol `a/Animal#` \r\n\r\nNot the best solution, but I haven't figured out how else to filter out the odd reference under `@JsonCodec`\r\n\r\ncheckStrict might not be the best name :thinking: ",
+        "createdAt" : "2019-12-01T21:22:28Z",
+        "updatedAt" : "2019-12-02T20:34:45Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "f16c3122-352e-4b2b-a3d2-d9e81cb36588",
+        "parentId" : "902fbef5-24ec-41ac-9bff-076551fcccf8",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Also I do the check only for renames - I think it's better to sacrifice a it of performance for correctness.",
+        "createdAt" : "2019-12-01T21:23:59Z",
+        "updatedAt" : "2019-12-02T20:34:45Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "96588902-aca6-4014-a51c-0f117b5bb887",
+        "parentId" : "902fbef5-24ec-41ac-9bff-076551fcccf8",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Sounds like a good idea! How does this play with token edit distance? I thought we already kind of do something like this 🤔 Otherwise, how about renaming `strictCheck` into `checkMatchesText`?",
+        "createdAt" : "2019-12-02T11:07:08Z",
+        "updatedAt" : "2019-12-02T20:34:45Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "fe8cba87-8995-4f58-b16f-65d20078f626",
+        "parentId" : "902fbef5-24ec-41ac-9bff-076551fcccf8",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Sure, I will also check with the edit distances - might not work currently because of that",
+        "createdAt" : "2019-12-02T11:09:39Z",
+        "updatedAt" : "2019-12-02T20:34:45Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "21c4d836-4b63-4374-9d05-a17c944e6b59",
+        "parentId" : "902fbef5-24ec-41ac-9bff-076551fcccf8",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "I checked - token distance is not an issue since we use the reference range to find the name in the snapshot. Token distance is taken into account later on.\r\n\r\nThis is also tested in the RenameLspSuite since we simulate an edit there.",
+        "createdAt" : "2019-12-02T20:07:59Z",
+        "updatedAt" : "2019-12-02T20:34:45Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "c156dad2-d44d-45c2-beff-c78dd8595ff5",
+        "parentId" : "902fbef5-24ec-41ac-9bff-076551fcccf8",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Renamed to `checkMatchesText`",
+        "createdAt" : "2019-12-02T20:38:43Z",
+        "updatedAt" : "2019-12-02T20:38:44Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "0cfe3c7e0b96620a4cdb9c4c993c7e3f984c8977",
+    "line" : null,
+    "diffHunk" : "@@ -89,16 +85,27 @@ final class RenameProvider(\n           .topMethodParents(occurence.symbol, semanticDb)\n         txtParams <- if (parentSymbols.isEmpty) List(textParams)\n         else parentSymbols.map(toTextParams)\n-        currentReferences = referenceProvider.references(\n-          toReferenceParams(txtParams)\n-        )\n+        isLocal = occurence.symbol.isLocal\n+        currentReferences = referenceProvider\n+          .references(\n+            // we can't get definition by name for local symbols\n+            toReferenceParams(txtParams, includeDeclaration = isLocal),\n+            // local symbol will not contain a proper name\n+            strictCheck = !isLocal"
+  },
+  {
+    "id" : "5a9f683e-cfe8-4cf9-8afc-ef80037cb921",
+    "prId" : 1095,
+    "comments" : [
+      {
+        "id" : "b3f15bf0-818a-46d6-b92a-aced9421b563",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "nit: I always wrap if/else in blocks inside for comprehensions to workaround wonky scalafmt formatting\r\n```suggestion\r\n        definitionLocation = {if (parentSymbols.isEmpty)\r\n        ...\r\n        \r\n        }\r\n```",
+        "createdAt" : "2019-12-01T21:03:57Z",
+        "updatedAt" : "2019-12-02T20:34:45Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "0eca1a43-529e-4634-a620-525e48ec1817",
+        "parentId" : "b3f15bf0-818a-46d6-b92a-aced9421b563",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Fixed",
+        "createdAt" : "2019-12-02T20:38:19Z",
+        "updatedAt" : "2019-12-02T20:38:20Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "0cfe3c7e0b96620a4cdb9c4c993c7e3f984c8977",
+    "line" : null,
+    "diffHunk" : "@@ -89,16 +85,27 @@ final class RenameProvider(\n           .topMethodParents(occurence.symbol, semanticDb)\n         txtParams <- if (parentSymbols.isEmpty) List(textParams)\n         else parentSymbols.map(toTextParams)\n-        currentReferences = referenceProvider.references(\n-          toReferenceParams(txtParams)\n-        )\n+        isLocal = occurence.symbol.isLocal\n+        currentReferences = referenceProvider\n+          .references(\n+            // we can't get definition by name for local symbols\n+            toReferenceParams(txtParams, includeDeclaration = isLocal),\n+            // local symbol will not contain a proper name\n+            strictCheck = !isLocal\n+          )\n+          .locations\n+        definitionLocation = if (parentSymbols.isEmpty)"
+  },
+  {
+    "id" : "652a70a2-9b5d-4316-8220-ea1334298222",
+    "prId" : 1382,
+    "comments" : [
+      {
+        "id" : "c344400a-eb61-47a6-bd0c-5d2efc3e69a9",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "what happens if the file has no package definition?",
+        "createdAt" : "2020-02-03T20:40:47Z",
+        "updatedAt" : "2020-02-03T20:55:49Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8ae9e2a9-5b45-48aa-b8ab-841410ed76ad",
+        "parentId" : "c344400a-eb61-47a6-bd0c-5d2efc3e69a9",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "I believe it returns “empty/“",
+        "createdAt" : "2020-02-03T20:46:40Z",
+        "updatedAt" : "2020-02-03T20:55:49Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "c8ce762d-a1c7-41cb-ae26-d283ac0c6846",
+        "parentId" : "c344400a-eb61-47a6-bd0c-5d2efc3e69a9",
+        "author" : {
+          "login" : "kubukoz",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/894884?u=0540420b474e1a76cf318b145d2d0363f66946d0&v=4"
+        },
+        "body" : "I can see it's `_empty_/` :)",
+        "createdAt" : "2020-02-03T20:57:39Z",
+        "updatedAt" : "2020-02-03T20:57:40Z",
+        "lastEditedBy" : {
+          "login" : "kubukoz",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/894884?u=0540420b474e1a76cf318b145d2d0363f66946d0&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "90ddb580583ac5d22a8f5d2a64a3dd57717061db",
+    "line" : 6,
+    "diffHunk" : "@@ -176,10 +176,11 @@ final class RenameProvider(\n   ): Option[LSPEither[TextDocumentEdit, ResourceOperation]] = {\n     fileChanges\n       .find { file =>\n-        isOccurence(str => {\n+        isOccurence { str =>\n+          str.owner.isPackage &&"
+  },
+  {
+    "id" : "77ec02e6-6f27-41b9-921a-75387980dad8",
+    "prId" : 1388,
+    "comments" : [
+      {
+        "id" : "a09215d7-bf69-4f11-b4ae-6bdfbc10c07b",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Let's not add the newlines inbetween imports - in many cases it doesn't make much sense. We might need to sort imports, but until we have an automated way to do it I would just leave it as is.",
+        "createdAt" : "2020-02-10T11:10:44Z",
+        "updatedAt" : "2020-02-24T14:38:50Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "dc21706d9256807977910c1e5c5cb2280a9755ef",
+    "line" : 13,
+    "diffHunk" : "@@ -2,62 +2,59 @@ package scala.meta.internal.rename\n import scala.meta.internal.metals.ReferenceProvider\n import org.eclipse.lsp4j.RenameParams\n import org.eclipse.lsp4j.WorkspaceEdit\n-import scala.meta.internal.implementation.ImplementationProvider\n import org.eclipse.lsp4j.TextDocumentPositionParams\n-import org.eclipse.lsp4j.ReferenceParams\n-import org.eclipse.lsp4j.TextDocumentIdentifier\n import org.eclipse.lsp4j.TextEdit\n+"
+  },
+  {
+    "id" : "194bc03f-c3f3-43e1-8f91-7740d11554be",
+    "prId" : 1388,
+    "comments" : [
+      {
+        "id" : "73d76666-8119-4363-9b74-6b8eadc44651",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Let's use a full name: `symbolOccurence` or `occurence`. I would avoid using super short variable names",
+        "createdAt" : "2020-02-10T11:11:17Z",
+        "updatedAt" : "2020-02-24T14:38:50Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "dc21706d9256807977910c1e5c5cb2280a9755ef",
+    "line" : null,
+    "diffHunk" : "@@ -67,64 +64,43 @@ final class RenameProvider(\n   }\n \n   def rename(params: RenameParams): WorkspaceEdit = {\n-    if (!compilations.currentlyCompiling.isEmpty) {\n+    def includeSynthetic(syn: Synthetic) = {\n+      syn.tree match {\n+        case SelectTree(_, id) =>\n+          id.exists(_.symbol.desc.name.toString == \"apply\")\n+        case _ => false\n+      }\n+    }\n+\n+    if (compilations.currentlyCompiling.nonEmpty) {\n       client.showMessage(isCompiling)\n       new WorkspaceEdit()\n     } else {\n       val source = params.getTextDocument.getUri.toAbsolutePath\n       val textParams = new TextDocumentPositionParams(\n-        params.getTextDocument(),\n-        params.getPosition()\n+        params.getTextDocument,\n+        params.getPosition\n       )\n \n-      val symbolOccurence =\n-        definitionProvider.symbolOccurence(source, textParams)\n-\n-      def includeSynthetic(syn: Synthetic) = {\n-        syn.tree match {\n-          case SelectTree(_, id) =>\n-            id.exists(_.symbol.desc.name.toString == \"apply\")\n-          case _ => false\n-        }\n-      }\n-\n-      val allReferences = for {\n-        (occurence, semanticDb) <- symbolOccurence.toIterable\n-        if canRenameSymbol(occurence.symbol, Option(params.getNewName()))\n-        parentSymbols = implementationProvider\n-          .topMethodParents(occurence.symbol, semanticDb)\n-        txtParams <- {\n-          if (parentSymbols.isEmpty) List(textParams)\n-          else parentSymbols.map(toTextParams)\n-        }\n-        isLocal = occurence.symbol.isLocal\n-        currentReferences = referenceProvider\n-          .references(\n-            // we can't get definition by name for local symbols\n-            toReferenceParams(txtParams, includeDeclaration = isLocal),\n-            // local symbol will not contain a proper name\n-            checkMatchesText = !isLocal,\n-            includeSynthetics = includeSynthetic\n+      val so ="
+  },
+  {
+    "id" : "d4b18bdb-3216-4e6c-9774-7d914d97df9a",
+    "prId" : 1388,
+    "comments" : [
+      {
+        "id" : "90f124c9-0de8-429f-a223-bcabd6978a1d",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "`toReferenceParams` will not be needed here if we switch to maybe using `locations` in `references` method ?",
+        "createdAt" : "2020-02-10T12:04:50Z",
+        "updatedAt" : "2020-02-24T14:38:50Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "dc21706d9256807977910c1e5c5cb2280a9755ef",
+    "line" : null,
+    "diffHunk" : "@@ -197,9 +174,11 @@ final class RenameProvider(\n       loc <- definitionProvider\n         .fromSymbol(companionSymbol)\n         .asScala\n-      if loc.getUri().isScalaFilename\n+      if loc.getUri.isScalaFilename\n       companionLocs <- referenceProvider\n-        .references(toReferenceParams(loc, includeDeclaration = false))\n+        .references(\n+          referenceProvider.toReferenceParams(loc, includeDeclaration = false)"
+  },
+  {
+    "id" : "74dc9e0b-946c-4a59-864a-f2bbd4c22383",
+    "prId" : 1388,
+    "comments" : [
+      {
+        "id" : "41ddf6bc-3ef5-4455-8cdd-af189f99ca09",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "We can use `filePosition` instead of `params` and this way there will be no need for the overloaded method with RenameParams.",
+        "createdAt" : "2020-02-18T14:58:00Z",
+        "updatedAt" : "2020-02-24T14:38:50Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "79384c9b-a4dc-420a-8529-0a8b7a5bf120",
+        "parentId" : "41ddf6bc-3ef5-4455-8cdd-af189f99ca09",
+        "author" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "body" : "There is still prepareRename that uses overloaded version with `params`",
+        "createdAt" : "2020-02-18T21:04:01Z",
+        "updatedAt" : "2020-02-24T14:38:50Z",
+        "lastEditedBy" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "dc21706d9256807977910c1e5c5cb2280a9755ef",
+    "line" : 128,
+    "diffHunk" : "@@ -68,64 +60,43 @@ final class RenameProvider(\n   }\n \n   def rename(params: RenameParams): WorkspaceEdit = {\n-    if (!compilations.currentlyCompiling.isEmpty) {\n+    def includeSynthetic(syn: Synthetic) = {\n+      syn.tree match {\n+        case SelectTree(_, id) =>\n+          id.exists(_.symbol.desc.name.toString == \"apply\")\n+        case _ => false\n+      }\n+    }\n+\n+    if (compilations.currentlyCompiling.nonEmpty) {\n       client.showMessage(isCompiling)\n       new WorkspaceEdit()\n     } else {\n-      val source = params.getTextDocument.getUri.toAbsolutePath\n-      val textParams = new TextDocumentPositionParams(\n-        params.getTextDocument(),\n-        params.getPosition()\n-      )\n \n-      val symbolOccurence =\n-        definitionProvider.symbolOccurence(source, textParams)\n-\n-      def includeSynthetic(syn: Synthetic) = {\n-        syn.tree match {\n-          case SelectTree(_, id) =>\n-            id.exists(_.symbol.desc.name.toString == \"apply\")\n-          case _ => false\n-        }\n-      }\n+      val filePosition = FilePosition(\n+        params.getTextDocument.getUri.toAbsolutePath,\n+        params.getPosition\n+      )\n \n-      val allReferences = for {\n-        (occurence, semanticDb) <- symbolOccurence.toIterable\n-        if canRenameSymbol(occurence.symbol, Option(params.getNewName()))\n-        parentSymbols = implementationProvider\n-          .topMethodParents(occurence.symbol, semanticDb)\n-        txtParams <- {\n-          if (parentSymbols.isEmpty) List(textParams)\n-          else parentSymbols.map(toTextParams)\n-        }\n-        isLocal = occurence.symbol.isLocal\n-        currentReferences = referenceProvider\n-          .references(\n-            // we can't get definition by name for local symbols\n-            toReferenceParams(txtParams, includeDeclaration = isLocal),\n-            // local symbol will not contain a proper name\n-            checkMatchesText = !isLocal,\n-            includeSynthetics = includeSynthetic\n+      val symbolOccurrence =\n+        definitionProvider.symbolOccurrence(params)"
+  },
+  {
+    "id" : "6c7350ba-7782-4687-b3f6-f32aa327a188",
+    "prId" : 1388,
+    "comments" : [
+      {
+        "id" : "bb60e55f-84ad-4ded-a76d-8a0d3d8168c9",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "We should have `canSkipExactMatch = true`",
+        "createdAt" : "2020-02-24T12:15:08Z",
+        "updatedAt" : "2020-02-24T14:38:50Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "dc21706d9256807977910c1e5c5cb2280a9755ef",
+    "line" : null,
+    "diffHunk" : "@@ -208,15 +185,29 @@ final class RenameProvider(\n       }\n   }\n \n+  private def changeClosedFiles(\n+      fileEdits: Map[AbsolutePath, List[TextEdit]]\n+  ): Unit = {\n+    fileEdits.toArray.par.foreach {\n+      case (file, changes) =>\n+        val text = file.readText\n+        val newText = TextEdits.applyEdits(text, changes)\n+        file.writeText(newText)\n+    }\n+  }\n+\n   private def companionReferences(sym: String): Seq[Location] = {\n     val results = for {\n       companionSymbol <- companion(sym).toIterable\n       loc <- definitionProvider\n         .fromSymbol(companionSymbol)\n         .asScala\n-      if loc.getUri().isScalaFilename\n+      if loc.getUri.isScalaFilename\n       companionLocs <- referenceProvider\n-        .references(toReferenceParams(loc, includeDeclaration = false))\n+        .currentSymbolReferences(\n+          locationToFilePosition(loc),\n+          includeDeclaration = false"
+  },
+  {
+    "id" : "88110653-822a-4660-8f3f-959e712f927c",
+    "prId" : 1405,
+    "comments" : [
+      {
+        "id" : "f086a3ef-69af-479b-931a-94dc8849b4ac",
+        "parentId" : null,
+        "author" : {
+          "login" : "ckipp01",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/13974112?u=7b6a2ddab8eec6f99e4e40ae9b81f71cb5ba92e5&v=4"
+        },
+        "body" : "I don't think this is used anywhere is it since we are taking the threshold from the `metalsConfig`?",
+        "createdAt" : "2020-02-07T19:24:08Z",
+        "updatedAt" : "2020-02-13T12:26:23Z",
+        "lastEditedBy" : {
+          "login" : "ckipp01",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/13974112?u=7b6a2ddab8eec6f99e4e40ae9b81f71cb5ba92e5&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "552ed994-776c-4750-a66a-cb987001dee2",
+        "parentId" : "f086a3ef-69af-479b-931a-94dc8849b4ac",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Good catch, I forgot to remove that!",
+        "createdAt" : "2020-02-10T10:27:55Z",
+        "updatedAt" : "2020-02-13T12:26:23Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "6fb276df-0f72-4107-a364-8221cf6de47f",
+        "parentId" : "f086a3ef-69af-479b-931a-94dc8849b4ac",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Fixed",
+        "createdAt" : "2020-02-10T10:43:13Z",
+        "updatedAt" : "2020-02-13T12:26:23Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "ce1728b34b6dbe9b49a918e16248f4c5b062465e",
+    "line" : null,
+    "diffHunk" : "@@ -45,9 +46,11 @@ final class RenameProvider(\n     workspace: AbsolutePath,\n     client: MetalsLanguageClient,\n     buffers: Buffers,\n-    compilations: Compilations\n+    compilations: Compilations,\n+    metalsConfig: MetalsServerConfig\n ) {\n \n+  private val renameFileTreshold = 100"
+  },
+  {
+    "id" : "77760a59-c6e0-4bdb-9b86-0b44023a22dd",
+    "prId" : 1405,
+    "comments" : [
+      {
+        "id" : "42404b62-e5cc-4cb8-a348-0cb6dd306669",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "I find this check a bit confusing: we're checking for `!metalsConfig.openFilesRenames` and immediately after for `metalsConfig.openFilesOnRenames`. Can we simplify this somehow?",
+        "createdAt" : "2020-02-13T09:10:28Z",
+        "updatedAt" : "2020-02-13T12:26:23Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "d27c2312-f891-4586-8f81-a77568a83a18",
+        "parentId" : "42404b62-e5cc-4cb8-a348-0cb6dd306669",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "I extraced `shouldRenameInBackground` value and it should be a bit clearer I think.",
+        "createdAt" : "2020-02-13T11:05:28Z",
+        "updatedAt" : "2020-02-13T12:26:23Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "ce1728b34b6dbe9b49a918e16248f4c5b062465e",
+    "line" : null,
+    "diffHunk" : "@@ -135,14 +136,21 @@ final class RenameProvider(\n         val textEdits = for (loc <- locs) yield {\n           textEdit(isOccurence, loc, params.getNewName())\n         }\n-        Seq(uri -> textEdits.toList)\n+        Seq(uri.toAbsolutePath -> textEdits.toList)\n       }\n       val fileChanges = allChanges.flatten.toMap\n-      val (openedEdits, closedEdits) = fileChanges.partition {\n-        case (file, edits) =>\n-          val path = AbsolutePath(Paths.get(new URI(file)))\n-          buffers.contains(path)\n-      }\n+      val (openedEdits, closedEdits) =\n+        if (!metalsConfig.openFilesOnRenames || fileChanges.keySet.size >= metalsConfig.renameFileThreshold) {\n+          if (metalsConfig.openFilesOnRenames) {"
+  },
+  {
+    "id" : "eb694f14-738e-4b1f-8ce5-37cd73e9c57a",
+    "prId" : 1405,
+    "comments" : [
+      {
+        "id" : "48757a62-3294-4756-8090-206ff16131c8",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "nit:\r\n\r\n```suggestion\r\n            case (path, _) =>\r\n```",
+        "createdAt" : "2020-02-13T09:10:51Z",
+        "updatedAt" : "2020-02-13T12:26:23Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "ce1728b34b6dbe9b49a918e16248f4c5b062465e",
+    "line" : null,
+    "diffHunk" : "@@ -135,14 +136,21 @@ final class RenameProvider(\n         val textEdits = for (loc <- locs) yield {\n           textEdit(isOccurence, loc, params.getNewName())\n         }\n-        Seq(uri -> textEdits.toList)\n+        Seq(uri.toAbsolutePath -> textEdits.toList)\n       }\n       val fileChanges = allChanges.flatten.toMap\n-      val (openedEdits, closedEdits) = fileChanges.partition {\n-        case (file, edits) =>\n-          val path = AbsolutePath(Paths.get(new URI(file)))\n-          buffers.contains(path)\n-      }\n+      val (openedEdits, closedEdits) =\n+        if (!metalsConfig.openFilesOnRenames || fileChanges.keySet.size >= metalsConfig.renameFileThreshold) {\n+          if (metalsConfig.openFilesOnRenames) {\n+            client.showMessage(fileThreshold(fileChanges.keySet.size))\n+          }\n+          fileChanges.partition {\n+            case (path, edits) =>"
+  },
+  {
+    "id" : "cf867a6e-8ae8-41f1-8bb5-7830ce6ea0ea",
+    "prId" : 1405,
+    "comments" : [
+      {
+        "id" : "5ac2b6cc-8b28-4a6d-bb77-60f0681e3d25",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "Suggestion (feel free to discard):\r\n\r\n```scala\r\ns\"\"\"|The renamed symbol appears in over $files files.\r\n    |It will be renamed without opening the files\r\n    |to prevent the editor from becoming unresponsive.\"\"\".stripMargin\r\n```",
+        "createdAt" : "2020-02-13T09:14:56Z",
+        "updatedAt" : "2020-02-13T12:26:23Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "8801bad8-eab8-4fc9-a57c-3675484255ad",
+        "parentId" : "5ac2b6cc-8b28-4a6d-bb77-60f0681e3d25",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Thanks, fixed!",
+        "createdAt" : "2020-02-13T11:06:03Z",
+        "updatedAt" : "2020-02-13T12:26:23Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "ce1728b34b6dbe9b49a918e16248f4c5b062465e",
+    "line" : null,
+    "diffHunk" : "@@ -357,6 +367,16 @@ final class RenameProvider(\n     )\n   }\n \n+  private def fileThreshold(\n+      files: Int\n+  ): MessageParams = {\n+    val message =\n+      s\"\"\"|Renamed symbol is present in over $files files.\n+          |It will be renamed outside the editor in the background, \n+          |otherwise the editor might become unresponsive.\"\"\".stripMargin"
+  },
+  {
+    "id" : "f6525882-f2d9-4f98-8f3c-d2081edc1e61",
+    "prId" : 1463,
+    "comments" : [
+      {
+        "id" : "00516250-ac34-4912-9378-41d093ccfd50",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Could we move it to a value? We can use that in both places then.\r\n\r\n",
+        "createdAt" : "2020-02-24T15:25:33Z",
+        "updatedAt" : "2020-02-24T15:44:57Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "40f1bf3c-4be6-4add-b198-900524fef1ca",
+        "parentId" : "00516250-ac34-4912-9378-41d093ccfd50",
+        "author" : {
+          "login" : "ckipp01",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/13974112?u=7b6a2ddab8eec6f99e4e40ae9b81f71cb5ba92e5&v=4"
+        },
+        "body" : "Sure! Fixed.",
+        "createdAt" : "2020-02-24T15:35:49Z",
+        "updatedAt" : "2020-02-24T15:44:57Z",
+        "lastEditedBy" : {
+          "login" : "ckipp01",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/13974112?u=7b6a2ddab8eec6f99e4e40ae9b81f71cb5ba92e5&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "b3e3bd005ccdcf5051e9bfe160ebc0020d1b4a1e",
+    "line" : null,
+    "diffHunk" : "@@ -145,11 +147,11 @@ final class RenameProvider(\n       }\n       val fileChanges = allChanges.flatten.toMap\n       val shouldRenameInBackground =\n-        !metalsConfig.openFilesOnRenames ||\n+        (!metalsConfig.openFilesOnRenames && !clientExperimentalCapabilities.openFilesOnRenameProvider) ||\n           fileChanges.keySet.size >= metalsConfig.renameFileThreshold\n       val (openedEdits, closedEdits) =\n         if (shouldRenameInBackground) {\n-          if (metalsConfig.openFilesOnRenames) {\n+          if (metalsConfig.openFilesOnRenames || clientExperimentalCapabilities.openFilesOnRenameProvider) {"
+  },
+  {
+    "id" : "a83e4e0c-2a15-4163-b32e-f2f2fd733e42",
+    "prId" : 1463,
+    "comments" : [
+      {
+        "id" : "e4088aca-4ddb-4e59-92c5-c7554a20e171",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "We could even do:\r\n```\r\nval openFilesOnRenames = metalsConfig.openFilesOnRenames || clientExperimentalCapabilities.openFilesOnRenameProvider\r\n```",
+        "createdAt" : "2020-02-24T15:36:56Z",
+        "updatedAt" : "2020-02-24T15:44:57Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "3ea99a84-ba1b-4e52-bc78-ebb8169cd2d1",
+        "parentId" : "e4088aca-4ddb-4e59-92c5-c7554a20e171",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Sorry for not being specific :(",
+        "createdAt" : "2020-02-24T15:39:54Z",
+        "updatedAt" : "2020-02-24T15:44:57Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "cfacd108-da86-4d06-aa70-cc170d083f8f",
+        "parentId" : "e4088aca-4ddb-4e59-92c5-c7554a20e171",
+        "author" : {
+          "login" : "ckipp01",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/13974112?u=7b6a2ddab8eec6f99e4e40ae9b81f71cb5ba92e5&v=4"
+        },
+        "body" : "Ah, duh. Of course. No worries, that was my bad, just quickly doing it and not thinking.",
+        "createdAt" : "2020-02-24T15:45:15Z",
+        "updatedAt" : "2020-02-24T15:45:16Z",
+        "lastEditedBy" : {
+          "login" : "ckipp01",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/13974112?u=7b6a2ddab8eec6f99e4e40ae9b81f71cb5ba92e5&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "b3e3bd005ccdcf5051e9bfe160ebc0020d1b4a1e",
+    "line" : null,
+    "diffHunk" : "@@ -144,12 +146,14 @@ final class RenameProvider(\n         Seq(uri.toAbsolutePath -> textEdits.toList)\n       }\n       val fileChanges = allChanges.flatten.toMap\n+      val openFilesOnRenameProvider =\n+        clientExperimentalCapabilities.openFilesOnRenameProvider"
+  },
+  {
+    "id" : "ab3305e5-d4b8-43e8-883b-3e1a0b26d195",
+    "prId" : 1637,
+    "comments" : [
+      {
+        "id" : "a5a78995-8d1a-4f7f-8c39-a05f10b43c47",
+        "parentId" : null,
+        "author" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "body" : "rename `symbolOccurence` -> `symbolOccurrence` let's fix this once and for all in this file :muscle: ",
+        "createdAt" : "2020-04-23T16:17:38Z",
+        "updatedAt" : "2020-04-27T09:08:00Z",
+        "lastEditedBy" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "46c0a77f-41cf-44c0-908a-a43f23b01091",
+        "parentId" : "a5a78995-8d1a-4f7f-8c39-a05f10b43c47",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Fixed",
+        "createdAt" : "2020-04-27T09:09:26Z",
+        "updatedAt" : "2020-04-27T09:09:26Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "fc20da6a0b4a0d2f5db919a1ac7119940549f1f3",
+    "line" : null,
+    "diffHunk" : "@@ -35,138 +33,152 @@ import scala.meta.internal.semanticdb.Synthetic\n import scala.meta.internal.semanticdb.SelectTree\n import scala.meta.internal.metals.MetalsServerConfig\n import scala.meta.internal.metals.ClientExperimentalCapabilities\n+import scala.meta.pc.CancelToken\n+import scala.concurrent.Future\n+import scala.concurrent.ExecutionContext\n \n final class RenameProvider(\n     referenceProvider: ReferenceProvider,\n     implementationProvider: ImplementationProvider,\n     definitionProvider: DefinitionProvider,\n-    index: GlobalSymbolIndex,\n     workspace: AbsolutePath,\n     client: MetalsLanguageClient,\n     buffers: Buffers,\n     compilations: Compilations,\n     metalsConfig: MetalsServerConfig,\n     clientExperimentalCapabilities: ClientExperimentalCapabilities\n-) {\n+)(implicit executionContext: ExecutionContext) {\n \n   private var awaitingSave = new ConcurrentLinkedQueue[() => Unit]\n \n-  def prepareRename(params: TextDocumentPositionParams): Option[LSPRange] = {\n+  def prepareRename(\n+      params: TextDocumentPositionParams,\n+      token: CancelToken\n+  ): Future[Option[LSPRange]] = {\n     if (!compilations.currentlyCompiling.isEmpty) {\n       client.showMessage(isCompiling)\n-      None\n+      Future.successful(None)\n     } else {\n       val source = params.getTextDocument.getUri.toAbsolutePath\n-      val symbolOccurence =\n-        definitionProvider.symbolOccurrence(source, params.getPosition)\n-      for {\n-        (occurence, semanticDb) <- symbolOccurence\n-        if canRenameSymbol(occurence.symbol, None)\n-        range <- occurence.range\n-      } yield range.toLSP\n+      definitionProvider.definition(source, params, token).map { definition =>\n+        val symbolOccurence =\n+          definitionProvider.symbolOccurrence(source, params.getPosition)\n+        for {\n+          (occurence, _) <- symbolOccurence"
+  },
+  {
+    "id" : "5b51c528-a647-43d0-b5ba-5aec4c2d6931",
+    "prId" : 1637,
+    "comments" : [
+      {
+        "id" : "5119d6a3-8ec0-4950-bb0a-a57066b7dafe",
+        "parentId" : null,
+        "author" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "body" : "maybe we could rename it to `isLocalSymbol` ?\r\n\r\nalso inside it is `symbol.startsWith(\"local\")` but we can simply reuse `symbol.isLocal` which is performing exactly this check.",
+        "createdAt" : "2020-04-23T16:59:07Z",
+        "updatedAt" : "2020-04-27T09:08:00Z",
+        "lastEditedBy" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "e182c03d-d0c9-4def-94c9-99836e33974c",
+        "parentId" : "5119d6a3-8ec0-4950-bb0a-a57066b7dafe",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "fixed, but renamed `isWorkspaceSymbol`",
+        "createdAt" : "2020-04-27T09:08:21Z",
+        "updatedAt" : "2020-04-27T09:08:43Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "fc20da6a0b4a0d2f5db919a1ac7119940549f1f3",
+    "line" : null,
+    "diffHunk" : "@@ -279,21 +295,21 @@ final class RenameProvider(\n     if (colonNotAllowed) {\n       client.showMessage(forbiddenColonRename(name, newName))\n     }\n-    symbolIsLocal(symbol) && (!desc.isMethod || (!colonNotAllowed && !isForbidden))\n+    symbolIsLocal(symbol, definitionPath) && (!desc.isMethod || (!colonNotAllowed && !isForbidden))\n   }\n \n-  private def symbolIsLocal(symbol: String): Boolean = {\n+  private def symbolIsLocal("
+  },
+  {
+    "id" : "8b4f03af-331c-447d-842a-d8a270eb0fe2",
+    "prId" : 1637,
+    "comments" : [
+      {
+        "id" : "fb3b0005-6fec-4ad9-86ca-a5250fc111d9",
+        "parentId" : null,
+        "author" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "body" : "for me `isLocal` has a meaning that symbol is `localXXX`(anonymous in a given file) and here we talk about `isInWorkspace` ?",
+        "createdAt" : "2020-04-23T17:01:07Z",
+        "updatedAt" : "2020-04-27T09:08:00Z",
+        "lastEditedBy" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "0ecd2f0b-44c1-47df-ba84-ac8220b7c979",
+        "parentId" : "fb3b0005-6fec-4ad9-86ca-a5250fc111d9",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Changed to `isInWorkspace`",
+        "createdAt" : "2020-04-27T09:07:00Z",
+        "updatedAt" : "2020-04-27T09:08:12Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "fc20da6a0b4a0d2f5db919a1ac7119940549f1f3",
+    "line" : null,
+    "diffHunk" : "@@ -279,21 +295,21 @@ final class RenameProvider(\n     if (colonNotAllowed) {\n       client.showMessage(forbiddenColonRename(name, newName))\n     }\n-    symbolIsLocal(symbol) && (!desc.isMethod || (!colonNotAllowed && !isForbidden))\n+    symbolIsLocal(symbol, definitionPath) && (!desc.isMethod || (!colonNotAllowed && !isForbidden))\n   }\n \n-  private def symbolIsLocal(symbol: String): Boolean = {\n+  private def symbolIsLocal(\n+      symbol: String,\n+      definitionPath: AbsolutePath\n+  ): Boolean = {\n \n-    def isFromWorkspace =\n-      index\n-        .definition(MSymbol(symbol))\n-        .exists { definition =>\n-          val isLocal = definition.path.isWorkspaceSource(workspace)\n-          if (isLocal && definition.path.isJava) {\n-            client.showMessage(javaSymbol(symbol.desc.name.value))\n-          }\n-          isLocal\n-        }\n+    def isFromWorkspace = {\n+      val isLocal = definitionPath.isWorkspaceSource(workspace)"
+  },
+  {
+    "id" : "a4dff526-de5c-49c4-895a-c7d1d69c054d",
+    "prId" : 1637,
+    "comments" : [
+      {
+        "id" : "93b9edaa-3c00-45e0-934c-e23e9f426ce9",
+        "parentId" : null,
+        "author" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "body" : "I think you try to bind symbol with AbsolutePath and propagate them together through multiple functions, maybe it is worth making case class containing those 2 things and just pass one thing. Also it will be easier to see this path is related to this symbol",
+        "createdAt" : "2020-04-23T17:16:19Z",
+        "updatedAt" : "2020-04-27T09:08:00Z",
+        "lastEditedBy" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "8baf36dc-e9fa-4353-8696-3bbf70aa7dcc",
+        "parentId" : "93b9edaa-3c00-45e0-934c-e23e9f426ce9",
+        "author" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "body" : "Okay actually I would go with symbol <-> List[AbsolutePath] as it looks like there can be multiple definitions of a symbol. This would fix a problem with `<-` above ",
+        "createdAt" : "2020-04-23T17:36:53Z",
+        "updatedAt" : "2020-04-27T09:08:00Z",
+        "lastEditedBy" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2332d2e9-cc4e-482a-865b-8e24153823ab",
+        "parentId" : "93b9edaa-3c00-45e0-934c-e23e9f426ce9",
+        "author" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "body" : "And then you can decide in `symbolIsLocal` if given symbol with all definition locations is local or not. \r\nPreviously we did `.exists` which means at least one location must be in workspace, but maybe `.all` would make more sense here?\r\nI don't know many multi def locations examples, is it only class/trait + object scenario?",
+        "createdAt" : "2020-04-23T17:43:17Z",
+        "updatedAt" : "2020-04-27T09:08:00Z",
+        "lastEditedBy" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "88f3f2b8-72b3-4db4-a564-ee6a8773ae77",
+        "parentId" : "93b9edaa-3c00-45e0-934c-e23e9f426ce9",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "I don't think we have multiple definitions anywhere currently really. And even if we get one, I can't imagine one being inside workspace and the other outside.\r\n\r\nI can rework it a bit, but I don't think we need to add a case class just for 2 methods.",
+        "createdAt" : "2020-04-24T07:44:06Z",
+        "updatedAt" : "2020-04-27T09:08:00Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ac9ce5ff-eec5-4bd0-a671-e7d8ec20248c",
+        "parentId" : "93b9edaa-3c00-45e0-934c-e23e9f426ce9",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Moved `isWorkspaceSymbol` up, so that we don't propagate the path now.",
+        "createdAt" : "2020-04-27T09:06:35Z",
+        "updatedAt" : "2020-04-27T09:08:00Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "fc20da6a0b4a0d2f5db919a1ac7119940549f1f3",
+    "line" : 281,
+    "diffHunk" : "@@ -267,7 +279,11 @@ final class RenameProvider(\n     }\n   }\n \n-  private def canRenameSymbol(symbol: String, newName: Option[String]) = {\n+  private def canRenameSymbol(\n+      symbol: String,"
+  },
+  {
+    "id" : "e886e48a-a05e-4c2a-a9c2-09da385473ac",
+    "prId" : 1637,
+    "comments" : [
+      {
+        "id" : "e6c705a4-0180-4130-aef8-bab091f07255",
+        "parentId" : null,
+        "author" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "body" : "I would not go with `<-` here as it means if you get more locations all references and will be calculated twice for each location",
+        "createdAt" : "2020-04-23T17:28:25Z",
+        "updatedAt" : "2020-04-27T09:08:00Z",
+        "lastEditedBy" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "39f73442-c85b-412e-9e9b-44d4061ad0ad",
+        "parentId" : "e6c705a4-0180-4130-aef8-bab091f07255",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "I should most likely go with headOption, but we don't have really currently a situation with multiple definitions.",
+        "createdAt" : "2020-04-24T07:44:57Z",
+        "updatedAt" : "2020-04-27T09:08:00Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "fc20da6a0b4a0d2f5db919a1ac7119940549f1f3",
+    "line" : null,
+    "diffHunk" : "@@ -35,138 +33,152 @@ import scala.meta.internal.semanticdb.Synthetic\n import scala.meta.internal.semanticdb.SelectTree\n import scala.meta.internal.metals.MetalsServerConfig\n import scala.meta.internal.metals.ClientExperimentalCapabilities\n+import scala.meta.pc.CancelToken\n+import scala.concurrent.Future\n+import scala.concurrent.ExecutionContext\n \n final class RenameProvider(\n     referenceProvider: ReferenceProvider,\n     implementationProvider: ImplementationProvider,\n     definitionProvider: DefinitionProvider,\n-    index: GlobalSymbolIndex,\n     workspace: AbsolutePath,\n     client: MetalsLanguageClient,\n     buffers: Buffers,\n     compilations: Compilations,\n     metalsConfig: MetalsServerConfig,\n     clientExperimentalCapabilities: ClientExperimentalCapabilities\n-) {\n+)(implicit executionContext: ExecutionContext) {\n \n   private var awaitingSave = new ConcurrentLinkedQueue[() => Unit]\n \n-  def prepareRename(params: TextDocumentPositionParams): Option[LSPRange] = {\n+  def prepareRename(\n+      params: TextDocumentPositionParams,\n+      token: CancelToken\n+  ): Future[Option[LSPRange]] = {\n     if (!compilations.currentlyCompiling.isEmpty) {\n       client.showMessage(isCompiling)\n-      None\n+      Future.successful(None)\n     } else {\n       val source = params.getTextDocument.getUri.toAbsolutePath\n-      val symbolOccurence =\n-        definitionProvider.symbolOccurrence(source, params.getPosition)\n-      for {\n-        (occurence, semanticDb) <- symbolOccurence\n-        if canRenameSymbol(occurence.symbol, None)\n-        range <- occurence.range\n-      } yield range.toLSP\n+      definitionProvider.definition(source, params, token).map { definition =>\n+        val symbolOccurence =\n+          definitionProvider.symbolOccurrence(source, params.getPosition)\n+        for {\n+          (occurence, _) <- symbolOccurence\n+          definitionLocation <- definition.locations.asScala.headOption\n+          definitionPath = definitionLocation.getUri().toAbsolutePath\n+          if canRenameSymbol(occurence.symbol, None, definitionPath)\n+          range <- occurence.range\n+        } yield range.toLSP\n+      }\n     }\n   }\n \n-  def rename(params: RenameParams): WorkspaceEdit = {\n+  def rename(\n+      params: RenameParams,\n+      token: CancelToken\n+  ): Future[WorkspaceEdit] = {\n     if (!compilations.currentlyCompiling.isEmpty) {\n       client.showMessage(isCompiling)\n-      new WorkspaceEdit()\n+      Future.successful(new WorkspaceEdit())\n     } else {\n       val source = params.getTextDocument.getUri.toAbsolutePath\n-      val textParams = new TextDocumentPositionParams(\n-        params.getTextDocument(),\n-        params.getPosition()\n-      )\n+      definitionProvider.definition(source, params, token).map { definition =>\n+        val textParams = new TextDocumentPositionParams(\n+          params.getTextDocument(),\n+          params.getPosition()\n+        )\n \n-      val symbolOccurence =\n-        definitionProvider.symbolOccurrence(source, textParams.getPosition)\n+        val symbolOccurence =\n+          definitionProvider.symbolOccurrence(source, textParams.getPosition)\n \n-      val suggestedName = params.getNewName()\n-      val newName =\n-        if (suggestedName.charAt(0) == '`')\n-          suggestedName.substring(1, suggestedName.length() - 1)\n-        else suggestedName\n+        val suggestedName = params.getNewName()\n+        val newName =\n+          if (suggestedName.charAt(0) == '`')\n+            suggestedName.substring(1, suggestedName.length() - 1)\n+          else suggestedName\n \n-      def includeSynthetic(syn: Synthetic) = {\n-        syn.tree match {\n-          case SelectTree(_, id) =>\n-            id.exists(_.symbol.desc.name.toString == \"apply\")\n-          case _ => false\n+        def includeSynthetic(syn: Synthetic) = {\n+          syn.tree match {\n+            case SelectTree(_, id) =>\n+              id.exists(_.symbol.desc.name.toString == \"apply\")\n+            case _ => false\n+          }\n         }\n-      }\n \n-      val allReferences = for {\n-        (occurence, semanticDb) <- symbolOccurence.toIterable\n-        if canRenameSymbol(occurence.symbol, Option(newName))\n-        parentSymbols = implementationProvider\n-          .topMethodParents(occurence.symbol, semanticDb)\n-        txtParams <- {\n-          if (parentSymbols.isEmpty) List(textParams)\n-          else parentSymbols.map(toTextParams)\n-        }\n-        isLocal = occurence.symbol.isLocal\n-        currentReferences = referenceProvider\n-          .references(\n-            // we can't get definition by name for local symbols\n-            toReferenceParams(txtParams, includeDeclaration = isLocal),\n-            canSkipExactMatchCheck = false,\n-            includeSynthetics = includeSynthetic\n+        val allReferences = for {\n+          (occurence, semanticDb) <- symbolOccurence.toIterable\n+          definitionLoc <- definition.locations.asScala"
+  },
+  {
+    "id" : "4632286e-5ac6-418c-a4bc-9e0a1ace4abd",
+    "prId" : 1637,
+    "comments" : [
+      {
+        "id" : "ca2ed795-1905-4b27-b442-506c04d2bafd",
+        "parentId" : null,
+        "author" : {
+          "login" : "mlachkar",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/7843237?u=d2941da73011b9a49767ac863ce5bc20b7b10ed7&v=4"
+        },
+        "body" : "OPT: same than Some(newName)",
+        "createdAt" : "2020-04-27T09:13:36Z",
+        "updatedAt" : "2020-04-27T10:40:36Z",
+        "lastEditedBy" : {
+          "login" : "mlachkar",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/7843237?u=d2941da73011b9a49767ac863ce5bc20b7b10ed7&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ef05914d-f627-4393-be03-589dc82b66a8",
+        "parentId" : "ca2ed795-1905-4b27-b442-506c04d2bafd",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Will fix it maybe next time, shouldn't be a big issue.",
+        "createdAt" : "2020-04-27T11:15:28Z",
+        "updatedAt" : "2020-04-27T11:15:28Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "fc20da6a0b4a0d2f5db919a1ac7119940549f1f3",
+    "line" : 138,
+    "diffHunk" : "@@ -35,138 +33,154 @@ import scala.meta.internal.semanticdb.Synthetic\n import scala.meta.internal.semanticdb.SelectTree\n import scala.meta.internal.metals.MetalsServerConfig\n import scala.meta.internal.metals.ClientExperimentalCapabilities\n+import scala.meta.pc.CancelToken\n+import scala.concurrent.Future\n+import scala.concurrent.ExecutionContext\n \n final class RenameProvider(\n     referenceProvider: ReferenceProvider,\n     implementationProvider: ImplementationProvider,\n     definitionProvider: DefinitionProvider,\n-    index: GlobalSymbolIndex,\n     workspace: AbsolutePath,\n     client: MetalsLanguageClient,\n     buffers: Buffers,\n     compilations: Compilations,\n     metalsConfig: MetalsServerConfig,\n     clientExperimentalCapabilities: ClientExperimentalCapabilities\n-) {\n+)(implicit executionContext: ExecutionContext) {\n \n   private var awaitingSave = new ConcurrentLinkedQueue[() => Unit]\n \n-  def prepareRename(params: TextDocumentPositionParams): Option[LSPRange] = {\n+  def prepareRename(\n+      params: TextDocumentPositionParams,\n+      token: CancelToken\n+  ): Future[Option[LSPRange]] = {\n     if (!compilations.currentlyCompiling.isEmpty) {\n       client.showMessage(isCompiling)\n-      None\n+      Future.successful(None)\n     } else {\n       val source = params.getTextDocument.getUri.toAbsolutePath\n-      val symbolOccurence =\n-        definitionProvider.symbolOccurrence(source, params.getPosition)\n-      for {\n-        (occurence, semanticDb) <- symbolOccurence\n-        if canRenameSymbol(occurence.symbol, None)\n-        range <- occurence.range\n-      } yield range.toLSP\n+      definitionProvider.definition(source, params, token).map { definition =>\n+        val symbolOccurrence =\n+          definitionProvider.symbolOccurrence(source, params.getPosition)\n+        for {\n+          (occurence, _) <- symbolOccurrence\n+          definitionLocation <- definition.locations.asScala.headOption\n+          definitionPath = definitionLocation.getUri().toAbsolutePath\n+          if canRenameSymbol(occurence.symbol, None) &&\n+            isWorkspaceSymbol(occurence.symbol, definitionPath)\n+          range <- occurence.range\n+        } yield range.toLSP\n+      }\n     }\n   }\n \n-  def rename(params: RenameParams): WorkspaceEdit = {\n+  def rename(\n+      params: RenameParams,\n+      token: CancelToken\n+  ): Future[WorkspaceEdit] = {\n     if (!compilations.currentlyCompiling.isEmpty) {\n       client.showMessage(isCompiling)\n-      new WorkspaceEdit()\n+      Future.successful(new WorkspaceEdit())\n     } else {\n       val source = params.getTextDocument.getUri.toAbsolutePath\n-      val textParams = new TextDocumentPositionParams(\n-        params.getTextDocument(),\n-        params.getPosition()\n-      )\n+      definitionProvider.definition(source, params, token).map { definition =>\n+        val textParams = new TextDocumentPositionParams(\n+          params.getTextDocument(),\n+          params.getPosition()\n+        )\n \n-      val symbolOccurence =\n-        definitionProvider.symbolOccurrence(source, textParams.getPosition)\n+        val symbolOccurrence =\n+          definitionProvider.symbolOccurrence(source, textParams.getPosition)\n \n-      val suggestedName = params.getNewName()\n-      val newName =\n-        if (suggestedName.charAt(0) == '`')\n-          suggestedName.substring(1, suggestedName.length() - 1)\n-        else suggestedName\n+        val suggestedName = params.getNewName()\n+        val newName =\n+          if (suggestedName.charAt(0) == '`')\n+            suggestedName.substring(1, suggestedName.length() - 1)\n+          else suggestedName\n \n-      def includeSynthetic(syn: Synthetic) = {\n-        syn.tree match {\n-          case SelectTree(_, id) =>\n-            id.exists(_.symbol.desc.name.toString == \"apply\")\n-          case _ => false\n+        def includeSynthetic(syn: Synthetic) = {\n+          syn.tree match {\n+            case SelectTree(_, id) =>\n+              id.exists(_.symbol.desc.name.toString == \"apply\")\n+            case _ => false\n+          }\n         }\n-      }\n \n-      val allReferences = for {\n-        (occurence, semanticDb) <- symbolOccurence.toIterable\n-        if canRenameSymbol(occurence.symbol, Option(newName))\n-        parentSymbols = implementationProvider\n-          .topMethodParents(occurence.symbol, semanticDb)\n-        txtParams <- {\n-          if (parentSymbols.isEmpty) List(textParams)\n-          else parentSymbols.map(toTextParams)\n-        }\n-        isLocal = occurence.symbol.isLocal\n-        currentReferences = referenceProvider\n-          .references(\n-            // we can't get definition by name for local symbols\n-            toReferenceParams(txtParams, includeDeclaration = isLocal),\n-            canSkipExactMatchCheck = false,\n-            includeSynthetics = includeSynthetic\n+        val allReferences = for {\n+          (occurence, semanticDb) <- symbolOccurrence.toIterable\n+          definitionLoc <- definition.locations.asScala.headOption.toIterable\n+          definitionPath = definitionLoc.getUri().toAbsolutePath\n+          if canRenameSymbol(occurence.symbol, Option(newName)) &&"
+  },
+  {
+    "id" : "9a26e0a7-0a4a-4180-b9a6-fad6b4f8185e",
+    "prId" : 1754,
+    "comments" : [
+      {
+        "id" : "d30e6b37-34b2-44f0-9b22-23aeed52d27e",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "We most likely don't have to fail in case of compile errors. SemanticDB files will still be available and rename will only fail in case of new non-compiled symbols, which is the current behavior. ",
+        "createdAt" : "2020-05-15T14:54:11Z",
+        "updatedAt" : "2020-06-05T10:53:32Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "ca06f607-c1d8-45a2-ae01-2b84606caca1",
+        "parentId" : "d30e6b37-34b2-44f0-9b22-23aeed52d27e",
+        "author" : {
+          "login" : "ltrojanowski",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3951626?v=4"
+        },
+        "body" : "removed check of compilation result",
+        "createdAt" : "2020-05-22T07:57:44Z",
+        "updatedAt" : "2020-06-05T10:53:32Z",
+        "lastEditedBy" : {
+          "login" : "ltrojanowski",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3951626?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "358d0bb5dfeb1e5bd52553e256f53c9f76a3d670",
+    "line" : null,
+    "diffHunk" : "@@ -77,105 +78,121 @@ final class RenameProvider(\n       params: RenameParams,\n       token: CancelToken\n   ): Future[WorkspaceEdit] = {\n-    if (!compilations.currentlyCompiling.isEmpty) {\n-      client.showMessage(isCompiling)\n-      Future.successful(new WorkspaceEdit())\n-    } else {\n-      val source = params.getTextDocument.getUri.toAbsolutePath\n-      definitionProvider.definition(source, params, token).map { definition =>\n-        val textParams = new TextDocumentPositionParams(\n-          params.getTextDocument(),\n-          params.getPosition()\n-        )\n-\n-        val symbolOccurrence =\n-          definitionProvider.symbolOccurrence(source, textParams.getPosition)\n-\n-        val suggestedName = params.getNewName()\n-        val newName =\n-          if (suggestedName.charAt(0) == '`')\n-            suggestedName.substring(1, suggestedName.length() - 1)\n-          else suggestedName\n-\n-        def includeSynthetic(syn: Synthetic) = {\n-          syn.tree match {\n-            case SelectTree(_, id) =>\n-              id.exists(_.symbol.desc.name.toString == \"apply\")\n-            case _ => false\n+    def compilationFinishedSuccessfully(\n+        source: AbsolutePath\n+    ): Future[Boolean] = {\n+      if (compilations.currentlyCompiling.isEmpty) {\n+        Future(true)\n+      } else {\n+        compilations.cascadeCompileFiles(Seq(source)).map { compilationResult =>\n+          if (compilationResult.getStatusCode() == StatusCode.OK) {"
+  },
+  {
+    "id" : "5301d76f-8b0c-401e-9e1d-e6c19ace8e04",
+    "prId" : 1754,
+    "comments" : [
+      {
+        "id" : "052781ae-5bba-4074-aa08-4d539927954c",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "We should remove the `isCompiling` message ",
+        "createdAt" : "2020-05-15T14:55:05Z",
+        "updatedAt" : "2020-06-05T10:53:32Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "358d0bb5dfeb1e5bd52553e256f53c9f76a3d670",
+    "line" : 33,
+    "diffHunk" : "@@ -77,105 +78,121 @@ final class RenameProvider(\n       params: RenameParams,\n       token: CancelToken\n   ): Future[WorkspaceEdit] = {\n-    if (!compilations.currentlyCompiling.isEmpty) {\n-      client.showMessage(isCompiling)"
+  },
+  {
+    "id" : "eefad829-3d7c-421d-a668-9a86f56a2f3c",
+    "prId" : 1754,
+    "comments" : [
+      {
+        "id" : "d35f60f8-968f-4ae8-ae03-f5ad77fea7d9",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "This should also be added to the `prepareRename` method, which is normally run before rename itself.",
+        "createdAt" : "2020-05-22T17:17:03Z",
+        "updatedAt" : "2020-06-05T10:53:32Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "708eb4ac-9e3b-4bb6-95fa-e09c28a85a44",
+        "parentId" : "d35f60f8-968f-4ae8-ae03-f5ad77fea7d9",
+        "author" : {
+          "login" : "ltrojanowski",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3951626?v=4"
+        },
+        "body" : "fixed",
+        "createdAt" : "2020-06-05T09:57:48Z",
+        "updatedAt" : "2020-06-05T10:53:32Z",
+        "lastEditedBy" : {
+          "login" : "ltrojanowski",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3951626?v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "358d0bb5dfeb1e5bd52553e256f53c9f76a3d670",
+    "line" : 38,
+    "diffHunk" : "@@ -77,11 +77,17 @@ final class RenameProvider(\n       params: RenameParams,\n       token: CancelToken\n   ): Future[WorkspaceEdit] = {\n-    if (!compilations.currentlyCompiling.isEmpty) {\n-      client.showMessage(isCompiling)\n-      Future.successful(new WorkspaceEdit())\n-    } else {\n-      val source = params.getTextDocument.getUri.toAbsolutePath\n+    def compilationFinished(\n+        source: AbsolutePath\n+    ): Future[Unit] = {\n+      if (compilations.currentlyCompiling.isEmpty) {\n+        Future(())\n+      } else {\n+        compilations.cascadeCompileFiles(Seq(source)).map { _ => () }\n+      }\n+    }\n+    val source = params.getTextDocument.getUri.toAbsolutePath\n+    compilationFinished(source).flatMap { _ =>"
+  }
+]

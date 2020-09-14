@@ -1,0 +1,637 @@
+[
+  {
+    "id" : "66ce56f8-0400-416f-86fe-2b07acb7c279",
+    "prId" : 694,
+    "comments" : [
+      {
+        "id" : "4cc1778c-9387-4c74-bae3-27d2ba089e5f",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Nit, this would read nicer as\r\n```scala\r\nbuildSrcDigest &&\r\ndigestDirectory(workspace, digest) &&\r\ndigestSubProjects(workspace, digest)\r\n```\r\nEven with Scalafmt you still need to manually decide line breaks for infix operators 😉 ",
+        "createdAt" : "2019-04-25T09:29:59Z",
+        "updatedAt" : "2019-05-07T08:42:52Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "95e8d18af9437cb5a757194bc83a227e9c0b8d79",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,252 @@\n+package scala.meta.internal.builds\n+\n+import java.nio.charset.StandardCharsets\n+import java.nio.file.Files\n+import java.nio.file.Path\n+import java.security.MessageDigest\n+import java.util.stream.Collectors\n+\n+import scala.io.Source\n+import scala.meta.internal.builds.Digest.Status\n+import scala.meta.internal.io.PathIO\n+import scala.meta.internal.mtags.MD5\n+import scala.meta.internal.mtags.MtagsEnrichments._\n+import scala.meta.io.AbsolutePath\n+import scala.meta.tokens.Token\n+import scala.util.control.NonFatal\n+import scala.collection.JavaConverters._\n+\n+case class Digest(\n+    md5: String,\n+    status: Status,\n+    millis: Long\n+)\n+\n+object Digest {\n+\n+  /**\n+   * Bump up this version if parameters outside of the sbt sources themselves require\n+   * re-running `bloopInstall`. For example a SemanticDB or Bloop version upgrade.\n+   */\n+  val version: String = \"v4\"\n+  sealed abstract class Status(val value: Int)\n+      extends Product\n+      with Serializable {\n+    import Status._\n+    def isRequested: Boolean = this == Requested\n+    def isStarted: Boolean = this == Started\n+    def isRejected: Boolean = this == Rejected\n+    def isFailed: Boolean = this == Failed\n+    def isInstalled: Boolean = this == Installed\n+    def isCancelled: Boolean = this == Cancelled\n+  }\n+  object Status {\n+    case object Requested extends Status(0)\n+    case object Started extends Status(1)\n+    case object Rejected extends Status(2)\n+    case object Failed extends Status(3)\n+    case object Installed extends Status(4)\n+    case object Cancelled extends Status(5)\n+    case class Unknown(n: Int) extends Status(n)\n+    def all: List[Status] = List(\n+      Requested,\n+      Started,\n+      Rejected,\n+      Failed,\n+      Installed,\n+      Cancelled\n+    )\n+  }\n+}\n+\n+trait Digestable {\n+\n+  def current(workspace: AbsolutePath): Option[String] = {\n+    if (!workspace.isDirectory) None\n+    else {\n+      val digest = MessageDigest.getInstance(\"MD5\")\n+      // we skip the version in tests, so that we don't have to manually update the digests in tests\n+      // when changing the version\n+      if (System.getProperty(\"metals.testing\") == null) {\n+        digest.update(Digest.version.getBytes(StandardCharsets.UTF_8))\n+      }\n+\n+      val isSuccess = digestWorkspace(workspace, digest)\n+      if (isSuccess) Some(MD5.bytesToHex(digest.digest()))\n+      else None\n+    }\n+  }\n+\n+  protected def digestWorkspace(\n+      absolutePath: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean\n+\n+  protected def digestDirectory(\n+      path: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    if (!path.isDirectory) true\n+    else {\n+      var isSuccess = true\n+      Files.list(path.toNIO).forEach { file =>\n+        isSuccess = isSuccess && digestFile(AbsolutePath(file), digest)\n+      }\n+      isSuccess\n+    }\n+  }\n+\n+  protected def digestFileBytes(\n+      path: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    if (path.isFile) {\n+      digest.update(path.readAllBytes)\n+    }\n+    true\n+  }\n+\n+  protected def digestFile(\n+      path: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    val ext = PathIO.extension(path.toNIO)\n+    val isScala = ext match {\n+      case \"sbt\" | \"scala\" => true\n+      case _ => false\n+    }\n+    // we can have both gradle and gradle.kts and build plugins can be written in any of three languages\n+    val isGradle =\n+      Set(\"gradle\", \"groovy\", \"gradle.kts\", \"java\", \"kts\").exists(\n+        path.toString().endsWith(_)\n+      )\n+    if (isScala && path.isFile) {\n+      digestScala(path, digest)\n+    } else if (isGradle && path.isFile) {\n+      digestGeneralJvm(path, digest)\n+    } else {\n+      true\n+    }\n+  }\n+\n+  protected def digestGeneralJvm(\n+      file: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    try {\n+      Source\n+        .fromFile(file.toFile)\n+        .getLines()\n+        .mkString(\"\\n\")\n+        .replaceAll(\"\"\"/\\*([^*]|[\\r\\n]|(\\*+([^*/]|[\\r\\n])))*\\*+/\"\"\", \"\") // match anything between /**/ comments and remove\n+        .replaceAll(\"\"\"//.*\"\"\", \"\") // replace any inline comment\n+        .split(\"\\\\s+\")\n+        .foreach { word =>\n+          digest.update(word.getBytes())\n+        }\n+      true\n+    } catch {\n+      case NonFatal(_) =>\n+        false\n+    }\n+  }\n+\n+  protected def digestScala(\n+      file: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    try {\n+      val input = file.toInput\n+      val tokens = input.tokenize.get\n+      tokens.foreach {\n+        case _: Token.Space | _: Token.Tab | _: Token.CR | _: Token.LF |\n+            _: Token.LFLF | _: Token.FF | _: Token.Comment | _: Token.BOF |\n+            _: Token.EOF => // Do nothing\n+        case token =>\n+          val bytes = StandardCharsets.UTF_8.encode(token.pos.text)\n+          digest.update(token.productPrefix.getBytes())\n+          digest.update(bytes)\n+      }\n+      true\n+    } catch {\n+      case NonFatal(e) =>\n+        false\n+    }\n+  }\n+}\n+\n+object SbtDigest extends Digestable {\n+  override protected def digestWorkspace(\n+      workspace: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    val project = workspace.resolve(\"project\")\n+    digestDirectory(workspace, digest) &&\n+    digestFileBytes(project.resolve(\"build.properties\"), digest) &&\n+    digestDirectory(project, digest) &&\n+    digestDirectory(project.resolve(\"project\"), digest)\n+  }\n+}\n+\n+object GradleDigest extends Digestable {\n+  override protected def digestWorkspace(\n+      workspace: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    val buildSrc = workspace.resolve(\"buildSrc\")\n+    val buildSrcDigest = if (buildSrc.isDirectory) {\n+      digestBuildSrc(buildSrc, digest)\n+    } else {\n+      true\n+    }\n+    buildSrcDigest && digestDirectory(workspace, digest) && digestSubProjects("
+  },
+  {
+    "id" : "b67668ae-00b9-4328-99a3-e266490529bf",
+    "prId" : 694,
+    "comments" : [
+      {
+        "id" : "b997310d-3c38-464a-91bd-2eff7fe2ed95",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Let's avoid `scala.io.Source`, you can use `java.nio.file.Files.lines(Path)` instead",
+        "createdAt" : "2019-04-25T09:31:30Z",
+        "updatedAt" : "2019-05-07T08:42:52Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "95e8d18af9437cb5a757194bc83a227e9c0b8d79",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,252 @@\n+package scala.meta.internal.builds\n+\n+import java.nio.charset.StandardCharsets\n+import java.nio.file.Files\n+import java.nio.file.Path\n+import java.security.MessageDigest\n+import java.util.stream.Collectors\n+\n+import scala.io.Source\n+import scala.meta.internal.builds.Digest.Status\n+import scala.meta.internal.io.PathIO\n+import scala.meta.internal.mtags.MD5\n+import scala.meta.internal.mtags.MtagsEnrichments._\n+import scala.meta.io.AbsolutePath\n+import scala.meta.tokens.Token\n+import scala.util.control.NonFatal\n+import scala.collection.JavaConverters._\n+\n+case class Digest(\n+    md5: String,\n+    status: Status,\n+    millis: Long\n+)\n+\n+object Digest {\n+\n+  /**\n+   * Bump up this version if parameters outside of the sbt sources themselves require\n+   * re-running `bloopInstall`. For example a SemanticDB or Bloop version upgrade.\n+   */\n+  val version: String = \"v4\"\n+  sealed abstract class Status(val value: Int)\n+      extends Product\n+      with Serializable {\n+    import Status._\n+    def isRequested: Boolean = this == Requested\n+    def isStarted: Boolean = this == Started\n+    def isRejected: Boolean = this == Rejected\n+    def isFailed: Boolean = this == Failed\n+    def isInstalled: Boolean = this == Installed\n+    def isCancelled: Boolean = this == Cancelled\n+  }\n+  object Status {\n+    case object Requested extends Status(0)\n+    case object Started extends Status(1)\n+    case object Rejected extends Status(2)\n+    case object Failed extends Status(3)\n+    case object Installed extends Status(4)\n+    case object Cancelled extends Status(5)\n+    case class Unknown(n: Int) extends Status(n)\n+    def all: List[Status] = List(\n+      Requested,\n+      Started,\n+      Rejected,\n+      Failed,\n+      Installed,\n+      Cancelled\n+    )\n+  }\n+}\n+\n+trait Digestable {\n+\n+  def current(workspace: AbsolutePath): Option[String] = {\n+    if (!workspace.isDirectory) None\n+    else {\n+      val digest = MessageDigest.getInstance(\"MD5\")\n+      // we skip the version in tests, so that we don't have to manually update the digests in tests\n+      // when changing the version\n+      if (System.getProperty(\"metals.testing\") == null) {\n+        digest.update(Digest.version.getBytes(StandardCharsets.UTF_8))\n+      }\n+\n+      val isSuccess = digestWorkspace(workspace, digest)\n+      if (isSuccess) Some(MD5.bytesToHex(digest.digest()))\n+      else None\n+    }\n+  }\n+\n+  protected def digestWorkspace(\n+      absolutePath: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean\n+\n+  protected def digestDirectory(\n+      path: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    if (!path.isDirectory) true\n+    else {\n+      var isSuccess = true\n+      Files.list(path.toNIO).forEach { file =>\n+        isSuccess = isSuccess && digestFile(AbsolutePath(file), digest)\n+      }\n+      isSuccess\n+    }\n+  }\n+\n+  protected def digestFileBytes(\n+      path: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    if (path.isFile) {\n+      digest.update(path.readAllBytes)\n+    }\n+    true\n+  }\n+\n+  protected def digestFile(\n+      path: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    val ext = PathIO.extension(path.toNIO)\n+    val isScala = ext match {\n+      case \"sbt\" | \"scala\" => true\n+      case _ => false\n+    }\n+    // we can have both gradle and gradle.kts and build plugins can be written in any of three languages\n+    val isGradle =\n+      Set(\"gradle\", \"groovy\", \"gradle.kts\", \"java\", \"kts\").exists(\n+        path.toString().endsWith(_)\n+      )\n+    if (isScala && path.isFile) {\n+      digestScala(path, digest)\n+    } else if (isGradle && path.isFile) {\n+      digestGeneralJvm(path, digest)\n+    } else {\n+      true\n+    }\n+  }\n+\n+  protected def digestGeneralJvm(\n+      file: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    try {\n+      Source"
+  },
+  {
+    "id" : "4e6ab709-0dc3-41cc-bbf6-6de696695637",
+    "prId" : 694,
+    "comments" : [
+      {
+        "id" : "c4c603c7-dbf7-43d6-8eec-1921092bc2cc",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "🙈 ",
+        "createdAt" : "2019-04-25T09:32:06Z",
+        "updatedAt" : "2019-05-07T08:42:52Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "9a1f2bcf-b4bf-4cfb-aa7e-41586ff92078",
+        "parentId" : "c4c603c7-dbf7-43d6-8eec-1921092bc2cc",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Yep, that's the regex to remove /**/ comments. Aside of normal tokenization I don't think there is a simpler way to do it. :P",
+        "createdAt" : "2019-04-25T11:37:09Z",
+        "updatedAt" : "2019-05-07T08:42:52Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "342a00db-2347-409b-8261-47607bb3720b",
+        "parentId" : "c4c603c7-dbf7-43d6-8eec-1921092bc2cc",
+        "author" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "body" : "I hope it is **thoroughly** tested ;P",
+        "createdAt" : "2019-04-25T14:26:15Z",
+        "updatedAt" : "2019-05-07T08:42:52Z",
+        "lastEditedBy" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "2cc9ad28-7d74-4579-8d48-73e1e1ec53c3",
+        "parentId" : "c4c603c7-dbf7-43d6-8eec-1921092bc2cc",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "It is tested in the Suites :D ",
+        "createdAt" : "2019-04-25T14:57:01Z",
+        "updatedAt" : "2019-05-07T08:42:52Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "516629f5-b9f7-4ce9-80fe-5ca2ee381f2f",
+        "parentId" : "c4c603c7-dbf7-43d6-8eec-1921092bc2cc",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "this actually is a bit more fragile than suspected, removed it for now and will add a test suite",
+        "createdAt" : "2019-04-30T16:00:00Z",
+        "updatedAt" : "2019-05-07T08:42:52Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "95e8d18af9437cb5a757194bc83a227e9c0b8d79",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,252 @@\n+package scala.meta.internal.builds\n+\n+import java.nio.charset.StandardCharsets\n+import java.nio.file.Files\n+import java.nio.file.Path\n+import java.security.MessageDigest\n+import java.util.stream.Collectors\n+\n+import scala.io.Source\n+import scala.meta.internal.builds.Digest.Status\n+import scala.meta.internal.io.PathIO\n+import scala.meta.internal.mtags.MD5\n+import scala.meta.internal.mtags.MtagsEnrichments._\n+import scala.meta.io.AbsolutePath\n+import scala.meta.tokens.Token\n+import scala.util.control.NonFatal\n+import scala.collection.JavaConverters._\n+\n+case class Digest(\n+    md5: String,\n+    status: Status,\n+    millis: Long\n+)\n+\n+object Digest {\n+\n+  /**\n+   * Bump up this version if parameters outside of the sbt sources themselves require\n+   * re-running `bloopInstall`. For example a SemanticDB or Bloop version upgrade.\n+   */\n+  val version: String = \"v4\"\n+  sealed abstract class Status(val value: Int)\n+      extends Product\n+      with Serializable {\n+    import Status._\n+    def isRequested: Boolean = this == Requested\n+    def isStarted: Boolean = this == Started\n+    def isRejected: Boolean = this == Rejected\n+    def isFailed: Boolean = this == Failed\n+    def isInstalled: Boolean = this == Installed\n+    def isCancelled: Boolean = this == Cancelled\n+  }\n+  object Status {\n+    case object Requested extends Status(0)\n+    case object Started extends Status(1)\n+    case object Rejected extends Status(2)\n+    case object Failed extends Status(3)\n+    case object Installed extends Status(4)\n+    case object Cancelled extends Status(5)\n+    case class Unknown(n: Int) extends Status(n)\n+    def all: List[Status] = List(\n+      Requested,\n+      Started,\n+      Rejected,\n+      Failed,\n+      Installed,\n+      Cancelled\n+    )\n+  }\n+}\n+\n+trait Digestable {\n+\n+  def current(workspace: AbsolutePath): Option[String] = {\n+    if (!workspace.isDirectory) None\n+    else {\n+      val digest = MessageDigest.getInstance(\"MD5\")\n+      // we skip the version in tests, so that we don't have to manually update the digests in tests\n+      // when changing the version\n+      if (System.getProperty(\"metals.testing\") == null) {\n+        digest.update(Digest.version.getBytes(StandardCharsets.UTF_8))\n+      }\n+\n+      val isSuccess = digestWorkspace(workspace, digest)\n+      if (isSuccess) Some(MD5.bytesToHex(digest.digest()))\n+      else None\n+    }\n+  }\n+\n+  protected def digestWorkspace(\n+      absolutePath: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean\n+\n+  protected def digestDirectory(\n+      path: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    if (!path.isDirectory) true\n+    else {\n+      var isSuccess = true\n+      Files.list(path.toNIO).forEach { file =>\n+        isSuccess = isSuccess && digestFile(AbsolutePath(file), digest)\n+      }\n+      isSuccess\n+    }\n+  }\n+\n+  protected def digestFileBytes(\n+      path: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    if (path.isFile) {\n+      digest.update(path.readAllBytes)\n+    }\n+    true\n+  }\n+\n+  protected def digestFile(\n+      path: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    val ext = PathIO.extension(path.toNIO)\n+    val isScala = ext match {\n+      case \"sbt\" | \"scala\" => true\n+      case _ => false\n+    }\n+    // we can have both gradle and gradle.kts and build plugins can be written in any of three languages\n+    val isGradle =\n+      Set(\"gradle\", \"groovy\", \"gradle.kts\", \"java\", \"kts\").exists(\n+        path.toString().endsWith(_)\n+      )\n+    if (isScala && path.isFile) {\n+      digestScala(path, digest)\n+    } else if (isGradle && path.isFile) {\n+      digestGeneralJvm(path, digest)\n+    } else {\n+      true\n+    }\n+  }\n+\n+  protected def digestGeneralJvm(\n+      file: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    try {\n+      Source\n+        .fromFile(file.toFile)\n+        .getLines()\n+        .mkString(\"\\n\")\n+        .replaceAll(\"\"\"/\\*([^*]|[\\r\\n]|(\\*+([^*/]|[\\r\\n])))*\\*+/\"\"\", \"\") // match anything between /**/ comments and remove"
+  },
+  {
+    "id" : "eb2d7974-4c99-4843-9bc2-aef780d1aeec",
+    "prId" : 694,
+    "comments" : [
+      {
+        "id" : "f901f18f-9d82-4602-b384-a70dd0c1a82a",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "nit: can we move the non-abstract methods into an object to prove they are stateless? ",
+        "createdAt" : "2019-04-25T09:34:05Z",
+        "updatedAt" : "2019-05-07T08:42:52Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "95e8d18af9437cb5a757194bc83a227e9c0b8d79",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,252 @@\n+package scala.meta.internal.builds\n+\n+import java.nio.charset.StandardCharsets\n+import java.nio.file.Files\n+import java.nio.file.Path\n+import java.security.MessageDigest\n+import java.util.stream.Collectors\n+\n+import scala.io.Source\n+import scala.meta.internal.builds.Digest.Status\n+import scala.meta.internal.io.PathIO\n+import scala.meta.internal.mtags.MD5\n+import scala.meta.internal.mtags.MtagsEnrichments._\n+import scala.meta.io.AbsolutePath\n+import scala.meta.tokens.Token\n+import scala.util.control.NonFatal\n+import scala.collection.JavaConverters._\n+\n+case class Digest(\n+    md5: String,\n+    status: Status,\n+    millis: Long\n+)\n+\n+object Digest {\n+\n+  /**\n+   * Bump up this version if parameters outside of the sbt sources themselves require\n+   * re-running `bloopInstall`. For example a SemanticDB or Bloop version upgrade.\n+   */\n+  val version: String = \"v4\"\n+  sealed abstract class Status(val value: Int)\n+      extends Product\n+      with Serializable {\n+    import Status._\n+    def isRequested: Boolean = this == Requested\n+    def isStarted: Boolean = this == Started\n+    def isRejected: Boolean = this == Rejected\n+    def isFailed: Boolean = this == Failed\n+    def isInstalled: Boolean = this == Installed\n+    def isCancelled: Boolean = this == Cancelled\n+  }\n+  object Status {\n+    case object Requested extends Status(0)\n+    case object Started extends Status(1)\n+    case object Rejected extends Status(2)\n+    case object Failed extends Status(3)\n+    case object Installed extends Status(4)\n+    case object Cancelled extends Status(5)\n+    case class Unknown(n: Int) extends Status(n)\n+    def all: List[Status] = List(\n+      Requested,\n+      Started,\n+      Rejected,\n+      Failed,\n+      Installed,\n+      Cancelled\n+    )\n+  }\n+}\n+\n+trait Digestable {"
+  },
+  {
+    "id" : "d33f1eb9-1f54-4824-8915-3b3ed9a78d39",
+    "prId" : 694,
+    "comments" : [
+      {
+        "id" : "8bc055cd-32f7-4c4b-9671-547229391ea7",
+        "parentId" : null,
+        "author" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "body" : "why not something like:\r\n```scala\r\nfinal class Status private(val value: Int){\r\n  def ...\r\n}\r\n\r\nobject Status{\r\n  val Requested = new Status(0)\r\n  val Started = new Status(1)\r\n  ...\r\n}\r\n```",
+        "createdAt" : "2019-04-25T14:13:56Z",
+        "updatedAt" : "2019-05-07T08:42:52Z",
+        "lastEditedBy" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "0e166c73-a52b-4e49-808c-ee102ad9caab",
+        "parentId" : "8bc055cd-32f7-4c4b-9671-547229391ea7",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "This is basically the same and lacks ability to sensibly pattern match. I would leave it as is.",
+        "createdAt" : "2019-04-26T09:17:21Z",
+        "updatedAt" : "2019-05-07T08:42:52Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "95e8d18af9437cb5a757194bc83a227e9c0b8d79",
+    "line" : 31,
+    "diffHunk" : "@@ -0,0 +1,251 @@\n+package scala.meta.internal.builds\n+\n+import java.nio.charset.StandardCharsets\n+import java.nio.file.Files\n+import java.nio.file.Path\n+import java.security.MessageDigest\n+import java.util.stream.Collectors\n+\n+import scala.meta.internal.builds.Digest.Status\n+import scala.meta.internal.io.PathIO\n+import scala.meta.internal.mtags.MD5\n+import scala.meta.internal.mtags.MtagsEnrichments._\n+import scala.meta.io.AbsolutePath\n+import scala.meta.tokens.Token\n+import scala.util.control.NonFatal\n+import scala.collection.JavaConverters._\n+\n+case class Digest(\n+    md5: String,\n+    status: Status,\n+    millis: Long\n+)\n+\n+object Digest {\n+\n+  /**\n+   * Bump up this version if parameters outside of the sbt sources themselves require\n+   * re-running `bloopInstall`. For example a SemanticDB or Bloop version upgrade.\n+   */\n+  val version: String = \"v4\"\n+  sealed abstract class Status(val value: Int)"
+  },
+  {
+    "id" : "b7a39162-f2dd-47fc-bf3b-9469c188c2a2",
+    "prId" : 694,
+    "comments" : [
+      {
+        "id" : "cc1623d2-2c2b-4e1e-8b34-ee5f8ca71fdd",
+        "parentId" : null,
+        "author" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "body" : "maybe `reduce` or even some kind of `forAll` would be simpler/more readable?",
+        "createdAt" : "2019-04-25T14:16:36Z",
+        "updatedAt" : "2019-05-07T08:42:52Z",
+        "lastEditedBy" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "95e8d18af9437cb5a757194bc83a227e9c0b8d79",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,251 @@\n+package scala.meta.internal.builds\n+\n+import java.nio.charset.StandardCharsets\n+import java.nio.file.Files\n+import java.nio.file.Path\n+import java.security.MessageDigest\n+import java.util.stream.Collectors\n+\n+import scala.meta.internal.builds.Digest.Status\n+import scala.meta.internal.io.PathIO\n+import scala.meta.internal.mtags.MD5\n+import scala.meta.internal.mtags.MtagsEnrichments._\n+import scala.meta.io.AbsolutePath\n+import scala.meta.tokens.Token\n+import scala.util.control.NonFatal\n+import scala.collection.JavaConverters._\n+\n+case class Digest(\n+    md5: String,\n+    status: Status,\n+    millis: Long\n+)\n+\n+object Digest {\n+\n+  /**\n+   * Bump up this version if parameters outside of the sbt sources themselves require\n+   * re-running `bloopInstall`. For example a SemanticDB or Bloop version upgrade.\n+   */\n+  val version: String = \"v4\"\n+  sealed abstract class Status(val value: Int)\n+      extends Product\n+      with Serializable {\n+    import Status._\n+    def isRequested: Boolean = this == Requested\n+    def isStarted: Boolean = this == Started\n+    def isRejected: Boolean = this == Rejected\n+    def isFailed: Boolean = this == Failed\n+    def isInstalled: Boolean = this == Installed\n+    def isCancelled: Boolean = this == Cancelled\n+  }\n+  object Status {\n+    case object Requested extends Status(0)\n+    case object Started extends Status(1)\n+    case object Rejected extends Status(2)\n+    case object Failed extends Status(3)\n+    case object Installed extends Status(4)\n+    case object Cancelled extends Status(5)\n+    case class Unknown(n: Int) extends Status(n)\n+    def all: List[Status] = List(\n+      Requested,\n+      Started,\n+      Rejected,\n+      Failed,\n+      Installed,\n+      Cancelled\n+    )\n+  }\n+\n+  def digestDirectory(\n+      path: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    if (!path.isDirectory) true\n+    else {\n+      var isSuccess = true\n+      Files.list(path.toNIO).forEach { file =>"
+  },
+  {
+    "id" : "631818e3-0eb7-41f3-bd30-894159b9dd78",
+    "prId" : 694,
+    "comments" : [
+      {
+        "id" : "4456f065-a609-4a1c-99c4-0cafa1fb557e",
+        "parentId" : null,
+        "author" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "body" : "would `ext == \"sbt\" || ext == \"scala\"` be more readable?\r\nor even `Set(\"scala\", \"sbt\").contains(ext)` -  since there already is a precedence of using sets with `isGradle` ;)\r\n",
+        "createdAt" : "2019-04-25T14:22:52Z",
+        "updatedAt" : "2019-05-07T08:42:52Z",
+        "lastEditedBy" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "95e8d18af9437cb5a757194bc83a227e9c0b8d79",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,251 @@\n+package scala.meta.internal.builds\n+\n+import java.nio.charset.StandardCharsets\n+import java.nio.file.Files\n+import java.nio.file.Path\n+import java.security.MessageDigest\n+import java.util.stream.Collectors\n+\n+import scala.meta.internal.builds.Digest.Status\n+import scala.meta.internal.io.PathIO\n+import scala.meta.internal.mtags.MD5\n+import scala.meta.internal.mtags.MtagsEnrichments._\n+import scala.meta.io.AbsolutePath\n+import scala.meta.tokens.Token\n+import scala.util.control.NonFatal\n+import scala.collection.JavaConverters._\n+\n+case class Digest(\n+    md5: String,\n+    status: Status,\n+    millis: Long\n+)\n+\n+object Digest {\n+\n+  /**\n+   * Bump up this version if parameters outside of the sbt sources themselves require\n+   * re-running `bloopInstall`. For example a SemanticDB or Bloop version upgrade.\n+   */\n+  val version: String = \"v4\"\n+  sealed abstract class Status(val value: Int)\n+      extends Product\n+      with Serializable {\n+    import Status._\n+    def isRequested: Boolean = this == Requested\n+    def isStarted: Boolean = this == Started\n+    def isRejected: Boolean = this == Rejected\n+    def isFailed: Boolean = this == Failed\n+    def isInstalled: Boolean = this == Installed\n+    def isCancelled: Boolean = this == Cancelled\n+  }\n+  object Status {\n+    case object Requested extends Status(0)\n+    case object Started extends Status(1)\n+    case object Rejected extends Status(2)\n+    case object Failed extends Status(3)\n+    case object Installed extends Status(4)\n+    case object Cancelled extends Status(5)\n+    case class Unknown(n: Int) extends Status(n)\n+    def all: List[Status] = List(\n+      Requested,\n+      Started,\n+      Rejected,\n+      Failed,\n+      Installed,\n+      Cancelled\n+    )\n+  }\n+\n+  def digestDirectory(\n+      path: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    if (!path.isDirectory) true\n+    else {\n+      var isSuccess = true\n+      Files.list(path.toNIO).forEach { file =>\n+        isSuccess = isSuccess && digestFile(AbsolutePath(file), digest)\n+      }\n+      isSuccess\n+    }\n+  }\n+\n+  def digestFileBytes(\n+      path: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    if (path.isFile) {\n+      digest.update(path.readAllBytes)\n+    }\n+    true\n+  }\n+\n+  def digestFile(\n+      path: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    val ext = PathIO.extension(path.toNIO)\n+    val isScala = ext match {"
+  },
+  {
+    "id" : "abf7c1f8-0028-4e98-abfc-6da3750f9898",
+    "prId" : 694,
+    "comments" : [
+      {
+        "id" : "886c29a5-6298-4879-a6d3-7161380a3493",
+        "parentId" : null,
+        "author" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "body" : "why ` path.toString().endsWith(_)` when there is an `ext` ?",
+        "createdAt" : "2019-04-25T14:23:17Z",
+        "updatedAt" : "2019-05-07T08:42:52Z",
+        "lastEditedBy" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ea31af5e-dabe-42c3-9a12-32d2652b39c4",
+        "parentId" : "886c29a5-6298-4879-a6d3-7161380a3493",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "ext doesn't work with `.gradle.kts`",
+        "createdAt" : "2019-04-25T14:53:45Z",
+        "updatedAt" : "2019-05-07T08:42:52Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "95e8d18af9437cb5a757194bc83a227e9c0b8d79",
+    "line" : 91,
+    "diffHunk" : "@@ -0,0 +1,251 @@\n+package scala.meta.internal.builds\n+\n+import java.nio.charset.StandardCharsets\n+import java.nio.file.Files\n+import java.nio.file.Path\n+import java.security.MessageDigest\n+import java.util.stream.Collectors\n+\n+import scala.meta.internal.builds.Digest.Status\n+import scala.meta.internal.io.PathIO\n+import scala.meta.internal.mtags.MD5\n+import scala.meta.internal.mtags.MtagsEnrichments._\n+import scala.meta.io.AbsolutePath\n+import scala.meta.tokens.Token\n+import scala.util.control.NonFatal\n+import scala.collection.JavaConverters._\n+\n+case class Digest(\n+    md5: String,\n+    status: Status,\n+    millis: Long\n+)\n+\n+object Digest {\n+\n+  /**\n+   * Bump up this version if parameters outside of the sbt sources themselves require\n+   * re-running `bloopInstall`. For example a SemanticDB or Bloop version upgrade.\n+   */\n+  val version: String = \"v4\"\n+  sealed abstract class Status(val value: Int)\n+      extends Product\n+      with Serializable {\n+    import Status._\n+    def isRequested: Boolean = this == Requested\n+    def isStarted: Boolean = this == Started\n+    def isRejected: Boolean = this == Rejected\n+    def isFailed: Boolean = this == Failed\n+    def isInstalled: Boolean = this == Installed\n+    def isCancelled: Boolean = this == Cancelled\n+  }\n+  object Status {\n+    case object Requested extends Status(0)\n+    case object Started extends Status(1)\n+    case object Rejected extends Status(2)\n+    case object Failed extends Status(3)\n+    case object Installed extends Status(4)\n+    case object Cancelled extends Status(5)\n+    case class Unknown(n: Int) extends Status(n)\n+    def all: List[Status] = List(\n+      Requested,\n+      Started,\n+      Rejected,\n+      Failed,\n+      Installed,\n+      Cancelled\n+    )\n+  }\n+\n+  def digestDirectory(\n+      path: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    if (!path.isDirectory) true\n+    else {\n+      var isSuccess = true\n+      Files.list(path.toNIO).forEach { file =>\n+        isSuccess = isSuccess && digestFile(AbsolutePath(file), digest)\n+      }\n+      isSuccess\n+    }\n+  }\n+\n+  def digestFileBytes(\n+      path: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    if (path.isFile) {\n+      digest.update(path.readAllBytes)\n+    }\n+    true\n+  }\n+\n+  def digestFile(\n+      path: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    val ext = PathIO.extension(path.toNIO)\n+    val isScala = ext match {\n+      case \"sbt\" | \"scala\" => true\n+      case _ => false\n+    }\n+    // we can have both gradle and gradle.kts and build plugins can be written in any of three languages\n+    val isGradle =\n+      Set(\"gradle\", \"groovy\", \"gradle.kts\", \"java\", \"kts\").exists(\n+        path.toString().endsWith(_)"
+  },
+  {
+    "id" : "fe962ba8-4cfe-44c0-98b8-d1cd745bfd7d",
+    "prId" : 694,
+    "comments" : [
+      {
+        "id" : "1b40b458-cfb3-42fd-964d-99834eca2856",
+        "parentId" : null,
+        "author" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "body" : "what do you think about a new line here? to clearly separate the \"set up\" stage from the \"act\" one ;)",
+        "createdAt" : "2019-04-25T14:25:17Z",
+        "updatedAt" : "2019-05-07T08:42:52Z",
+        "lastEditedBy" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "95e8d18af9437cb5a757194bc83a227e9c0b8d79",
+    "line" : 94,
+    "diffHunk" : "@@ -0,0 +1,251 @@\n+package scala.meta.internal.builds\n+\n+import java.nio.charset.StandardCharsets\n+import java.nio.file.Files\n+import java.nio.file.Path\n+import java.security.MessageDigest\n+import java.util.stream.Collectors\n+\n+import scala.meta.internal.builds.Digest.Status\n+import scala.meta.internal.io.PathIO\n+import scala.meta.internal.mtags.MD5\n+import scala.meta.internal.mtags.MtagsEnrichments._\n+import scala.meta.io.AbsolutePath\n+import scala.meta.tokens.Token\n+import scala.util.control.NonFatal\n+import scala.collection.JavaConverters._\n+\n+case class Digest(\n+    md5: String,\n+    status: Status,\n+    millis: Long\n+)\n+\n+object Digest {\n+\n+  /**\n+   * Bump up this version if parameters outside of the sbt sources themselves require\n+   * re-running `bloopInstall`. For example a SemanticDB or Bloop version upgrade.\n+   */\n+  val version: String = \"v4\"\n+  sealed abstract class Status(val value: Int)\n+      extends Product\n+      with Serializable {\n+    import Status._\n+    def isRequested: Boolean = this == Requested\n+    def isStarted: Boolean = this == Started\n+    def isRejected: Boolean = this == Rejected\n+    def isFailed: Boolean = this == Failed\n+    def isInstalled: Boolean = this == Installed\n+    def isCancelled: Boolean = this == Cancelled\n+  }\n+  object Status {\n+    case object Requested extends Status(0)\n+    case object Started extends Status(1)\n+    case object Rejected extends Status(2)\n+    case object Failed extends Status(3)\n+    case object Installed extends Status(4)\n+    case object Cancelled extends Status(5)\n+    case class Unknown(n: Int) extends Status(n)\n+    def all: List[Status] = List(\n+      Requested,\n+      Started,\n+      Rejected,\n+      Failed,\n+      Installed,\n+      Cancelled\n+    )\n+  }\n+\n+  def digestDirectory(\n+      path: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    if (!path.isDirectory) true\n+    else {\n+      var isSuccess = true\n+      Files.list(path.toNIO).forEach { file =>\n+        isSuccess = isSuccess && digestFile(AbsolutePath(file), digest)\n+      }\n+      isSuccess\n+    }\n+  }\n+\n+  def digestFileBytes(\n+      path: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    if (path.isFile) {\n+      digest.update(path.readAllBytes)\n+    }\n+    true\n+  }\n+\n+  def digestFile(\n+      path: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    val ext = PathIO.extension(path.toNIO)\n+    val isScala = ext match {\n+      case \"sbt\" | \"scala\" => true\n+      case _ => false\n+    }\n+    // we can have both gradle and gradle.kts and build plugins can be written in any of three languages\n+    val isGradle =\n+      Set(\"gradle\", \"groovy\", \"gradle.kts\", \"java\", \"kts\").exists(\n+        path.toString().endsWith(_)\n+      )\n+    if (isScala && path.isFile) {"
+  },
+  {
+    "id" : "68273860-5374-4a07-9d32-a49159bbc6bb",
+    "prId" : 694,
+    "comments" : [
+      {
+        "id" : "1128560a-5970-4619-bbd3-baa27aba2703",
+        "parentId" : null,
+        "author" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "body" : "Second time - maybe it could be extracted  as some kind of `def fileIterator(path): Iterator[AbsolutePath]` and then we could use `fileIterator(path).forAll(file => digestFile(file, digest))`",
+        "createdAt" : "2019-04-25T14:32:59Z",
+        "updatedAt" : "2019-05-07T08:42:52Z",
+        "lastEditedBy" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "95e8d18af9437cb5a757194bc83a227e9c0b8d79",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,251 @@\n+package scala.meta.internal.builds\n+\n+import java.nio.charset.StandardCharsets\n+import java.nio.file.Files\n+import java.nio.file.Path\n+import java.security.MessageDigest\n+import java.util.stream.Collectors\n+\n+import scala.meta.internal.builds.Digest.Status\n+import scala.meta.internal.io.PathIO\n+import scala.meta.internal.mtags.MD5\n+import scala.meta.internal.mtags.MtagsEnrichments._\n+import scala.meta.io.AbsolutePath\n+import scala.meta.tokens.Token\n+import scala.util.control.NonFatal\n+import scala.collection.JavaConverters._\n+\n+case class Digest(\n+    md5: String,\n+    status: Status,\n+    millis: Long\n+)\n+\n+object Digest {\n+\n+  /**\n+   * Bump up this version if parameters outside of the sbt sources themselves require\n+   * re-running `bloopInstall`. For example a SemanticDB or Bloop version upgrade.\n+   */\n+  val version: String = \"v4\"\n+  sealed abstract class Status(val value: Int)\n+      extends Product\n+      with Serializable {\n+    import Status._\n+    def isRequested: Boolean = this == Requested\n+    def isStarted: Boolean = this == Started\n+    def isRejected: Boolean = this == Rejected\n+    def isFailed: Boolean = this == Failed\n+    def isInstalled: Boolean = this == Installed\n+    def isCancelled: Boolean = this == Cancelled\n+  }\n+  object Status {\n+    case object Requested extends Status(0)\n+    case object Started extends Status(1)\n+    case object Rejected extends Status(2)\n+    case object Failed extends Status(3)\n+    case object Installed extends Status(4)\n+    case object Cancelled extends Status(5)\n+    case class Unknown(n: Int) extends Status(n)\n+    def all: List[Status] = List(\n+      Requested,\n+      Started,\n+      Rejected,\n+      Failed,\n+      Installed,\n+      Cancelled\n+    )\n+  }\n+\n+  def digestDirectory(\n+      path: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    if (!path.isDirectory) true\n+    else {\n+      var isSuccess = true\n+      Files.list(path.toNIO).forEach { file =>\n+        isSuccess = isSuccess && digestFile(AbsolutePath(file), digest)\n+      }\n+      isSuccess\n+    }\n+  }\n+\n+  def digestFileBytes(\n+      path: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    if (path.isFile) {\n+      digest.update(path.readAllBytes)\n+    }\n+    true\n+  }\n+\n+  def digestFile(\n+      path: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    val ext = PathIO.extension(path.toNIO)\n+    val isScala = ext match {\n+      case \"sbt\" | \"scala\" => true\n+      case _ => false\n+    }\n+    // we can have both gradle and gradle.kts and build plugins can be written in any of three languages\n+    val isGradle =\n+      Set(\"gradle\", \"groovy\", \"gradle.kts\", \"java\", \"kts\").exists(\n+        path.toString().endsWith(_)\n+      )\n+    if (isScala && path.isFile) {\n+      digestScala(path, digest)\n+    } else if (isGradle && path.isFile) {\n+      digestGeneralJvm(path, digest)\n+    } else {\n+      true\n+    }\n+  }\n+\n+  def digestGeneralJvm(\n+      file: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    try {\n+      Files\n+        .readAllLines(file.toNIO)\n+        .asScala\n+        .mkString(\"\\n\")\n+        .replaceAll(\"\"\"/\\*([^*]|[\\r\\n]|(\\*+([^*/]|[\\r\\n])))*\\*+/\"\"\", \"\") // match anything between /**/ comments and remove\n+        .replaceAll(\"\"\"//.*\"\"\", \"\") // replace any inline comment\n+        .split(\"\\\\s+\")\n+        .foreach { word =>\n+          digest.update(word.getBytes())\n+        }\n+      true\n+    } catch {\n+      case NonFatal(_) =>\n+        false\n+    }\n+  }\n+\n+  def digestScala(\n+      file: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    try {\n+      val input = file.toInput\n+      val tokens = input.tokenize.get\n+      tokens.foreach {\n+        case _: Token.Space | _: Token.Tab | _: Token.CR | _: Token.LF |\n+            _: Token.LFLF | _: Token.FF | _: Token.Comment | _: Token.BOF |\n+            _: Token.EOF => // Do nothing\n+        case token =>\n+          val bytes = StandardCharsets.UTF_8.encode(token.pos.text)\n+          digest.update(token.productPrefix.getBytes())\n+          digest.update(bytes)\n+      }\n+      true\n+    } catch {\n+      case NonFatal(e) =>\n+        false\n+    }\n+  }\n+}\n+\n+trait Digestable {\n+  def current(workspace: AbsolutePath): Option[String] = {\n+    if (!workspace.isDirectory) None\n+    else {\n+      val digest = MessageDigest.getInstance(\"MD5\")\n+      // we skip the version in tests, so that we don't have to manually update the digests in tests\n+      // when changing the version\n+      if (System.getProperty(\"metals.testing\") == null) {\n+        digest.update(Digest.version.getBytes(StandardCharsets.UTF_8))\n+      }\n+\n+      val isSuccess = digestWorkspace(workspace, digest)\n+      if (isSuccess) Some(MD5.bytesToHex(digest.digest()))\n+      else None\n+    }\n+  }\n+\n+  protected def digestWorkspace(\n+      absolutePath: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean\n+}\n+\n+object SbtDigest extends Digestable {\n+  override protected def digestWorkspace(\n+      workspace: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    val project = workspace.resolve(\"project\")\n+    Digest.digestDirectory(workspace, digest) &&\n+    Digest.digestFileBytes(project.resolve(\"build.properties\"), digest) &&\n+    Digest.digestDirectory(project, digest) &&\n+    Digest.digestDirectory(project.resolve(\"project\"), digest)\n+  }\n+}\n+\n+object GradleDigest extends Digestable {\n+  override protected def digestWorkspace(\n+      workspace: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    val buildSrc = workspace.resolve(\"buildSrc\")\n+    val buildSrcDigest = if (buildSrc.isDirectory) {\n+      digestBuildSrc(buildSrc, digest)\n+    } else {\n+      true\n+    }\n+    buildSrcDigest && Digest.digestDirectory(workspace, digest) && digestSubProjects(\n+      workspace,\n+      digest\n+    )\n+  }\n+\n+  def digestBuildSrc(path: AbsolutePath, digest: MessageDigest): Boolean = {\n+    var isSuccessful = true\n+    Files.walk(path.toNIO).forEach { file =>"
+  },
+  {
+    "id" : "737827ec-650d-44fc-bb20-832628ed5491",
+    "prId" : 694,
+    "comments" : [
+      {
+        "id" : "2862e8fd-f3f3-4019-a865-bb33b0b4c594",
+        "parentId" : null,
+        "author" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "body" : "isn't line `221` already checking if the file is a directory?",
+        "createdAt" : "2019-04-25T14:34:41Z",
+        "updatedAt" : "2019-05-07T08:42:52Z",
+        "lastEditedBy" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "95e8d18af9437cb5a757194bc83a227e9c0b8d79",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,251 @@\n+package scala.meta.internal.builds\n+\n+import java.nio.charset.StandardCharsets\n+import java.nio.file.Files\n+import java.nio.file.Path\n+import java.security.MessageDigest\n+import java.util.stream.Collectors\n+\n+import scala.meta.internal.builds.Digest.Status\n+import scala.meta.internal.io.PathIO\n+import scala.meta.internal.mtags.MD5\n+import scala.meta.internal.mtags.MtagsEnrichments._\n+import scala.meta.io.AbsolutePath\n+import scala.meta.tokens.Token\n+import scala.util.control.NonFatal\n+import scala.collection.JavaConverters._\n+\n+case class Digest(\n+    md5: String,\n+    status: Status,\n+    millis: Long\n+)\n+\n+object Digest {\n+\n+  /**\n+   * Bump up this version if parameters outside of the sbt sources themselves require\n+   * re-running `bloopInstall`. For example a SemanticDB or Bloop version upgrade.\n+   */\n+  val version: String = \"v4\"\n+  sealed abstract class Status(val value: Int)\n+      extends Product\n+      with Serializable {\n+    import Status._\n+    def isRequested: Boolean = this == Requested\n+    def isStarted: Boolean = this == Started\n+    def isRejected: Boolean = this == Rejected\n+    def isFailed: Boolean = this == Failed\n+    def isInstalled: Boolean = this == Installed\n+    def isCancelled: Boolean = this == Cancelled\n+  }\n+  object Status {\n+    case object Requested extends Status(0)\n+    case object Started extends Status(1)\n+    case object Rejected extends Status(2)\n+    case object Failed extends Status(3)\n+    case object Installed extends Status(4)\n+    case object Cancelled extends Status(5)\n+    case class Unknown(n: Int) extends Status(n)\n+    def all: List[Status] = List(\n+      Requested,\n+      Started,\n+      Rejected,\n+      Failed,\n+      Installed,\n+      Cancelled\n+    )\n+  }\n+\n+  def digestDirectory(\n+      path: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    if (!path.isDirectory) true\n+    else {\n+      var isSuccess = true\n+      Files.list(path.toNIO).forEach { file =>\n+        isSuccess = isSuccess && digestFile(AbsolutePath(file), digest)\n+      }\n+      isSuccess\n+    }\n+  }\n+\n+  def digestFileBytes(\n+      path: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    if (path.isFile) {\n+      digest.update(path.readAllBytes)\n+    }\n+    true\n+  }\n+\n+  def digestFile(\n+      path: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    val ext = PathIO.extension(path.toNIO)\n+    val isScala = ext match {\n+      case \"sbt\" | \"scala\" => true\n+      case _ => false\n+    }\n+    // we can have both gradle and gradle.kts and build plugins can be written in any of three languages\n+    val isGradle =\n+      Set(\"gradle\", \"groovy\", \"gradle.kts\", \"java\", \"kts\").exists(\n+        path.toString().endsWith(_)\n+      )\n+    if (isScala && path.isFile) {\n+      digestScala(path, digest)\n+    } else if (isGradle && path.isFile) {\n+      digestGeneralJvm(path, digest)\n+    } else {\n+      true\n+    }\n+  }\n+\n+  def digestGeneralJvm(\n+      file: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    try {\n+      Files\n+        .readAllLines(file.toNIO)\n+        .asScala\n+        .mkString(\"\\n\")\n+        .replaceAll(\"\"\"/\\*([^*]|[\\r\\n]|(\\*+([^*/]|[\\r\\n])))*\\*+/\"\"\", \"\") // match anything between /**/ comments and remove\n+        .replaceAll(\"\"\"//.*\"\"\", \"\") // replace any inline comment\n+        .split(\"\\\\s+\")\n+        .foreach { word =>\n+          digest.update(word.getBytes())\n+        }\n+      true\n+    } catch {\n+      case NonFatal(_) =>\n+        false\n+    }\n+  }\n+\n+  def digestScala(\n+      file: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    try {\n+      val input = file.toInput\n+      val tokens = input.tokenize.get\n+      tokens.foreach {\n+        case _: Token.Space | _: Token.Tab | _: Token.CR | _: Token.LF |\n+            _: Token.LFLF | _: Token.FF | _: Token.Comment | _: Token.BOF |\n+            _: Token.EOF => // Do nothing\n+        case token =>\n+          val bytes = StandardCharsets.UTF_8.encode(token.pos.text)\n+          digest.update(token.productPrefix.getBytes())\n+          digest.update(bytes)\n+      }\n+      true\n+    } catch {\n+      case NonFatal(e) =>\n+        false\n+    }\n+  }\n+}\n+\n+trait Digestable {\n+  def current(workspace: AbsolutePath): Option[String] = {\n+    if (!workspace.isDirectory) None\n+    else {\n+      val digest = MessageDigest.getInstance(\"MD5\")\n+      // we skip the version in tests, so that we don't have to manually update the digests in tests\n+      // when changing the version\n+      if (System.getProperty(\"metals.testing\") == null) {\n+        digest.update(Digest.version.getBytes(StandardCharsets.UTF_8))\n+      }\n+\n+      val isSuccess = digestWorkspace(workspace, digest)\n+      if (isSuccess) Some(MD5.bytesToHex(digest.digest()))\n+      else None\n+    }\n+  }\n+\n+  protected def digestWorkspace(\n+      absolutePath: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean\n+}\n+\n+object SbtDigest extends Digestable {\n+  override protected def digestWorkspace(\n+      workspace: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    val project = workspace.resolve(\"project\")\n+    Digest.digestDirectory(workspace, digest) &&\n+    Digest.digestFileBytes(project.resolve(\"build.properties\"), digest) &&\n+    Digest.digestDirectory(project, digest) &&\n+    Digest.digestDirectory(project.resolve(\"project\"), digest)\n+  }\n+}\n+\n+object GradleDigest extends Digestable {\n+  override protected def digestWorkspace(\n+      workspace: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    val buildSrc = workspace.resolve(\"buildSrc\")\n+    val buildSrcDigest = if (buildSrc.isDirectory) {\n+      digestBuildSrc(buildSrc, digest)\n+    } else {\n+      true\n+    }\n+    buildSrcDigest && Digest.digestDirectory(workspace, digest) && digestSubProjects(\n+      workspace,\n+      digest\n+    )\n+  }\n+\n+  def digestBuildSrc(path: AbsolutePath, digest: MessageDigest): Boolean = {\n+    var isSuccessful = true\n+    Files.walk(path.toNIO).forEach { file =>\n+      isSuccessful = isSuccessful && Digest\n+        .digestFile(AbsolutePath(file), digest)\n+    }\n+    isSuccessful\n+  }\n+\n+  def digestSubProjects(\n+      workspace: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    val (subprojects, dirs) = Files\n+      .list(workspace.toNIO)\n+      .filter(AbsolutePath(_).isDirectory)\n+      .collect(Collectors.toList[Path])\n+      .asScala\n+      .partition { file =>\n+        AbsolutePath(file).isDirectory && Files"
+  },
+  {
+    "id" : "ffeef51a-96aa-412c-ab31-682f0690fe34",
+    "prId" : 694,
+    "comments" : [
+      {
+        "id" : "90d72c7e-e3ed-4d88-aebb-f0cf5c55e4a3",
+        "parentId" : null,
+        "author" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "body" : "`subprojects.forall` ?",
+        "createdAt" : "2019-04-25T14:37:24Z",
+        "updatedAt" : "2019-05-07T08:42:52Z",
+        "lastEditedBy" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "95e8d18af9437cb5a757194bc83a227e9c0b8d79",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,251 @@\n+package scala.meta.internal.builds\n+\n+import java.nio.charset.StandardCharsets\n+import java.nio.file.Files\n+import java.nio.file.Path\n+import java.security.MessageDigest\n+import java.util.stream.Collectors\n+\n+import scala.meta.internal.builds.Digest.Status\n+import scala.meta.internal.io.PathIO\n+import scala.meta.internal.mtags.MD5\n+import scala.meta.internal.mtags.MtagsEnrichments._\n+import scala.meta.io.AbsolutePath\n+import scala.meta.tokens.Token\n+import scala.util.control.NonFatal\n+import scala.collection.JavaConverters._\n+\n+case class Digest(\n+    md5: String,\n+    status: Status,\n+    millis: Long\n+)\n+\n+object Digest {\n+\n+  /**\n+   * Bump up this version if parameters outside of the sbt sources themselves require\n+   * re-running `bloopInstall`. For example a SemanticDB or Bloop version upgrade.\n+   */\n+  val version: String = \"v4\"\n+  sealed abstract class Status(val value: Int)\n+      extends Product\n+      with Serializable {\n+    import Status._\n+    def isRequested: Boolean = this == Requested\n+    def isStarted: Boolean = this == Started\n+    def isRejected: Boolean = this == Rejected\n+    def isFailed: Boolean = this == Failed\n+    def isInstalled: Boolean = this == Installed\n+    def isCancelled: Boolean = this == Cancelled\n+  }\n+  object Status {\n+    case object Requested extends Status(0)\n+    case object Started extends Status(1)\n+    case object Rejected extends Status(2)\n+    case object Failed extends Status(3)\n+    case object Installed extends Status(4)\n+    case object Cancelled extends Status(5)\n+    case class Unknown(n: Int) extends Status(n)\n+    def all: List[Status] = List(\n+      Requested,\n+      Started,\n+      Rejected,\n+      Failed,\n+      Installed,\n+      Cancelled\n+    )\n+  }\n+\n+  def digestDirectory(\n+      path: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    if (!path.isDirectory) true\n+    else {\n+      var isSuccess = true\n+      Files.list(path.toNIO).forEach { file =>\n+        isSuccess = isSuccess && digestFile(AbsolutePath(file), digest)\n+      }\n+      isSuccess\n+    }\n+  }\n+\n+  def digestFileBytes(\n+      path: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    if (path.isFile) {\n+      digest.update(path.readAllBytes)\n+    }\n+    true\n+  }\n+\n+  def digestFile(\n+      path: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    val ext = PathIO.extension(path.toNIO)\n+    val isScala = ext match {\n+      case \"sbt\" | \"scala\" => true\n+      case _ => false\n+    }\n+    // we can have both gradle and gradle.kts and build plugins can be written in any of three languages\n+    val isGradle =\n+      Set(\"gradle\", \"groovy\", \"gradle.kts\", \"java\", \"kts\").exists(\n+        path.toString().endsWith(_)\n+      )\n+    if (isScala && path.isFile) {\n+      digestScala(path, digest)\n+    } else if (isGradle && path.isFile) {\n+      digestGeneralJvm(path, digest)\n+    } else {\n+      true\n+    }\n+  }\n+\n+  def digestGeneralJvm(\n+      file: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    try {\n+      Files\n+        .readAllLines(file.toNIO)\n+        .asScala\n+        .mkString(\"\\n\")\n+        .replaceAll(\"\"\"/\\*([^*]|[\\r\\n]|(\\*+([^*/]|[\\r\\n])))*\\*+/\"\"\", \"\") // match anything between /**/ comments and remove\n+        .replaceAll(\"\"\"//.*\"\"\", \"\") // replace any inline comment\n+        .split(\"\\\\s+\")\n+        .foreach { word =>\n+          digest.update(word.getBytes())\n+        }\n+      true\n+    } catch {\n+      case NonFatal(_) =>\n+        false\n+    }\n+  }\n+\n+  def digestScala(\n+      file: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    try {\n+      val input = file.toInput\n+      val tokens = input.tokenize.get\n+      tokens.foreach {\n+        case _: Token.Space | _: Token.Tab | _: Token.CR | _: Token.LF |\n+            _: Token.LFLF | _: Token.FF | _: Token.Comment | _: Token.BOF |\n+            _: Token.EOF => // Do nothing\n+        case token =>\n+          val bytes = StandardCharsets.UTF_8.encode(token.pos.text)\n+          digest.update(token.productPrefix.getBytes())\n+          digest.update(bytes)\n+      }\n+      true\n+    } catch {\n+      case NonFatal(e) =>\n+        false\n+    }\n+  }\n+}\n+\n+trait Digestable {\n+  def current(workspace: AbsolutePath): Option[String] = {\n+    if (!workspace.isDirectory) None\n+    else {\n+      val digest = MessageDigest.getInstance(\"MD5\")\n+      // we skip the version in tests, so that we don't have to manually update the digests in tests\n+      // when changing the version\n+      if (System.getProperty(\"metals.testing\") == null) {\n+        digest.update(Digest.version.getBytes(StandardCharsets.UTF_8))\n+      }\n+\n+      val isSuccess = digestWorkspace(workspace, digest)\n+      if (isSuccess) Some(MD5.bytesToHex(digest.digest()))\n+      else None\n+    }\n+  }\n+\n+  protected def digestWorkspace(\n+      absolutePath: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean\n+}\n+\n+object SbtDigest extends Digestable {\n+  override protected def digestWorkspace(\n+      workspace: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    val project = workspace.resolve(\"project\")\n+    Digest.digestDirectory(workspace, digest) &&\n+    Digest.digestFileBytes(project.resolve(\"build.properties\"), digest) &&\n+    Digest.digestDirectory(project, digest) &&\n+    Digest.digestDirectory(project.resolve(\"project\"), digest)\n+  }\n+}\n+\n+object GradleDigest extends Digestable {\n+  override protected def digestWorkspace(\n+      workspace: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    val buildSrc = workspace.resolve(\"buildSrc\")\n+    val buildSrcDigest = if (buildSrc.isDirectory) {\n+      digestBuildSrc(buildSrc, digest)\n+    } else {\n+      true\n+    }\n+    buildSrcDigest && Digest.digestDirectory(workspace, digest) && digestSubProjects(\n+      workspace,\n+      digest\n+    )\n+  }\n+\n+  def digestBuildSrc(path: AbsolutePath, digest: MessageDigest): Boolean = {\n+    var isSuccessful = true\n+    Files.walk(path.toNIO).forEach { file =>\n+      isSuccessful = isSuccessful && Digest\n+        .digestFile(AbsolutePath(file), digest)\n+    }\n+    isSuccessful\n+  }\n+\n+  def digestSubProjects(\n+      workspace: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    val (subprojects, dirs) = Files\n+      .list(workspace.toNIO)\n+      .filter(AbsolutePath(_).isDirectory)\n+      .collect(Collectors.toList[Path])\n+      .asScala\n+      .partition { file =>\n+        AbsolutePath(file).isDirectory && Files\n+          .list(file)\n+          .anyMatch { path =>\n+            val stringPath = path.toString\n+            stringPath.endsWith(\".gradle\") || stringPath.endsWith(\"gradle.kts\")\n+          }\n+      }\n+    /*\n+     If a dir contains a gradle file we need to treat is as a workspace\n+     */\n+    val isSuccessful = subprojects.foldLeft(true) {"
+  },
+  {
+    "id" : "39882c3e-fe90-4329-b8bb-01118392dcd5",
+    "prId" : 694,
+    "comments" : [
+      {
+        "id" : "7c0f2247-0fb1-4004-9c19-743e996e9074",
+        "parentId" : null,
+        "author" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "body" : "`AbsolutePath(file).isDirectory` -> `Files.isDirectory(file)`. No need to create an object unnecessarily ;)",
+        "createdAt" : "2019-04-25T14:38:33Z",
+        "updatedAt" : "2019-05-07T08:42:52Z",
+        "lastEditedBy" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "95e8d18af9437cb5a757194bc83a227e9c0b8d79",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,251 @@\n+package scala.meta.internal.builds\n+\n+import java.nio.charset.StandardCharsets\n+import java.nio.file.Files\n+import java.nio.file.Path\n+import java.security.MessageDigest\n+import java.util.stream.Collectors\n+\n+import scala.meta.internal.builds.Digest.Status\n+import scala.meta.internal.io.PathIO\n+import scala.meta.internal.mtags.MD5\n+import scala.meta.internal.mtags.MtagsEnrichments._\n+import scala.meta.io.AbsolutePath\n+import scala.meta.tokens.Token\n+import scala.util.control.NonFatal\n+import scala.collection.JavaConverters._\n+\n+case class Digest(\n+    md5: String,\n+    status: Status,\n+    millis: Long\n+)\n+\n+object Digest {\n+\n+  /**\n+   * Bump up this version if parameters outside of the sbt sources themselves require\n+   * re-running `bloopInstall`. For example a SemanticDB or Bloop version upgrade.\n+   */\n+  val version: String = \"v4\"\n+  sealed abstract class Status(val value: Int)\n+      extends Product\n+      with Serializable {\n+    import Status._\n+    def isRequested: Boolean = this == Requested\n+    def isStarted: Boolean = this == Started\n+    def isRejected: Boolean = this == Rejected\n+    def isFailed: Boolean = this == Failed\n+    def isInstalled: Boolean = this == Installed\n+    def isCancelled: Boolean = this == Cancelled\n+  }\n+  object Status {\n+    case object Requested extends Status(0)\n+    case object Started extends Status(1)\n+    case object Rejected extends Status(2)\n+    case object Failed extends Status(3)\n+    case object Installed extends Status(4)\n+    case object Cancelled extends Status(5)\n+    case class Unknown(n: Int) extends Status(n)\n+    def all: List[Status] = List(\n+      Requested,\n+      Started,\n+      Rejected,\n+      Failed,\n+      Installed,\n+      Cancelled\n+    )\n+  }\n+\n+  def digestDirectory(\n+      path: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    if (!path.isDirectory) true\n+    else {\n+      var isSuccess = true\n+      Files.list(path.toNIO).forEach { file =>\n+        isSuccess = isSuccess && digestFile(AbsolutePath(file), digest)\n+      }\n+      isSuccess\n+    }\n+  }\n+\n+  def digestFileBytes(\n+      path: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    if (path.isFile) {\n+      digest.update(path.readAllBytes)\n+    }\n+    true\n+  }\n+\n+  def digestFile(\n+      path: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    val ext = PathIO.extension(path.toNIO)\n+    val isScala = ext match {\n+      case \"sbt\" | \"scala\" => true\n+      case _ => false\n+    }\n+    // we can have both gradle and gradle.kts and build plugins can be written in any of three languages\n+    val isGradle =\n+      Set(\"gradle\", \"groovy\", \"gradle.kts\", \"java\", \"kts\").exists(\n+        path.toString().endsWith(_)\n+      )\n+    if (isScala && path.isFile) {\n+      digestScala(path, digest)\n+    } else if (isGradle && path.isFile) {\n+      digestGeneralJvm(path, digest)\n+    } else {\n+      true\n+    }\n+  }\n+\n+  def digestGeneralJvm(\n+      file: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    try {\n+      Files\n+        .readAllLines(file.toNIO)\n+        .asScala\n+        .mkString(\"\\n\")\n+        .replaceAll(\"\"\"/\\*([^*]|[\\r\\n]|(\\*+([^*/]|[\\r\\n])))*\\*+/\"\"\", \"\") // match anything between /**/ comments and remove\n+        .replaceAll(\"\"\"//.*\"\"\", \"\") // replace any inline comment\n+        .split(\"\\\\s+\")\n+        .foreach { word =>\n+          digest.update(word.getBytes())\n+        }\n+      true\n+    } catch {\n+      case NonFatal(_) =>\n+        false\n+    }\n+  }\n+\n+  def digestScala(\n+      file: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    try {\n+      val input = file.toInput\n+      val tokens = input.tokenize.get\n+      tokens.foreach {\n+        case _: Token.Space | _: Token.Tab | _: Token.CR | _: Token.LF |\n+            _: Token.LFLF | _: Token.FF | _: Token.Comment | _: Token.BOF |\n+            _: Token.EOF => // Do nothing\n+        case token =>\n+          val bytes = StandardCharsets.UTF_8.encode(token.pos.text)\n+          digest.update(token.productPrefix.getBytes())\n+          digest.update(bytes)\n+      }\n+      true\n+    } catch {\n+      case NonFatal(e) =>\n+        false\n+    }\n+  }\n+}\n+\n+trait Digestable {\n+  def current(workspace: AbsolutePath): Option[String] = {\n+    if (!workspace.isDirectory) None\n+    else {\n+      val digest = MessageDigest.getInstance(\"MD5\")\n+      // we skip the version in tests, so that we don't have to manually update the digests in tests\n+      // when changing the version\n+      if (System.getProperty(\"metals.testing\") == null) {\n+        digest.update(Digest.version.getBytes(StandardCharsets.UTF_8))\n+      }\n+\n+      val isSuccess = digestWorkspace(workspace, digest)\n+      if (isSuccess) Some(MD5.bytesToHex(digest.digest()))\n+      else None\n+    }\n+  }\n+\n+  protected def digestWorkspace(\n+      absolutePath: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean\n+}\n+\n+object SbtDigest extends Digestable {\n+  override protected def digestWorkspace(\n+      workspace: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    val project = workspace.resolve(\"project\")\n+    Digest.digestDirectory(workspace, digest) &&\n+    Digest.digestFileBytes(project.resolve(\"build.properties\"), digest) &&\n+    Digest.digestDirectory(project, digest) &&\n+    Digest.digestDirectory(project.resolve(\"project\"), digest)\n+  }\n+}\n+\n+object GradleDigest extends Digestable {\n+  override protected def digestWorkspace(\n+      workspace: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    val buildSrc = workspace.resolve(\"buildSrc\")\n+    val buildSrcDigest = if (buildSrc.isDirectory) {\n+      digestBuildSrc(buildSrc, digest)\n+    } else {\n+      true\n+    }\n+    buildSrcDigest && Digest.digestDirectory(workspace, digest) && digestSubProjects(\n+      workspace,\n+      digest\n+    )\n+  }\n+\n+  def digestBuildSrc(path: AbsolutePath, digest: MessageDigest): Boolean = {\n+    var isSuccessful = true\n+    Files.walk(path.toNIO).forEach { file =>\n+      isSuccessful = isSuccessful && Digest\n+        .digestFile(AbsolutePath(file), digest)\n+    }\n+    isSuccessful\n+  }\n+\n+  def digestSubProjects(\n+      workspace: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    val (subprojects, dirs) = Files\n+      .list(workspace.toNIO)\n+      .filter(AbsolutePath(_).isDirectory)"
+  },
+  {
+    "id" : "1bd9ff36-e085-452f-bc33-25c8d71bfb00",
+    "prId" : 694,
+    "comments" : [
+      {
+        "id" : "468cf12a-bc69-458c-b78a-5b135e5ed140",
+        "parentId" : null,
+        "author" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "body" : "`forall`",
+        "createdAt" : "2019-04-25T14:40:44Z",
+        "updatedAt" : "2019-05-07T08:42:52Z",
+        "lastEditedBy" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "95e8d18af9437cb5a757194bc83a227e9c0b8d79",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,251 @@\n+package scala.meta.internal.builds\n+\n+import java.nio.charset.StandardCharsets\n+import java.nio.file.Files\n+import java.nio.file.Path\n+import java.security.MessageDigest\n+import java.util.stream.Collectors\n+\n+import scala.meta.internal.builds.Digest.Status\n+import scala.meta.internal.io.PathIO\n+import scala.meta.internal.mtags.MD5\n+import scala.meta.internal.mtags.MtagsEnrichments._\n+import scala.meta.io.AbsolutePath\n+import scala.meta.tokens.Token\n+import scala.util.control.NonFatal\n+import scala.collection.JavaConverters._\n+\n+case class Digest(\n+    md5: String,\n+    status: Status,\n+    millis: Long\n+)\n+\n+object Digest {\n+\n+  /**\n+   * Bump up this version if parameters outside of the sbt sources themselves require\n+   * re-running `bloopInstall`. For example a SemanticDB or Bloop version upgrade.\n+   */\n+  val version: String = \"v4\"\n+  sealed abstract class Status(val value: Int)\n+      extends Product\n+      with Serializable {\n+    import Status._\n+    def isRequested: Boolean = this == Requested\n+    def isStarted: Boolean = this == Started\n+    def isRejected: Boolean = this == Rejected\n+    def isFailed: Boolean = this == Failed\n+    def isInstalled: Boolean = this == Installed\n+    def isCancelled: Boolean = this == Cancelled\n+  }\n+  object Status {\n+    case object Requested extends Status(0)\n+    case object Started extends Status(1)\n+    case object Rejected extends Status(2)\n+    case object Failed extends Status(3)\n+    case object Installed extends Status(4)\n+    case object Cancelled extends Status(5)\n+    case class Unknown(n: Int) extends Status(n)\n+    def all: List[Status] = List(\n+      Requested,\n+      Started,\n+      Rejected,\n+      Failed,\n+      Installed,\n+      Cancelled\n+    )\n+  }\n+\n+  def digestDirectory(\n+      path: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    if (!path.isDirectory) true\n+    else {\n+      var isSuccess = true\n+      Files.list(path.toNIO).forEach { file =>\n+        isSuccess = isSuccess && digestFile(AbsolutePath(file), digest)\n+      }\n+      isSuccess\n+    }\n+  }\n+\n+  def digestFileBytes(\n+      path: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    if (path.isFile) {\n+      digest.update(path.readAllBytes)\n+    }\n+    true\n+  }\n+\n+  def digestFile(\n+      path: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    val ext = PathIO.extension(path.toNIO)\n+    val isScala = ext match {\n+      case \"sbt\" | \"scala\" => true\n+      case _ => false\n+    }\n+    // we can have both gradle and gradle.kts and build plugins can be written in any of three languages\n+    val isGradle =\n+      Set(\"gradle\", \"groovy\", \"gradle.kts\", \"java\", \"kts\").exists(\n+        path.toString().endsWith(_)\n+      )\n+    if (isScala && path.isFile) {\n+      digestScala(path, digest)\n+    } else if (isGradle && path.isFile) {\n+      digestGeneralJvm(path, digest)\n+    } else {\n+      true\n+    }\n+  }\n+\n+  def digestGeneralJvm(\n+      file: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    try {\n+      Files\n+        .readAllLines(file.toNIO)\n+        .asScala\n+        .mkString(\"\\n\")\n+        .replaceAll(\"\"\"/\\*([^*]|[\\r\\n]|(\\*+([^*/]|[\\r\\n])))*\\*+/\"\"\", \"\") // match anything between /**/ comments and remove\n+        .replaceAll(\"\"\"//.*\"\"\", \"\") // replace any inline comment\n+        .split(\"\\\\s+\")\n+        .foreach { word =>\n+          digest.update(word.getBytes())\n+        }\n+      true\n+    } catch {\n+      case NonFatal(_) =>\n+        false\n+    }\n+  }\n+\n+  def digestScala(\n+      file: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    try {\n+      val input = file.toInput\n+      val tokens = input.tokenize.get\n+      tokens.foreach {\n+        case _: Token.Space | _: Token.Tab | _: Token.CR | _: Token.LF |\n+            _: Token.LFLF | _: Token.FF | _: Token.Comment | _: Token.BOF |\n+            _: Token.EOF => // Do nothing\n+        case token =>\n+          val bytes = StandardCharsets.UTF_8.encode(token.pos.text)\n+          digest.update(token.productPrefix.getBytes())\n+          digest.update(bytes)\n+      }\n+      true\n+    } catch {\n+      case NonFatal(e) =>\n+        false\n+    }\n+  }\n+}\n+\n+trait Digestable {\n+  def current(workspace: AbsolutePath): Option[String] = {\n+    if (!workspace.isDirectory) None\n+    else {\n+      val digest = MessageDigest.getInstance(\"MD5\")\n+      // we skip the version in tests, so that we don't have to manually update the digests in tests\n+      // when changing the version\n+      if (System.getProperty(\"metals.testing\") == null) {\n+        digest.update(Digest.version.getBytes(StandardCharsets.UTF_8))\n+      }\n+\n+      val isSuccess = digestWorkspace(workspace, digest)\n+      if (isSuccess) Some(MD5.bytesToHex(digest.digest()))\n+      else None\n+    }\n+  }\n+\n+  protected def digestWorkspace(\n+      absolutePath: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean\n+}\n+\n+object SbtDigest extends Digestable {\n+  override protected def digestWorkspace(\n+      workspace: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    val project = workspace.resolve(\"project\")\n+    Digest.digestDirectory(workspace, digest) &&\n+    Digest.digestFileBytes(project.resolve(\"build.properties\"), digest) &&\n+    Digest.digestDirectory(project, digest) &&\n+    Digest.digestDirectory(project.resolve(\"project\"), digest)\n+  }\n+}\n+\n+object GradleDigest extends Digestable {\n+  override protected def digestWorkspace(\n+      workspace: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    val buildSrc = workspace.resolve(\"buildSrc\")\n+    val buildSrcDigest = if (buildSrc.isDirectory) {\n+      digestBuildSrc(buildSrc, digest)\n+    } else {\n+      true\n+    }\n+    buildSrcDigest && Digest.digestDirectory(workspace, digest) && digestSubProjects(\n+      workspace,\n+      digest\n+    )\n+  }\n+\n+  def digestBuildSrc(path: AbsolutePath, digest: MessageDigest): Boolean = {\n+    var isSuccessful = true\n+    Files.walk(path.toNIO).forEach { file =>\n+      isSuccessful = isSuccessful && Digest\n+        .digestFile(AbsolutePath(file), digest)\n+    }\n+    isSuccessful\n+  }\n+\n+  def digestSubProjects(\n+      workspace: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    val (subprojects, dirs) = Files\n+      .list(workspace.toNIO)\n+      .filter(AbsolutePath(_).isDirectory)\n+      .collect(Collectors.toList[Path])\n+      .asScala\n+      .partition { file =>\n+        AbsolutePath(file).isDirectory && Files\n+          .list(file)\n+          .anyMatch { path =>\n+            val stringPath = path.toString\n+            stringPath.endsWith(\".gradle\") || stringPath.endsWith(\"gradle.kts\")\n+          }\n+      }\n+    /*\n+     If a dir contains a gradle file we need to treat is as a workspace\n+     */\n+    val isSuccessful = subprojects.foldLeft(true) {\n+      case (success, file) =>\n+        success && digestWorkspace(\n+          AbsolutePath(file),\n+          digest\n+        )\n+    }\n+\n+    /*\n+     If it's a dir we need to keep searching since gradle can have non trivial workspace layouts\n+     */\n+    dirs.foldLeft(isSuccessful) {"
+  },
+  {
+    "id" : "3028f80c-fa95-4958-818c-2bf8c22b98cc",
+    "prId" : 722,
+    "comments" : [
+      {
+        "id" : "4703b87b-c9cd-41cf-8b70-c3759dd7d772",
+        "parentId" : null,
+        "author" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "body" : "Java stream should have something like 'forall' defined ",
+        "createdAt" : "2019-05-16T19:08:01Z",
+        "updatedAt" : "2019-06-04T19:19:04Z",
+        "lastEditedBy" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "11fe128c6413d1e06c71678633c5f9d8649864ce",
+    "line" : null,
+    "diffHunk" : "@@ -239,3 +263,19 @@ object GradleDigest extends Digestable {\n     }\n   }\n }\n+\n+object MavenDigest extends Digestable {\n+  override protected def digestWorkspace(\n+      workspace: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    Digest.digestFile(workspace.resolve(\"pom.xml\"), digest)\n+    Files.walk(workspace.toNIO).iterator().asScala.forall { file =>"
+  },
+  {
+    "id" : "b09fb905-8637-4cdc-94a0-0ea9a6b40344",
+    "prId" : 722,
+    "comments" : [
+      {
+        "id" : "a82aee3e-9591-470d-b992-15dbce185bb7",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "FYI, not sure we want to do it, but one option is to parse the file with `scala.xml.XML.loadFile` and digest the parsed XML",
+        "createdAt" : "2019-05-20T15:41:44Z",
+        "updatedAt" : "2019-06-04T19:19:04Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "9b4a9c66-cb81-4660-b9a2-f92040a820ff",
+        "parentId" : "a82aee3e-9591-470d-b992-15dbce185bb7",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Added, I think I was just a bit lazy previously and forgot about it.",
+        "createdAt" : "2019-05-21T10:22:44Z",
+        "updatedAt" : "2019-06-04T19:19:04Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "11fe128c6413d1e06c71678633c5f9d8649864ce",
+    "line" : null,
+    "diffHunk" : "@@ -90,16 +90,40 @@ object Digest {\n       Set(\"gradle\", \"groovy\", \"gradle.kts\", \"java\", \"kts\").exists(\n         path.toString().endsWith(_)\n       )\n+    val isXml = ext == \"xml\"\n \n     if (isScala && path.isFile) {\n       digestScala(path, digest)\n     } else if (isGradle && path.isFile) {\n       digestGeneralJvm(path, digest)\n+    } else if (isXml){\n+      digestXml(path, digest)\n     } else {\n       true\n     }\n   }\n \n+  def digestXml(\n+      file: AbsolutePath,\n+      digest: MessageDigest\n+  ): Boolean = {\n+    try {\n+      Files"
+  }
+]

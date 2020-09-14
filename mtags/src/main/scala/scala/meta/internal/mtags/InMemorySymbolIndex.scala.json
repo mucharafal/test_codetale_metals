@@ -1,0 +1,33 @@
+[
+  {
+    "id" : "0d30e085-f8dc-4bc3-a810-2a1785992bb3",
+    "prId" : 332,
+    "comments" : [
+      {
+        "id" : "e2ae5aca-5f4f-4e5d-8786-a595d60e4115",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "Is this repeated because the above can mutate definitions?",
+        "createdAt" : "2018-10-09T05:59:53Z",
+        "updatedAt" : "2018-10-17T09:17:09Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "889b282a30a7ddd72b09da4b9328f7779b1cfae9",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,160 @@\n+package scala.meta.internal.mtags\n+\n+import java.nio.CharBuffer\n+import java.nio.charset.StandardCharsets\n+import scala.collection.mutable\n+import scala.meta.inputs.Input\n+import scala.meta.internal.io.PathIO\n+import scala.meta.internal.{semanticdb => s}\n+import scala.meta.io.AbsolutePath\n+import scala.meta.io.Classpath\n+import scala.meta.internal.mtags.Enrichments._\n+import scala.meta.internal.io._\n+import scala.meta.internal.semanticdb.Scala._\n+\n+case class InMemorySymbolIndex(\n+    toplevels: mutable.Map[String, AbsolutePath] = mutable.Map.empty,\n+    definitions: mutable.Map[String, AbsolutePath] = mutable.Map.empty,\n+    references: mutable.Map[String, mutable.Set[AbsolutePath]] =\n+      mutable.Map.empty\n+) extends SymbolIndex {\n+  val mtags = new Mtags\n+  private val sourceJars = new ClasspathLoader(Classpath(Nil))\n+  var indexedSources = 0L\n+  override def symbol(path: AbsolutePath, range: s.Range): Option[String] = {\n+    for {\n+      document <- getDocument(path)\n+      occ <- document.occurrences.find(_.range.exists(_.encloses(range)))\n+    } yield occ.symbol\n+  }.headOption\n+  override def definition(symbol: String): Option[SymbolDefinition] = {\n+    getDefinition(symbol, symbol)\n+  }\n+  private def addTextDocuments(\n+      file: AbsolutePath,\n+      docs: s.TextDocuments\n+  ): Unit = {\n+    docs.documents.foreach { document =>\n+      document.occurrences.foreach { occ =>\n+        if (occ.symbol.isLocal) {\n+          () // Do nothing, compute on demand\n+        } else {\n+          if (occ.role.isReference) {\n+            addReference(occ.symbol, file)\n+          } else if (occ.role.isDefinition) {\n+            definitions.put(occ.symbol, file)\n+          }\n+        }\n+      }\n+    }\n+  }\n+\n+  override def addSemanticdb(file: AbsolutePath): Unit = {\n+    val docs: s.TextDocuments = PathIO.extension(file.toNIO) match {\n+      case \"semanticdb\" =>\n+        Semanticdbs.loadTextDocuments(file)\n+      case \"scala\" | \"java\" =>\n+        val language = file.toLanguage\n+        val input = file.toInput\n+        val document = mtags.index(language, input)\n+        s.TextDocuments(List(document))\n+      case _ =>\n+        s.TextDocuments(Nil)\n+    }\n+    if (docs.documents.nonEmpty) {\n+      addTextDocuments(file, docs)\n+    }\n+  }\n+\n+  override def addSourceFile(source: AbsolutePath): Unit = {\n+    if (source.toLanguage.isScala) {\n+      indexedSources += 1\n+      val path = source.toString()\n+      val text = FileIO.slurp(source, StandardCharsets.UTF_8)\n+      val input = Input.VirtualFile(path, text)\n+      val sourceToplevels = mtags.toplevels(input)\n+      sourceToplevels.foreach { toplevel =>\n+        if (!isTrivialToplevelSymbol(path, toplevel)) {\n+          toplevels(toplevel) = source\n+        }\n+      }\n+    }\n+  }\n+\n+  override def addSourceJar(jar: AbsolutePath): Unit = {\n+    sourceJars.addEntry(jar)\n+    FileIO.withJarFileSystem(jar, create = false) { root =>\n+      FileIO.listAllFilesRecursively(root).foreach { source =>\n+        addSourceFile(source)\n+      }\n+    }\n+  }\n+\n+  /** Returns true if symbol is com/foo/Bar# and path is /com/foo/Bar.scala */\n+  private def isTrivialToplevelSymbol(path: String, symbol: String): Boolean = {\n+    val pathBuffer =\n+      CharBuffer.wrap(path).subSequence(1, path.length - \".scala\".length)\n+    val symbolBuffer =\n+      CharBuffer.wrap(symbol).subSequence(0, symbol.length - 1)\n+    pathBuffer.equals(symbolBuffer)\n+  }\n+\n+  private def trivialPaths(toplevel: String): List[String] = {\n+    val noExtension = toplevel.stripSuffix(\".\").stripSuffix(\"#\")\n+    List(\n+      noExtension + \".scala\",\n+      noExtension + \".java\"\n+    )\n+  }\n+\n+  final private def loadFromSourceJars(\n+      paths: List[String]\n+  ): Option[AbsolutePath] = {\n+    paths match {\n+      case Nil =>\n+        None\n+      case head :: tail =>\n+        sourceJars.load(head) match {\n+          case Some(file) => Some(file)\n+          case _ => loadFromSourceJars(tail)\n+        }\n+    }\n+  }\n+\n+  private def getDefinition(\n+      querySymbol: String,\n+      symbol: String\n+  ): Option[SymbolDefinition] = {\n+    if (!definitions.contains(symbol)) {\n+      val toplevel = symbol.toplevel\n+      toplevels.get(toplevel) match {\n+        case Some(file) =>\n+          addSemanticdb(file)\n+        case _ =>\n+          loadFromSourceJars(trivialPaths(toplevel)).foreach(addSemanticdb)\n+      }\n+    }\n+    if (!definitions.contains(symbol)) {"
+  }
+]

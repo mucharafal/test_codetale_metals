@@ -1,0 +1,208 @@
+[
+  {
+    "id" : "fab777fe-3c43-46db-8518-bcbdbb7df31e",
+    "prId" : 13,
+    "comments" : [
+      {
+        "id" : "59d07c58-c54d-4b4d-857d-a43b304eaba3",
+        "parentId" : null,
+        "author" : {
+          "login" : "jvican",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/2462974?u=247f9a0cfd142440687595dce462fabed087e912&v=4"
+        },
+        "body" : "Don't you need the scala version here?",
+        "createdAt" : "2017-11-08T10:04:41Z",
+        "updatedAt" : "2017-11-08T10:06:35Z",
+        "lastEditedBy" : {
+          "login" : "jvican",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/2462974?u=247f9a0cfd142440687595dce462fabed087e912&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "ee33f512-0821-47d2-abf6-4b2bd8d7026a",
+        "parentId" : "59d07c58-c54d-4b4d-857d-a43b304eaba3",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "We will need to classload the compiler for it to work for more scala versions, that's the next step. Currently it's hardcoded for 2.12.3. We will likely only support the 2.11/2.12 releases supported by semanticdb, in order to provide scalafix linting as you type alongside completions.",
+        "createdAt" : "2017-11-08T10:33:57Z",
+        "updatedAt" : "2017-11-08T10:33:58Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "c96d35e3100f36e275a98639498d78a3fa5a737a",
+    "line" : 17,
+    "diffHunk" : "@@ -0,0 +1,113 @@\n+package scala.meta.languageserver\n+\n+import java.io.File\n+import java.nio.file.Files\n+import java.util.Properties\n+import scala.collection.mutable\n+import scala.reflect.io\n+import scala.tools.nsc.Settings\n+import scala.tools.nsc.interactive.Global\n+import scala.tools.nsc.reporters.StoreReporter\n+import com.typesafe.scalalogging.LazyLogging\n+import langserver.core.Connection\n+import langserver.messages.MessageType\n+import monix.reactive.Observable\n+import org.langmeta.io.AbsolutePath\n+\n+case class CompilerConfig("
+  },
+  {
+    "id" : "370a180e-13b7-4629-a228-51aa3c0bd907",
+    "prId" : 21,
+    "comments" : [
+      {
+        "id" : "aeb4e53d-5f37-4884-95d7-07daa608b4a8",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "This is the relevant bit.\r\n\r\nIn this example:\r\n\r\n```scala\r\nval user = User(name = \"foo\", age = 42)\r\nList(user).map(x => x.name)\r\n```\r\n\r\nhovering on:\r\n\r\n- `user` --> `<notype>`\r\n- `User` --> `(name: String, age: Int)a.User`\r\n- `List` --> `([A](xs: A*)List[A]`\r\n- `map` --> `[B, That](f: a.User => B)(implicit bf: scala.collection.generic.CanBuildFrom[List[a.User],B,That])That`\r\n- `x` --> `<notype>`\r\n\r\nessentially everything got worse apart from `map` but I think I may be using the `typedTree` wrong",
+        "createdAt" : "2017-11-09T15:01:13Z",
+        "updatedAt" : "2017-11-10T14:28:30Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "122ec665a5096b2c5408dc9d9320eac87adb0549",
+    "line" : null,
+    "diffHunk" : "@@ -71,6 +72,23 @@ class Compiler(\n         .distinct\n     }\n   }\n+\n+  def typeAt(path: AbsolutePath, line: Int, column: Int): Option[String] = {\n+    val code = buffers.read(path)\n+    val offset = lineColumnToOffset(code, line, column)\n+    compilerByPath.get(path).map { compiler =>\n+      compiler.reporter.reset()\n+      val unit = compiler.newCompilationUnit(code, path.toString())\n+      val richUnit = new compiler.RichCompilationUnit(unit.source)\n+      compiler.unitOfFile(richUnit.source.file) = richUnit\n+      val position = richUnit.position(offset)\n+      val r = new Response[compiler.Tree]\n+      val results = compiler.askTypeAt(position, r)\n+      val typedTree = r.get.left.get\n+      typedTree.tpe.toString"
+  },
+  {
+    "id" : "c7473950-e25a-48f9-8067-d52b5ee38e56",
+    "prId" : 21,
+    "comments" : [
+      {
+        "id" : "d86b6bcf-c7d5-435e-9677-2088dbaca06c",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "How would you say the types compare to denotation.info? One thing we can do with denotation.info later down the road is to improve the pretty-printing so that some types are printed like `mutable.Set` and renamings in the source file are respected.",
+        "createdAt" : "2017-11-09T17:03:44Z",
+        "updatedAt" : "2017-11-10T14:28:30Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "1ad5f1fb-4220-4f48-b176-0c9ec93dd892",
+        "parentId" : "d86b6bcf-c7d5-435e-9677-2088dbaca06c",
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "See my other comment, it's pretty bad as of now.\r\nThe reason is that I'm taking the `.tpe` from the typed tree without analyzing which tree it is.\r\nIf I start discriminating on the trees it gets much better (e.g. if it's a `val` declaration, take the `tpe` of the rhs)",
+        "createdAt" : "2017-11-09T17:17:00Z",
+        "updatedAt" : "2017-11-10T14:28:30Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "1e6bb41f-69d1-45aa-abc9-7131ddcf7712",
+        "parentId" : "d86b6bcf-c7d5-435e-9677-2088dbaca06c",
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "I've just pushed a new commit, as an example of what I mean.",
+        "createdAt" : "2017-11-09T17:19:48Z",
+        "updatedAt" : "2017-11-10T14:28:30Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "3a5e82b4-b116-4f67-8f64-5d304f313837",
+        "parentId" : "d86b6bcf-c7d5-435e-9677-2088dbaca06c",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Does this work for unsaved buffers that don't fully typecheck?",
+        "createdAt" : "2017-11-09T18:54:13Z",
+        "updatedAt" : "2017-11-10T14:28:30Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "122ec665a5096b2c5408dc9d9320eac87adb0549",
+    "line" : null,
+    "diffHunk" : "@@ -71,6 +72,22 @@ class Compiler(\n         .distinct\n     }\n   }\n+\n+  def typeAt(path: AbsolutePath, line: Int, column: Int): Option[String] = {"
+  },
+  {
+    "id" : "c78a8187-5092-4d31-817c-2faec17fd992",
+    "prId" : 21,
+    "comments" : [
+      {
+        "id" : "525c2858-26d0-4e12-8dc1-bf4c7aaeb953",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Does `g.showCode(Tree)` give any better results? I recall it handling some cases a bit better while implementing the semanticdb-scalac type printer https://github.com/scalameta/scalameta/blob/c0b7b7df565115b39e0c1f6b6d39d307bef0b4ed/scalameta/semanticdb-scalac/src/main/scala/scala/meta/internal/semanticdb/PrinterOps.scala#L350-L458",
+        "createdAt" : "2017-11-09T18:56:15Z",
+        "updatedAt" : "2017-11-10T14:28:30Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "122ec665a5096b2c5408dc9d9320eac87adb0549",
+    "line" : null,
+    "diffHunk" : "@@ -110,4 +127,22 @@ class Compiler(\n     i + column\n   }\n \n+  private def ask[A](f: Response[A] => Unit): Response[A] = {\n+    val r = new Response[A]\n+    f(r)\n+    r\n+  }\n+\n+  private def typeOfTree(c: Global)(t: c.Tree): Option[String] = {"
+  }
+]

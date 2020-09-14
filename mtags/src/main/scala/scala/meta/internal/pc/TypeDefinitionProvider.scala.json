@@ -1,0 +1,1522 @@
+[
+  {
+    "id" : "0d88e783-079e-4d31-b147-a76a8aeccba2",
+    "prId" : 978,
+    "comments" : [
+      {
+        "id" : "a0639118-4ef2-47bb-b1b2-3df9e9335939",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Do we need all 3 as return values?  Those can be created separately when needed and just have the Tree returned here.",
+        "createdAt" : "2019-11-04T11:04:47Z",
+        "updatedAt" : "2019-12-18T13:50:19Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "316b10f8dae0939ba80f4ffb8eb60ae0b0fad9ea",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,152 @@\n+package scala.meta.internal.pc\n+\n+import org.eclipse.{lsp4j => l}\n+import scala.meta.internal.mtags.MtagsEnrichments._\n+import scala.meta.pc.OffsetParams\n+import scala.meta.internal.jdk.CollectionConverters._\n+import scala.meta.internal.metals.CompilerOffsetParams\n+\n+class TypeDefinitionProvider(val compiler: MetalsGlobal, params: OffsetParams) {\n+  import compiler._\n+\n+  def typedTree: Option[(RichCompilationUnit, Position, Tree)] = {"
+  },
+  {
+    "id" : "045e425b-95d9-4b73-a8b7-f33d1ca947af",
+    "prId" : 978,
+    "comments" : [
+      {
+        "id" : "7bbb64b4-bf4b-4766-8c4c-2af099a019ee",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "This conflicts a bit with the method named `typedParams`, maybe rename?",
+        "createdAt" : "2019-11-04T11:09:33Z",
+        "updatedAt" : "2019-12-18T13:50:19Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "316b10f8dae0939ba80f4ffb8eb60ae0b0fad9ea",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,152 @@\n+package scala.meta.internal.pc\n+\n+import org.eclipse.{lsp4j => l}\n+import scala.meta.internal.mtags.MtagsEnrichments._\n+import scala.meta.pc.OffsetParams\n+import scala.meta.internal.jdk.CollectionConverters._\n+import scala.meta.internal.metals.CompilerOffsetParams\n+\n+class TypeDefinitionProvider(val compiler: MetalsGlobal, params: OffsetParams) {\n+  import compiler._\n+\n+  def typedTree: Option[(RichCompilationUnit, Position, Tree)] = {\n+    if (params.isWhitespace) {\n+      None\n+    } else {\n+      val unit = addCompilationUnit(\n+        code = params.text(),\n+        filename = params.filename(),\n+        cursor = None\n+      )\n+      val pos = unit.position(params.offset())\n+      val tree = typedHoverTreeAt(pos)\n+      Some(unit, pos, tree)\n+    }\n+  }\n+\n+  def typeSymbol: Option[(RichCompilationUnit, Position, Symbol)] = {\n+    val tri = typedTree\n+    tri match {\n+      case Some((t1, t2, tree))\n+          if tree.symbol.isTypeSymbol || tree.symbol.isMethod || tree.symbol.isConstructor =>\n+        Some(t1, t2, tree.symbol)\n+      case Some((t1, t2, tree)) if tree.tpe.isDefined =>\n+        Some(t1, t2, tree.tpe.typeSymbol)\n+      case Some((t1, t2, tree)) if tree.children.nonEmpty =>\n+        Some(t1, t2, tree.children.head.tpe.typeSymbol)\n+      case Some((t1, t2, tree)) =>\n+        val expTree = expandRangeToEnclosingApply(tree.pos)\n+        if (expTree.tpe.isDefined) Some(t1, t2, expTree.tpe.typeSymbol)\n+        else None\n+      case _ => None\n+    }\n+  }\n+\n+  def typeDefinition: List[l.Location] = {\n+    typeSymbol match {\n+      case Some((_, _, sym))\n+          if sym.pos.source.file != null && !sym.pos.source.file.isVirtual =>\n+        val pos = sym.pos\n+\n+        val src = scala.io.Source.fromFile(sym.pos.source.path)\n+\n+        val nParams = CompilerOffsetParams(\n+          pos.source.path,\n+          src.mkString,\n+          pos.start\n+        )\n+        src.close()\n+\n+        val provider = new PcDefinitionProvider(compiler, nParams)\n+        val res = provider.definition()\n+        res.locations().asScala.toList\n+      case Some((_, _, sym)) =>\n+        val pos = sym.pos\n+        val unit = unitOfFile(pos.source.file)\n+        unit.body.find(_.symbol == sym) match {\n+          case Some(value) =>\n+            value match {\n+              case t: DefTree =>\n+                List(new l.Location(pos.source.path, t.namePos.toLSP))\n+            }\n+          case None =>\n+            List(new l.Location(pos.source.path, pos.toLSP))\n+        }\n+      case _ => Nil\n+    }\n+  }\n+\n+  def expandRangeToEnclosingApply(pos: Position): Tree = {\n+    def tryTail(enclosing: List[Tree]): Option[Tree] = enclosing match {\n+      case Nil => None\n+      case head :: tail =>\n+        head match {\n+          case TreeApply(qual, _) if qual.pos.includes(pos) =>\n+            tryTail(tail).orElse(Some(head))\n+          case New(_) =>\n+            tail match {\n+              case Nil => None\n+              case Select(_, _) :: next =>\n+                tryTail(next)\n+              case _ =>\n+                None\n+            }\n+          case _ =>\n+            None\n+        }\n+    }\n+    lastVisistedParentTrees match {\n+      case head :: tail =>\n+        tryTail(tail) match {\n+          case Some(value) =>\n+            typedTreeAt(value.pos)\n+          case None =>\n+            head\n+        }\n+      case _ =>\n+        EmptyTree\n+    }\n+  }\n+\n+  lazy val isForName: Set[compiler.Name] = Set[Name](\n+    nme.map,\n+    nme.withFilter,\n+    nme.flatMap,\n+    nme.foreach\n+  )\n+  def isForSynthetic(gtree: Tree): Boolean = {\n+    def isForComprehensionSyntheticName(select: Select): Boolean = {\n+      select.pos == select.qualifier.pos && isForName(select.name)\n+    }\n+    gtree match {\n+      case Apply(fun, List(_: Function)) => isForSynthetic(fun)\n+      case TypeApply(fun, _) => isForSynthetic(fun)\n+      case gtree: Select if isForComprehensionSyntheticName(gtree) => true\n+      case _ => false\n+    }\n+  }\n+\n+  private def typedHoverTreeAt(pos: Position): Tree = {\n+    val typedTree = typedTreeAt(pos)"
+  },
+  {
+    "id" : "46baa06d-e809-49f9-8686-55c78acc44ec",
+    "prId" : 978,
+    "comments" : [
+      {
+        "id" : "e9c1b46a-ec46-4503-8cf8-a3c8bc7fced6",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "`t1` and `t2` are not really used here, we can create them later.",
+        "createdAt" : "2019-11-04T11:12:22Z",
+        "updatedAt" : "2019-12-18T13:50:19Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "316b10f8dae0939ba80f4ffb8eb60ae0b0fad9ea",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,152 @@\n+package scala.meta.internal.pc\n+\n+import org.eclipse.{lsp4j => l}\n+import scala.meta.internal.mtags.MtagsEnrichments._\n+import scala.meta.pc.OffsetParams\n+import scala.meta.internal.jdk.CollectionConverters._\n+import scala.meta.internal.metals.CompilerOffsetParams\n+\n+class TypeDefinitionProvider(val compiler: MetalsGlobal, params: OffsetParams) {\n+  import compiler._\n+\n+  def typedTree: Option[(RichCompilationUnit, Position, Tree)] = {\n+    if (params.isWhitespace) {\n+      None\n+    } else {\n+      val unit = addCompilationUnit(\n+        code = params.text(),\n+        filename = params.filename(),\n+        cursor = None\n+      )\n+      val pos = unit.position(params.offset())\n+      val tree = typedHoverTreeAt(pos)\n+      Some(unit, pos, tree)\n+    }\n+  }\n+\n+  def typeSymbol: Option[(RichCompilationUnit, Position, Symbol)] = {\n+    val tri = typedTree\n+    tri match {\n+      case Some((t1, t2, tree))"
+  },
+  {
+    "id" : "3f1f81e3-161b-43c2-9e9e-32f10695f555",
+    "prId" : 978,
+    "comments" : [
+      {
+        "id" : "6de5ef6e-da94-4300-a83c-cbc2c8845ac7",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "I tihnk using simple `if/else` might be simpler here. We can `flatMap` over typedTree itself.",
+        "createdAt" : "2019-11-04T11:13:54Z",
+        "updatedAt" : "2019-12-18T13:50:19Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "316b10f8dae0939ba80f4ffb8eb60ae0b0fad9ea",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,152 @@\n+package scala.meta.internal.pc\n+\n+import org.eclipse.{lsp4j => l}\n+import scala.meta.internal.mtags.MtagsEnrichments._\n+import scala.meta.pc.OffsetParams\n+import scala.meta.internal.jdk.CollectionConverters._\n+import scala.meta.internal.metals.CompilerOffsetParams\n+\n+class TypeDefinitionProvider(val compiler: MetalsGlobal, params: OffsetParams) {\n+  import compiler._\n+\n+  def typedTree: Option[(RichCompilationUnit, Position, Tree)] = {\n+    if (params.isWhitespace) {\n+      None\n+    } else {\n+      val unit = addCompilationUnit(\n+        code = params.text(),\n+        filename = params.filename(),\n+        cursor = None\n+      )\n+      val pos = unit.position(params.offset())\n+      val tree = typedHoverTreeAt(pos)\n+      Some(unit, pos, tree)\n+    }\n+  }\n+\n+  def typeSymbol: Option[(RichCompilationUnit, Position, Symbol)] = {\n+    val tri = typedTree\n+    tri match {\n+      case Some((t1, t2, tree))\n+          if tree.symbol.isTypeSymbol || tree.symbol.isMethod || tree.symbol.isConstructor =>\n+        Some(t1, t2, tree.symbol)\n+      case Some((t1, t2, tree)) if tree.tpe.isDefined =>"
+  },
+  {
+    "id" : "d642eded-978e-48ba-80fe-c375303e743a",
+    "prId" : 978,
+    "comments" : [
+      {
+        "id" : "07476681-0e54-4b63-8681-612d9f3e6c69",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Would just flatMap over typeDefinition result. ",
+        "createdAt" : "2019-11-04T11:15:02Z",
+        "updatedAt" : "2019-12-18T13:50:19Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "892f6b38-3680-44c6-9a3f-26aaa58e6ba0",
+        "parentId" : "07476681-0e54-4b63-8681-612d9f3e6c69",
+        "author" : {
+          "login" : "sswistun-vl",
+          "name" : null,
+          "avatarUrl" : "https://avatars3.githubusercontent.com/u/56023683?u=f003afed233efe6b3491f405b0affea9c99d3163&v=4"
+        },
+        "body" : "What do you mean by that?",
+        "createdAt" : "2019-11-05T12:11:40Z",
+        "updatedAt" : "2019-12-18T13:50:19Z",
+        "lastEditedBy" : {
+          "login" : "sswistun-vl",
+          "name" : null,
+          "avatarUrl" : "https://avatars3.githubusercontent.com/u/56023683?u=f003afed233efe6b3491f405b0affea9c99d3163&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "316b10f8dae0939ba80f4ffb8eb60ae0b0fad9ea",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,152 @@\n+package scala.meta.internal.pc\n+\n+import org.eclipse.{lsp4j => l}\n+import scala.meta.internal.mtags.MtagsEnrichments._\n+import scala.meta.pc.OffsetParams\n+import scala.meta.internal.jdk.CollectionConverters._\n+import scala.meta.internal.metals.CompilerOffsetParams\n+\n+class TypeDefinitionProvider(val compiler: MetalsGlobal, params: OffsetParams) {\n+  import compiler._\n+\n+  def typedTree: Option[(RichCompilationUnit, Position, Tree)] = {\n+    if (params.isWhitespace) {\n+      None\n+    } else {\n+      val unit = addCompilationUnit(\n+        code = params.text(),\n+        filename = params.filename(),\n+        cursor = None\n+      )\n+      val pos = unit.position(params.offset())\n+      val tree = typedHoverTreeAt(pos)\n+      Some(unit, pos, tree)\n+    }\n+  }\n+\n+  def typeSymbol: Option[(RichCompilationUnit, Position, Symbol)] = {\n+    val tri = typedTree\n+    tri match {\n+      case Some((t1, t2, tree))\n+          if tree.symbol.isTypeSymbol || tree.symbol.isMethod || tree.symbol.isConstructor =>\n+        Some(t1, t2, tree.symbol)\n+      case Some((t1, t2, tree)) if tree.tpe.isDefined =>\n+        Some(t1, t2, tree.tpe.typeSymbol)\n+      case Some((t1, t2, tree)) if tree.children.nonEmpty =>\n+        Some(t1, t2, tree.children.head.tpe.typeSymbol)\n+      case Some((t1, t2, tree)) =>\n+        val expTree = expandRangeToEnclosingApply(tree.pos)\n+        if (expTree.tpe.isDefined) Some(t1, t2, expTree.tpe.typeSymbol)\n+        else None\n+      case _ => None\n+    }\n+  }\n+\n+  def typeDefinition: List[l.Location] = {\n+    typeSymbol match {\n+      case Some((_, _, sym))"
+  },
+  {
+    "id" : "9c1009c3-5854-4582-93b6-0b7321ef9eb9",
+    "prId" : 978,
+    "comments" : [
+      {
+        "id" : "43fc7568-accb-49b0-9125-557c201da411",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Use `Files.readAllLines()`, it's more reliant.",
+        "createdAt" : "2019-11-04T11:17:00Z",
+        "updatedAt" : "2019-12-18T13:50:19Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "316b10f8dae0939ba80f4ffb8eb60ae0b0fad9ea",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,152 @@\n+package scala.meta.internal.pc\n+\n+import org.eclipse.{lsp4j => l}\n+import scala.meta.internal.mtags.MtagsEnrichments._\n+import scala.meta.pc.OffsetParams\n+import scala.meta.internal.jdk.CollectionConverters._\n+import scala.meta.internal.metals.CompilerOffsetParams\n+\n+class TypeDefinitionProvider(val compiler: MetalsGlobal, params: OffsetParams) {\n+  import compiler._\n+\n+  def typedTree: Option[(RichCompilationUnit, Position, Tree)] = {\n+    if (params.isWhitespace) {\n+      None\n+    } else {\n+      val unit = addCompilationUnit(\n+        code = params.text(),\n+        filename = params.filename(),\n+        cursor = None\n+      )\n+      val pos = unit.position(params.offset())\n+      val tree = typedHoverTreeAt(pos)\n+      Some(unit, pos, tree)\n+    }\n+  }\n+\n+  def typeSymbol: Option[(RichCompilationUnit, Position, Symbol)] = {\n+    val tri = typedTree\n+    tri match {\n+      case Some((t1, t2, tree))\n+          if tree.symbol.isTypeSymbol || tree.symbol.isMethod || tree.symbol.isConstructor =>\n+        Some(t1, t2, tree.symbol)\n+      case Some((t1, t2, tree)) if tree.tpe.isDefined =>\n+        Some(t1, t2, tree.tpe.typeSymbol)\n+      case Some((t1, t2, tree)) if tree.children.nonEmpty =>\n+        Some(t1, t2, tree.children.head.tpe.typeSymbol)\n+      case Some((t1, t2, tree)) =>\n+        val expTree = expandRangeToEnclosingApply(tree.pos)\n+        if (expTree.tpe.isDefined) Some(t1, t2, expTree.tpe.typeSymbol)\n+        else None\n+      case _ => None\n+    }\n+  }\n+\n+  def typeDefinition: List[l.Location] = {\n+    typeSymbol match {\n+      case Some((_, _, sym))\n+          if sym.pos.source.file != null && !sym.pos.source.file.isVirtual =>\n+        val pos = sym.pos\n+\n+        val src = scala.io.Source.fromFile(sym.pos.source.path)"
+  },
+  {
+    "id" : "6bb3cad8-5641-4738-b14a-81ebfc71ce53",
+    "prId" : 978,
+    "comments" : [
+      {
+        "id" : "f1d73a55-a598-4763-85f2-fbc87d921489",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "This should be on top of the file since it's a value",
+        "createdAt" : "2019-11-04T11:19:02Z",
+        "updatedAt" : "2019-12-18T13:50:19Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "316b10f8dae0939ba80f4ffb8eb60ae0b0fad9ea",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,152 @@\n+package scala.meta.internal.pc\n+\n+import org.eclipse.{lsp4j => l}\n+import scala.meta.internal.mtags.MtagsEnrichments._\n+import scala.meta.pc.OffsetParams\n+import scala.meta.internal.jdk.CollectionConverters._\n+import scala.meta.internal.metals.CompilerOffsetParams\n+\n+class TypeDefinitionProvider(val compiler: MetalsGlobal, params: OffsetParams) {\n+  import compiler._\n+\n+  def typedTree: Option[(RichCompilationUnit, Position, Tree)] = {\n+    if (params.isWhitespace) {\n+      None\n+    } else {\n+      val unit = addCompilationUnit(\n+        code = params.text(),\n+        filename = params.filename(),\n+        cursor = None\n+      )\n+      val pos = unit.position(params.offset())\n+      val tree = typedHoverTreeAt(pos)\n+      Some(unit, pos, tree)\n+    }\n+  }\n+\n+  def typeSymbol: Option[(RichCompilationUnit, Position, Symbol)] = {\n+    val tri = typedTree\n+    tri match {\n+      case Some((t1, t2, tree))\n+          if tree.symbol.isTypeSymbol || tree.symbol.isMethod || tree.symbol.isConstructor =>\n+        Some(t1, t2, tree.symbol)\n+      case Some((t1, t2, tree)) if tree.tpe.isDefined =>\n+        Some(t1, t2, tree.tpe.typeSymbol)\n+      case Some((t1, t2, tree)) if tree.children.nonEmpty =>\n+        Some(t1, t2, tree.children.head.tpe.typeSymbol)\n+      case Some((t1, t2, tree)) =>\n+        val expTree = expandRangeToEnclosingApply(tree.pos)\n+        if (expTree.tpe.isDefined) Some(t1, t2, expTree.tpe.typeSymbol)\n+        else None\n+      case _ => None\n+    }\n+  }\n+\n+  def typeDefinition: List[l.Location] = {\n+    typeSymbol match {\n+      case Some((_, _, sym))\n+          if sym.pos.source.file != null && !sym.pos.source.file.isVirtual =>\n+        val pos = sym.pos\n+\n+        val src = scala.io.Source.fromFile(sym.pos.source.path)\n+\n+        val nParams = CompilerOffsetParams(\n+          pos.source.path,\n+          src.mkString,\n+          pos.start\n+        )\n+        src.close()\n+\n+        val provider = new PcDefinitionProvider(compiler, nParams)\n+        val res = provider.definition()\n+        res.locations().asScala.toList\n+      case Some((_, _, sym)) =>\n+        val pos = sym.pos\n+        val unit = unitOfFile(pos.source.file)\n+        unit.body.find(_.symbol == sym) match {\n+          case Some(value) =>\n+            value match {\n+              case t: DefTree =>\n+                List(new l.Location(pos.source.path, t.namePos.toLSP))\n+            }\n+          case None =>\n+            List(new l.Location(pos.source.path, pos.toLSP))\n+        }\n+      case _ => Nil\n+    }\n+  }\n+\n+  def expandRangeToEnclosingApply(pos: Position): Tree = {\n+    def tryTail(enclosing: List[Tree]): Option[Tree] = enclosing match {\n+      case Nil => None\n+      case head :: tail =>\n+        head match {\n+          case TreeApply(qual, _) if qual.pos.includes(pos) =>\n+            tryTail(tail).orElse(Some(head))\n+          case New(_) =>\n+            tail match {\n+              case Nil => None\n+              case Select(_, _) :: next =>\n+                tryTail(next)\n+              case _ =>\n+                None\n+            }\n+          case _ =>\n+            None\n+        }\n+    }\n+    lastVisistedParentTrees match {\n+      case head :: tail =>\n+        tryTail(tail) match {\n+          case Some(value) =>\n+            typedTreeAt(value.pos)\n+          case None =>\n+            head\n+        }\n+      case _ =>\n+        EmptyTree\n+    }\n+  }\n+\n+  lazy val isForName: Set[compiler.Name] = Set[Name]("
+  },
+  {
+    "id" : "533e711e-5242-4917-a123-5349d32ffddf",
+    "prId" : 978,
+    "comments" : [
+      {
+        "id" : "a1a2ded5-b51d-4917-ab03-e4b4343ea6d2",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Try to do it `@tailrec` maybe?",
+        "createdAt" : "2019-11-04T11:19:46Z",
+        "updatedAt" : "2019-12-18T13:50:19Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "316b10f8dae0939ba80f4ffb8eb60ae0b0fad9ea",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,152 @@\n+package scala.meta.internal.pc\n+\n+import org.eclipse.{lsp4j => l}\n+import scala.meta.internal.mtags.MtagsEnrichments._\n+import scala.meta.pc.OffsetParams\n+import scala.meta.internal.jdk.CollectionConverters._\n+import scala.meta.internal.metals.CompilerOffsetParams\n+\n+class TypeDefinitionProvider(val compiler: MetalsGlobal, params: OffsetParams) {\n+  import compiler._\n+\n+  def typedTree: Option[(RichCompilationUnit, Position, Tree)] = {\n+    if (params.isWhitespace) {\n+      None\n+    } else {\n+      val unit = addCompilationUnit(\n+        code = params.text(),\n+        filename = params.filename(),\n+        cursor = None\n+      )\n+      val pos = unit.position(params.offset())\n+      val tree = typedHoverTreeAt(pos)\n+      Some(unit, pos, tree)\n+    }\n+  }\n+\n+  def typeSymbol: Option[(RichCompilationUnit, Position, Symbol)] = {\n+    val tri = typedTree\n+    tri match {\n+      case Some((t1, t2, tree))\n+          if tree.symbol.isTypeSymbol || tree.symbol.isMethod || tree.symbol.isConstructor =>\n+        Some(t1, t2, tree.symbol)\n+      case Some((t1, t2, tree)) if tree.tpe.isDefined =>\n+        Some(t1, t2, tree.tpe.typeSymbol)\n+      case Some((t1, t2, tree)) if tree.children.nonEmpty =>\n+        Some(t1, t2, tree.children.head.tpe.typeSymbol)\n+      case Some((t1, t2, tree)) =>\n+        val expTree = expandRangeToEnclosingApply(tree.pos)\n+        if (expTree.tpe.isDefined) Some(t1, t2, expTree.tpe.typeSymbol)\n+        else None\n+      case _ => None\n+    }\n+  }\n+\n+  def typeDefinition: List[l.Location] = {\n+    typeSymbol match {\n+      case Some((_, _, sym))\n+          if sym.pos.source.file != null && !sym.pos.source.file.isVirtual =>\n+        val pos = sym.pos\n+\n+        val src = scala.io.Source.fromFile(sym.pos.source.path)\n+\n+        val nParams = CompilerOffsetParams(\n+          pos.source.path,\n+          src.mkString,\n+          pos.start\n+        )\n+        src.close()\n+\n+        val provider = new PcDefinitionProvider(compiler, nParams)\n+        val res = provider.definition()\n+        res.locations().asScala.toList\n+      case Some((_, _, sym)) =>\n+        val pos = sym.pos\n+        val unit = unitOfFile(pos.source.file)\n+        unit.body.find(_.symbol == sym) match {\n+          case Some(value) =>\n+            value match {\n+              case t: DefTree =>\n+                List(new l.Location(pos.source.path, t.namePos.toLSP))\n+            }\n+          case None =>\n+            List(new l.Location(pos.source.path, pos.toLSP))\n+        }\n+      case _ => Nil\n+    }\n+  }\n+\n+  def expandRangeToEnclosingApply(pos: Position): Tree = {\n+    def tryTail(enclosing: List[Tree]): Option[Tree] = enclosing match {"
+  },
+  {
+    "id" : "b567e8f3-db5a-4b71-83d6-4af37da4a477",
+    "prId" : 978,
+    "comments" : [
+      {
+        "id" : "d50e537a-c1a9-45d5-896f-97b716778339",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "These are copied from HoverProvider - can we just reuse those methods? Or some of them may be moved to an object.",
+        "createdAt" : "2019-11-04T11:25:32Z",
+        "updatedAt" : "2019-12-18T13:50:19Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "316b10f8dae0939ba80f4ffb8eb60ae0b0fad9ea",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,152 @@\n+package scala.meta.internal.pc\n+\n+import org.eclipse.{lsp4j => l}\n+import scala.meta.internal.mtags.MtagsEnrichments._\n+import scala.meta.pc.OffsetParams\n+import scala.meta.internal.jdk.CollectionConverters._\n+import scala.meta.internal.metals.CompilerOffsetParams\n+\n+class TypeDefinitionProvider(val compiler: MetalsGlobal, params: OffsetParams) {\n+  import compiler._\n+\n+  def typedTree: Option[(RichCompilationUnit, Position, Tree)] = {\n+    if (params.isWhitespace) {\n+      None\n+    } else {\n+      val unit = addCompilationUnit(\n+        code = params.text(),\n+        filename = params.filename(),\n+        cursor = None\n+      )\n+      val pos = unit.position(params.offset())\n+      val tree = typedHoverTreeAt(pos)\n+      Some(unit, pos, tree)\n+    }\n+  }\n+\n+  def typeSymbol: Option[(RichCompilationUnit, Position, Symbol)] = {\n+    val tri = typedTree\n+    tri match {\n+      case Some((t1, t2, tree))\n+          if tree.symbol.isTypeSymbol || tree.symbol.isMethod || tree.symbol.isConstructor =>\n+        Some(t1, t2, tree.symbol)\n+      case Some((t1, t2, tree)) if tree.tpe.isDefined =>\n+        Some(t1, t2, tree.tpe.typeSymbol)\n+      case Some((t1, t2, tree)) if tree.children.nonEmpty =>\n+        Some(t1, t2, tree.children.head.tpe.typeSymbol)\n+      case Some((t1, t2, tree)) =>\n+        val expTree = expandRangeToEnclosingApply(tree.pos)\n+        if (expTree.tpe.isDefined) Some(t1, t2, expTree.tpe.typeSymbol)\n+        else None\n+      case _ => None\n+    }\n+  }\n+\n+  def typeDefinition: List[l.Location] = {\n+    typeSymbol match {\n+      case Some((_, _, sym))\n+          if sym.pos.source.file != null && !sym.pos.source.file.isVirtual =>\n+        val pos = sym.pos\n+\n+        val src = scala.io.Source.fromFile(sym.pos.source.path)\n+\n+        val nParams = CompilerOffsetParams(\n+          pos.source.path,\n+          src.mkString,\n+          pos.start\n+        )\n+        src.close()\n+\n+        val provider = new PcDefinitionProvider(compiler, nParams)\n+        val res = provider.definition()\n+        res.locations().asScala.toList\n+      case Some((_, _, sym)) =>\n+        val pos = sym.pos\n+        val unit = unitOfFile(pos.source.file)\n+        unit.body.find(_.symbol == sym) match {\n+          case Some(value) =>\n+            value match {\n+              case t: DefTree =>\n+                List(new l.Location(pos.source.path, t.namePos.toLSP))\n+            }\n+          case None =>\n+            List(new l.Location(pos.source.path, pos.toLSP))\n+        }\n+      case _ => Nil\n+    }\n+  }\n+\n+  def expandRangeToEnclosingApply(pos: Position): Tree = {\n+    def tryTail(enclosing: List[Tree]): Option[Tree] = enclosing match {\n+      case Nil => None\n+      case head :: tail =>\n+        head match {\n+          case TreeApply(qual, _) if qual.pos.includes(pos) =>\n+            tryTail(tail).orElse(Some(head))\n+          case New(_) =>\n+            tail match {\n+              case Nil => None\n+              case Select(_, _) :: next =>\n+                tryTail(next)\n+              case _ =>\n+                None\n+            }\n+          case _ =>\n+            None\n+        }\n+    }\n+    lastVisistedParentTrees match {\n+      case head :: tail =>\n+        tryTail(tail) match {\n+          case Some(value) =>\n+            typedTreeAt(value.pos)\n+          case None =>\n+            head\n+        }\n+      case _ =>\n+        EmptyTree\n+    }\n+  }\n+\n+  lazy val isForName: Set[compiler.Name] = Set[Name](\n+    nme.map,\n+    nme.withFilter,\n+    nme.flatMap,\n+    nme.foreach\n+  )\n+  def isForSynthetic(gtree: Tree): Boolean = {"
+  },
+  {
+    "id" : "9b2178d8-85c0-4eca-a51f-a9c0b4ce4c95",
+    "prId" : 978,
+    "comments" : [
+      {
+        "id" : "98018f8d-4a7b-47fe-b232-b0de9e379801",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Do we need to cast it still?",
+        "createdAt" : "2019-11-12T11:53:59Z",
+        "updatedAt" : "2019-12-18T13:50:19Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "316b10f8dae0939ba80f4ffb8eb60ae0b0fad9ea",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,80 @@\n+package scala.meta.internal.pc\n+\n+import java.nio.file.Files\n+import org.eclipse.{lsp4j => l}\n+import scala.meta.internal.mtags.MtagsEnrichments._\n+import scala.meta.pc.OffsetParams\n+import scala.meta.internal.jdk.CollectionConverters._\n+import scala.meta.internal.metals.CompilerOffsetParams\n+\n+class TypeDefinitionProvider(val compiler: MetalsGlobal, params: OffsetParams)\n+    extends ProviderCommon {\n+  import compiler._\n+\n+  def typedTree: Option[Tree] = {\n+    if (params.isWhitespace) {\n+      None\n+    } else {\n+      val unit = addCompilationUnit(\n+        code = params.text(),\n+        filename = params.filename(),\n+        cursor = None\n+      )\n+      val pos = unit.position(params.offset())\n+      val tree = typedHoverTreeAt(pos)\n+      Some(tree.asInstanceOf[compiler.Tree])"
+  },
+  {
+    "id" : "755fb966-9335-4887-983f-5890df61b129",
+    "prId" : 978,
+    "comments" : [
+      {
+        "id" : "be9d1395-fb14-4509-8434-8b2f8189de58",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "No need for the value here, the name doesn't add anything. It can be just `typedTree.map`",
+        "createdAt" : "2019-11-12T11:54:45Z",
+        "updatedAt" : "2019-12-18T13:50:19Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "dd064c21-7962-4dab-8d79-d56b2e98d290",
+        "parentId" : "be9d1395-fb14-4509-8434-8b2f8189de58",
+        "author" : {
+          "login" : "sswistun-vl",
+          "name" : null,
+          "avatarUrl" : "https://avatars3.githubusercontent.com/u/56023683?u=f003afed233efe6b3491f405b0affea9c99d3163&v=4"
+        },
+        "body" : "Fixed.",
+        "createdAt" : "2019-11-13T16:05:01Z",
+        "updatedAt" : "2019-12-18T13:50:19Z",
+        "lastEditedBy" : {
+          "login" : "sswistun-vl",
+          "name" : null,
+          "avatarUrl" : "https://avatars3.githubusercontent.com/u/56023683?u=f003afed233efe6b3491f405b0affea9c99d3163&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "316b10f8dae0939ba80f4ffb8eb60ae0b0fad9ea",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,80 @@\n+package scala.meta.internal.pc\n+\n+import java.nio.file.Files\n+import org.eclipse.{lsp4j => l}\n+import scala.meta.internal.mtags.MtagsEnrichments._\n+import scala.meta.pc.OffsetParams\n+import scala.meta.internal.jdk.CollectionConverters._\n+import scala.meta.internal.metals.CompilerOffsetParams\n+\n+class TypeDefinitionProvider(val compiler: MetalsGlobal, params: OffsetParams)\n+    extends ProviderCommon {\n+  import compiler._\n+\n+  def typedTree: Option[Tree] = {\n+    if (params.isWhitespace) {\n+      None\n+    } else {\n+      val unit = addCompilationUnit(\n+        code = params.text(),\n+        filename = params.filename(),\n+        cursor = None\n+      )\n+      val pos = unit.position(params.offset())\n+      val tree = typedHoverTreeAt(pos)\n+      Some(tree.asInstanceOf[compiler.Tree])\n+    }\n+  }\n+\n+  def typeSymbol: Option[Symbol] = {\n+    val t = typedTree"
+  },
+  {
+    "id" : "9e122b4b-6e0e-4f12-909f-495f894d9fde",
+    "prId" : 978,
+    "comments" : [
+      {
+        "id" : "0c3c8bb1-1cba-4266-9820-32b684906204",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Maybe extract the condition to a method just above? It would much more readable.",
+        "createdAt" : "2019-11-12T11:55:56Z",
+        "updatedAt" : "2019-12-18T13:50:19Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "4f1f75f6-45ca-430a-8298-3aba1778c633",
+        "parentId" : "0c3c8bb1-1cba-4266-9820-32b684906204",
+        "author" : {
+          "login" : "sswistun-vl",
+          "name" : null,
+          "avatarUrl" : "https://avatars3.githubusercontent.com/u/56023683?u=f003afed233efe6b3491f405b0affea9c99d3163&v=4"
+        },
+        "body" : "Fixed.",
+        "createdAt" : "2019-11-13T16:05:13Z",
+        "updatedAt" : "2019-12-18T13:50:19Z",
+        "lastEditedBy" : {
+          "login" : "sswistun-vl",
+          "name" : null,
+          "avatarUrl" : "https://avatars3.githubusercontent.com/u/56023683?u=f003afed233efe6b3491f405b0affea9c99d3163&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "316b10f8dae0939ba80f4ffb8eb60ae0b0fad9ea",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,80 @@\n+package scala.meta.internal.pc\n+\n+import java.nio.file.Files\n+import org.eclipse.{lsp4j => l}\n+import scala.meta.internal.mtags.MtagsEnrichments._\n+import scala.meta.pc.OffsetParams\n+import scala.meta.internal.jdk.CollectionConverters._\n+import scala.meta.internal.metals.CompilerOffsetParams\n+\n+class TypeDefinitionProvider(val compiler: MetalsGlobal, params: OffsetParams)\n+    extends ProviderCommon {\n+  import compiler._\n+\n+  def typedTree: Option[Tree] = {\n+    if (params.isWhitespace) {\n+      None\n+    } else {\n+      val unit = addCompilationUnit(\n+        code = params.text(),\n+        filename = params.filename(),\n+        cursor = None\n+      )\n+      val pos = unit.position(params.offset())\n+      val tree = typedHoverTreeAt(pos)\n+      Some(tree.asInstanceOf[compiler.Tree])\n+    }\n+  }\n+\n+  def typeSymbol: Option[Symbol] = {\n+    val t = typedTree\n+    t.flatMap {\n+      case tree\n+          if tree.symbol.isTypeSymbol || tree.symbol.isMethod || tree.symbol.isConstructor =>\n+        Some(tree.symbol)\n+      case tree if tree.tpe.isDefined =>\n+        Some(tree.tpe.typeSymbol)\n+      case tree if tree.children.nonEmpty =>\n+        Some(tree.children.head.tpe.typeSymbol)\n+      case tree =>\n+        val expTree = expandRangeToEnclosingApply(tree.pos)\n+        if (expTree.tpe.isDefined) Some(expTree.tpe.typeSymbol)\n+        else None\n+      case _ => None\n+    }\n+  }\n+\n+  def typeDefinition: List[l.Location] = {\n+    typeSymbol.map {\n+      case sym\n+          if sym.pos.source.file != null && !sym.pos.source.file.isVirtual =>"
+  },
+  {
+    "id" : "b7de46a7-f544-4485-a888-cc6a41281bc3",
+    "prId" : 978,
+    "comments" : [
+      {
+        "id" : "83f606a2-8c33-4ec1-9929-69aa54d49507",
+        "parentId" : null,
+        "author" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "body" : "what are `nParams` ? My initial intuition was that the `n` stands for `number` (as in \"amount\")",
+        "createdAt" : "2019-11-13T08:05:16Z",
+        "updatedAt" : "2019-12-18T13:50:19Z",
+        "lastEditedBy" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "d5e0ced7-1374-47c1-ae33-b769d07d06d9",
+        "parentId" : "83f606a2-8c33-4ec1-9929-69aa54d49507",
+        "author" : {
+          "login" : "sswistun-vl",
+          "name" : null,
+          "avatarUrl" : "https://avatars3.githubusercontent.com/u/56023683?u=f003afed233efe6b3491f405b0affea9c99d3163&v=4"
+        },
+        "body" : "Fixed.",
+        "createdAt" : "2019-11-13T16:12:31Z",
+        "updatedAt" : "2019-12-18T13:50:19Z",
+        "lastEditedBy" : {
+          "login" : "sswistun-vl",
+          "name" : null,
+          "avatarUrl" : "https://avatars3.githubusercontent.com/u/56023683?u=f003afed233efe6b3491f405b0affea9c99d3163&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "316b10f8dae0939ba80f4ffb8eb60ae0b0fad9ea",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,80 @@\n+package scala.meta.internal.pc\n+\n+import java.nio.file.Files\n+import org.eclipse.{lsp4j => l}\n+import scala.meta.internal.mtags.MtagsEnrichments._\n+import scala.meta.pc.OffsetParams\n+import scala.meta.internal.jdk.CollectionConverters._\n+import scala.meta.internal.metals.CompilerOffsetParams\n+\n+class TypeDefinitionProvider(val compiler: MetalsGlobal, params: OffsetParams)\n+    extends ProviderCommon {\n+  import compiler._\n+\n+  def typedTree: Option[Tree] = {\n+    if (params.isWhitespace) {\n+      None\n+    } else {\n+      val unit = addCompilationUnit(\n+        code = params.text(),\n+        filename = params.filename(),\n+        cursor = None\n+      )\n+      val pos = unit.position(params.offset())\n+      val tree = typedHoverTreeAt(pos)\n+      Some(tree.asInstanceOf[compiler.Tree])\n+    }\n+  }\n+\n+  def typeSymbol: Option[Symbol] = {\n+    val t = typedTree\n+    t.flatMap {\n+      case tree\n+          if tree.symbol.isTypeSymbol || tree.symbol.isMethod || tree.symbol.isConstructor =>\n+        Some(tree.symbol)\n+      case tree if tree.tpe.isDefined =>\n+        Some(tree.tpe.typeSymbol)\n+      case tree if tree.children.nonEmpty =>\n+        Some(tree.children.head.tpe.typeSymbol)\n+      case tree =>\n+        val expTree = expandRangeToEnclosingApply(tree.pos)\n+        if (expTree.tpe.isDefined) Some(expTree.tpe.typeSymbol)\n+        else None\n+      case _ => None\n+    }\n+  }\n+\n+  def typeDefinition: List[l.Location] = {\n+    typeSymbol.map {\n+      case sym\n+          if sym.pos.source.file != null && !sym.pos.source.file.isVirtual =>\n+        val pos = sym.pos\n+\n+        val src = Files.readAllLines(sym.pos.source.file.file.toPath).asScala\n+\n+        val nParams = CompilerOffsetParams("
+  },
+  {
+    "id" : "4a68fec4-6733-4bdb-a92a-9c31cf2fb349",
+    "prId" : 978,
+    "comments" : [
+      {
+        "id" : "742a48c7-3e9e-4470-b1bd-fe7768dc46fe",
+        "parentId" : null,
+        "author" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "body" : "`res` is a redundant variable, let's rename it to `val locations = provider.definition().locations()`",
+        "createdAt" : "2019-11-13T08:06:22Z",
+        "updatedAt" : "2019-12-18T13:50:19Z",
+        "lastEditedBy" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "09810c76-1fe7-4acf-aa86-e366864f3c25",
+        "parentId" : "742a48c7-3e9e-4470-b1bd-fe7768dc46fe",
+        "author" : {
+          "login" : "sswistun-vl",
+          "name" : null,
+          "avatarUrl" : "https://avatars3.githubusercontent.com/u/56023683?u=f003afed233efe6b3491f405b0affea9c99d3163&v=4"
+        },
+        "body" : "Fixed.",
+        "createdAt" : "2019-11-13T16:12:40Z",
+        "updatedAt" : "2019-12-18T13:50:19Z",
+        "lastEditedBy" : {
+          "login" : "sswistun-vl",
+          "name" : null,
+          "avatarUrl" : "https://avatars3.githubusercontent.com/u/56023683?u=f003afed233efe6b3491f405b0affea9c99d3163&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "316b10f8dae0939ba80f4ffb8eb60ae0b0fad9ea",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,80 @@\n+package scala.meta.internal.pc\n+\n+import java.nio.file.Files\n+import org.eclipse.{lsp4j => l}\n+import scala.meta.internal.mtags.MtagsEnrichments._\n+import scala.meta.pc.OffsetParams\n+import scala.meta.internal.jdk.CollectionConverters._\n+import scala.meta.internal.metals.CompilerOffsetParams\n+\n+class TypeDefinitionProvider(val compiler: MetalsGlobal, params: OffsetParams)\n+    extends ProviderCommon {\n+  import compiler._\n+\n+  def typedTree: Option[Tree] = {\n+    if (params.isWhitespace) {\n+      None\n+    } else {\n+      val unit = addCompilationUnit(\n+        code = params.text(),\n+        filename = params.filename(),\n+        cursor = None\n+      )\n+      val pos = unit.position(params.offset())\n+      val tree = typedHoverTreeAt(pos)\n+      Some(tree.asInstanceOf[compiler.Tree])\n+    }\n+  }\n+\n+  def typeSymbol: Option[Symbol] = {\n+    val t = typedTree\n+    t.flatMap {\n+      case tree\n+          if tree.symbol.isTypeSymbol || tree.symbol.isMethod || tree.symbol.isConstructor =>\n+        Some(tree.symbol)\n+      case tree if tree.tpe.isDefined =>\n+        Some(tree.tpe.typeSymbol)\n+      case tree if tree.children.nonEmpty =>\n+        Some(tree.children.head.tpe.typeSymbol)\n+      case tree =>\n+        val expTree = expandRangeToEnclosingApply(tree.pos)\n+        if (expTree.tpe.isDefined) Some(expTree.tpe.typeSymbol)\n+        else None\n+      case _ => None\n+    }\n+  }\n+\n+  def typeDefinition: List[l.Location] = {\n+    typeSymbol.map {\n+      case sym\n+          if sym.pos.source.file != null && !sym.pos.source.file.isVirtual =>\n+        val pos = sym.pos\n+\n+        val src = Files.readAllLines(sym.pos.source.file.file.toPath).asScala\n+\n+        val nParams = CompilerOffsetParams(\n+          pos.source.path,\n+          src.mkString,\n+          pos.start\n+        )\n+\n+        val provider = new PcDefinitionProvider(compiler, nParams)\n+        val res = provider.definition()"
+  },
+  {
+    "id" : "8a1b6e64-0fe4-4e61-8fd5-644305ff8bf1",
+    "prId" : 978,
+    "comments" : [
+      {
+        "id" : "68377f3c-2296-416e-97c6-608a93f72549",
+        "parentId" : null,
+        "author" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "body" : "```scala\r\nval some_sensible_name = unit.body\r\n  .find(_.symbol == sym) \r\n  .collect { case t: DefTree => t.namePos }\r\n  .getOrElse(pos)\r\n\r\nList(new l.Location(pos.source.path, some_sensible_name.toLSP)\r\n```",
+        "createdAt" : "2019-11-13T08:11:42Z",
+        "updatedAt" : "2019-12-18T13:50:19Z",
+        "lastEditedBy" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "183933fe-4aa8-4734-8fe9-5d14f1c1fc87",
+        "parentId" : "68377f3c-2296-416e-97c6-608a93f72549",
+        "author" : {
+          "login" : "sswistun-vl",
+          "name" : null,
+          "avatarUrl" : "https://avatars3.githubusercontent.com/u/56023683?u=f003afed233efe6b3491f405b0affea9c99d3163&v=4"
+        },
+        "body" : "Fixed.",
+        "createdAt" : "2019-11-14T09:50:31Z",
+        "updatedAt" : "2019-12-18T13:50:19Z",
+        "lastEditedBy" : {
+          "login" : "sswistun-vl",
+          "name" : null,
+          "avatarUrl" : "https://avatars3.githubusercontent.com/u/56023683?u=f003afed233efe6b3491f405b0affea9c99d3163&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "316b10f8dae0939ba80f4ffb8eb60ae0b0fad9ea",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,80 @@\n+package scala.meta.internal.pc\n+\n+import java.nio.file.Files\n+import org.eclipse.{lsp4j => l}\n+import scala.meta.internal.mtags.MtagsEnrichments._\n+import scala.meta.pc.OffsetParams\n+import scala.meta.internal.jdk.CollectionConverters._\n+import scala.meta.internal.metals.CompilerOffsetParams\n+\n+class TypeDefinitionProvider(val compiler: MetalsGlobal, params: OffsetParams)\n+    extends ProviderCommon {\n+  import compiler._\n+\n+  def typedTree: Option[Tree] = {\n+    if (params.isWhitespace) {\n+      None\n+    } else {\n+      val unit = addCompilationUnit(\n+        code = params.text(),\n+        filename = params.filename(),\n+        cursor = None\n+      )\n+      val pos = unit.position(params.offset())\n+      val tree = typedHoverTreeAt(pos)\n+      Some(tree.asInstanceOf[compiler.Tree])\n+    }\n+  }\n+\n+  def typeSymbol: Option[Symbol] = {\n+    val t = typedTree\n+    t.flatMap {\n+      case tree\n+          if tree.symbol.isTypeSymbol || tree.symbol.isMethod || tree.symbol.isConstructor =>\n+        Some(tree.symbol)\n+      case tree if tree.tpe.isDefined =>\n+        Some(tree.tpe.typeSymbol)\n+      case tree if tree.children.nonEmpty =>\n+        Some(tree.children.head.tpe.typeSymbol)\n+      case tree =>\n+        val expTree = expandRangeToEnclosingApply(tree.pos)\n+        if (expTree.tpe.isDefined) Some(expTree.tpe.typeSymbol)\n+        else None\n+      case _ => None\n+    }\n+  }\n+\n+  def typeDefinition: List[l.Location] = {\n+    typeSymbol.map {\n+      case sym\n+          if sym.pos.source.file != null && !sym.pos.source.file.isVirtual =>\n+        val pos = sym.pos\n+\n+        val src = Files.readAllLines(sym.pos.source.file.file.toPath).asScala\n+\n+        val nParams = CompilerOffsetParams(\n+          pos.source.path,\n+          src.mkString,\n+          pos.start\n+        )\n+\n+        val provider = new PcDefinitionProvider(compiler, nParams)\n+        val res = provider.definition()\n+        res.locations().asScala.toList\n+      case sym =>\n+        val pos = sym.pos\n+        val unit = unitOfFile(pos.source.file)\n+        unit.body.find(_.symbol == sym) match {\n+          case Some(value) =>\n+            value match {\n+              case t: DefTree =>\n+                List(new l.Location(pos.source.path, t.namePos.toLSP))\n+            }\n+          case None =>\n+            List(new l.Location(pos.source.path, pos.toLSP))\n+        }"
+  },
+  {
+    "id" : "2ad3287d-8258-47b1-994d-5c0329277d9d",
+    "prId" : 978,
+    "comments" : [
+      {
+        "id" : "72594efe-1692-49c5-95aa-6a574eb45944",
+        "parentId" : null,
+        "author" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "body" : "`isVirtualFile` or `hasVirtualSource` ?",
+        "createdAt" : "2019-11-14T15:58:24Z",
+        "updatedAt" : "2019-12-18T13:50:19Z",
+        "lastEditedBy" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "3826a1ef-c612-4195-9f03-1e2e517e55b6",
+        "parentId" : "72594efe-1692-49c5-95aa-6a574eb45944",
+        "author" : {
+          "login" : "sswistun-vl",
+          "name" : null,
+          "avatarUrl" : "https://avatars3.githubusercontent.com/u/56023683?u=f003afed233efe6b3491f405b0affea9c99d3163&v=4"
+        },
+        "body" : "Changed.",
+        "createdAt" : "2019-11-15T08:20:19Z",
+        "updatedAt" : "2019-12-18T13:50:19Z",
+        "lastEditedBy" : {
+          "login" : "sswistun-vl",
+          "name" : null,
+          "avatarUrl" : "https://avatars3.githubusercontent.com/u/56023683?u=f003afed233efe6b3491f405b0affea9c99d3163&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "316b10f8dae0939ba80f4ffb8eb60ae0b0fad9ea",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,76 @@\n+package scala.meta.internal.pc\n+\n+import java.nio.file.Files\n+import org.eclipse.{lsp4j => l}\n+import scala.meta.internal.mtags.MtagsEnrichments._\n+import scala.meta.pc.OffsetParams\n+import scala.meta.internal.jdk.CollectionConverters._\n+import scala.meta.internal.metals.CompilerOffsetParams\n+\n+class TypeDefinitionProvider(val compiler: MetalsGlobal, params: OffsetParams)\n+    extends AbstractProvider {\n+  import compiler._\n+\n+  def typedTree: Option[Tree] = {\n+    if (params.isWhitespace) {\n+      None\n+    } else {\n+      val unit = addCompilationUnit(\n+        code = params.text(),\n+        filename = params.filename(),\n+        cursor = None\n+      )\n+      val pos = unit.position(params.offset())\n+      val tree = typedHoverTreeAt(pos)\n+      Some(tree)\n+    }\n+  }\n+\n+  def typeSymbol: Option[Symbol] = {\n+    typedTree.flatMap {\n+      case tree\n+          if tree.symbol.isTypeSymbol || tree.symbol.isMethod || tree.symbol.isConstructor =>\n+        Some(tree.symbol)\n+      case tree if tree.tpe.isDefined =>\n+        Some(tree.tpe.typeSymbol)\n+      case tree if tree.children.nonEmpty =>\n+        Some(tree.children.head.tpe.typeSymbol)\n+      case tree =>\n+        val expTree = expandRangeToEnclosingApply(tree.pos)\n+        if (expTree.tpe.isDefined) Some(expTree.tpe.typeSymbol)\n+        else None\n+      case _ => None\n+    }\n+  }\n+\n+  private def isFileVirtual(sym: compiler.Symbol) ="
+  },
+  {
+    "id" : "19e3df1e-f521-40f9-9b0b-4252a3238766",
+    "prId" : 978,
+    "comments" : [
+      {
+        "id" : "b81639e5-5374-411a-b11a-d163dc6eecc6",
+        "parentId" : null,
+        "author" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "body" : "invert the condition. Conditions which are not negated are easier to reason about",
+        "createdAt" : "2019-11-14T15:59:32Z",
+        "updatedAt" : "2019-12-18T13:50:19Z",
+        "lastEditedBy" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "a3df621c-5a91-4cc8-9d20-8127f198c534",
+        "parentId" : "b81639e5-5374-411a-b11a-d163dc6eecc6",
+        "author" : {
+          "login" : "sswistun-vl",
+          "name" : null,
+          "avatarUrl" : "https://avatars3.githubusercontent.com/u/56023683?u=f003afed233efe6b3491f405b0affea9c99d3163&v=4"
+        },
+        "body" : "Fixed.",
+        "createdAt" : "2019-11-15T08:27:44Z",
+        "updatedAt" : "2019-12-18T13:50:19Z",
+        "lastEditedBy" : {
+          "login" : "sswistun-vl",
+          "name" : null,
+          "avatarUrl" : "https://avatars3.githubusercontent.com/u/56023683?u=f003afed233efe6b3491f405b0affea9c99d3163&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "316b10f8dae0939ba80f4ffb8eb60ae0b0fad9ea",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,76 @@\n+package scala.meta.internal.pc\n+\n+import java.nio.file.Files\n+import org.eclipse.{lsp4j => l}\n+import scala.meta.internal.mtags.MtagsEnrichments._\n+import scala.meta.pc.OffsetParams\n+import scala.meta.internal.jdk.CollectionConverters._\n+import scala.meta.internal.metals.CompilerOffsetParams\n+\n+class TypeDefinitionProvider(val compiler: MetalsGlobal, params: OffsetParams)\n+    extends AbstractProvider {\n+  import compiler._\n+\n+  def typedTree: Option[Tree] = {\n+    if (params.isWhitespace) {\n+      None\n+    } else {\n+      val unit = addCompilationUnit(\n+        code = params.text(),\n+        filename = params.filename(),\n+        cursor = None\n+      )\n+      val pos = unit.position(params.offset())\n+      val tree = typedHoverTreeAt(pos)\n+      Some(tree)\n+    }\n+  }\n+\n+  def typeSymbol: Option[Symbol] = {\n+    typedTree.flatMap {\n+      case tree\n+          if tree.symbol.isTypeSymbol || tree.symbol.isMethod || tree.symbol.isConstructor =>\n+        Some(tree.symbol)\n+      case tree if tree.tpe.isDefined =>\n+        Some(tree.tpe.typeSymbol)\n+      case tree if tree.children.nonEmpty =>\n+        Some(tree.children.head.tpe.typeSymbol)\n+      case tree =>\n+        val expTree = expandRangeToEnclosingApply(tree.pos)\n+        if (expTree.tpe.isDefined) Some(expTree.tpe.typeSymbol)\n+        else None\n+      case _ => None\n+    }\n+  }\n+\n+  private def isFileVirtual(sym: compiler.Symbol) =\n+    sym.pos.source.file == null || sym.pos.source.file.isVirtual\n+\n+  def typeDefinition: List[l.Location] = {\n+    typeSymbol.map {\n+      case sym if !isFileVirtual(sym) =>"
+  },
+  {
+    "id" : "c4ddfbdc-8fd4-4f47-bb64-0de59f2ccef1",
+    "prId" : 978,
+    "comments" : [
+      {
+        "id" : "b0889051-7952-4d61-9373-e32a6a82fd88",
+        "parentId" : null,
+        "author" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "body" : "```scala\r\n  val content = Files.readAllBytes(sym.pos.source.file.file.toPath)`\r\n  val params = CompilerOffsetParams(\r\n    pos.source.path,\r\n    new String(content),\r\n    pos.start\r\n)\r\n\r\n```",
+        "createdAt" : "2019-11-14T16:01:37Z",
+        "updatedAt" : "2019-12-18T13:50:19Z",
+        "lastEditedBy" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "802766b4-939a-4a9a-aa31-02e42afa2535",
+        "parentId" : "b0889051-7952-4d61-9373-e32a6a82fd88",
+        "author" : {
+          "login" : "sswistun-vl",
+          "name" : null,
+          "avatarUrl" : "https://avatars3.githubusercontent.com/u/56023683?u=f003afed233efe6b3491f405b0affea9c99d3163&v=4"
+        },
+        "body" : "Renamed.",
+        "createdAt" : "2019-11-15T08:27:36Z",
+        "updatedAt" : "2019-12-18T13:50:19Z",
+        "lastEditedBy" : {
+          "login" : "sswistun-vl",
+          "name" : null,
+          "avatarUrl" : "https://avatars3.githubusercontent.com/u/56023683?u=f003afed233efe6b3491f405b0affea9c99d3163&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "316b10f8dae0939ba80f4ffb8eb60ae0b0fad9ea",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,76 @@\n+package scala.meta.internal.pc\n+\n+import java.nio.file.Files\n+import org.eclipse.{lsp4j => l}\n+import scala.meta.internal.mtags.MtagsEnrichments._\n+import scala.meta.pc.OffsetParams\n+import scala.meta.internal.jdk.CollectionConverters._\n+import scala.meta.internal.metals.CompilerOffsetParams\n+\n+class TypeDefinitionProvider(val compiler: MetalsGlobal, params: OffsetParams)\n+    extends AbstractProvider {\n+  import compiler._\n+\n+  def typedTree: Option[Tree] = {\n+    if (params.isWhitespace) {\n+      None\n+    } else {\n+      val unit = addCompilationUnit(\n+        code = params.text(),\n+        filename = params.filename(),\n+        cursor = None\n+      )\n+      val pos = unit.position(params.offset())\n+      val tree = typedHoverTreeAt(pos)\n+      Some(tree)\n+    }\n+  }\n+\n+  def typeSymbol: Option[Symbol] = {\n+    typedTree.flatMap {\n+      case tree\n+          if tree.symbol.isTypeSymbol || tree.symbol.isMethod || tree.symbol.isConstructor =>\n+        Some(tree.symbol)\n+      case tree if tree.tpe.isDefined =>\n+        Some(tree.tpe.typeSymbol)\n+      case tree if tree.children.nonEmpty =>\n+        Some(tree.children.head.tpe.typeSymbol)\n+      case tree =>\n+        val expTree = expandRangeToEnclosingApply(tree.pos)\n+        if (expTree.tpe.isDefined) Some(expTree.tpe.typeSymbol)\n+        else None\n+      case _ => None\n+    }\n+  }\n+\n+  private def isFileVirtual(sym: compiler.Symbol) =\n+    sym.pos.source.file == null || sym.pos.source.file.isVirtual\n+\n+  def typeDefinition: List[l.Location] = {\n+    typeSymbol.map {\n+      case sym if !isFileVirtual(sym) =>\n+        val pos = sym.pos\n+\n+        val src = Files.readAllLines(sym.pos.source.file.file.toPath).asScala\n+\n+        val params = CompilerOffsetParams(\n+          pos.source.path,\n+          src.mkString,\n+          pos.start\n+        )"
+  },
+  {
+    "id" : "979b0a9a-beb7-48fa-8bea-9bb64806d091",
+    "prId" : 978,
+    "comments" : [
+      {
+        "id" : "d457f179-4595-4cf3-9d8f-5c567e8f504e",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "I think `sym.pos` can be null and `sym.pos.source` can also be null",
+        "createdAt" : "2019-11-16T01:00:10Z",
+        "updatedAt" : "2019-12-18T13:50:19Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "8c2f8c9f-f4de-4864-abaa-13f4559a204b",
+        "parentId" : "d457f179-4595-4cf3-9d8f-5c567e8f504e",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "I believe `pos.isDefined` is a sufficient guard",
+        "createdAt" : "2019-11-16T01:02:23Z",
+        "updatedAt" : "2019-12-18T13:50:19Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "7edd4ccd-c692-4e22-b893-e78967194b14",
+        "parentId" : "d457f179-4595-4cf3-9d8f-5c567e8f504e",
+        "author" : {
+          "login" : "sswistun-vl",
+          "name" : null,
+          "avatarUrl" : "https://avatars3.githubusercontent.com/u/56023683?u=f003afed233efe6b3491f405b0affea9c99d3163&v=4"
+        },
+        "body" : "Fixed.",
+        "createdAt" : "2019-11-18T11:11:57Z",
+        "updatedAt" : "2019-12-18T13:50:19Z",
+        "lastEditedBy" : {
+          "login" : "sswistun-vl",
+          "name" : null,
+          "avatarUrl" : "https://avatars3.githubusercontent.com/u/56023683?u=f003afed233efe6b3491f405b0affea9c99d3163&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "316b10f8dae0939ba80f4ffb8eb60ae0b0fad9ea",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,76 @@\n+package scala.meta.internal.pc\n+\n+import java.nio.file.Files\n+import org.eclipse.{lsp4j => l}\n+import scala.meta.internal.mtags.MtagsEnrichments._\n+import scala.meta.pc.OffsetParams\n+import scala.meta.internal.jdk.CollectionConverters._\n+import scala.meta.internal.metals.CompilerOffsetParams\n+\n+class TypeDefinitionProvider(val compiler: MetalsGlobal, params: OffsetParams)\n+    extends AbstractProvider {\n+  import compiler._\n+\n+  def typedTree: Option[Tree] = {\n+    if (params.isWhitespace) {\n+      None\n+    } else {\n+      val unit = addCompilationUnit(\n+        code = params.text(),\n+        filename = params.filename(),\n+        cursor = None\n+      )\n+      val pos = unit.position(params.offset())\n+      val tree = typedHoverTreeAt(pos)\n+      Some(tree)\n+    }\n+  }\n+\n+  def typeSymbol: Option[Symbol] = {\n+    typedTree.flatMap {\n+      case tree\n+          if tree.symbol.isTypeSymbol || tree.symbol.isMethod || tree.symbol.isConstructor =>\n+        Some(tree.symbol)\n+      case tree if tree.tpe.isDefined =>\n+        Some(tree.tpe.typeSymbol)\n+      case tree if tree.children.nonEmpty =>\n+        Some(tree.children.head.tpe.typeSymbol)\n+      case tree =>\n+        val expTree = expandRangeToEnclosingApply(tree.pos)\n+        if (expTree.tpe.isDefined) Some(expTree.tpe.typeSymbol)\n+        else None\n+      case _ => None\n+    }\n+  }\n+\n+  private def hasVirtualSource(sym: compiler.Symbol) =\n+    sym.pos.source.file == null || sym.pos.source.file.isVirtual"
+  },
+  {
+    "id" : "aec3fe2e-ac48-417a-b71a-1228109bc8b9",
+    "prId" : 978,
+    "comments" : [
+      {
+        "id" : "bf79259a-14ff-4676-b6a5-0e1ac7a28b4e",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "nit: the public method that is called externally should be at the top",
+        "createdAt" : "2019-11-16T01:48:42Z",
+        "updatedAt" : "2019-12-18T13:50:19Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "f1660543-eb62-4cd6-a495-e11052dfc8b1",
+        "parentId" : "bf79259a-14ff-4676-b6a5-0e1ac7a28b4e",
+        "author" : {
+          "login" : "sswistun-vl",
+          "name" : null,
+          "avatarUrl" : "https://avatars3.githubusercontent.com/u/56023683?u=f003afed233efe6b3491f405b0affea9c99d3163&v=4"
+        },
+        "body" : "Changed.",
+        "createdAt" : "2019-11-18T11:12:44Z",
+        "updatedAt" : "2019-12-18T13:50:19Z",
+        "lastEditedBy" : {
+          "login" : "sswistun-vl",
+          "name" : null,
+          "avatarUrl" : "https://avatars3.githubusercontent.com/u/56023683?u=f003afed233efe6b3491f405b0affea9c99d3163&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "316b10f8dae0939ba80f4ffb8eb60ae0b0fad9ea",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,76 @@\n+package scala.meta.internal.pc\n+\n+import java.nio.file.Files\n+import org.eclipse.{lsp4j => l}\n+import scala.meta.internal.mtags.MtagsEnrichments._\n+import scala.meta.pc.OffsetParams\n+import scala.meta.internal.jdk.CollectionConverters._\n+import scala.meta.internal.metals.CompilerOffsetParams\n+\n+class TypeDefinitionProvider(val compiler: MetalsGlobal, params: OffsetParams)\n+    extends AbstractProvider {\n+  import compiler._\n+\n+  def typedTree: Option[Tree] = {\n+    if (params.isWhitespace) {\n+      None\n+    } else {\n+      val unit = addCompilationUnit(\n+        code = params.text(),\n+        filename = params.filename(),\n+        cursor = None\n+      )\n+      val pos = unit.position(params.offset())\n+      val tree = typedHoverTreeAt(pos)\n+      Some(tree)\n+    }\n+  }\n+\n+  def typeSymbol: Option[Symbol] = {\n+    typedTree.flatMap {\n+      case tree\n+          if tree.symbol.isTypeSymbol || tree.symbol.isMethod || tree.symbol.isConstructor =>\n+        Some(tree.symbol)\n+      case tree if tree.tpe.isDefined =>\n+        Some(tree.tpe.typeSymbol)\n+      case tree if tree.children.nonEmpty =>\n+        Some(tree.children.head.tpe.typeSymbol)\n+      case tree =>\n+        val expTree = expandRangeToEnclosingApply(tree.pos)\n+        if (expTree.tpe.isDefined) Some(expTree.tpe.typeSymbol)\n+        else None\n+      case _ => None\n+    }\n+  }\n+\n+  private def hasVirtualSource(sym: compiler.Symbol) =\n+    sym.pos.source.file == null || sym.pos.source.file.isVirtual\n+\n+  def typeDefinition: List[l.Location] = {"
+  },
+  {
+    "id" : "bddd843d-5ed2-4a79-969b-fea055b40818",
+    "prId" : 978,
+    "comments" : [
+      {
+        "id" : "06094ab4-e893-4bf8-9db5-aeac399f7bad",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "nit: i find it a bit unusual that all the methods in this class have no parameters. In general, I prefer the following structure\r\n\r\n```scala\r\nclass FooProvider {\r\n  def typeDefinition(params: OffsetParams): List[Locations] = {\r\n    for {\r\n      tree <- typedTree(params)\r\n      symbol <- typeSymbol(tree)\r\n    } yield definition(symbol)\r\n  }\r\n  private def typeSymbol(tree: Tree): Option[Symbol] = ???\r\n  private def typedTree(params: OffsetParams): Option[Tree] = ???\r\n  private def definition(sym: Symbol): Option[List[Location]] = ???\r\n}\r\n```",
+        "createdAt" : "2019-11-16T01:51:35Z",
+        "updatedAt" : "2019-12-18T13:50:19Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "c421054c-8121-4b95-9400-de9f3f374e57",
+        "parentId" : "06094ab4-e893-4bf8-9db5-aeac399f7bad",
+        "author" : {
+          "login" : "sswistun-vl",
+          "name" : null,
+          "avatarUrl" : "https://avatars3.githubusercontent.com/u/56023683?u=f003afed233efe6b3491f405b0affea9c99d3163&v=4"
+        },
+        "body" : "Changed. I've structured it after HoverProvider, so it may require some work as well.",
+        "createdAt" : "2019-11-18T11:21:20Z",
+        "updatedAt" : "2019-12-18T13:50:19Z",
+        "lastEditedBy" : {
+          "login" : "sswistun-vl",
+          "name" : null,
+          "avatarUrl" : "https://avatars3.githubusercontent.com/u/56023683?u=f003afed233efe6b3491f405b0affea9c99d3163&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "316b10f8dae0939ba80f4ffb8eb60ae0b0fad9ea",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,76 @@\n+package scala.meta.internal.pc\n+\n+import java.nio.file.Files\n+import org.eclipse.{lsp4j => l}\n+import scala.meta.internal.mtags.MtagsEnrichments._\n+import scala.meta.pc.OffsetParams\n+import scala.meta.internal.jdk.CollectionConverters._\n+import scala.meta.internal.metals.CompilerOffsetParams\n+\n+class TypeDefinitionProvider(val compiler: MetalsGlobal, params: OffsetParams)\n+    extends AbstractProvider {\n+  import compiler._\n+\n+  def typedTree: Option[Tree] = {"
+  },
+  {
+    "id" : "39b20cec-78cf-47f0-ba24-07a24a664eed",
+    "prId" : 978,
+    "comments" : [
+      {
+        "id" : "33a8e6b7-2aff-4a97-81a6-2d840fb2ab9a",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Beware that `expTree.tpe` can be null here",
+        "createdAt" : "2019-11-18T05:03:50Z",
+        "updatedAt" : "2019-12-18T13:50:19Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "34427f28-a988-42f5-b277-6115a069cb9b",
+        "parentId" : "33a8e6b7-2aff-4a97-81a6-2d840fb2ab9a",
+        "author" : {
+          "login" : "sswistun-vl",
+          "name" : null,
+          "avatarUrl" : "https://avatars3.githubusercontent.com/u/56023683?u=f003afed233efe6b3491f405b0affea9c99d3163&v=4"
+        },
+        "body" : "I've added null check there.",
+        "createdAt" : "2019-11-18T11:50:09Z",
+        "updatedAt" : "2019-12-18T13:50:19Z",
+        "lastEditedBy" : {
+          "login" : "sswistun-vl",
+          "name" : null,
+          "avatarUrl" : "https://avatars3.githubusercontent.com/u/56023683?u=f003afed233efe6b3491f405b0affea9c99d3163&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "316b10f8dae0939ba80f4ffb8eb60ae0b0fad9ea",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,76 @@\n+package scala.meta.internal.pc\n+\n+import java.nio.file.Files\n+import org.eclipse.{lsp4j => l}\n+import scala.meta.internal.mtags.MtagsEnrichments._\n+import scala.meta.pc.OffsetParams\n+import scala.meta.internal.jdk.CollectionConverters._\n+import scala.meta.internal.metals.CompilerOffsetParams\n+\n+class TypeDefinitionProvider(val compiler: MetalsGlobal, params: OffsetParams)\n+    extends AbstractProvider {\n+  import compiler._\n+\n+  def typedTree: Option[Tree] = {\n+    if (params.isWhitespace) {\n+      None\n+    } else {\n+      val unit = addCompilationUnit(\n+        code = params.text(),\n+        filename = params.filename(),\n+        cursor = None\n+      )\n+      val pos = unit.position(params.offset())\n+      val tree = typedHoverTreeAt(pos)\n+      Some(tree)\n+    }\n+  }\n+\n+  def typeSymbol: Option[Symbol] = {\n+    typedTree.flatMap {\n+      case tree\n+          if tree.symbol.isTypeSymbol || tree.symbol.isMethod || tree.symbol.isConstructor =>\n+        Some(tree.symbol)\n+      case tree if tree.tpe.isDefined =>\n+        Some(tree.tpe.typeSymbol)\n+      case tree if tree.children.nonEmpty =>\n+        Some(tree.children.head.tpe.typeSymbol)\n+      case tree =>\n+        val expTree = expandRangeToEnclosingApply(tree.pos)\n+        if (expTree.tpe.isDefined) Some(expTree.tpe.typeSymbol)"
+  },
+  {
+    "id" : "56c8996c-daa3-4125-ae87-6b63e143780a",
+    "prId" : 978,
+    "comments" : [
+      {
+        "id" : "c068d6d6-03d4-4d08-8999-1f4ff37ccd75",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "`._3` looks a bit ugly. I am not super convinced we need it all in one method.\r\n\r\nWe could introduce a case class here maybe?",
+        "createdAt" : "2019-12-16T14:21:04Z",
+        "updatedAt" : "2019-12-18T13:50:19Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "4475c9fd-63d0-4d37-b88f-1c5e6cd16ca7",
+        "parentId" : "c068d6d6-03d4-4d08-8999-1f4ff37ccd75",
+        "author" : {
+          "login" : "sswistun-vl",
+          "name" : null,
+          "avatarUrl" : "https://avatars3.githubusercontent.com/u/56023683?u=f003afed233efe6b3491f405b0affea9c99d3163&v=4"
+        },
+        "body" : "Fixed.",
+        "createdAt" : "2019-12-17T10:48:46Z",
+        "updatedAt" : "2019-12-18T13:50:19Z",
+        "lastEditedBy" : {
+          "login" : "sswistun-vl",
+          "name" : null,
+          "avatarUrl" : "https://avatars3.githubusercontent.com/u/56023683?u=f003afed233efe6b3491f405b0affea9c99d3163&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "316b10f8dae0939ba80f4ffb8eb60ae0b0fad9ea",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,147 @@\n+package scala.meta.internal.pc\n+\n+import java.util.NoSuchElementException\n+import org.eclipse.{lsp4j => l}\n+import scala.meta.internal.mtags.MtagsEnrichments._\n+import scala.meta.pc.OffsetParams\n+import scala.meta.internal.jdk.CollectionConverters._\n+import scala.meta.tokenizers.Api\n+\n+class TypeDefinitionProvider(val compiler: MetalsGlobal) extends Api {\n+  import compiler._\n+\n+  val ignoredTags: List[String] = List(\n+    \"val\",\n+    \"var\"\n+  )\n+\n+  def tree(params: OffsetParams): Option[Tree] =\n+    if (params.isWhitespace)\n+      None\n+    else {\n+      Some(createCompilationUnit(params)._3)"
+  },
+  {
+    "id" : "7a2b1255-bafb-4c96-ba0c-e5fdd2abb6d3",
+    "prId" : 978,
+    "comments" : [
+      {
+        "id" : "333c85ad-a4a1-47cd-96a5-38bf8f31e792",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Not sure I understand this. Is this whole function to filer out val/var? It seems bit too complex for that. \r\n\r\nDo we need to check it at all?",
+        "createdAt" : "2019-12-16T14:30:22Z",
+        "updatedAt" : "2019-12-18T13:50:19Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "316b10f8dae0939ba80f4ffb8eb60ae0b0fad9ea",
+    "line" : 44,
+    "diffHunk" : "@@ -0,0 +1,147 @@\n+package scala.meta.internal.pc\n+\n+import java.util.NoSuchElementException\n+import org.eclipse.{lsp4j => l}\n+import scala.meta.internal.mtags.MtagsEnrichments._\n+import scala.meta.pc.OffsetParams\n+import scala.meta.internal.jdk.CollectionConverters._\n+import scala.meta.tokenizers.Api\n+\n+class TypeDefinitionProvider(val compiler: MetalsGlobal) extends Api {\n+  import compiler._\n+\n+  val ignoredTags: List[String] = List(\n+    \"val\",\n+    \"var\"\n+  )\n+\n+  def tree(params: OffsetParams): Option[Tree] =\n+    if (params.isWhitespace)\n+      None\n+    else {\n+      Some(createCompilationUnit(params)._3)\n+    }\n+\n+  def lineAndCharacterToOffset(\n+      pos: compiler.Position,\n+      line: Int,\n+      char: Int\n+  ): Int =\n+    pos.source.lineToOffset(line) + char\n+\n+  def typeSymbol(params: OffsetParams): Option[Symbol] = {\n+    tree(params)\n+      .flatMap {\n+        case vd: ValDef =>\n+          val (rStart, rEnd) = (vd.pos.start, vd.pos.end)\n+          val tokens = vd.pos.source.content\n+            .slice(rStart, rEnd)\n+            .mkString\n+            .tokenize\n+            .get\n+            .tokens\n+          val curToken = tokens\n+            .dropWhile(_.pos.end < params.offset() - vd.pos.start)"
+  },
+  {
+    "id" : "dde3869c-4d4d-4246-aa1c-62538c84c200",
+    "prId" : 978,
+    "comments" : [
+      {
+        "id" : "1f774410-ddb8-4a23-bd5b-3fbb7bf32d0d",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "I don't think there is any need to fold? slice should already give you a string.",
+        "createdAt" : "2019-12-17T08:48:18Z",
+        "updatedAt" : "2019-12-18T13:50:19Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "bbb501f9-2fb1-4e5d-8bb7-fd2f5568af62",
+        "parentId" : "1f774410-ddb8-4a23-bd5b-3fbb7bf32d0d",
+        "author" : {
+          "login" : "sswistun-vl",
+          "name" : null,
+          "avatarUrl" : "https://avatars3.githubusercontent.com/u/56023683?u=f003afed233efe6b3491f405b0affea9c99d3163&v=4"
+        },
+        "body" : "Changed.",
+        "createdAt" : "2019-12-18T12:34:44Z",
+        "updatedAt" : "2019-12-18T13:50:19Z",
+        "lastEditedBy" : {
+          "login" : "sswistun-vl",
+          "name" : null,
+          "avatarUrl" : "https://avatars3.githubusercontent.com/u/56023683?u=f003afed233efe6b3491f405b0affea9c99d3163&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "316b10f8dae0939ba80f4ffb8eb60ae0b0fad9ea",
+    "line" : 61,
+    "diffHunk" : "@@ -0,0 +1,147 @@\n+package scala.meta.internal.pc\n+\n+import java.util.NoSuchElementException\n+import org.eclipse.{lsp4j => l}\n+import scala.meta.internal.mtags.MtagsEnrichments._\n+import scala.meta.pc.OffsetParams\n+import scala.meta.internal.jdk.CollectionConverters._\n+import scala.meta.tokenizers.Api\n+\n+class TypeDefinitionProvider(val compiler: MetalsGlobal) extends Api {\n+  import compiler._\n+\n+  val ignoredTags: List[String] = List(\n+    \"val\",\n+    \"var\"\n+  )\n+\n+  def tree(params: OffsetParams): Option[Tree] =\n+    if (params.isWhitespace)\n+      None\n+    else {\n+      Some(createCompilationUnit(params)._3)\n+    }\n+\n+  def lineAndCharacterToOffset(\n+      pos: compiler.Position,\n+      line: Int,\n+      char: Int\n+  ): Int =\n+    pos.source.lineToOffset(line) + char\n+\n+  def typeSymbol(params: OffsetParams): Option[Symbol] = {\n+    tree(params)\n+      .flatMap {\n+        case vd: ValDef =>\n+          val (rStart, rEnd) = (vd.pos.start, vd.pos.end)\n+          val tokens = vd.pos.source.content\n+            .slice(rStart, rEnd)\n+            .mkString\n+            .tokenize\n+            .get\n+            .tokens\n+          val curToken = tokens\n+            .dropWhile(_.pos.end < params.offset() - vd.pos.start)\n+            .head\n+\n+          if (ignoredTags.contains(curToken.text))\n+            None\n+          else\n+            Some(vd)\n+        case t: Tree => Some(t)\n+      }\n+      .flatMap {\n+        case sel: Select\n+            if sel.symbol.asMethod.returnType.typeSymbol.isTypeParameter =>\n+          Some(sel.tpe.typeSymbol)\n+        case app @ Apply(fun, args) if args.nonEmpty =>\n+          val (rStart, rEnd) = (fun.pos.start, args.last.pos.end)\n+\n+          val txt = app.pos.source.content\n+            .slice(rStart, rEnd)"
+  },
+  {
+    "id" : "0c738e3a-31f8-43ba-a093-1b4de9ee38d3",
+    "prId" : 978,
+    "comments" : [
+      {
+        "id" : "e267658e-d74c-4987-96d5-6647148dd838",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Let's just use `find` here. ",
+        "createdAt" : "2019-12-17T09:14:30Z",
+        "updatedAt" : "2019-12-18T13:50:19Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "bc0312d3-23c7-45b9-b858-ba506345cdc0",
+        "parentId" : "e267658e-d74c-4987-96d5-6647148dd838",
+        "author" : {
+          "login" : "sswistun-vl",
+          "name" : null,
+          "avatarUrl" : "https://avatars3.githubusercontent.com/u/56023683?u=f003afed233efe6b3491f405b0affea9c99d3163&v=4"
+        },
+        "body" : "Changed.",
+        "createdAt" : "2019-12-17T10:48:56Z",
+        "updatedAt" : "2019-12-18T13:50:19Z",
+        "lastEditedBy" : {
+          "login" : "sswistun-vl",
+          "name" : null,
+          "avatarUrl" : "https://avatars3.githubusercontent.com/u/56023683?u=f003afed233efe6b3491f405b0affea9c99d3163&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "316b10f8dae0939ba80f4ffb8eb60ae0b0fad9ea",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,147 @@\n+package scala.meta.internal.pc\n+\n+import java.util.NoSuchElementException\n+import org.eclipse.{lsp4j => l}\n+import scala.meta.internal.mtags.MtagsEnrichments._\n+import scala.meta.pc.OffsetParams\n+import scala.meta.internal.jdk.CollectionConverters._\n+import scala.meta.tokenizers.Api\n+\n+class TypeDefinitionProvider(val compiler: MetalsGlobal) extends Api {\n+  import compiler._\n+\n+  val ignoredTags: List[String] = List(\n+    \"val\",\n+    \"var\"\n+  )\n+\n+  def tree(params: OffsetParams): Option[Tree] =\n+    if (params.isWhitespace)\n+      None\n+    else {\n+      Some(createCompilationUnit(params)._3)\n+    }\n+\n+  def lineAndCharacterToOffset(\n+      pos: compiler.Position,\n+      line: Int,\n+      char: Int\n+  ): Int =\n+    pos.source.lineToOffset(line) + char\n+\n+  def typeSymbol(params: OffsetParams): Option[Symbol] = {\n+    tree(params)\n+      .flatMap {\n+        case vd: ValDef =>\n+          val (rStart, rEnd) = (vd.pos.start, vd.pos.end)\n+          val tokens = vd.pos.source.content\n+            .slice(rStart, rEnd)\n+            .mkString\n+            .tokenize\n+            .get\n+            .tokens\n+          val curToken = tokens\n+            .dropWhile(_.pos.end < params.offset() - vd.pos.start)\n+            .head\n+\n+          if (ignoredTags.contains(curToken.text))\n+            None\n+          else\n+            Some(vd)\n+        case t: Tree => Some(t)\n+      }\n+      .flatMap {\n+        case sel: Select\n+            if sel.symbol.asMethod.returnType.typeSymbol.isTypeParameter =>\n+          Some(sel.tpe.typeSymbol)\n+        case app @ Apply(fun, args) if args.nonEmpty =>\n+          val (rStart, rEnd) = (fun.pos.start, args.last.pos.end)\n+\n+          val txt = app.pos.source.content\n+            .slice(rStart, rEnd)\n+            .fold(\"\")(_ + _.toString)\n+            .toString\n+          val tokens = txt.tokenize.get.tokens.toList\n+            .filter(t => {"
+  },
+  {
+    "id" : "002d1324-6ce5-4ff1-a155-71875c8e1fc6",
+    "prId" : 978,
+    "comments" : [
+      {
+        "id" : "f4f1ef42-42bf-439a-b6b9-14a7692d85f4",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "```suggestion\r\n              val treeOffset = app.pos.start\r\n              pStart <= params.offset - treeOffset && pEnd >= params.offset - treeOffset\r\n```",
+        "createdAt" : "2019-12-17T09:16:21Z",
+        "updatedAt" : "2019-12-18T13:50:19Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "316b10f8dae0939ba80f4ffb8eb60ae0b0fad9ea",
+    "line" : 67,
+    "diffHunk" : "@@ -0,0 +1,147 @@\n+package scala.meta.internal.pc\n+\n+import java.util.NoSuchElementException\n+import org.eclipse.{lsp4j => l}\n+import scala.meta.internal.mtags.MtagsEnrichments._\n+import scala.meta.pc.OffsetParams\n+import scala.meta.internal.jdk.CollectionConverters._\n+import scala.meta.tokenizers.Api\n+\n+class TypeDefinitionProvider(val compiler: MetalsGlobal) extends Api {\n+  import compiler._\n+\n+  val ignoredTags: List[String] = List(\n+    \"val\",\n+    \"var\"\n+  )\n+\n+  def tree(params: OffsetParams): Option[Tree] =\n+    if (params.isWhitespace)\n+      None\n+    else {\n+      Some(createCompilationUnit(params)._3)\n+    }\n+\n+  def lineAndCharacterToOffset(\n+      pos: compiler.Position,\n+      line: Int,\n+      char: Int\n+  ): Int =\n+    pos.source.lineToOffset(line) + char\n+\n+  def typeSymbol(params: OffsetParams): Option[Symbol] = {\n+    tree(params)\n+      .flatMap {\n+        case vd: ValDef =>\n+          val (rStart, rEnd) = (vd.pos.start, vd.pos.end)\n+          val tokens = vd.pos.source.content\n+            .slice(rStart, rEnd)\n+            .mkString\n+            .tokenize\n+            .get\n+            .tokens\n+          val curToken = tokens\n+            .dropWhile(_.pos.end < params.offset() - vd.pos.start)\n+            .head\n+\n+          if (ignoredTags.contains(curToken.text))\n+            None\n+          else\n+            Some(vd)\n+        case t: Tree => Some(t)\n+      }\n+      .flatMap {\n+        case sel: Select\n+            if sel.symbol.asMethod.returnType.typeSymbol.isTypeParameter =>\n+          Some(sel.tpe.typeSymbol)\n+        case app @ Apply(fun, args) if args.nonEmpty =>\n+          val (rStart, rEnd) = (fun.pos.start, args.last.pos.end)\n+\n+          val txt = app.pos.source.content\n+            .slice(rStart, rEnd)\n+            .fold(\"\")(_ + _.toString)\n+            .toString\n+          val tokens = txt.tokenize.get.tokens.toList\n+            .filter(t => {\n+              val (pStart, pEnd) =\n+                (app.pos.start + t.pos.start, app.pos.start + t.pos.end)\n+              pStart <= params.offset && pEnd >= params.offset"
+  },
+  {
+    "id" : "34cd41f8-b5a6-4564-8a8c-cdc661fde438",
+    "prId" : 978,
+    "comments" : [
+      {
+        "id" : "9eae9447-893c-4662-8498-5ccaaa319514",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Add brackets `{}` here maybe",
+        "createdAt" : "2019-12-17T09:17:15Z",
+        "updatedAt" : "2019-12-18T13:50:19Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "46abe4b9-118c-4121-83d1-9675d23876ec",
+        "parentId" : "9eae9447-893c-4662-8498-5ccaaa319514",
+        "author" : {
+          "login" : "sswistun-vl",
+          "name" : null,
+          "avatarUrl" : "https://avatars3.githubusercontent.com/u/56023683?u=f003afed233efe6b3491f405b0affea9c99d3163&v=4"
+        },
+        "body" : "Added.",
+        "createdAt" : "2019-12-17T10:49:05Z",
+        "updatedAt" : "2019-12-18T13:50:19Z",
+        "lastEditedBy" : {
+          "login" : "sswistun-vl",
+          "name" : null,
+          "avatarUrl" : "https://avatars3.githubusercontent.com/u/56023683?u=f003afed233efe6b3491f405b0affea9c99d3163&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "316b10f8dae0939ba80f4ffb8eb60ae0b0fad9ea",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,147 @@\n+package scala.meta.internal.pc\n+\n+import java.util.NoSuchElementException\n+import org.eclipse.{lsp4j => l}\n+import scala.meta.internal.mtags.MtagsEnrichments._\n+import scala.meta.pc.OffsetParams\n+import scala.meta.internal.jdk.CollectionConverters._\n+import scala.meta.tokenizers.Api\n+\n+class TypeDefinitionProvider(val compiler: MetalsGlobal) extends Api {\n+  import compiler._\n+\n+  val ignoredTags: List[String] = List(\n+    \"val\",\n+    \"var\"\n+  )\n+\n+  def tree(params: OffsetParams): Option[Tree] =\n+    if (params.isWhitespace)\n+      None\n+    else {\n+      Some(createCompilationUnit(params)._3)\n+    }\n+\n+  def lineAndCharacterToOffset(\n+      pos: compiler.Position,\n+      line: Int,\n+      char: Int\n+  ): Int =\n+    pos.source.lineToOffset(line) + char\n+\n+  def typeSymbol(params: OffsetParams): Option[Symbol] = {\n+    tree(params)\n+      .flatMap {\n+        case vd: ValDef =>\n+          val (rStart, rEnd) = (vd.pos.start, vd.pos.end)\n+          val tokens = vd.pos.source.content\n+            .slice(rStart, rEnd)\n+            .mkString\n+            .tokenize\n+            .get\n+            .tokens\n+          val curToken = tokens\n+            .dropWhile(_.pos.end < params.offset() - vd.pos.start)\n+            .head\n+\n+          if (ignoredTags.contains(curToken.text))\n+            None\n+          else\n+            Some(vd)\n+        case t: Tree => Some(t)\n+      }\n+      .flatMap {\n+        case sel: Select\n+            if sel.symbol.asMethod.returnType.typeSymbol.isTypeParameter =>\n+          Some(sel.tpe.typeSymbol)\n+        case app @ Apply(fun, args) if args.nonEmpty =>\n+          val (rStart, rEnd) = (fun.pos.start, args.last.pos.end)\n+\n+          val txt = app.pos.source.content\n+            .slice(rStart, rEnd)\n+            .fold(\"\")(_ + _.toString)\n+            .toString\n+          val tokens = txt.tokenize.get.tokens.toList\n+            .filter(t => {\n+              val (pStart, pEnd) =\n+                (app.pos.start + t.pos.start, app.pos.start + t.pos.end)\n+              pStart <= params.offset && pEnd >= params.offset\n+            })\n+          tokens.headOption match {\n+            case Some(t) =>\n+              app.symbol.asMethod.paramLists.flatten\n+                .find(_.nameString.trim == t.text)\n+                .map(_.tpe.typeSymbol)\n+            case _ => None\n+          }\n+        case tree: Tree if tree.symbol.isMethod =>\n+          Some(tree.symbol.asMethod.returnType.typeSymbol)\n+        case tree: Tree if tree.symbol.isTypeSymbol =>\n+          Some(tree.symbol)\n+        case tree: Tree if tree.tpe.isDefined =>\n+          Some(tree.tpe.typeSymbol)\n+        case tree: Tree if tree.children.nonEmpty =>\n+          Some(tree.children.head.tpe.typeSymbol)\n+        case vd: compiler.ValDef if vd.rhs.tpe != null =>\n+          Some(vd.rhs.tpe.typeSymbol)\n+        case tree: Tree =>\n+          val expTree = expandRangeToEnclosingApply(tree.pos)\n+          if (expTree.tpe != null && expTree.tpe.isDefined)\n+            Some(expTree.tpe.typeSymbol)\n+          else None\n+        case _ => None\n+      }\n+  }\n+\n+  def typeDefinition(params: OffsetParams): List[l.Location] ="
+  },
+  {
+    "id" : "2a060a73-e399-4231-98ab-1f0fdc3946a3",
+    "prId" : 978,
+    "comments" : [
+      {
+        "id" : "b164a6de-8e66-41c7-8ea4-786ebddacadf",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Can't you just check for null? The only thing that can throw it is file.",
+        "createdAt" : "2019-12-17T09:23:13Z",
+        "updatedAt" : "2019-12-18T13:50:19Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "0cb8697d-572a-4eeb-8c7e-3c81cc53860b",
+        "parentId" : "b164a6de-8e66-41c7-8ea4-786ebddacadf",
+        "author" : {
+          "login" : "sswistun-vl",
+          "name" : null,
+          "avatarUrl" : "https://avatars3.githubusercontent.com/u/56023683?u=f003afed233efe6b3491f405b0affea9c99d3163&v=4"
+        },
+        "body" : "Changed.",
+        "createdAt" : "2019-12-18T12:51:34Z",
+        "updatedAt" : "2019-12-18T13:50:19Z",
+        "lastEditedBy" : {
+          "login" : "sswistun-vl",
+          "name" : null,
+          "avatarUrl" : "https://avatars3.githubusercontent.com/u/56023683?u=f003afed233efe6b3491f405b0affea9c99d3163&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "316b10f8dae0939ba80f4ffb8eb60ae0b0fad9ea",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,147 @@\n+package scala.meta.internal.pc\n+\n+import java.util.NoSuchElementException\n+import org.eclipse.{lsp4j => l}\n+import scala.meta.internal.mtags.MtagsEnrichments._\n+import scala.meta.pc.OffsetParams\n+import scala.meta.internal.jdk.CollectionConverters._\n+import scala.meta.tokenizers.Api\n+\n+class TypeDefinitionProvider(val compiler: MetalsGlobal) extends Api {\n+  import compiler._\n+\n+  val ignoredTags: List[String] = List(\n+    \"val\",\n+    \"var\"\n+  )\n+\n+  def tree(params: OffsetParams): Option[Tree] =\n+    if (params.isWhitespace)\n+      None\n+    else {\n+      Some(createCompilationUnit(params)._3)\n+    }\n+\n+  def lineAndCharacterToOffset(\n+      pos: compiler.Position,\n+      line: Int,\n+      char: Int\n+  ): Int =\n+    pos.source.lineToOffset(line) + char\n+\n+  def typeSymbol(params: OffsetParams): Option[Symbol] = {\n+    tree(params)\n+      .flatMap {\n+        case vd: ValDef =>\n+          val (rStart, rEnd) = (vd.pos.start, vd.pos.end)\n+          val tokens = vd.pos.source.content\n+            .slice(rStart, rEnd)\n+            .mkString\n+            .tokenize\n+            .get\n+            .tokens\n+          val curToken = tokens\n+            .dropWhile(_.pos.end < params.offset() - vd.pos.start)\n+            .head\n+\n+          if (ignoredTags.contains(curToken.text))\n+            None\n+          else\n+            Some(vd)\n+        case t: Tree => Some(t)\n+      }\n+      .flatMap {\n+        case sel: Select\n+            if sel.symbol.asMethod.returnType.typeSymbol.isTypeParameter =>\n+          Some(sel.tpe.typeSymbol)\n+        case app @ Apply(fun, args) if args.nonEmpty =>\n+          val (rStart, rEnd) = (fun.pos.start, args.last.pos.end)\n+\n+          val txt = app.pos.source.content\n+            .slice(rStart, rEnd)\n+            .fold(\"\")(_ + _.toString)\n+            .toString\n+          val tokens = txt.tokenize.get.tokens.toList\n+            .filter(t => {\n+              val (pStart, pEnd) =\n+                (app.pos.start + t.pos.start, app.pos.start + t.pos.end)\n+              pStart <= params.offset && pEnd >= params.offset\n+            })\n+          tokens.headOption match {\n+            case Some(t) =>\n+              app.symbol.asMethod.paramLists.flatten\n+                .find(_.nameString.trim == t.text)\n+                .map(_.tpe.typeSymbol)\n+            case _ => None\n+          }\n+        case tree: Tree if tree.symbol.isMethod =>\n+          Some(tree.symbol.asMethod.returnType.typeSymbol)\n+        case tree: Tree if tree.symbol.isTypeSymbol =>\n+          Some(tree.symbol)\n+        case tree: Tree if tree.tpe.isDefined =>\n+          Some(tree.tpe.typeSymbol)\n+        case tree: Tree if tree.children.nonEmpty =>\n+          Some(tree.children.head.tpe.typeSymbol)\n+        case vd: compiler.ValDef if vd.rhs.tpe != null =>\n+          Some(vd.rhs.tpe.typeSymbol)\n+        case tree: Tree =>\n+          val expTree = expandRangeToEnclosingApply(tree.pos)\n+          if (expTree.tpe != null && expTree.tpe.isDefined)\n+            Some(expTree.tpe.typeSymbol)\n+          else None\n+        case _ => None\n+      }\n+  }\n+\n+  def typeDefinition(params: OffsetParams): List[l.Location] =\n+    typeSymbol(params)\n+      .collect {\n+        case sym => getSymbolDefinition(sym)\n+      }\n+      .toList\n+      .flatten\n+\n+  private def getSymbolDefinition(sym: Symbol): List[l.Location] = {\n+    val file = sym.pos.source.file\n+    val uri =\n+      try {\n+        file.toURL.toURI.toString\n+      } catch {\n+        case _: NullPointerException =>"
+  },
+  {
+    "id" : "699b0bfd-0fdc-483e-ac0c-58285add9aa8",
+    "prId" : 978,
+    "comments" : [
+      {
+        "id" : "8b1c238f-5eb0-41c8-b12b-5fa3f239e13f",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "There is already a lot of checks, do we need this?",
+        "createdAt" : "2019-12-17T09:23:37Z",
+        "updatedAt" : "2019-12-18T13:50:19Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "cc49de8b-fe11-4c7e-9309-08ede515badc",
+        "parentId" : "8b1c238f-5eb0-41c8-b12b-5fa3f239e13f",
+        "author" : {
+          "login" : "sswistun-vl",
+          "name" : null,
+          "avatarUrl" : "https://avatars3.githubusercontent.com/u/56023683?u=f003afed233efe6b3491f405b0affea9c99d3163&v=4"
+        },
+        "body" : "Changed.",
+        "createdAt" : "2019-12-17T10:49:27Z",
+        "updatedAt" : "2019-12-18T13:50:19Z",
+        "lastEditedBy" : {
+          "login" : "sswistun-vl",
+          "name" : null,
+          "avatarUrl" : "https://avatars3.githubusercontent.com/u/56023683?u=f003afed233efe6b3491f405b0affea9c99d3163&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "316b10f8dae0939ba80f4ffb8eb60ae0b0fad9ea",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,147 @@\n+package scala.meta.internal.pc\n+\n+import java.util.NoSuchElementException\n+import org.eclipse.{lsp4j => l}\n+import scala.meta.internal.mtags.MtagsEnrichments._\n+import scala.meta.pc.OffsetParams\n+import scala.meta.internal.jdk.CollectionConverters._\n+import scala.meta.tokenizers.Api\n+\n+class TypeDefinitionProvider(val compiler: MetalsGlobal) extends Api {\n+  import compiler._\n+\n+  val ignoredTags: List[String] = List(\n+    \"val\",\n+    \"var\"\n+  )\n+\n+  def tree(params: OffsetParams): Option[Tree] =\n+    if (params.isWhitespace)\n+      None\n+    else {\n+      Some(createCompilationUnit(params)._3)\n+    }\n+\n+  def lineAndCharacterToOffset(\n+      pos: compiler.Position,\n+      line: Int,\n+      char: Int\n+  ): Int =\n+    pos.source.lineToOffset(line) + char\n+\n+  def typeSymbol(params: OffsetParams): Option[Symbol] = {\n+    tree(params)\n+      .flatMap {\n+        case vd: ValDef =>\n+          val (rStart, rEnd) = (vd.pos.start, vd.pos.end)\n+          val tokens = vd.pos.source.content\n+            .slice(rStart, rEnd)\n+            .mkString\n+            .tokenize\n+            .get\n+            .tokens\n+          val curToken = tokens\n+            .dropWhile(_.pos.end < params.offset() - vd.pos.start)\n+            .head\n+\n+          if (ignoredTags.contains(curToken.text))\n+            None\n+          else\n+            Some(vd)\n+        case t: Tree => Some(t)\n+      }\n+      .flatMap {\n+        case sel: Select\n+            if sel.symbol.asMethod.returnType.typeSymbol.isTypeParameter =>\n+          Some(sel.tpe.typeSymbol)\n+        case app @ Apply(fun, args) if args.nonEmpty =>\n+          val (rStart, rEnd) = (fun.pos.start, args.last.pos.end)\n+\n+          val txt = app.pos.source.content\n+            .slice(rStart, rEnd)\n+            .fold(\"\")(_ + _.toString)\n+            .toString\n+          val tokens = txt.tokenize.get.tokens.toList\n+            .filter(t => {\n+              val (pStart, pEnd) =\n+                (app.pos.start + t.pos.start, app.pos.start + t.pos.end)\n+              pStart <= params.offset && pEnd >= params.offset\n+            })\n+          tokens.headOption match {\n+            case Some(t) =>\n+              app.symbol.asMethod.paramLists.flatten\n+                .find(_.nameString.trim == t.text)\n+                .map(_.tpe.typeSymbol)\n+            case _ => None\n+          }\n+        case tree: Tree if tree.symbol.isMethod =>\n+          Some(tree.symbol.asMethod.returnType.typeSymbol)\n+        case tree: Tree if tree.symbol.isTypeSymbol =>\n+          Some(tree.symbol)\n+        case tree: Tree if tree.tpe.isDefined =>\n+          Some(tree.tpe.typeSymbol)\n+        case tree: Tree if tree.children.nonEmpty =>\n+          Some(tree.children.head.tpe.typeSymbol)\n+        case vd: compiler.ValDef if vd.rhs.tpe != null =>\n+          Some(vd.rhs.tpe.typeSymbol)\n+        case tree: Tree =>\n+          val expTree = expandRangeToEnclosingApply(tree.pos)\n+          if (expTree.tpe != null && expTree.tpe.isDefined)\n+            Some(expTree.tpe.typeSymbol)\n+          else None\n+        case _ => None\n+      }\n+  }\n+\n+  def typeDefinition(params: OffsetParams): List[l.Location] =\n+    typeSymbol(params)\n+      .collect {\n+        case sym => getSymbolDefinition(sym)\n+      }\n+      .toList\n+      .flatten\n+\n+  private def getSymbolDefinition(sym: Symbol): List[l.Location] = {\n+    val file = sym.pos.source.file\n+    val uri =\n+      try {\n+        file.toURL.toURI.toString\n+      } catch {\n+        case _: NullPointerException =>\n+          sym.pos.source.path\n+      }\n+\n+    try {\n+      if (file != null || compiler.unitOfFile.contains(file)) {\n+        val unit = compiler.unitOfFile(file)\n+        if (unit != null) {\n+          val trees = unit.body\n+            .filter(_.symbol == sym)\n+            .filter(_.pos != null)\n+            .filter(_.isDef)\n+          trees\n+            .map(t => new l.Location(uri, t.pos.toLSP))\n+        } else fallbackToSemanticDB(sym)\n+      } else fallbackToSemanticDB(sym)\n+    } catch {"
+  },
+  {
+    "id" : "182fe8d3-d4a1-4e3d-bda9-98a9c6a39664",
+    "prId" : 978,
+    "comments" : [
+      {
+        "id" : "fbd22223-190c-49d4-85f4-ccca1cf7dea1",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "I think we can incorporate the changes from https://github.com/scalameta/metals/pull/1174/files - we look for the file containing the symbol there. ",
+        "createdAt" : "2019-12-17T09:26:47Z",
+        "updatedAt" : "2019-12-18T13:50:19Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "316b10f8dae0939ba80f4ffb8eb60ae0b0fad9ea",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,147 @@\n+package scala.meta.internal.pc\n+\n+import java.util.NoSuchElementException\n+import org.eclipse.{lsp4j => l}\n+import scala.meta.internal.mtags.MtagsEnrichments._\n+import scala.meta.pc.OffsetParams\n+import scala.meta.internal.jdk.CollectionConverters._\n+import scala.meta.tokenizers.Api\n+\n+class TypeDefinitionProvider(val compiler: MetalsGlobal) extends Api {\n+  import compiler._\n+\n+  val ignoredTags: List[String] = List(\n+    \"val\",\n+    \"var\"\n+  )\n+\n+  def tree(params: OffsetParams): Option[Tree] =\n+    if (params.isWhitespace)\n+      None\n+    else {\n+      Some(createCompilationUnit(params)._3)\n+    }\n+\n+  def lineAndCharacterToOffset(\n+      pos: compiler.Position,\n+      line: Int,\n+      char: Int\n+  ): Int =\n+    pos.source.lineToOffset(line) + char\n+\n+  def typeSymbol(params: OffsetParams): Option[Symbol] = {\n+    tree(params)\n+      .flatMap {\n+        case vd: ValDef =>\n+          val (rStart, rEnd) = (vd.pos.start, vd.pos.end)\n+          val tokens = vd.pos.source.content\n+            .slice(rStart, rEnd)\n+            .mkString\n+            .tokenize\n+            .get\n+            .tokens\n+          val curToken = tokens\n+            .dropWhile(_.pos.end < params.offset() - vd.pos.start)\n+            .head\n+\n+          if (ignoredTags.contains(curToken.text))\n+            None\n+          else\n+            Some(vd)\n+        case t: Tree => Some(t)\n+      }\n+      .flatMap {\n+        case sel: Select\n+            if sel.symbol.asMethod.returnType.typeSymbol.isTypeParameter =>\n+          Some(sel.tpe.typeSymbol)\n+        case app @ Apply(fun, args) if args.nonEmpty =>\n+          val (rStart, rEnd) = (fun.pos.start, args.last.pos.end)\n+\n+          val txt = app.pos.source.content\n+            .slice(rStart, rEnd)\n+            .fold(\"\")(_ + _.toString)\n+            .toString\n+          val tokens = txt.tokenize.get.tokens.toList\n+            .filter(t => {\n+              val (pStart, pEnd) =\n+                (app.pos.start + t.pos.start, app.pos.start + t.pos.end)\n+              pStart <= params.offset && pEnd >= params.offset\n+            })\n+          tokens.headOption match {\n+            case Some(t) =>\n+              app.symbol.asMethod.paramLists.flatten\n+                .find(_.nameString.trim == t.text)\n+                .map(_.tpe.typeSymbol)\n+            case _ => None\n+          }\n+        case tree: Tree if tree.symbol.isMethod =>\n+          Some(tree.symbol.asMethod.returnType.typeSymbol)\n+        case tree: Tree if tree.symbol.isTypeSymbol =>\n+          Some(tree.symbol)\n+        case tree: Tree if tree.tpe.isDefined =>\n+          Some(tree.tpe.typeSymbol)\n+        case tree: Tree if tree.children.nonEmpty =>\n+          Some(tree.children.head.tpe.typeSymbol)\n+        case vd: compiler.ValDef if vd.rhs.tpe != null =>\n+          Some(vd.rhs.tpe.typeSymbol)\n+        case tree: Tree =>\n+          val expTree = expandRangeToEnclosingApply(tree.pos)\n+          if (expTree.tpe != null && expTree.tpe.isDefined)\n+            Some(expTree.tpe.typeSymbol)\n+          else None\n+        case _ => None\n+      }\n+  }\n+\n+  def typeDefinition(params: OffsetParams): List[l.Location] =\n+    typeSymbol(params)\n+      .collect {\n+        case sym => getSymbolDefinition(sym)\n+      }\n+      .toList\n+      .flatten\n+\n+  private def getSymbolDefinition(sym: Symbol): List[l.Location] = {\n+    val file = sym.pos.source.file\n+    val uri =\n+      try {\n+        file.toURL.toURI.toString\n+      } catch {\n+        case _: NullPointerException =>\n+          sym.pos.source.path\n+      }\n+\n+    try {\n+      if (file != null || compiler.unitOfFile.contains(file)) {"
+  },
+  {
+    "id" : "7e4956bb-d51a-447b-b631-7d45b275c608",
+    "prId" : 978,
+    "comments" : [
+      {
+        "id" : "48a17355-861c-4be2-adc1-324c2ad52f27",
+        "parentId" : null,
+        "author" : {
+          "login" : "alekseiAlefirov",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/10850363?v=4"
+        },
+        "body" : "`HoverProvider` seems to be doing a good job at providing type symbol. Maybe that code could be reused?",
+        "createdAt" : "2020-04-02T13:04:36Z",
+        "updatedAt" : "2020-04-02T17:08:31Z",
+        "lastEditedBy" : {
+          "login" : "alekseiAlefirov",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/10850363?v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "316b10f8dae0939ba80f4ffb8eb60ae0b0fad9ea",
+    "line" : 32,
+    "diffHunk" : "@@ -0,0 +1,136 @@\n+package scala.meta.internal.pc\n+\n+import org.eclipse.{lsp4j => l}\n+import scala.meta.internal.mtags.MtagsEnrichments._\n+import scala.meta.pc.OffsetParams\n+import scala.meta.internal.jdk.CollectionConverters._\n+import scala.meta.tokenizers.Api\n+\n+class TypeDefinitionProvider(val compiler: MetalsGlobal) extends Api {\n+  import compiler._\n+\n+  val ignoredTags: List[String] = List(\n+    \"val\",\n+    \"var\"\n+  )\n+\n+  def tree(params: OffsetParams): Option[Tree] =\n+    if (params.isWhitespace)\n+      None\n+    else {\n+      val (_, _, tree) = createCompilationUnit(params)\n+      Some(tree)\n+    }\n+\n+  def lineAndCharacterToOffset(\n+      pos: compiler.Position,\n+      line: Int,\n+      char: Int\n+  ): Int =\n+    pos.source.lineToOffset(line) + char\n+\n+  def typeSymbol(params: OffsetParams): Option[Symbol] = {"
+  },
+  {
+    "id" : "6c68bbbb-bf77-4efe-97b1-099c2bb4a7c1",
+    "prId" : 978,
+    "comments" : [
+      {
+        "id" : "ccfbdf07-1414-4e9a-bed0-54f5818fb40c",
+        "parentId" : null,
+        "author" : {
+          "login" : "alekseiAlefirov",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/10850363?v=4"
+        },
+        "body" : "this whole block is about fixing named parameters. Worth to refactor into separate method. Also -- what if it's the case of named parameter?",
+        "createdAt" : "2020-04-02T16:22:05Z",
+        "updatedAt" : "2020-04-02T17:08:31Z",
+        "lastEditedBy" : {
+          "login" : "alekseiAlefirov",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/10850363?v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "fa3d7910-80cc-45a2-bb9f-ac77ccf254c4",
+        "parentId" : "ccfbdf07-1414-4e9a-bed0-54f5818fb40c",
+        "author" : {
+          "login" : "alekseiAlefirov",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/10850363?v=4"
+        },
+        "body" : "maybe fixing `typedHoverTreeAt` is possible to untangle this code a bit?\r\nAlso, @sswistun-vl  [mentioned](https://github.com/scalameta/metals/pull/978#issuecomment-562541418) solution for problem of named parameter in [semanticDB](https://github.com/scalameta/scalameta/pull/1919). Not sure though, how it can save working with compiler here.",
+        "createdAt" : "2020-04-02T17:00:58Z",
+        "updatedAt" : "2020-04-02T17:08:32Z",
+        "lastEditedBy" : {
+          "login" : "alekseiAlefirov",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/10850363?v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "316b10f8dae0939ba80f4ffb8eb60ae0b0fad9ea",
+    "line" : 73,
+    "diffHunk" : "@@ -0,0 +1,136 @@\n+package scala.meta.internal.pc\n+\n+import org.eclipse.{lsp4j => l}\n+import scala.meta.internal.mtags.MtagsEnrichments._\n+import scala.meta.pc.OffsetParams\n+import scala.meta.internal.jdk.CollectionConverters._\n+import scala.meta.tokenizers.Api\n+\n+class TypeDefinitionProvider(val compiler: MetalsGlobal) extends Api {\n+  import compiler._\n+\n+  val ignoredTags: List[String] = List(\n+    \"val\",\n+    \"var\"\n+  )\n+\n+  def tree(params: OffsetParams): Option[Tree] =\n+    if (params.isWhitespace)\n+      None\n+    else {\n+      val (_, _, tree) = createCompilationUnit(params)\n+      Some(tree)\n+    }\n+\n+  def lineAndCharacterToOffset(\n+      pos: compiler.Position,\n+      line: Int,\n+      char: Int\n+  ): Int =\n+    pos.source.lineToOffset(line) + char\n+\n+  def typeSymbol(params: OffsetParams): Option[Symbol] = {\n+    tree(params)\n+      .flatMap {\n+        case vd: ValDef =>\n+          val (rStart, rEnd) = (vd.pos.start, vd.pos.end)\n+          val tokens = vd.pos.source.content\n+            .slice(rStart, rEnd)\n+            .mkString\n+            .tokenize\n+            .get\n+            .tokens\n+          val curToken = tokens\n+            .dropWhile(_.pos.end < params.offset() - vd.pos.start)\n+            .head\n+\n+          if (ignoredTags.contains(curToken.text))\n+            None\n+          else\n+            Some(vd)\n+        case t: Tree => Some(t)\n+      }\n+      .flatMap {\n+        case sel: Select\n+            if sel.symbol.asMethod.returnType.typeSymbol.isTypeParameter =>\n+          Some(sel.tpe.typeSymbol)\n+        case app @ Apply(fun, args) if args.nonEmpty =>\n+          val (rStart, rEnd) = (fun.pos.start, args.last.pos.end)\n+\n+          val txt = app.pos.source.content\n+            .slice(rStart, rEnd)\n+            .mkString\n+          txt.tokenize.get.tokens.toList\n+            .find(t => {\n+              val (pStart, pEnd) =\n+                (app.pos.start + t.pos.start, app.pos.start + t.pos.end)\n+              pStart <= params.offset && pEnd >= params.offset\n+            }) match {\n+            case Some(t) =>\n+              app.symbol.asMethod.paramLists.flatten\n+                .find(_.nameString.trim == t.text)\n+                .map(_.tpe.typeSymbol)\n+            case _ => None"
+  },
+  {
+    "id" : "87750cf8-e8e5-4539-817c-b65ffe87b8e0",
+    "prId" : 978,
+    "comments" : [
+      {
+        "id" : "ae3545df-9362-4213-a859-9b861d5fb06e",
+        "parentId" : null,
+        "author" : {
+          "login" : "alekseiAlefirov",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/10850363?v=4"
+        },
+        "body" : "no need for a tuple definition here. also this logic of finding token by position can be refactored into separate method.",
+        "createdAt" : "2020-04-02T16:25:26Z",
+        "updatedAt" : "2020-04-02T17:08:31Z",
+        "lastEditedBy" : {
+          "login" : "alekseiAlefirov",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/10850363?v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "316b10f8dae0939ba80f4ffb8eb60ae0b0fad9ea",
+    "line" : 67,
+    "diffHunk" : "@@ -0,0 +1,136 @@\n+package scala.meta.internal.pc\n+\n+import org.eclipse.{lsp4j => l}\n+import scala.meta.internal.mtags.MtagsEnrichments._\n+import scala.meta.pc.OffsetParams\n+import scala.meta.internal.jdk.CollectionConverters._\n+import scala.meta.tokenizers.Api\n+\n+class TypeDefinitionProvider(val compiler: MetalsGlobal) extends Api {\n+  import compiler._\n+\n+  val ignoredTags: List[String] = List(\n+    \"val\",\n+    \"var\"\n+  )\n+\n+  def tree(params: OffsetParams): Option[Tree] =\n+    if (params.isWhitespace)\n+      None\n+    else {\n+      val (_, _, tree) = createCompilationUnit(params)\n+      Some(tree)\n+    }\n+\n+  def lineAndCharacterToOffset(\n+      pos: compiler.Position,\n+      line: Int,\n+      char: Int\n+  ): Int =\n+    pos.source.lineToOffset(line) + char\n+\n+  def typeSymbol(params: OffsetParams): Option[Symbol] = {\n+    tree(params)\n+      .flatMap {\n+        case vd: ValDef =>\n+          val (rStart, rEnd) = (vd.pos.start, vd.pos.end)\n+          val tokens = vd.pos.source.content\n+            .slice(rStart, rEnd)\n+            .mkString\n+            .tokenize\n+            .get\n+            .tokens\n+          val curToken = tokens\n+            .dropWhile(_.pos.end < params.offset() - vd.pos.start)\n+            .head\n+\n+          if (ignoredTags.contains(curToken.text))\n+            None\n+          else\n+            Some(vd)\n+        case t: Tree => Some(t)\n+      }\n+      .flatMap {\n+        case sel: Select\n+            if sel.symbol.asMethod.returnType.typeSymbol.isTypeParameter =>\n+          Some(sel.tpe.typeSymbol)\n+        case app @ Apply(fun, args) if args.nonEmpty =>\n+          val (rStart, rEnd) = (fun.pos.start, args.last.pos.end)\n+\n+          val txt = app.pos.source.content\n+            .slice(rStart, rEnd)\n+            .mkString\n+          txt.tokenize.get.tokens.toList\n+            .find(t => {\n+              val (pStart, pEnd) =\n+                (app.pos.start + t.pos.start, app.pos.start + t.pos.end)\n+              pStart <= params.offset && pEnd >= params.offset"
+  },
+  {
+    "id" : "8f096580-2301-4bb2-9055-664a40f5c63e",
+    "prId" : 978,
+    "comments" : [
+      {
+        "id" : "160d9c3d-a043-44fb-947f-752c39abb1c1",
+        "parentId" : null,
+        "author" : {
+          "login" : "alekseiAlefirov",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/10850363?v=4"
+        },
+        "body" : "`vd.rhs.tpe != null` is not enough here. it should be also not Error and not `NoType`. Seems to be one of the reason `basicMultifile` test fails (for me it does, after rebase).",
+        "createdAt" : "2020-04-02T17:04:05Z",
+        "updatedAt" : "2020-04-02T17:08:32Z",
+        "lastEditedBy" : {
+          "login" : "alekseiAlefirov",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/10850363?v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "316b10f8dae0939ba80f4ffb8eb60ae0b0fad9ea",
+    "line" : 83,
+    "diffHunk" : "@@ -0,0 +1,136 @@\n+package scala.meta.internal.pc\n+\n+import org.eclipse.{lsp4j => l}\n+import scala.meta.internal.mtags.MtagsEnrichments._\n+import scala.meta.pc.OffsetParams\n+import scala.meta.internal.jdk.CollectionConverters._\n+import scala.meta.tokenizers.Api\n+\n+class TypeDefinitionProvider(val compiler: MetalsGlobal) extends Api {\n+  import compiler._\n+\n+  val ignoredTags: List[String] = List(\n+    \"val\",\n+    \"var\"\n+  )\n+\n+  def tree(params: OffsetParams): Option[Tree] =\n+    if (params.isWhitespace)\n+      None\n+    else {\n+      val (_, _, tree) = createCompilationUnit(params)\n+      Some(tree)\n+    }\n+\n+  def lineAndCharacterToOffset(\n+      pos: compiler.Position,\n+      line: Int,\n+      char: Int\n+  ): Int =\n+    pos.source.lineToOffset(line) + char\n+\n+  def typeSymbol(params: OffsetParams): Option[Symbol] = {\n+    tree(params)\n+      .flatMap {\n+        case vd: ValDef =>\n+          val (rStart, rEnd) = (vd.pos.start, vd.pos.end)\n+          val tokens = vd.pos.source.content\n+            .slice(rStart, rEnd)\n+            .mkString\n+            .tokenize\n+            .get\n+            .tokens\n+          val curToken = tokens\n+            .dropWhile(_.pos.end < params.offset() - vd.pos.start)\n+            .head\n+\n+          if (ignoredTags.contains(curToken.text))\n+            None\n+          else\n+            Some(vd)\n+        case t: Tree => Some(t)\n+      }\n+      .flatMap {\n+        case sel: Select\n+            if sel.symbol.asMethod.returnType.typeSymbol.isTypeParameter =>\n+          Some(sel.tpe.typeSymbol)\n+        case app @ Apply(fun, args) if args.nonEmpty =>\n+          val (rStart, rEnd) = (fun.pos.start, args.last.pos.end)\n+\n+          val txt = app.pos.source.content\n+            .slice(rStart, rEnd)\n+            .mkString\n+          txt.tokenize.get.tokens.toList\n+            .find(t => {\n+              val (pStart, pEnd) =\n+                (app.pos.start + t.pos.start, app.pos.start + t.pos.end)\n+              pStart <= params.offset && pEnd >= params.offset\n+            }) match {\n+            case Some(t) =>\n+              app.symbol.asMethod.paramLists.flatten\n+                .find(_.nameString.trim == t.text)\n+                .map(_.tpe.typeSymbol)\n+            case _ => None\n+          }\n+        case tree: Tree if tree.symbol.isMethod =>\n+          Some(tree.symbol.asMethod.returnType.typeSymbol)\n+        case tree: Tree if tree.symbol.isTypeSymbol =>\n+          Some(tree.symbol)\n+        case tree: Tree if tree.tpe.isDefined =>\n+          Some(tree.tpe.typeSymbol)\n+        case tree: Tree if tree.children.nonEmpty =>\n+          Some(tree.children.head.tpe.typeSymbol)\n+        case vd: compiler.ValDef if vd.rhs.tpe != null =>"
+  }
+]

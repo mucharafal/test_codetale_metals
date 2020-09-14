@@ -1,0 +1,49 @@
+[
+  {
+    "id" : "e287337f-2862-4877-8e85-b6ac718dcb6d",
+    "prId" : 23,
+    "comments" : [
+      {
+        "id" : "bebf729b-94b0-4c9a-b0b1-01d589867e41",
+        "parentId" : null,
+        "author" : {
+          "login" : "ShaneDelmore",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/4604933?v=4"
+        },
+        "body" : "An alternative suggestion in a completely different style.  Nothing wrong with this one though if you want to keep it.  Ignore my lack of filename in the IllegalArgumentExceptions, I just whipped this up in a worksheet.\r\n\r\n```scala\r\ndef pos(content: String, line: Int, col: Int): Int = {\r\n  val (lineCount, pos) = content\r\n    .linesWithSeparators\r\n    .take(line + 1)\r\n    .foldLeft((0, 0)){ (accum, str) =>\r\n      val (lineNum, charCount) = accum\r\n      if (lineNum < line) {\r\n        (lineNum + 1, charCount + str.length)\r\n      } else {\r\n        require(str.length >= col, \"Line is not long enough\")\r\n        (lineNum + 1, charCount + col)\r\n      }\r\n    }\r\n  require(lineCount == line + 1, \"Not enough lines\")\r\n  pos\r\n}\r\n```",
+        "createdAt" : "2017-11-11T18:22:49Z",
+        "updatedAt" : "2017-11-14T20:08:40Z",
+        "lastEditedBy" : {
+          "login" : "ShaneDelmore",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/4604933?v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "732d4a09-211c-4837-b87c-6eaf63f0c7ce",
+        "parentId" : "bebf729b-94b0-4c9a-b0b1-01d589867e41",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "This method is on a fairly critical path since it's run for every start/end point during completions. `foldLeft` + tuples creates a lot of unnecessary allocations compared to the while loops. \r\n\r\nHowever, I just found out that scala.meta.Input has an internal `private lazy val cachedLineIndices: Array[Int]` which allows you to get the offset of a line in from an array lookup. I've refactored to use this instead of rolling our own.",
+        "createdAt" : "2017-11-11T21:47:25Z",
+        "updatedAt" : "2017-11-14T20:08:40Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5e9272f240feb4f00bdea5ee50e2808699cd0d0e",
+    "line" : 48,
+    "diffHunk" : "@@ -0,0 +1,48 @@\n+package scala.meta.languageserver\n+\n+import org.langmeta.inputs.Input\n+\n+object Positions {\n+  def positionToOffset(\n+      input: Input.VirtualFile,\n+      line: Int,\n+      column: Int\n+  ): Int =\n+    positionToOffset(input.path, input.value, line, column)\n+\n+  def positionToOffset(\n+      filename: String,\n+      contents: String,\n+      line: Int,\n+      column: Int\n+  ): Int = {\n+    def peek(idx: Int): Int =\n+      if (idx < contents.length) contents.charAt(idx) else -1\n+    var i, l = 0\n+    while (i < contents.length && l < line) {\n+      contents.charAt(i) match {\n+        case '\\r' =>\n+          l += 1\n+          if (peek(i + 1) == '\\n') i += 1\n+\n+        case '\\n' =>\n+          l += 1\n+\n+        case _ =>\n+      }\n+      i += 1\n+    }\n+\n+    if (l < line)\n+      throw new IllegalArgumentException(\n+        s\"$filename: Can't find position $line:$column in contents of only $l lines long.\"\n+      )\n+    if (i + column < contents.length)\n+      i + column\n+    else\n+      throw new IllegalArgumentException(\n+        s\"$filename: Invalid column. Position $line:$column in line '${contents.slice(i, contents.length).mkString}'\"\n+      )\n+  }\n+\n+}"
+  }
+]

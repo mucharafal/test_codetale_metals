@@ -1,0 +1,142 @@
+[
+  {
+    "id" : "81d2bd5f-d42e-4299-89e7-18fba899680a",
+    "prId" : 632,
+    "comments" : [
+      {
+        "id" : "154bd0d6-d060-4c02-ae98-3d78efc20fe8",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Let's use `List` here",
+        "createdAt" : "2019-04-08T14:53:52Z",
+        "updatedAt" : "2019-04-10T09:48:55Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "79793f51fa23f5e83e6e9dc8e633ae708eeb17a1",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,188 @@\n+package scala.meta.internal.metals\n+\n+import java.util\n+import org.eclipse.lsp4j.FoldingRange\n+import scala.annotation.tailrec\n+import scala.collection.mutable\n+import scala.meta.Term\n+import scala.meta._\n+import scala.meta.internal.metals.FoldingRangeProvider._\n+import scala.meta.tokens.Token\n+\n+final class FoldingRangeExtractor(foldOnlyLines: Boolean) {\n+  def extract(tree: Tree): util.List[FoldingRange] = {\n+    val ranges = new FoldingRanges(foldOnlyLines)\n+    extractCommentRanges(tree.tokens, ranges)\n+    new Traverser(ranges).apply(tree)\n+    ranges.get\n+  }\n+\n+  private final class Traverser(ranges: FoldingRanges) {\n+    def apply(tree: Tree): Unit = {\n+      fold(tree)\n+      traverse(tree)\n+    }\n+\n+    private def fold(tree: Tree): Unit = tree match {\n+      case _: Term.Block =>\n+        ranges.add(Region, tree.pos)\n+      case _: Template =>\n+        ranges.add(Region, tree.pos)\n+\n+      case loop: Term.For =>\n+        val forToken = loop.tokens.head\n+        val startLine = forToken.pos.endLine\n+        val startColumn = forToken.pos.endColumn // fold everything just after \"for\"\n+\n+        val endLine = loop.body.pos.startLine\n+        val endColumn = loop.body.pos.startColumn // must be exact$startColumn, since it can be \"}{\"\n+\n+        val range = new FoldingRange(startLine, endLine)\n+        range.setStartCharacter(startColumn)\n+        range.setEndCharacter(endColumn)\n+\n+        ranges.add(Region, range)\n+\n+      // it preserves the whitespaces between \"yield\" token and the body\n+      case loop: Term.ForYield =>\n+        val forToken = loop.tokens.head\n+        val startLine = forToken.pos.endLine\n+        val startColumn = forToken.pos.endColumn // fold everything just after \"for\"\n+\n+        val range = loop.tokens.collectFirst {\n+          case token: Token.KwYield => // fold up to the 'yield' token\n+            val endLine = token.pos.startLine\n+            val endColumn = token.pos.startColumn\n+\n+            val range = new FoldingRange(startLine, endLine)\n+            range.setStartCharacter(startColumn)\n+            range.setEndCharacter(endColumn)\n+            range\n+        }\n+\n+        range.foreach(ranges.add(Region, _))\n+\n+      case matchTerm: Term.Match =>\n+        val range = matchTerm.tokens.collectFirst {\n+          case token: Token.KwMatch => // fold just behind the 'match' token\n+            val startLine = token.pos.endLine\n+            val startColumn = token.pos.endColumn\n+\n+            val range = new FoldingRange(startLine, matchTerm.pos.endLine)\n+            range.setStartCharacter(startColumn)\n+            range.setEndCharacter(matchTerm.pos.endColumn)\n+            range\n+        }\n+        range.foreach(ranges.add(Region, _))\n+\n+      case stmt: Case =>\n+        val range = stmt.tokens.collectFirst {\n+          case token: Token.RightArrow =>\n+            val startLine = token.pos.endLine\n+            val startColumn = token.pos.endColumn\n+\n+            val tokens = stmt.tokens\n+            val lastToken = // every but last case ends on the first column of the new case...\n+              if (tokens.last.pos.endColumn == 0)\n+                tokens.dropRight(1).last\n+              else stmt.tokens.last\n+\n+            val range = new FoldingRange(startLine, lastToken.pos.endLine)\n+            range.setStartCharacter(startColumn)\n+            range.setEndCharacter(lastToken.pos.endColumn)\n+            range\n+        }\n+\n+        range.foreach(ranges.addAsIs(Region, _))\n+      case _ =>\n+    }\n+\n+    private def traverse(tree: Tree): Unit = tree match {\n+      case stmt: Case if stmt.body.is[Term.Block] =>\n+        val withoutBody = stmt.children.filter(_ ne stmt.body) // skip body\n+        traverse(withoutBody)\n+        traverse(stmt.body)\n+\n+      case _ => traverse(tree.children)\n+    }\n+\n+    private def traverse(trees: Seq[Tree]): Unit = {"
+  },
+  {
+    "id" : "c88e1f45-374f-425b-9b93-2e1714b1e2e9",
+    "prId" : 632,
+    "comments" : [
+      {
+        "id" : "ca6cad39-df68-4147-bc51-78aae8cb911d",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Let's use `ListBuffer.empty[T]` here",
+        "createdAt" : "2019-04-08T14:54:00Z",
+        "updatedAt" : "2019-04-10T09:48:55Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "79793f51fa23f5e83e6e9dc8e633ae708eeb17a1",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,188 @@\n+package scala.meta.internal.metals\n+\n+import java.util\n+import org.eclipse.lsp4j.FoldingRange\n+import scala.annotation.tailrec\n+import scala.collection.mutable\n+import scala.meta.Term\n+import scala.meta._\n+import scala.meta.internal.metals.FoldingRangeProvider._\n+import scala.meta.tokens.Token\n+\n+final class FoldingRangeExtractor(foldOnlyLines: Boolean) {\n+  def extract(tree: Tree): util.List[FoldingRange] = {\n+    val ranges = new FoldingRanges(foldOnlyLines)\n+    extractCommentRanges(tree.tokens, ranges)\n+    new Traverser(ranges).apply(tree)\n+    ranges.get\n+  }\n+\n+  private final class Traverser(ranges: FoldingRanges) {\n+    def apply(tree: Tree): Unit = {\n+      fold(tree)\n+      traverse(tree)\n+    }\n+\n+    private def fold(tree: Tree): Unit = tree match {\n+      case _: Term.Block =>\n+        ranges.add(Region, tree.pos)\n+      case _: Template =>\n+        ranges.add(Region, tree.pos)\n+\n+      case loop: Term.For =>\n+        val forToken = loop.tokens.head\n+        val startLine = forToken.pos.endLine\n+        val startColumn = forToken.pos.endColumn // fold everything just after \"for\"\n+\n+        val endLine = loop.body.pos.startLine\n+        val endColumn = loop.body.pos.startColumn // must be exact$startColumn, since it can be \"}{\"\n+\n+        val range = new FoldingRange(startLine, endLine)\n+        range.setStartCharacter(startColumn)\n+        range.setEndCharacter(endColumn)\n+\n+        ranges.add(Region, range)\n+\n+      // it preserves the whitespaces between \"yield\" token and the body\n+      case loop: Term.ForYield =>\n+        val forToken = loop.tokens.head\n+        val startLine = forToken.pos.endLine\n+        val startColumn = forToken.pos.endColumn // fold everything just after \"for\"\n+\n+        val range = loop.tokens.collectFirst {\n+          case token: Token.KwYield => // fold up to the 'yield' token\n+            val endLine = token.pos.startLine\n+            val endColumn = token.pos.startColumn\n+\n+            val range = new FoldingRange(startLine, endLine)\n+            range.setStartCharacter(startColumn)\n+            range.setEndCharacter(endColumn)\n+            range\n+        }\n+\n+        range.foreach(ranges.add(Region, _))\n+\n+      case matchTerm: Term.Match =>\n+        val range = matchTerm.tokens.collectFirst {\n+          case token: Token.KwMatch => // fold just behind the 'match' token\n+            val startLine = token.pos.endLine\n+            val startColumn = token.pos.endColumn\n+\n+            val range = new FoldingRange(startLine, matchTerm.pos.endLine)\n+            range.setStartCharacter(startColumn)\n+            range.setEndCharacter(matchTerm.pos.endColumn)\n+            range\n+        }\n+        range.foreach(ranges.add(Region, _))\n+\n+      case stmt: Case =>\n+        val range = stmt.tokens.collectFirst {\n+          case token: Token.RightArrow =>\n+            val startLine = token.pos.endLine\n+            val startColumn = token.pos.endColumn\n+\n+            val tokens = stmt.tokens\n+            val lastToken = // every but last case ends on the first column of the new case...\n+              if (tokens.last.pos.endColumn == 0)\n+                tokens.dropRight(1).last\n+              else stmt.tokens.last\n+\n+            val range = new FoldingRange(startLine, lastToken.pos.endLine)\n+            range.setStartCharacter(startColumn)\n+            range.setEndCharacter(lastToken.pos.endColumn)\n+            range\n+        }\n+\n+        range.foreach(ranges.addAsIs(Region, _))\n+      case _ =>\n+    }\n+\n+    private def traverse(tree: Tree): Unit = tree match {\n+      case stmt: Case if stmt.body.is[Term.Block] =>\n+        val withoutBody = stmt.children.filter(_ ne stmt.body) // skip body\n+        traverse(withoutBody)\n+        traverse(stmt.body)\n+\n+      case _ => traverse(tree.children)\n+    }\n+\n+    private def traverse(trees: Seq[Tree]): Unit = {\n+      val importGroups = mutable.Buffer(mutable.Buffer[Import]())"
+  },
+  {
+    "id" : "310bd053-42a8-434c-a0cc-9bfe0572f424",
+    "prId" : 632,
+    "comments" : [
+      {
+        "id" : "ed6c24c7-1247-4020-a47a-57b39f4924c5",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "This won't work for cases like this\r\n```scala\r\n    case Some(value) if value.exists(x => true) =>\r\n```",
+        "createdAt" : "2019-04-08T14:55:57Z",
+        "updatedAt" : "2019-04-10T09:48:55Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "79793f51fa23f5e83e6e9dc8e633ae708eeb17a1",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,188 @@\n+package scala.meta.internal.metals\n+\n+import java.util\n+import org.eclipse.lsp4j.FoldingRange\n+import scala.annotation.tailrec\n+import scala.collection.mutable\n+import scala.meta.Term\n+import scala.meta._\n+import scala.meta.internal.metals.FoldingRangeProvider._\n+import scala.meta.tokens.Token\n+\n+final class FoldingRangeExtractor(foldOnlyLines: Boolean) {\n+  def extract(tree: Tree): util.List[FoldingRange] = {\n+    val ranges = new FoldingRanges(foldOnlyLines)\n+    extractCommentRanges(tree.tokens, ranges)\n+    new Traverser(ranges).apply(tree)\n+    ranges.get\n+  }\n+\n+  private final class Traverser(ranges: FoldingRanges) {\n+    def apply(tree: Tree): Unit = {\n+      fold(tree)\n+      traverse(tree)\n+    }\n+\n+    private def fold(tree: Tree): Unit = tree match {\n+      case _: Term.Block =>\n+        ranges.add(Region, tree.pos)\n+      case _: Template =>\n+        ranges.add(Region, tree.pos)\n+\n+      case loop: Term.For =>\n+        val forToken = loop.tokens.head\n+        val startLine = forToken.pos.endLine\n+        val startColumn = forToken.pos.endColumn // fold everything just after \"for\"\n+\n+        val endLine = loop.body.pos.startLine\n+        val endColumn = loop.body.pos.startColumn // must be exact$startColumn, since it can be \"}{\"\n+\n+        val range = new FoldingRange(startLine, endLine)\n+        range.setStartCharacter(startColumn)\n+        range.setEndCharacter(endColumn)\n+\n+        ranges.add(Region, range)\n+\n+      // it preserves the whitespaces between \"yield\" token and the body\n+      case loop: Term.ForYield =>\n+        val forToken = loop.tokens.head\n+        val startLine = forToken.pos.endLine\n+        val startColumn = forToken.pos.endColumn // fold everything just after \"for\"\n+\n+        val range = loop.tokens.collectFirst {\n+          case token: Token.KwYield => // fold up to the 'yield' token\n+            val endLine = token.pos.startLine\n+            val endColumn = token.pos.startColumn\n+\n+            val range = new FoldingRange(startLine, endLine)\n+            range.setStartCharacter(startColumn)\n+            range.setEndCharacter(endColumn)\n+            range\n+        }\n+\n+        range.foreach(ranges.add(Region, _))\n+\n+      case matchTerm: Term.Match =>\n+        val range = matchTerm.tokens.collectFirst {\n+          case token: Token.KwMatch => // fold just behind the 'match' token\n+            val startLine = token.pos.endLine\n+            val startColumn = token.pos.endColumn\n+\n+            val range = new FoldingRange(startLine, matchTerm.pos.endLine)\n+            range.setStartCharacter(startColumn)\n+            range.setEndCharacter(matchTerm.pos.endColumn)\n+            range\n+        }\n+        range.foreach(ranges.add(Region, _))\n+\n+      case stmt: Case =>\n+        val range = stmt.tokens.collectFirst {"
+  },
+  {
+    "id" : "3cb7c404-c5e8-49ea-977c-179d42b7bebd",
+    "prId" : 1020,
+    "comments" : [
+      {
+        "id" : "8bc7bb78-24e4-42bf-9a81-165e318d826d",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Formatting here was a bit crazy and worked differently on Windows.",
+        "createdAt" : "2019-10-28T15:30:58Z",
+        "updatedAt" : "2019-10-28T15:54:32Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "f4845971-3c73-474a-a21e-23c77205c130",
+        "parentId" : "8bc7bb78-24e4-42bf-9a81-165e318d826d",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "What's going on 😨 ",
+        "createdAt" : "2019-10-28T21:34:34Z",
+        "updatedAt" : "2019-10-28T21:36:29Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "bf83d588297229d15d4ae4ac49c6d318dae867af",
+    "line" : 26,
+    "diffHunk" : "@@ -173,8 +175,9 @@ final class FoldingRangeExtractor(\n           startToken <- term.expr.findFirstTrailing(_.is[Token.KwCatch])\n           lastCase <- term.catchp.lastOption\n           endToken <- lastCase.findFirstTrailing(_.is[Token.RightBrace])\n-        } yield\n-          Position.Range(tree.pos.input, startToken.pos.end, endToken.pos.end)\n+          tryPos = Position"
+  }
+]

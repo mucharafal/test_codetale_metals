@@ -1,0 +1,173 @@
+[
+  {
+    "id" : "4b7de40e-73a9-4649-a0f2-5a5b5a86abfe",
+    "prId" : 1971,
+    "comments" : [
+      {
+        "id" : "744ef66e-0349-43be-b32c-0ddaf2f6d296",
+        "parentId" : null,
+        "author" : {
+          "login" : "ckipp01",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/13974112?u=7b6a2ddab8eec6f99e4e40ae9b81f71cb5ba92e5&v=4"
+        },
+        "body" : "```suggestion\r\n        statusBar.trackBlockingTask(\"Downloading scalafix\") {\r\n```",
+        "createdAt" : "2020-09-04T13:38:09Z",
+        "updatedAt" : "2020-09-11T13:32:54Z",
+        "lastEditedBy" : {
+          "login" : "ckipp01",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/13974112?u=7b6a2ddab8eec6f99e4e40ae9b81f71cb5ba92e5&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "ebd2632e5db66829b27658c5dd9e9289d1b5ba6d",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,126 @@\n+package scala.meta.internal.metals\n+\n+import java.nio.file.Path\n+import java.util\n+import java.util.Collections\n+import java.util.Optional\n+\n+import scala.collection.mutable\n+import scala.util.Try\n+\n+import scala.meta._\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.io.AbsolutePath\n+\n+import org.eclipse.{lsp4j => l}\n+import scalafix.interfaces.Scalafix\n+import scalafix.interfaces.ScalafixArguments\n+\n+case class ScalafixProvider(\n+    buildTargets: BuildTargets,\n+    buffers: Buffers,\n+    workspace: AbsolutePath,\n+    embedded: Embedded,\n+    statusBar: StatusBar\n+) {\n+  import ScalafixProvider._\n+  private val scalafixCache = mutable.Map.empty[String, Scalafix]\n+\n+  def organizeImports(file: AbsolutePath): List[l.TextEdit] = {\n+    val input = file.toInputFromBuffers(buffers)\n+    val scalafixConfPath = workspace.resolve(scalafixFileName)\n+    val scalafixConf: Optional[Path] =\n+      if (scalafixConfPath.isFile) Optional.of(scalafixConfPath.toNIO)\n+      else Optional.empty()\n+    val resOpt = for {\n+      (scalaVersion, scalaBinaryVersion, classPath) <-\n+        getScalaVersionAndClassPath(file)\n+      api <- getOrUpdateScalafixCache(scalaBinaryVersion)\n+      scalafixArgs = configureApi(api, scalaVersion, classPath)\n+      urlClassLoaderWithExternalRule = embedded.organizeImports(\n+        scalaBinaryVersion,\n+        api.getClass.getClassLoader\n+      )\n+    } yield {\n+      val scalacOption =\n+        if (scalaBinaryVersion == \"2.13\") \"-Wunused:imports\"\n+        else \"-Ywarn-unused-import\"\n+      scalafixArgs\n+        .withToolClasspath(urlClassLoaderWithExternalRule)\n+        .withConfig(scalafixConf)\n+        .withRules(List(organizeImportRuleName).asJava)\n+        .withPaths(List(file.toNIO).asJava)\n+        .withSourceroot(workspace.toNIO)\n+        .withScalacOptions(Collections.singletonList(scalacOption))\n+        .evaluate()\n+    }\n+\n+    val fixedOpt = resOpt\n+      .flatMap(result => result.getFileEvaluations.headOption)\n+      .flatMap(_.previewPatches().asScala)\n+    fixedOpt.map(getTextEditsFrom(_, input)).getOrElse(Nil)\n+  }\n+\n+  private def getTextEditsFrom(\n+      fixed: String,\n+      input: Input\n+  ): List[l.TextEdit] = {\n+    val fullDocumentRange = Position.Range(input, 0, input.chars.length).toLSP\n+    if (fixed != input.text) {\n+      List(new l.TextEdit(fullDocumentRange, fixed))\n+    } else {\n+      Nil\n+    }\n+  }\n+\n+  private def getScalaVersionAndClassPath(\n+      file: AbsolutePath\n+  ): Option[(ScalaVersion, ScalaBinaryVersion, util.List[Path])] = {\n+    for {\n+      identifier <- buildTargets.inverseSources(file)\n+      scalacOptions <- buildTargets.scalacOptions(identifier)\n+      scalaBuildTarget <- buildTargets.scalaInfo(identifier)\n+      scalaVersion = scalaBuildTarget.getScalaVersion\n+      semanticdbTarget = scalacOptions.targetroot(scalaVersion).toNIO\n+      scalaBinaryVersion = scalaBuildTarget.getScalaBinaryVersion\n+      classPath = scalacOptions.getClasspath.map(_.toAbsolutePath.toNIO)\n+      _ = classPath.add(semanticdbTarget)\n+    } yield (scalaVersion, scalaBinaryVersion, classPath)\n+  }\n+\n+  private def configureApi(\n+      api: Scalafix,\n+      scalaVersion: ScalaVersion,\n+      classPath: util.List[Path]\n+  ): ScalafixArguments = {\n+    api\n+      .newArguments()\n+      .withScalaVersion(scalaVersion)\n+      .withClasspath(classPath)\n+  }\n+\n+  private def getOrUpdateScalafixCache(\n+      scalaBinaryVersion: ScalaBinaryVersion\n+  ): Option[Scalafix] = {\n+    scalafixCache\n+      .get(scalaBinaryVersion)\n+      .orElse(\n+        statusBar.trackBlockingTask(\"downloading scalafix\") {"
+  },
+  {
+    "id" : "51c59ac9-3be9-4a8a-bb16-8b692f34950d",
+    "prId" : 1971,
+    "comments" : [
+      {
+        "id" : "b7dc12e6-f78e-4e1d-999c-d0d075be6364",
+        "parentId" : null,
+        "author" : {
+          "login" : "ckipp01",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/13974112?u=7b6a2ddab8eec6f99e4e40ae9b81f71cb5ba92e5&v=4"
+        },
+        "body" : "What do you think about sticking with `patches` or `patchesOpt` to make it a bit clearer what exactly this is, and then we could change the signature of `getTextEditsFrom` to take a `patch` and `input`?",
+        "createdAt" : "2020-09-04T13:46:48Z",
+        "updatedAt" : "2020-09-11T13:32:54Z",
+        "lastEditedBy" : {
+          "login" : "ckipp01",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/13974112?u=7b6a2ddab8eec6f99e4e40ae9b81f71cb5ba92e5&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "bc0472d4-1ad0-4cab-baf7-2c4e20f6ff89",
+        "parentId" : "b7dc12e6-f78e-4e1d-999c-d0d075be6364",
+        "author" : {
+          "login" : "mlachkar",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/7843237?u=d2941da73011b9a49767ac863ce5bc20b7b10ed7&v=4"
+        },
+        "body" : "It's not really patches, but the content file after scalafix is evaluated on this file. I will change names. ",
+        "createdAt" : "2020-09-07T09:12:38Z",
+        "updatedAt" : "2020-09-11T13:32:54Z",
+        "lastEditedBy" : {
+          "login" : "mlachkar",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/7843237?u=d2941da73011b9a49767ac863ce5bc20b7b10ed7&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "ebd2632e5db66829b27658c5dd9e9289d1b5ba6d",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,126 @@\n+package scala.meta.internal.metals\n+\n+import java.nio.file.Path\n+import java.util\n+import java.util.Collections\n+import java.util.Optional\n+\n+import scala.collection.mutable\n+import scala.util.Try\n+\n+import scala.meta._\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.io.AbsolutePath\n+\n+import org.eclipse.{lsp4j => l}\n+import scalafix.interfaces.Scalafix\n+import scalafix.interfaces.ScalafixArguments\n+\n+case class ScalafixProvider(\n+    buildTargets: BuildTargets,\n+    buffers: Buffers,\n+    workspace: AbsolutePath,\n+    embedded: Embedded,\n+    statusBar: StatusBar\n+) {\n+  import ScalafixProvider._\n+  private val scalafixCache = mutable.Map.empty[String, Scalafix]\n+\n+  def organizeImports(file: AbsolutePath): List[l.TextEdit] = {\n+    val input = file.toInputFromBuffers(buffers)\n+    val scalafixConfPath = workspace.resolve(scalafixFileName)\n+    val scalafixConf: Optional[Path] =\n+      if (scalafixConfPath.isFile) Optional.of(scalafixConfPath.toNIO)\n+      else Optional.empty()\n+    val resOpt = for {\n+      (scalaVersion, scalaBinaryVersion, classPath) <-\n+        getScalaVersionAndClassPath(file)\n+      api <- getOrUpdateScalafixCache(scalaBinaryVersion)\n+      scalafixArgs = configureApi(api, scalaVersion, classPath)\n+      urlClassLoaderWithExternalRule = embedded.organizeImports(\n+        scalaBinaryVersion,\n+        api.getClass.getClassLoader\n+      )\n+    } yield {\n+      val scalacOption =\n+        if (scalaBinaryVersion == \"2.13\") \"-Wunused:imports\"\n+        else \"-Ywarn-unused-import\"\n+      scalafixArgs\n+        .withToolClasspath(urlClassLoaderWithExternalRule)\n+        .withConfig(scalafixConf)\n+        .withRules(List(organizeImportRuleName).asJava)\n+        .withPaths(List(file.toNIO).asJava)\n+        .withSourceroot(workspace.toNIO)\n+        .withScalacOptions(Collections.singletonList(scalacOption))\n+        .evaluate()\n+    }\n+\n+    val fixedOpt = resOpt"
+  },
+  {
+    "id" : "73de8812-35d4-4cc8-8cd5-b1054b03742b",
+    "prId" : 1971,
+    "comments" : [
+      {
+        "id" : "4631e29c-9047-4079-b8f2-248015867073",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "nit: instead of dealing with Java types directly, we may use Option and invoke .toJava where appropriate",
+        "createdAt" : "2020-09-06T17:00:23Z",
+        "updatedAt" : "2020-09-13T08:26:39Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "ebd2632e5db66829b27658c5dd9e9289d1b5ba6d",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,126 @@\n+package scala.meta.internal.metals\n+\n+import java.nio.file.Path\n+import java.util\n+import java.util.Collections\n+import java.util.Optional\n+\n+import scala.collection.mutable\n+import scala.util.Try\n+\n+import scala.meta._\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.io.AbsolutePath\n+\n+import org.eclipse.{lsp4j => l}\n+import scalafix.interfaces.Scalafix\n+import scalafix.interfaces.ScalafixArguments\n+\n+case class ScalafixProvider(\n+    buildTargets: BuildTargets,\n+    buffers: Buffers,\n+    workspace: AbsolutePath,\n+    embedded: Embedded,\n+    statusBar: StatusBar\n+) {\n+  import ScalafixProvider._\n+  private val scalafixCache = mutable.Map.empty[String, Scalafix]\n+\n+  def organizeImports(file: AbsolutePath): List[l.TextEdit] = {\n+    val input = file.toInputFromBuffers(buffers)\n+    val scalafixConfPath = workspace.resolve(scalafixFileName)\n+    val scalafixConf: Optional[Path] ="
+  },
+  {
+    "id" : "9d7b0492-e890-4abc-9733-7000f6d2dd44",
+    "prId" : 1971,
+    "comments" : [
+      {
+        "id" : "6fed3d31-6176-4aae-b2ed-f043bbf7f35c",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "Nit: in other places we generally use the Scala type and then convert to Java types on demand.\r\n\r\n```suggestion\r\n        val scalafixConf =\r\n          if (scalafixConfPath.isFile) Some(scalafixConfPath.toNIO)\r\n          else None\r\n```\r\n\r\nand then `scalafixConf.asJava` where needed",
+        "createdAt" : "2020-09-13T08:10:58Z",
+        "updatedAt" : "2020-09-13T08:26:40Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ebd2632e5db66829b27658c5dd9e9289d1b5ba6d",
+    "line" : 48,
+    "diffHunk" : "@@ -0,0 +1,147 @@\n+package scala.meta.internal.metals\n+\n+import java.nio.file.Path\n+import java.util\n+import java.util.Collections\n+import java.util.Optional\n+\n+import scala.collection.mutable\n+import scala.util.Try\n+\n+import scala.meta._\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.io.AbsolutePath\n+\n+import org.eclipse.lsp4j.MessageType\n+import org.eclipse.{lsp4j => l}\n+import scalafix.interfaces.Scalafix\n+import scalafix.interfaces.ScalafixArguments\n+\n+case class ScalafixProvider(\n+    buildTargets: BuildTargets,\n+    buffers: Buffers,\n+    workspace: AbsolutePath,\n+    embedded: Embedded,\n+    statusBar: StatusBar,\n+    icons: Icons,\n+    languageClient: MetalsLanguageClient\n+) {\n+  import ScalafixProvider._\n+  private val scalafixCache = mutable.Map.empty[String, Scalafix]\n+\n+  def organizeImports(file: AbsolutePath): List[l.TextEdit] = {\n+    val fileInput = file.toInput\n+    val unsavedFile = file.toInputFromBuffers(buffers)\n+    if (fileInput.text.diff(unsavedFile.text).nonEmpty) {\n+      scribe.info(s\"Organize imports requires saving the file first\")\n+      languageClient.showMessage(\n+        MessageType.Warning,\n+        s\"Save ${file.toNIO.getFileName} before organizing imports\"\n+      )\n+      Nil\n+    } else {\n+      val baseMatcher = scalafix.internal.v1.Args.baseMatcher\n+      if (baseMatcher.matches(file.toNIO)) {\n+        val scalafixConfPath = workspace.resolve(scalafixFileName)\n+        val scalafixConf: Optional[Path] =\n+          if (scalafixConfPath.isFile) Optional.of(scalafixConfPath.toNIO)\n+          else Optional.empty()"
+  },
+  {
+    "id" : "9893ac64-689b-49c3-8732-44c095d49bcc",
+    "prId" : 1971,
+    "comments" : [
+      {
+        "id" : "9069ae9a-faea-42a7-a941-84f1e4fd1bd0",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "Not sure how relevant this is, but the `.scalafmt.conf` file is configurable. See `scalafmtConfigPath` in `UserConfiguration`. I would instinctively expect this to be configurable as well.\r\n\r\nWhat do you think?",
+        "createdAt" : "2020-09-13T08:16:29Z",
+        "updatedAt" : "2020-09-13T08:26:40Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "ebd2632e5db66829b27658c5dd9e9289d1b5ba6d",
+    "line" : 145,
+    "diffHunk" : "@@ -0,0 +1,147 @@\n+package scala.meta.internal.metals\n+\n+import java.nio.file.Path\n+import java.util\n+import java.util.Collections\n+import java.util.Optional\n+\n+import scala.collection.mutable\n+import scala.util.Try\n+\n+import scala.meta._\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.io.AbsolutePath\n+\n+import org.eclipse.lsp4j.MessageType\n+import org.eclipse.{lsp4j => l}\n+import scalafix.interfaces.Scalafix\n+import scalafix.interfaces.ScalafixArguments\n+\n+case class ScalafixProvider(\n+    buildTargets: BuildTargets,\n+    buffers: Buffers,\n+    workspace: AbsolutePath,\n+    embedded: Embedded,\n+    statusBar: StatusBar,\n+    icons: Icons,\n+    languageClient: MetalsLanguageClient\n+) {\n+  import ScalafixProvider._\n+  private val scalafixCache = mutable.Map.empty[String, Scalafix]\n+\n+  def organizeImports(file: AbsolutePath): List[l.TextEdit] = {\n+    val fileInput = file.toInput\n+    val unsavedFile = file.toInputFromBuffers(buffers)\n+    if (fileInput.text.diff(unsavedFile.text).nonEmpty) {\n+      scribe.info(s\"Organize imports requires saving the file first\")\n+      languageClient.showMessage(\n+        MessageType.Warning,\n+        s\"Save ${file.toNIO.getFileName} before organizing imports\"\n+      )\n+      Nil\n+    } else {\n+      val baseMatcher = scalafix.internal.v1.Args.baseMatcher\n+      if (baseMatcher.matches(file.toNIO)) {\n+        val scalafixConfPath = workspace.resolve(scalafixFileName)\n+        val scalafixConf: Optional[Path] =\n+          if (scalafixConfPath.isFile) Optional.of(scalafixConfPath.toNIO)\n+          else Optional.empty()\n+        val scalafixEvaluation = for {\n+          (scalaVersion, scalaBinaryVersion, classPath) <-\n+            getScalaVersionAndClassPath(file)\n+          api <- getOrUpdateScalafixCache(scalaBinaryVersion)\n+          scalafixArgs = configureApi(api, scalaVersion, classPath)\n+          urlClassLoaderWithExternalRule = embedded.organizeImports(\n+            scalaBinaryVersion,\n+            api.getClass.getClassLoader\n+          )\n+        } yield {\n+          val scalacOption =\n+            if (scalaBinaryVersion == \"2.13\") \"-Wunused:imports\"\n+            else \"-Ywarn-unused-import\"\n+\n+          scalafixArgs\n+            .withToolClasspath(urlClassLoaderWithExternalRule)\n+            .withConfig(scalafixConf)\n+            .withRules(List(organizeImportRuleName).asJava)\n+            .withPaths(List(file.toNIO).asJava)\n+            .withSourceroot(workspace.toNIO)\n+            .withScalacOptions(Collections.singletonList(scalacOption))\n+            .evaluate()\n+        }\n+\n+        val newFileContentOpt = scalafixEvaluation\n+          .flatMap(result => result.getFileEvaluations.headOption)\n+          .flatMap(_.previewPatches().asScala)\n+        newFileContentOpt.map(getTextEditsFrom(_, fileInput)).getOrElse(Nil)\n+      } else {\n+        scribe.info(\n+          s\"\"\"|Could not organize import for ${file.toNIO.getFileName}. Should end with .scala or .sbt\"\"\"\n+        )\n+        Nil\n+      }\n+    }\n+  }\n+\n+  private def getTextEditsFrom(\n+      newFileContent: String,\n+      input: Input\n+  ): List[l.TextEdit] = {\n+    val fullDocumentRange = Position.Range(input, 0, input.chars.length).toLSP\n+    if (newFileContent != input.text) {\n+      List(new l.TextEdit(fullDocumentRange, newFileContent))\n+    } else {\n+      Nil\n+    }\n+  }\n+\n+  private def getScalaVersionAndClassPath(\n+      file: AbsolutePath\n+  ): Option[(ScalaVersion, ScalaBinaryVersion, util.List[Path])] =\n+    for {\n+      identifier <- buildTargets.inverseSources(file)\n+      scalacOptions <- buildTargets.scalacOptions(identifier)\n+      scalaBuildTarget <- buildTargets.scalaInfo(identifier)\n+      scalaVersion = scalaBuildTarget.getScalaVersion\n+      semanticdbTarget = scalacOptions.targetroot(scalaVersion).toNIO\n+      scalaBinaryVersion = scalaBuildTarget.getScalaBinaryVersion\n+      classPath = scalacOptions.getClasspath.map(_.toAbsolutePath.toNIO)\n+      _ = classPath.add(semanticdbTarget)\n+    } yield (scalaVersion, scalaBinaryVersion, classPath)\n+\n+  private def configureApi(\n+      api: Scalafix,\n+      scalaVersion: ScalaVersion,\n+      classPath: util.List[Path]\n+  ): ScalafixArguments = {\n+    api\n+      .newArguments()\n+      .withScalaVersion(scalaVersion)\n+      .withClasspath(classPath)\n+  }\n+\n+  private def getOrUpdateScalafixCache(\n+      scalaBinaryVersion: ScalaBinaryVersion\n+  ): Option[Scalafix] = {\n+    scalafixCache\n+      .get(scalaBinaryVersion)\n+      .orElse(\n+        statusBar.trackBlockingTask(\"Downloading scalafix\") {\n+          Try(Scalafix.fetchAndClassloadInstance(scalaBinaryVersion)).toOption\n+            .map { api =>\n+              scalafixCache.update(scalaBinaryVersion, api)\n+              api\n+            }\n+        }\n+      )\n+  }\n+}\n+\n+object ScalafixProvider {\n+  type ScalaBinaryVersion = String\n+  type ScalaVersion = String\n+\n+  val organizeImportRuleName = \"OrganizeImports\"\n+  val scalafixFileName = \".scalafix.conf\""
+  }
+]

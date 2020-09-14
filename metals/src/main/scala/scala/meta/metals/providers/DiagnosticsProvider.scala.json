@@ -1,0 +1,30 @@
+[
+  {
+    "id" : "4d38ff45-882a-49bb-a945-3e5ed083f087",
+    "prId" : 215,
+    "comments" : [
+      {
+        "id" : "4a8b8e4e-e052-45b6-8302-863c06cd4ba2",
+        "parentId" : null,
+        "author" : {
+          "login" : "laughedelic",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/766656?v=4"
+        },
+        "body" : "I was doubting whether this should use the code from `ScalaErrorReporter` instead, like this:\r\n\r\n```scala\r\n  private def scalacAnalyze(doc: m.Document): Seq[Diagnostic] = {\r\n    val index = EagerInMemorySemanticdbIndex(\r\n      m.Database(doc :: Nil),\r\n      m.Sourcepath(Nil),\r\n      m.Classpath(Nil)\r\n    )\r\n    for {\r\n      doc <- index.database.documents\r\n      msg <- doc.messages\r\n    } yield msg.toLSP(\"scalac\")\r\n  }\r\n```\r\n\r\nI tried it, but it was glitchy so I left it as is. I don't understand very well why `EagerInMemorySemanticdbIndex` was used there and whether it should be used here. Semanticdbs we get here are already built interactively, isn't it enough?",
+        "createdAt" : "2018-03-31T15:10:16Z",
+        "updatedAt" : "2018-03-31T19:24:47Z",
+        "lastEditedBy" : {
+          "login" : "laughedelic",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/766656?v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "5708b7b0e46d970250e38a25ad44371815b04c29",
+    "line" : 41,
+    "diffHunk" : "@@ -0,0 +1,53 @@\n+package scala.meta.metals.providers\n+\n+import scala.meta.metals.Linter\n+import scala.meta.metals.Configuration\n+import com.typesafe.scalalogging.LazyLogging\n+import scala.{meta => m}\n+import scala.meta.metals.ScalametaEnrichments._\n+import org.langmeta.lsp.MonixEnrichments._\n+import org.langmeta.lsp.PublishDiagnostics\n+import org.langmeta.jsonrpc.JsonRpcClient\n+import monix.eval.Task\n+import monix.execution.Scheduler\n+import monix.reactive.Observable\n+import org.langmeta.AbsolutePath\n+import org.langmeta.lsp.Diagnostic\n+\n+class DiagnosticsProvider(\n+    configuration: Observable[Configuration],\n+    cwd: AbsolutePath\n+)(implicit s: Scheduler, client: JsonRpcClient)\n+    extends LazyLogging {\n+  private def latestConfig = configuration.toFunction0()\n+  private def scalafixDisabled: Boolean =\n+    !latestConfig().scalafix.enabled\n+  private def scalacDisabled: Boolean =\n+    !latestConfig().scalac.diagnostics.enabled\n+\n+  lazy val linter = new Linter(configuration, cwd)\n+\n+  def diagnostics(doc: m.Document): Task[Seq[PublishDiagnostics]] =\n+    diagnostics(m.Database(doc :: Nil))\n+  def diagnostics(db: m.Database): Task[Seq[PublishDiagnostics]] = {\n+    if (scalafixDisabled && scalacDisabled) Task(Nil)\n+    else\n+      Task.sequence {\n+        db.documents.map { document =>\n+          val uri = document.input.syntax\n+\n+          val scalacDiagnostics: Seq[Diagnostic] =\n+            if (scalacDisabled) Nil\n+            else document.messages.map(_.toLSP(\"scalac\"))"
+  }
+]

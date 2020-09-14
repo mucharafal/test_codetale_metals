@@ -1,0 +1,77 @@
+[
+  {
+    "id" : "f9291eea-2c37-4daf-bb64-2ca8446d7b28",
+    "prId" : 1523,
+    "comments" : [
+      {
+        "id" : "b8992fba-e4b7-4e48-9176-ca4154b799b4",
+        "parentId" : null,
+        "author" : {
+          "login" : "ckipp01",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/13974112?u=7b6a2ddab8eec6f99e4e40ae9b81f71cb5ba92e5&v=4"
+        },
+        "body" : "Just to double check, but for `sc` files we use `dialects.Sbt`?",
+        "createdAt" : "2020-04-04T08:56:46Z",
+        "updatedAt" : "2020-04-15T13:50:25Z",
+        "lastEditedBy" : {
+          "login" : "ckipp01",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/13974112?u=7b6a2ddab8eec6f99e4e40ae9b81f71cb5ba92e5&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "e27e2a94-be6c-49a9-94e0-6820b49778ee",
+        "parentId" : "b8992fba-e4b7-4e48-9176-ca4154b799b4",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "I think it's a workaround, until we properly support Sbt I don't think it add much. This also just moved and is the current behaviour.",
+        "createdAt" : "2020-04-04T09:54:48Z",
+        "updatedAt" : "2020-04-15T13:50:25Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "f2fb0285-3161-45be-830d-fad6074f5f01",
+        "parentId" : "b8992fba-e4b7-4e48-9176-ca4154b799b4",
+        "author" : {
+          "login" : "ckipp01",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/13974112?u=7b6a2ddab8eec6f99e4e40ae9b81f71cb5ba92e5&v=4"
+        },
+        "body" : "Sounds good!",
+        "createdAt" : "2020-04-06T18:28:53Z",
+        "updatedAt" : "2020-04-15T13:50:25Z",
+        "lastEditedBy" : {
+          "login" : "ckipp01",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/13974112?u=7b6a2ddab8eec6f99e4e40ae9b81f71cb5ba92e5&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "1142490703f832961ac0df1debd14b4f3b12ce7d",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,73 @@\n+package scala.meta.internal.metals\n+\n+import scala.collection.concurrent.TrieMap\n+import scala.meta._\n+import scala.meta.internal.io.PathIO\n+import scala.meta.internal.mtags.MtagsEnrichments._\n+import scala.meta.parsers.Parsed\n+import org.eclipse.lsp4j.Diagnostic\n+import org.eclipse.lsp4j.DiagnosticSeverity\n+import java.nio.file.Paths\n+import java.net.URI\n+\n+/**\n+ * Manages parsing of Scala source files into Scalameta syntax trees.\n+ *\n+ * - provides the latest good Scalameta tree for a given source file\n+ *   similar as `Buffers` provides the current text content.\n+ * - publishes diagnostics for syntax errors.\n+ */\n+final class Trees {\n+\n+  private val trees = TrieMap.empty[URI, Tree]\n+\n+  def get(fileUri: URI, code: String): Option[Tree] =\n+    trees.get(fileUri).orElse {\n+      // Fallback to parse without caching result.\n+      parse(fileUri, code).flatMap(_.toOption)\n+    }\n+\n+  def didClose(fileUri: URI): Unit = {\n+    trees.remove(fileUri)\n+  }\n+\n+  def didChange(fileUri: URI, text: String): List[Diagnostic] = {\n+    parse(fileUri, text) match {\n+      case Some(parsed) =>\n+        parsed match {\n+          case Parsed.Error(pos, message, _) =>\n+            List(\n+              new Diagnostic(\n+                pos.toLSP,\n+                message,\n+                DiagnosticSeverity.Error,\n+                \"scalameta\"\n+              )\n+            )\n+          case Parsed.Success(tree) =>\n+            trees(fileUri) = tree\n+            List()\n+        }\n+      case None =>\n+        () // Unknown extension, do nothing.\n+        List()\n+    }\n+  }\n+\n+  private def parse(\n+      fileUri: URI,\n+      text: String\n+  ): Option[Parsed[Source]] = {\n+    dialect(fileUri).map { d =>\n+      val input = Input.VirtualFile(Paths.get(fileUri).toString(), text)\n+      d(input).parse[Source]\n+    }\n+  }\n+  private def dialect(fileUri: URI): Option[Dialect] = {\n+    Option(PathIO.extension(Paths.get(fileUri))).collect {\n+      case \"scala\" => dialects.Scala\n+      case \"sbt\" => dialects.Sbt\n+      case \"sc\" => dialects.Sbt"
+  }
+]

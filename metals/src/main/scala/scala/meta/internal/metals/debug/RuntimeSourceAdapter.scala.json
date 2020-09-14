@@ -1,0 +1,99 @@
+[
+  {
+    "id" : "24375a20-90d6-497c-b629-d1b5f8946160",
+    "prId" : 1163,
+    "comments" : [
+      {
+        "id" : "c86ad800-11c2-4522-9246-5fc8063978e3",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "It's quite heavyweight to go via `WorkspaceSymbolProvider` to find the location of a definition. Did you try using the `DefinitionIndex` directly? It's possible to compute mtags \"toplevels\" on the fly given the source file.",
+        "createdAt" : "2019-12-10T15:40:57Z",
+        "updatedAt" : "2019-12-18T11:36:11Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "255043aa-cef5-450d-8e26-7454a3b56561",
+        "parentId" : "c86ad800-11c2-4522-9246-5fc8063978e3",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "WorkspaceSymbolProvider supports fuzzy symbol searching, which I don't think we need here",
+        "createdAt" : "2019-12-10T15:41:23Z",
+        "updatedAt" : "2019-12-18T11:36:11Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "432c3e4c-53f1-4e77-bcce-ff3554de7d85",
+        "parentId" : "c86ad800-11c2-4522-9246-5fc8063978e3",
+        "author" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "body" : "You are right, using DefinitionProvider works - thanks! \r\nIt has one small regression in regards to the WorksapceSymbolProvider but I think it can be addressed later: ambiguous source files, like:\r\n- `foo/a/b/Foo.scala`\r\n- `bar/a/b/Foo.scala`\r\n\r\nwhere `foo` and `bar` are different, unrelated modules (let's say with variants of classes for different scala versions or something like that).\r\n\r\nIn this case, the `OnDemandSymbolIndex` fails us, because the top-level symbols from `bar`  would overwrite the symbols from `foo`",
+        "createdAt" : "2019-12-10T16:51:58Z",
+        "updatedAt" : "2019-12-18T11:36:11Z",
+        "lastEditedBy" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "4f17a567-c8cb-44cd-a67a-904f956aa5a7",
+        "parentId" : "c86ad800-11c2-4522-9246-5fc8063978e3",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "The same limitation applies for “goto definition” and this issue is totally fixable. ",
+        "createdAt" : "2019-12-11T09:25:48Z",
+        "updatedAt" : "2019-12-18T11:36:11Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "04ef30f47759c2620cd886265e4c50169245a539",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,59 @@\n+package scala.meta.internal.metals.debug\n+\n+import ch.epfl.scala.bsp4j.BuildTargetIdentifier\n+import org.eclipse.lsp4j.debug.Source\n+import scala.meta.internal.metals.BuildTargets\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.internal.metals.WorkspaceSymbolProvider\n+\n+final class RuntimeSourceAdapter(\n+    symbolProvider: WorkspaceSymbolProvider,\n+    buildTargets: BuildTargets,\n+    targets: List[BuildTargetIdentifier]\n+) {\n+  def adapt(source: Source): Boolean = {\n+    val symbol = searchRealPath(source)\n+\n+    symbol match {\n+      case Some(symbol) =>\n+        source.setPath(symbol)\n+        true\n+      case None =>\n+        false\n+    }\n+  }\n+\n+  private def searchRealPath(source: Source): Option[String] = {\n+    if (source == null) None\n+    else {\n+      searchAsClassPathSymbol(source).orElse(searchAsSourceFile(source))\n+    }\n+  }\n+\n+  private def searchAsClassPathSymbol(source: Source): Option[String] = {\n+    val container =\n+      source.getPath.stripSuffix(source.getName).replaceAll(\"/\", \".\")\n+    val pattern = source.getName\n+      .stripSuffix(\".scala\")\n+      .stripSuffix(\".java\")\n+\n+    val symbols = for {\n+      target <- targets.view\n+      symbol <- symbolProvider.searchExact(pattern, Some(target))"
+  }
+]

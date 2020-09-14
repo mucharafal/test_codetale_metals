@@ -1,0 +1,463 @@
+[
+  {
+    "id" : "1e7c2869-1e4d-431d-ab18-477ce47e9f22",
+    "prId" : 632,
+    "comments" : [
+      {
+        "id" : "bfc2ab13-9f71-4100-8f0d-dfebc29a54b7",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "nit: same as in #621, can you please configure IntelliJ import settings to use\r\n\r\n- no blank lines between groups, imports should be in plain alphabetical order\r\n- no grouping of imports with shared prefix",
+        "createdAt" : "2019-04-04T08:57:48Z",
+        "updatedAt" : "2019-04-10T09:48:54Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "79793f51fa23f5e83e6e9dc8e633ae708eeb17a1",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,65 @@\n+package scala.meta.internal.metals\n+\n+import java.util\n+\n+import org.eclipse.lsp4j.{FoldingRange, FoldingRangeCapabilities}"
+  },
+  {
+    "id" : "ac464d98-2ed3-4c46-811d-4fbd196e440a",
+    "prId" : 632,
+    "comments" : [
+      {
+        "id" : "d52ec0b6-a799-4b85-a785-8d296d43f265",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Can this can be simplified into?\r\n```scala\r\nimport MetalsEnrichments._\r\nval range = pos.toLSP\r\nif (capabilities.getLineFoldingOnly) {\r\n  range.setEndLine(range.getEndLine - 1)\r\n}\r\n```\r\n\r\nWe can pass in the capabilities directly and avoid the need for `FoldingMode` and `Factor`.",
+        "createdAt" : "2019-04-04T09:01:09Z",
+        "updatedAt" : "2019-04-10T09:48:54Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "79793f51fa23f5e83e6e9dc8e633ae708eeb17a1",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,65 @@\n+package scala.meta.internal.metals\n+\n+import java.util\n+\n+import org.eclipse.lsp4j.{FoldingRange, FoldingRangeCapabilities}\n+\n+import scala.meta.Term.Block\n+import scala.meta.internal.metals.FoldingMode._\n+import scala.meta.internal.metals.FoldingRanges.{Factory, Region}\n+import scala.meta.io.AbsolutePath\n+import scala.meta.transversers.SimpleTraverser\n+import scala.meta.{Position, Tree}\n+\n+final class FoldingRangeProvider(val trees: Trees, mode: FoldingMode) {\n+  def getRangedFor(path: AbsolutePath): util.List[FoldingRange] = {\n+    trees\n+      .get(path)\n+      .map(findFoldingRanges)\n+      .getOrElse(util.Collections.emptyList())\n+  }\n+\n+  private def findFoldingRanges(tree: Tree): util.List[FoldingRange] = {\n+    val ranges = new util.ArrayList[FoldingRange]()\n+    new RangeFinder(ranges).apply(tree)\n+    ranges\n+  }\n+\n+  private class RangeFinder(ranges: util.ArrayList[FoldingRange])\n+      extends SimpleTraverser {\n+\n+    private def fold(tree: Tree): Unit = tree match {\n+      case Block(_) => createRange(Region, tree.pos)\n+      case _ =>\n+    }\n+\n+    override def apply(tree: Tree): Unit = {\n+      fold(tree)\n+      super.apply(tree)\n+    }\n+\n+    private def createRange(factory: Factory, pos: Position): Unit = {\n+      val range = factory.create("
+  },
+  {
+    "id" : "ff9f64be-14e1-46cb-a3af-fb1079ab7567",
+    "prId" : 632,
+    "comments" : [
+      {
+        "id" : "28c48362-d8ef-4da5-890f-804c4c0224df",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Can this be replaced with?\r\n\r\n```scala\r\nval ranges = tree.collect {\r\n  case block @ Term.Block(_) => createRange(block.pos)\r\n}\r\n```\r\n\r\nSee https://scalameta.org/docs/trees/guide.html#simple-traversals for more examples how to use `collect`. `Traverser` should only be needed for more custom traversals, for example when we don't want to visit all tree nodes.",
+        "createdAt" : "2019-04-04T09:04:00Z",
+        "updatedAt" : "2019-04-10T09:48:54Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "79793f51fa23f5e83e6e9dc8e633ae708eeb17a1",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,65 @@\n+package scala.meta.internal.metals\n+\n+import java.util\n+\n+import org.eclipse.lsp4j.{FoldingRange, FoldingRangeCapabilities}\n+\n+import scala.meta.Term.Block\n+import scala.meta.internal.metals.FoldingMode._\n+import scala.meta.internal.metals.FoldingRanges.{Factory, Region}\n+import scala.meta.io.AbsolutePath\n+import scala.meta.transversers.SimpleTraverser\n+import scala.meta.{Position, Tree}\n+\n+final class FoldingRangeProvider(val trees: Trees, mode: FoldingMode) {\n+  def getRangedFor(path: AbsolutePath): util.List[FoldingRange] = {\n+    trees\n+      .get(path)\n+      .map(findFoldingRanges)\n+      .getOrElse(util.Collections.emptyList())\n+  }\n+\n+  private def findFoldingRanges(tree: Tree): util.List[FoldingRange] = {\n+    val ranges = new util.ArrayList[FoldingRange]()\n+    new RangeFinder(ranges).apply(tree)\n+    ranges\n+  }\n+\n+  private class RangeFinder(ranges: util.ArrayList[FoldingRange])"
+  },
+  {
+    "id" : "697924d2-1226-44c9-91b7-193f28dba19b",
+    "prId" : 632,
+    "comments" : [
+      {
+        "id" : "4ac5a232-9f8b-4fd7-8677-9de052c9fdc9",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Nit, by convention we `import scala.meta._` and reference classes like `Term.Block`. This is because many names of the inner classes conflict, for example `Term.Name` and `Type.Name`",
+        "createdAt" : "2019-04-04T09:08:18Z",
+        "updatedAt" : "2019-04-10T09:48:54Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "79793f51fa23f5e83e6e9dc8e633ae708eeb17a1",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,65 @@\n+package scala.meta.internal.metals\n+\n+import java.util\n+\n+import org.eclipse.lsp4j.{FoldingRange, FoldingRangeCapabilities}\n+\n+import scala.meta.Term.Block"
+  },
+  {
+    "id" : "f9c08327-4770-4a46-a28a-97005fda135a",
+    "prId" : 632,
+    "comments" : [
+      {
+        "id" : "b732ab47-db36-4bf9-9fb8-1c9a2256e933",
+        "parentId" : null,
+        "author" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "body" : "I am not 100% sure if this is cleaner than the previous explicit Traverser.\r\nhere, we need to specify the names like \r\n```scala\r\ntree traverse {\r\n  case block: Term.Block => foo(block.pos)\r\n  case template: Template => ranges.add(Region, template.pos)\r\n  ...\r\n}\r\n```\r\n\r\nbut since, we have `tree` in scope - it is easy to make a mistake\r\n\r\nin contrast - using explicit Traverser, we had to write:\r\n```scala\r\ndef fold(tree: Tree): Unit = tree match {\r\n  case _ : Term.Block => ranges.add(Region, tree.pos)\r\n  case _ : Template => ranges.add(Region, tree.pos)\r\n  case _ =>\r\n}\r\n```",
+        "createdAt" : "2019-04-04T10:09:01Z",
+        "updatedAt" : "2019-04-10T09:48:54Z",
+        "lastEditedBy" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "1051483b-80cd-4188-af14-da00d68b6dc7",
+        "parentId" : "b732ab47-db36-4bf9-9fb8-1c9a2256e933",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "You can also do\r\n```scala\r\nx.traverse {\r\n  case tree =>\r\n    tree match {\r\n      case _: Term.Block => ...\r\n```\r\nEither way I don't feel strongly about this, I suspect down the road we will need a custom traverser to stop visiting children so that approach might be more flexible.",
+        "createdAt" : "2019-04-04T10:13:53Z",
+        "updatedAt" : "2019-04-10T09:48:54Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "79793f51fa23f5e83e6e9dc8e633ae708eeb17a1",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,82 @@\n+package scala.meta.internal.metals\n+\n+import java.util\n+import java.util.Collections\n+import org.eclipse.lsp4j.FoldingRange\n+import org.eclipse.lsp4j.FoldingRangeCapabilities\n+import scala.meta.Template\n+import scala.meta.Term\n+import scala.meta.Tree\n+import scala.meta._\n+import scala.meta.inputs.Position\n+import scala.meta.internal.metals.FoldingRangeProvider._\n+import scala.meta.io.AbsolutePath\n+\n+final class FoldingRangeProvider(val trees: Trees, foldOnlyLines: Boolean) {\n+  def getRangedFor(path: AbsolutePath): util.List[FoldingRange] = {\n+    trees\n+      .get(path)\n+      .map(findFoldingRanges)\n+      .getOrElse(util.Collections.emptyList())\n+  }\n+\n+  private def findFoldingRanges(tree: Tree): util.List[FoldingRange] = {\n+    val ranges = new FoldingRanges(foldOnlyLines)\n+\n+    tree traverse {\n+      case block: Term.Block => ranges.add(Region, block.pos)"
+  },
+  {
+    "id" : "c80296f1-4472-466e-ad54-5eb4cd63da69",
+    "prId" : 632,
+    "comments" : [
+      {
+        "id" : "5ff109c7-35f2-47c1-af8e-ce07f6623bde",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Thanks 🙏 ",
+        "createdAt" : "2019-04-04T10:11:59Z",
+        "updatedAt" : "2019-04-10T09:48:54Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "79793f51fa23f5e83e6e9dc8e633ae708eeb17a1",
+    "line" : 8,
+    "diffHunk" : "@@ -0,0 +1,82 @@\n+package scala.meta.internal.metals\n+\n+import java.util\n+import java.util.Collections\n+import org.eclipse.lsp4j.FoldingRange\n+import org.eclipse.lsp4j.FoldingRangeCapabilities\n+import scala.meta.Template\n+import scala.meta.Term\n+import scala.meta.Tree\n+import scala.meta._\n+import scala.meta.inputs.Position\n+import scala.meta.internal.metals.FoldingRangeProvider._"
+  },
+  {
+    "id" : "1fccdb35-022a-47d3-a2b8-cdd1fdf98ef2",
+    "prId" : 632,
+    "comments" : [
+      {
+        "id" : "d3c43beb-7497-4ac5-929f-c0bfea44f44d",
+        "parentId" : null,
+        "author" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "body" : "it folds \r\n```\r\n  def why =\r\n    for {\r\n      x <- ???\r\n    } yield\r\n  \r\n{\r\n    ???\r\n  }\r\n```\r\n\r\nto\r\n```\r\n  def why =\r\n    for(...)yield\r\n  \r\n(...)\r\n```\r\n\r\nWhich does not look the best but - short of circumventing the traversal - cannot be helped.\r\ndoes it look better this way? probably, but I am not sure\r\n```\r\n  def why =\r\n    for(...)yield(...)\r\n```",
+        "createdAt" : "2019-04-04T17:07:43Z",
+        "updatedAt" : "2019-04-10T09:48:54Z",
+        "lastEditedBy" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "79793f51fa23f5e83e6e9dc8e633ae708eeb17a1",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,122 @@\n+package scala.meta.internal.metals\n+\n+import java.util\n+import java.util.Collections\n+import org.eclipse.lsp4j.FoldingRange\n+import org.eclipse.lsp4j.FoldingRangeCapabilities\n+import scala.meta.Template\n+import scala.meta.Term\n+import scala.meta.Tree\n+import scala.meta._\n+import scala.meta.inputs.Position\n+import scala.meta.internal.metals.FoldingRangeProvider._\n+import scala.meta.io.AbsolutePath\n+import scala.meta.tokens.Token.KwYield\n+\n+final class FoldingRangeProvider(val trees: Trees, foldOnlyLines: Boolean) {\n+  def getRangedFor(path: AbsolutePath): util.List[FoldingRange] = {\n+    trees\n+      .get(path)\n+      .map(findFoldingRanges)\n+      .getOrElse(util.Collections.emptyList())\n+  }\n+\n+  private def findFoldingRanges(tree: Tree): util.List[FoldingRange] = {\n+    val ranges = new FoldingRanges(foldOnlyLines)\n+\n+    tree traverse {\n+      case block: Term.Block =>\n+        ranges.add(Region, block.pos)\n+      case template: Template =>\n+        ranges.add(Region, template.pos)\n+      case loop: Term.For =>\n+        val startLine = loop.pos.startLine\n+        val startColumn = loop.pos.startColumn + 3 // just after \"for\" since there may be no whitespace (e.g. \"for{\")\n+\n+        val endLine = loop.body.pos.startLine\n+        val endColumn = loop.body.pos.startColumn // must be exact$startColumn, since it can be \"}{\"\n+\n+        val range = new FoldingRange(startLine, endLine)\n+        range.setStartCharacter(startColumn)\n+        range.setEndCharacter(endColumn)\n+\n+        ranges.add(Region, range)\n+\n+      // it preserves the whitespaces between \"yield\" token and the body"
+  },
+  {
+    "id" : "c868c5d8-730d-4923-8da0-e9295aeb9d13",
+    "prId" : 632,
+    "comments" : [
+      {
+        "id" : "5a0d5812-ee40-4f02-9ad5-2f3e2b6b7b6e",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Nit, by convention we prefix with `Token.`, for example: `Token.KwYield`. Usually, when working with trees and tokens we put an `import scala.meta._` at the top of the file to bring everything into scope. ",
+        "createdAt" : "2019-04-05T06:43:18Z",
+        "updatedAt" : "2019-04-10T09:48:55Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "79793f51fa23f5e83e6e9dc8e633ae708eeb17a1",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,122 @@\n+package scala.meta.internal.metals\n+\n+import java.util\n+import java.util.Collections\n+import org.eclipse.lsp4j.FoldingRange\n+import org.eclipse.lsp4j.FoldingRangeCapabilities\n+import scala.meta.Template\n+import scala.meta.Term\n+import scala.meta.Tree\n+import scala.meta._\n+import scala.meta.inputs.Position\n+import scala.meta.internal.metals.FoldingRangeProvider._\n+import scala.meta.io.AbsolutePath\n+import scala.meta.tokens.Token.KwYield"
+  },
+  {
+    "id" : "16aa469a-4505-4200-aa00-1aee1691102a",
+    "prId" : 632,
+    "comments" : [
+      {
+        "id" : "c183e75f-2e94-46cf-8438-71a7e81d873e",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "you can also do `case token: Token.KwYield =>`",
+        "createdAt" : "2019-04-05T06:45:01Z",
+        "updatedAt" : "2019-04-10T09:48:55Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "79793f51fa23f5e83e6e9dc8e633ae708eeb17a1",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,122 @@\n+package scala.meta.internal.metals\n+\n+import java.util\n+import java.util.Collections\n+import org.eclipse.lsp4j.FoldingRange\n+import org.eclipse.lsp4j.FoldingRangeCapabilities\n+import scala.meta.Template\n+import scala.meta.Term\n+import scala.meta.Tree\n+import scala.meta._\n+import scala.meta.inputs.Position\n+import scala.meta.internal.metals.FoldingRangeProvider._\n+import scala.meta.io.AbsolutePath\n+import scala.meta.tokens.Token.KwYield\n+\n+final class FoldingRangeProvider(val trees: Trees, foldOnlyLines: Boolean) {\n+  def getRangedFor(path: AbsolutePath): util.List[FoldingRange] = {\n+    trees\n+      .get(path)\n+      .map(findFoldingRanges)\n+      .getOrElse(util.Collections.emptyList())\n+  }\n+\n+  private def findFoldingRanges(tree: Tree): util.List[FoldingRange] = {\n+    val ranges = new FoldingRanges(foldOnlyLines)\n+\n+    tree traverse {\n+      case block: Term.Block =>\n+        ranges.add(Region, block.pos)\n+      case template: Template =>\n+        ranges.add(Region, template.pos)\n+      case loop: Term.For =>\n+        val startLine = loop.pos.startLine\n+        val startColumn = loop.pos.startColumn + 3 // just after \"for\" since there may be no whitespace (e.g. \"for{\")\n+\n+        val endLine = loop.body.pos.startLine\n+        val endColumn = loop.body.pos.startColumn // must be exact$startColumn, since it can be \"}{\"\n+\n+        val range = new FoldingRange(startLine, endLine)\n+        range.setStartCharacter(startColumn)\n+        range.setEndCharacter(endColumn)\n+\n+        ranges.add(Region, range)\n+\n+      // it preserves the whitespaces between \"yield\" token and the body\n+      case loop: Term.ForYield =>\n+        val startLine = loop.pos.startLine\n+        val startColumn = loop.pos.startColumn + 3 // just after \"for\" since there may be no whitespace (e.g. \"for{\")\n+\n+        val range = loop.tokens.collectFirst {\n+          case token if token.is[KwYield] => // fold up to the 'yield' token"
+  },
+  {
+    "id" : "3f080b95-e3b3-4ded-a596-a8a5a62e8594",
+    "prId" : 632,
+    "comments" : [
+      {
+        "id" : "100dbffa-0887-4361-bbe0-c3ceff393660",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "I'm wondering how it would work if we could simplify this block to something like this 🤔 \r\n```scala\r\ncase stat: Stat if stat.pos.startLine - stat.pos.endLine > 5 => fold(stat)\r\n```\r\nThe number 5 is arbitrary, but I personally find folding most helpful with for bodies that span multiple lines (at least more than two lines).\r\n\r\nThis approach would automatically handle cases like multiline strings, large lambdas, xml literals, ..., but we might need customization to filter out redundant folds. WDYT?\r\n\r\n",
+        "createdAt" : "2019-04-05T06:57:20Z",
+        "updatedAt" : "2019-04-10T09:48:55Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "944f1d68-f0a8-4ba8-a761-614bfcb55fdf",
+        "parentId" : "100dbffa-0887-4361-bbe0-c3ceff393660",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "The biggest value in doing folding based on the syntax tree is that we don't have to limit ourselves to tree nodes with curly braces or parentheses, for example\r\n\r\n```scala\r\n\"\"\"|a\r\n   |b\r\n   |c\r\n   |d\r\n   |e\r\n   |f\"\"\".stripMargin\r\n```\r\n",
+        "createdAt" : "2019-04-05T07:00:48Z",
+        "updatedAt" : "2019-04-10T09:48:55Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "476c1e10-572e-40d2-9cf0-1366b13ba0f2",
+        "parentId" : "100dbffa-0887-4361-bbe0-c3ceff393660",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Just brainstorming, we could fold the first/last line based on the length of the range\r\n\r\n- 0-2 lines: no folding (it's small enough we don't care)\r\n- 3-4 lines: fold start and end line\r\n- 5+ lines: fold end line and keep start line",
+        "createdAt" : "2019-04-05T07:03:40Z",
+        "updatedAt" : "2019-04-10T09:48:55Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "5fd01a80-62ec-4cc7-96a3-8fd5ee336965",
+        "parentId" : "100dbffa-0887-4361-bbe0-c3ceff393660",
+        "author" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "body" : "That sounds interesting - at least for those cases for which we cannot have a precise folding. I will check it out",
+        "createdAt" : "2019-04-05T07:48:35Z",
+        "updatedAt" : "2019-04-10T09:48:55Z",
+        "lastEditedBy" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "d4d65539-f347-4596-97d4-a55e084a1dcb",
+        "parentId" : "100dbffa-0887-4361-bbe0-c3ceff393660",
+        "author" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "body" : "a generic rule like that (well, not a `Stat` because it meant everything - even class declaration - but a `Term`) gives us somewhat undesired results like:\r\n\r\n```\r\n       val manyLines = >>region>>>>region>>\"\"\"|a\r\n       |b\r\n       |c\r\n       |d\r\n       |e\r\n       |f\"\"\"<<region<<.stripMargin<<region<<\r\n```\r\nso I will have to investigate it further - but in the end it may not be so simple",
+        "createdAt" : "2019-04-05T13:35:49Z",
+        "updatedAt" : "2019-04-10T09:48:55Z",
+        "lastEditedBy" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "301d6528-1b81-40dc-ae52-3595d5d191cb",
+        "parentId" : "100dbffa-0887-4361-bbe0-c3ceff393660",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "What if we limit the traversal to only fold top-level statements in `Term.Block`, `Template.stats` and `Pkg.stats`?",
+        "createdAt" : "2019-04-05T13:37:58Z",
+        "updatedAt" : "2019-04-10T09:48:55Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "1b843120-95c2-42e0-bb9a-d68521c734ea",
+        "parentId" : "100dbffa-0887-4361-bbe0-c3ceff393660",
+        "author" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "body" : "It did not reach all of the nodes in the tree. It seems not so straightforward, so let me create more test cases handled as best as they can and only then revisit this idea. It seems like something worthwhile to check - but I am not yet confident enough it will not interfere with other constructs.",
+        "createdAt" : "2019-04-05T13:50:06Z",
+        "updatedAt" : "2019-04-10T09:48:55Z",
+        "lastEditedBy" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "79793f51fa23f5e83e6e9dc8e633ae708eeb17a1",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,122 @@\n+package scala.meta.internal.metals\n+\n+import java.util\n+import java.util.Collections\n+import org.eclipse.lsp4j.FoldingRange\n+import org.eclipse.lsp4j.FoldingRangeCapabilities\n+import scala.meta.Template\n+import scala.meta.Term\n+import scala.meta.Tree\n+import scala.meta._\n+import scala.meta.inputs.Position\n+import scala.meta.internal.metals.FoldingRangeProvider._\n+import scala.meta.io.AbsolutePath\n+import scala.meta.tokens.Token.KwYield\n+\n+final class FoldingRangeProvider(val trees: Trees, foldOnlyLines: Boolean) {\n+  def getRangedFor(path: AbsolutePath): util.List[FoldingRange] = {\n+    trees\n+      .get(path)\n+      .map(findFoldingRanges)\n+      .getOrElse(util.Collections.emptyList())\n+  }\n+\n+  private def findFoldingRanges(tree: Tree): util.List[FoldingRange] = {\n+    val ranges = new FoldingRanges(foldOnlyLines)\n+\n+    tree traverse {"
+  }
+]

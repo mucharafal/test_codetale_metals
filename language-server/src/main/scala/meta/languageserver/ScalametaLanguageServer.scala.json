@@ -1,0 +1,33 @@
+[
+  {
+    "id" : "a9e7959b-e4b2-461f-ad02-b8619ca82619",
+    "prId" : 1,
+    "comments" : [
+      {
+        "id" : "8aa0d9a3-bef9-4646-87ee-6de10e575dbd",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "this TODO can go away. Also I we will use this method also to watch the changes to the `.scalafix.conf` file, so I would check the file extension before assuming it's a `.semanticdb`.",
+        "createdAt" : "2017-11-05T09:48:47Z",
+        "updatedAt" : "2017-11-05T11:26:41Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "7997b78c44b241641a7ac02fac3fa7eee9fbb649",
+    "line" : null,
+    "diffHunk" : "@@ -1,45 +1,52 @@\n package scala.meta.languageserver\n \n-import java.io.{File, InputStream, OutputStream}\n+import java.io.PrintStream\n+import java.io.InputStream\n+import java.io.OutputStream\n import java.net.URI\n-\n-import langserver.core.{LanguageServer, TextDocument, MessageReader}\n+import java.nio.file.Paths\n+import scalafix.languageserver.ScalafixResult\n+import scalafix.languageserver.ScalafixService\n+import langserver.core.LanguageServer\n import langserver.messages._\n import langserver.types._\n+import org.langmeta.io.AbsolutePath\n \n-class ScalametaLanguageServer(in: InputStream, out: OutputStream) extends LanguageServer(in, out) {\n+class ScalametaLanguageServer(cwd: AbsolutePath,\n+                              in: InputStream,\n+                              out: OutputStream)\n+    extends LanguageServer(in, out) {\n+  val ps = new PrintStream(out)\n+  val scalafixService = new ScalafixService(cwd, out, connection)\n \n-  override def initialize(pid: Long, rootPath: String, capabilities: ClientCapabilities): ServerCapabilities = {\n-    logger.info(s\"Initialized with $pid, $rootPath, $capabilities\")\n+  override def initialize(\n+      pid: Long,\n+      rootPath: String,\n+      capabilities: ClientCapabilities): ServerCapabilities = {\n+    logger.info(s\"Initialized with $cwd, $pid, $rootPath, $capabilities\")\n \n     ServerCapabilities(completionProvider = None)\n   }\n \n-  private[this] def runScalafixLint(uri: String): List[Diagnostic] = {\n-    // TODO(gabro): here's where we have to invoke scalafix and collect all the linter errors/warnings\n-\n-    // Dummy example of Diagnostic\n-    List(Diagnostic(\n-      range = Range(start = Position(line = 5, character = 0), end = Position(line = 5, character = 6)),\n-      severity = Some(DiagnosticSeverity.Error),\n-      code = None,\n-      source = Some(\"scalafix\"),\n-      message = \"Hey, this is not good\"\n-    ))\n-\n-  }\n-\n-  override def onChangeTextDocument(td: VersionedTextDocumentIdentifier, changes: Seq[TextDocumentContentChangeEvent]): Unit = {\n-    val diagnostics = runScalafixLint(td.uri)\n-    connection.publishDiagnostics(td.uri, diagnostics)\n+  def report(result: ScalafixResult): Unit = {\n+    // NOTE(olafur) I must be doing something wrong, but nio.Path.toUri.toString\n+    // produces file:/// instead of file:/ which is what vscode expects\n+    val fileUri = s\"file:${cwd.resolve(result.path)}\"\n+    connection.publishDiagnostics(fileUri, result.diagnostics)\n   }\n \n-  override def onChangeWatchedFiles(changes: Seq[FileEvent]): Unit = changes match {\n-    case FileEvent(uri, FileChangeType.Created | FileChangeType.Changed | FileChangeType.Deleted) +: _ =>\n-      // TODO(gabro): not sure what is the strategy to manage .semanticdb is going to be\n-      // but just in case we're being notified here about changes\n-      logger.info(s\"$uri changed, created or deleted\")\n-    case _ => ()\n-  }\n+  override def onChangeWatchedFiles(changes: Seq[FileEvent]): Unit =\n+    changes match {\n+      case FileEvent(uri, FileChangeType.Created | FileChangeType.Changed) +: _ =>\n+        val semanticdbUri = Paths.get(new URI(uri))\n+        // TODO(gabro): not sure what is the strategy to manage .semanticdb is going to be"
+  }
+]

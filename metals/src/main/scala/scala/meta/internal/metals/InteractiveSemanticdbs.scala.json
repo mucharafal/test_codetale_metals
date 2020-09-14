@@ -1,0 +1,68 @@
+[
+  {
+    "id" : "08378240-028e-4eff-904e-47d41a44f7ab",
+    "prId" : 337,
+    "comments" : [
+      {
+        "id" : "20ad14d2-cbd4-4370-b716-c583abe24757",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "Have you considered the trade-offs wrt `ConcurrentHashMap`? I'm asking because `ConcurrentHashMap` is my go-to for these scenarios since it's generally faster.",
+        "createdAt" : "2018-11-24T20:05:01Z",
+        "updatedAt" : "2018-11-27T10:23:41Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "56d0e4a0-21ea-49c5-83e7-350d965ca24d",
+        "parentId" : "20ad14d2-cbd4-4370-b716-c583abe24757",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "I didn't use `ConcurrentHashMap` since the `computeIfAbsent` instructions say the compute function should be \"short and simple\" and in this class it's expensive. However, worst case it blocks with synchronized either way so can just use `ConcurrentHashMap`. I agree that's better for consistency 👍 ",
+        "createdAt" : "2018-11-25T11:24:05Z",
+        "updatedAt" : "2018-11-27T10:23:41Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "e686fb8a-3dfe-4f1c-b725-57dfb91cea1e",
+        "parentId" : "20ad14d2-cbd4-4370-b716-c583abe24757",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Turns out that `ConcurrentHashMap` results in a deadlock or infinite loop at\r\n\r\n```\r\n\"ForkJoinPool.commonPool-worker-1\" #96 daemon prio=5 os_prio=31 tid=0x00007f9cec46c000 nid=0x7323 runnable [0x0000700008402000]\r\n   java.lang.Thread.State: RUNNABLE\r\n        at java.util.concurrent.ConcurrentHashMap.putVal(ConcurrentHashMap.java:1069)\r\n        at java.util.concurrent.ConcurrentHashMap.put(ConcurrentHashMap.java:1006)\r\n        at scala.meta.internal.metals.InteractiveSemanticdbs.$anonfun$compile$3(InteractiveSemanticdbs.scala:98)\r\n```\r\n\r\nBack to `Collections.synchronizedMap` it is then.",
+        "createdAt" : "2018-11-26T10:48:34Z",
+        "updatedAt" : "2018-11-27T10:23:41Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "8ab78d5883e2e77a843cca1ea641084e6e4a2875",
+    "line" : 57,
+    "diffHunk" : "@@ -0,0 +1,196 @@\n+package scala.meta.internal.metals\n+\n+import ch.epfl.scala.bsp4j.BuildTargetIdentifier\n+import ch.epfl.scala.bsp4j.ScalacOptionsItem\n+import java.net.URI\n+import java.nio.charset.Charset\n+import java.nio.file.Files\n+import java.nio.file.Paths\n+import java.util.Collections\n+import java.util.concurrent.TimeUnit\n+import java.util.concurrent.atomic.AtomicBoolean\n+import java.util.concurrent.atomic.AtomicReference\n+import org.eclipse.lsp4j.DiagnosticSeverity\n+import org.eclipse.lsp4j.PublishDiagnosticsParams\n+import org.eclipse.{lsp4j => l}\n+import scala.concurrent.ExecutionContext\n+import scala.meta.interactive.InteractiveSemanticdb\n+import scala.meta.internal.io.FileIO\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.internal.mtags.MtagsEnrichments._\n+import scala.meta.internal.mtags.Semanticdbs\n+import scala.meta.internal.mtags.TextDocumentLookup\n+import scala.meta.internal.tokenizers.PlatformTokenizerCache\n+import scala.meta.internal.{semanticdb => s}\n+import scala.meta.io.AbsolutePath\n+import scala.tools.nsc.interactive.Global\n+\n+/**\n+ * Produces SemanticDBs on-demand by using the presentation compiler.\n+ *\n+ * Only used to provide navigation inside external library sources, not used to compile\n+ * workspace sources.\n+ *\n+ * Uses persistent storage to keep track of what external source file is associated\n+ * with what build target (to determine classpath and compiler options).\n+ */\n+final class InteractiveSemanticdbs(\n+    workspace: AbsolutePath,\n+    buildTargets: BuildTargets,\n+    charset: Charset,\n+    client: MetalsLanguageClient,\n+    tables: Tables,\n+    messages: Messages,\n+    statusBar: StatusBar\n+)(implicit ec: ExecutionContext)\n+    extends Cancelable\n+    with Semanticdbs {\n+  import messages._\n+  private val activeDocument = new AtomicReference[Option[String]](None)\n+  private val globalCache = Collections.synchronizedMap(\n+    new java.util.HashMap[BuildTargetIdentifier, Global]\n+  )\n+  private val textDocumentCache = Collections.synchronizedMap(\n+    new java.util.HashMap[AbsolutePath, s.TextDocument]\n+  )"
+  }
+]

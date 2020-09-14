@@ -1,0 +1,86 @@
+[
+  {
+    "id" : "96bdccac-31e4-4f19-83f2-c06d11d02c91",
+    "prId" : 37,
+    "comments" : [
+      {
+        "id" : "79a2f457-36cc-4d39-ba17-d73244e122cb",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "how does this fail in case a symbol is not found?\r\n\r\nMaybe it's worth to also check that `term` is defined?\r\n\r\n```scala\r\nval term = indexer.findSymbol(path, 3, 17)\r\nassert(term.isDefined)\r\nassertNoDiff(term.get.symbol, \"_root_.a.User#\")\r\nassert(term.get.definition.isDefined)\r\n```\r\n\r\nOr even a common utility as:\r\n\r\n```scala\r\ndef assertSymbolFound(path: AbsolutePath, line: Int, column: Int, expected: String) = {\r\n  val term = indexer.findSymbol(path, line, column)\r\n  assert(term.isDefined, s\"Symbol not found at $path:$line:$column\")\r\n  assertNoDiff(term.get.symbol, expected)\r\n  assert(term.get.definition.isDefined, s\"Definition not found for term $term\")\r\n}\r\n```",
+        "createdAt" : "2017-11-19T05:21:29Z",
+        "updatedAt" : "2017-11-20T07:50:41Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "e5cdbdc2-7541-4298-ade4-e5e06ddb5578",
+        "parentId" : "79a2f457-36cc-4d39-ba17-d73244e122cb",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "I like your style! Great idea, much cleaner now 💯 \r\n\r\n![screen shot 2017-11-19 at 13 35 08](https://user-images.githubusercontent.com/1408093/32990710-801cf010-cd2e-11e7-9dc6-8c12913ed25d.png)\r\n\r\nNow just need to figure out how to replace those pesky line+column magic numbers  with something more readable\r\n",
+        "createdAt" : "2017-11-19T12:36:12Z",
+        "updatedAt" : "2017-11-20T07:50:41Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "ed0e859accacbeb45baa83cfdbb1650efaa932da",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,214 @@\n+package tests.index\n+\n+import java.io.ByteArrayInputStream\n+import java.io.InputStream\n+import java.io.PipedInputStream\n+import java.io.PipedOutputStream\n+import java.net.URI\n+import java.net.URLClassLoader\n+import java.nio.charset.StandardCharsets\n+import java.nio.file.Files\n+import java.nio.file.Paths\n+import scala.collection.mutable\n+import scala.collection.mutable.ListBuffer\n+import scala.meta.languageserver.ScalametaLanguageServer\n+import scala.meta.languageserver.Semanticdbs\n+import scala.meta.languageserver.ServerConfig\n+import scala.meta.languageserver.SymbolIndexer\n+import scala.meta.languageserver.ctags.Ctags\n+import scala.meta.languageserver.{index => i}\n+import scala.{meta => m}\n+import langserver.core.MessageReader\n+import langserver.core.MessageWriter\n+import langserver.messages.ClientCapabilities\n+import langserver.messages.DefinitionResult\n+import langserver.messages.TextDocumentDefinitionRequest\n+import langserver.messages.TextDocumentPositionParams\n+import langserver.types.TextDocumentIdentifier\n+import org.langmeta.inputs.Input\n+import org.langmeta.internal.io.FileIO\n+import org.langmeta.internal.io.PathIO\n+import org.langmeta.internal.semanticdb.{schema => s}\n+import langserver.{types => l}\n+import org.langmeta.io.AbsolutePath\n+import org.langmeta.languageserver.InputEnrichments._\n+import org.langmeta.semanticdb.Database\n+import tests.MegaSuite\n+import utest._\n+import monix.execution.schedulers.TestScheduler\n+import org.langmeta.io.Classpath\n+import play.api.libs.json.Format\n+import play.api.libs.json.JsValue\n+import play.api.libs.json.Json\n+\n+object SymbolIndexerTest extends MegaSuite {\n+  implicit val cwd: AbsolutePath =\n+    PathIO.workingDirectory.resolve(\"test-workspace\")\n+  val path = cwd\n+    .resolve(\"a\")\n+    .resolve(\"src\")\n+    .resolve(\"test\")\n+    .resolve(\"scala\")\n+    .resolve(\"example\")\n+    .resolve(\"UserTest.scala\")\n+  assert(Files.isRegularFile(path.toNIO))\n+\n+  val scheduler = TestScheduler()\n+  val config = ServerConfig(\n+    cwd,\n+    setupScalafmt = false,\n+    indexJDK = false,\n+    indexClasspath = true // set to false to speedup edit/debug cycle\n+  )\n+  val client = new PipedOutputStream()\n+  val stdin = new PipedInputStream(client)\n+  val stdout = new PipedOutputStream()\n+\n+  val server = new ScalametaLanguageServer(\n+    config,\n+    stdin,\n+    stdout,\n+    System.out\n+  )(scheduler)\n+  server.initialize(0L, cwd.toString(), ClientCapabilities())\n+  // TODO(olafur) run this as part of utest.runner.Framework.setup()\n+  while (scheduler.tickOne()) () // Trigger indexing\n+  val indexer: SymbolIndexer = server.symbolIndexer\n+\n+  override val tests = Tests {\n+\n+    \"fallback\" - {\n+      \"<<User>>(...)\" - {\n+        val term = indexer.findSymbol(path, 3, 17).get"
+  },
+  {
+    "id" : "bed3d863-10f1-428e-95af-ef8428ee9d41",
+    "prId" : 37,
+    "comments" : [
+      {
+        "id" : "64dcba39-00df-48b3-8fcd-2f34510ab20a",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Moved all of the tricky logic here to an `InverseSymbolIndexer` utility in main, making this test a lot smaller.",
+        "createdAt" : "2017-11-19T12:37:05Z",
+        "updatedAt" : "2017-11-20T07:50:41Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "ed0e859accacbeb45baa83cfdbb1650efaa932da",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,214 @@\n+package tests.index\n+\n+import java.io.ByteArrayInputStream\n+import java.io.InputStream\n+import java.io.PipedInputStream\n+import java.io.PipedOutputStream\n+import java.net.URI\n+import java.net.URLClassLoader\n+import java.nio.charset.StandardCharsets\n+import java.nio.file.Files\n+import java.nio.file.Paths\n+import scala.collection.mutable\n+import scala.collection.mutable.ListBuffer\n+import scala.meta.languageserver.ScalametaLanguageServer\n+import scala.meta.languageserver.Semanticdbs\n+import scala.meta.languageserver.ServerConfig\n+import scala.meta.languageserver.SymbolIndexer\n+import scala.meta.languageserver.ctags.Ctags\n+import scala.meta.languageserver.{index => i}\n+import scala.{meta => m}\n+import langserver.core.MessageReader\n+import langserver.core.MessageWriter\n+import langserver.messages.ClientCapabilities\n+import langserver.messages.DefinitionResult\n+import langserver.messages.TextDocumentDefinitionRequest\n+import langserver.messages.TextDocumentPositionParams\n+import langserver.types.TextDocumentIdentifier\n+import org.langmeta.inputs.Input\n+import org.langmeta.internal.io.FileIO\n+import org.langmeta.internal.io.PathIO\n+import org.langmeta.internal.semanticdb.{schema => s}\n+import langserver.{types => l}\n+import org.langmeta.io.AbsolutePath\n+import org.langmeta.languageserver.InputEnrichments._\n+import org.langmeta.semanticdb.Database\n+import tests.MegaSuite\n+import utest._\n+import monix.execution.schedulers.TestScheduler\n+import org.langmeta.io.Classpath\n+import play.api.libs.json.Format\n+import play.api.libs.json.JsValue\n+import play.api.libs.json.Json\n+\n+object SymbolIndexerTest extends MegaSuite {\n+  implicit val cwd: AbsolutePath =\n+    PathIO.workingDirectory.resolve(\"test-workspace\")\n+  val path = cwd\n+    .resolve(\"a\")\n+    .resolve(\"src\")\n+    .resolve(\"test\")\n+    .resolve(\"scala\")\n+    .resolve(\"example\")\n+    .resolve(\"UserTest.scala\")\n+  assert(Files.isRegularFile(path.toNIO))\n+\n+  val scheduler = TestScheduler()\n+  val config = ServerConfig(\n+    cwd,\n+    setupScalafmt = false,\n+    indexJDK = false,\n+    indexClasspath = true // set to false to speedup edit/debug cycle\n+  )\n+  val client = new PipedOutputStream()\n+  val stdin = new PipedInputStream(client)\n+  val stdout = new PipedOutputStream()\n+\n+  val server = new ScalametaLanguageServer(\n+    config,\n+    stdin,\n+    stdout,\n+    System.out\n+  )(scheduler)\n+  server.initialize(0L, cwd.toString(), ClientCapabilities())\n+  // TODO(olafur) run this as part of utest.runner.Framework.setup()\n+  while (scheduler.tickOne()) () // Trigger indexing\n+  val indexer: SymbolIndexer = server.symbolIndexer\n+\n+  override val tests = Tests {\n+\n+    \"fallback\" - {\n+      \"<<User>>(...)\" - {\n+        val term = indexer.findSymbol(path, 3, 17).get\n+        assertNoDiff(term.symbol, \"_root_.a.User#\")\n+        assert(term.definition.isDefined)\n+      }\n+\n+      \"User.<<apply>>(...)\" - {\n+        val term = indexer.findSymbol(path, 3, 22).get\n+        assertNoDiff(term.symbol, \"_root_.a.User#\")\n+        assert(term.definition.isDefined)\n+      }\n+\n+      \"User.apply(<<name>> ...)\" - {\n+        val term = indexer.findSymbol(path, 3, 28).get\n+        assertNoDiff(term.symbol, \"_root_.a.User#(name)\")\n+        assert(term.definition.isDefined)\n+      }\n+\n+      \"user.copy(<<age>> = ...)\" - {\n+        val term = indexer.findSymbol(path, 4, 14).get\n+        assertNoDiff(term.symbol, \"_root_.a.User#(age)\")\n+        assert(term.definition.isDefined)\n+      }\n+    }\n+\n+    \"classpath\" - {\n+      // ScalaCtags\n+      \"<<List>>(...)\" - {\n+        val term = indexer.findSymbol(path, 5, 5).get\n+        assertNoDiff(term.symbol, \"_root_.scala.collection.immutable.List.\")\n+        assert(term.definition.isDefined)\n+      }\n+      // JavaCtags\n+      \"<<CharRef>>.create(...)\" - {\n+        val term = indexer.findSymbol(path, 8, 19).get\n+        assertNoDiff(term.symbol, \"_root_.scala.runtime.CharRef.\")\n+        assert(term.definition.isDefined)\n+      }\n+    }\n+\n+    \"bijection\" - {"
+  }
+]

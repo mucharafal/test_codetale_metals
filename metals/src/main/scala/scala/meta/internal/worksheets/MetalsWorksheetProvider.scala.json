@@ -1,0 +1,395 @@
+[
+  {
+    "id" : "723f6128-26cf-475f-a3a4-5ca2e92f1a87",
+    "prId" : 1041,
+    "comments" : [
+      {
+        "id" : "4d5e62f4-46fc-42e6-8107-e443e4012ed3",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "shouldn't this also check for the `.worksheet` prefix?",
+        "createdAt" : "2019-11-04T11:59:13Z",
+        "updatedAt" : "2019-11-09T20:01:12Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "a2902a65a77773398f8ac710483906215a06bcf8",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,352 @@\n+package scala.meta.internal.worksheets\n+\n+import scala.meta._\n+import scala.meta.internal.decorations.DecorationOptions\n+import scala.meta.io.AbsolutePath\n+import scala.meta.internal.metals.Buffers\n+import scala.meta.internal.metals.BuildTargets\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.internal.metals.Cancelable\n+import scala.collection.concurrent.TrieMap\n+import ch.epfl.scala.bsp4j.BuildTargetIdentifier\n+import mdoc.internal.cli.Context\n+import mdoc.internal.markdown.SectionInput\n+import mdoc.internal.markdown.Modifier\n+import mdoc.internal.markdown.Instrumenter\n+import mdoc.internal.markdown.MarkdownCompiler\n+import org.eclipse.{lsp4j => l}\n+import scala.meta.internal.decorations.ThemableDecorationInstanceRenderOptions\n+import scala.meta.internal.decorations.ThemableDecorationAttachmentRenderOptions\n+import mdoc.internal.cli.Settings\n+import scala.meta.internal.metals.ScalaTarget\n+import scala.concurrent.Future\n+import scala.meta.pc.CancelToken\n+import pprint.TPrintColors\n+import scala.meta.internal.metals.UserConfiguration\n+import scala.collection.immutable.Nil\n+import mdoc.document.Statement\n+import scala.meta.internal.metals.MetalsLanguageClient\n+import scala.meta.internal.metals.ScalaVersions\n+import scala.meta.internal.metals.BuildInfo\n+import org.eclipse.lsp4j.PublishDiagnosticsParams\n+import scala.meta.internal.pc.CompilerJobQueue\n+import java.util.concurrent.CompletableFuture\n+import scala.concurrent.ExecutionContext\n+import java.util.concurrent.ScheduledExecutorService\n+import scala.meta.internal.metals.MetalsSlowTaskParams\n+import java.util.concurrent.TimeUnit\n+import scala.meta.internal.metals.MutableCancelable\n+import scala.meta.internal.metals.StatusBar\n+import scala.meta.internal.pc.InterruptException\n+import scala.util.control.NonFatal\n+\n+/**\n+ * Implements interactive worksheets for \"*.worksheet.sc\" file extensions.\n+ *\n+ * Code is evaluated on file save using mdoc: https://scalameta.org/mdoc/\n+ */\n+class MetalsWorksheetProvider(\n+    workspace: AbsolutePath,\n+    buffers: Buffers,\n+    buildTargets: BuildTargets,\n+    languageClient: MetalsLanguageClient,\n+    userConfig: () => UserConfiguration,\n+    sh: ScheduledExecutorService,\n+    statusBar: StatusBar\n+)(implicit ec: ExecutionContext)\n+    extends WorksheetProvider\n+    with Cancelable {\n+  // Worksheet evaluation happens on a single threaded job queue. Jobs are\n+  // prioritized using the same order as completion/hover requests:\n+  // first-come last-out.\n+  private val jobs = CompilerJobQueue()\n+  private val cancelables = new MutableCancelable()\n+  private val contexts = new TrieMap[BuildTargetIdentifier, Context]()\n+  private val reporter = new StoreReporter()\n+\n+  def clear(): Unit = {\n+    jobs.shutdown()\n+    contexts.values.foreach { context =>\n+      context.compiler.global.close()\n+    }\n+    contexts.clear()\n+  }\n+  def cancel(): Unit = {\n+    clear()\n+  }\n+\n+  override def decorations(\n+      path: AbsolutePath,\n+      token: CancelToken\n+  ): Future[Array[DecorationOptions]] = {\n+    if (path.extension != \"sc\") {"
+  },
+  {
+    "id" : "19221c86-2a36-4969-93f5-818a3c873326",
+    "prId" : 1041,
+    "comments" : [
+      {
+        "id" : "a5fc2600-53f2-4fe9-92f7-4c8d9a6031d0",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "the comment seems 'interrupted', was it meant to be\r\n\r\n```suggestion\r\n          // Don't publish any result on cancelation\r\n```",
+        "createdAt" : "2019-11-04T12:00:07Z",
+        "updatedAt" : "2019-11-09T20:01:12Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "0cd0180b-6abc-4fde-ac45-30efebab5010",
+        "parentId" : "a5fc2600-53f2-4fe9-92f7-4c8d9a6031d0",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Fixed.",
+        "createdAt" : "2019-11-06T06:29:45Z",
+        "updatedAt" : "2019-11-09T20:01:12Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "a2902a65a77773398f8ac710483906215a06bcf8",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,352 @@\n+package scala.meta.internal.worksheets\n+\n+import scala.meta._\n+import scala.meta.internal.decorations.DecorationOptions\n+import scala.meta.io.AbsolutePath\n+import scala.meta.internal.metals.Buffers\n+import scala.meta.internal.metals.BuildTargets\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.internal.metals.Cancelable\n+import scala.collection.concurrent.TrieMap\n+import ch.epfl.scala.bsp4j.BuildTargetIdentifier\n+import mdoc.internal.cli.Context\n+import mdoc.internal.markdown.SectionInput\n+import mdoc.internal.markdown.Modifier\n+import mdoc.internal.markdown.Instrumenter\n+import mdoc.internal.markdown.MarkdownCompiler\n+import org.eclipse.{lsp4j => l}\n+import scala.meta.internal.decorations.ThemableDecorationInstanceRenderOptions\n+import scala.meta.internal.decorations.ThemableDecorationAttachmentRenderOptions\n+import mdoc.internal.cli.Settings\n+import scala.meta.internal.metals.ScalaTarget\n+import scala.concurrent.Future\n+import scala.meta.pc.CancelToken\n+import pprint.TPrintColors\n+import scala.meta.internal.metals.UserConfiguration\n+import scala.collection.immutable.Nil\n+import mdoc.document.Statement\n+import scala.meta.internal.metals.MetalsLanguageClient\n+import scala.meta.internal.metals.ScalaVersions\n+import scala.meta.internal.metals.BuildInfo\n+import org.eclipse.lsp4j.PublishDiagnosticsParams\n+import scala.meta.internal.pc.CompilerJobQueue\n+import java.util.concurrent.CompletableFuture\n+import scala.concurrent.ExecutionContext\n+import java.util.concurrent.ScheduledExecutorService\n+import scala.meta.internal.metals.MetalsSlowTaskParams\n+import java.util.concurrent.TimeUnit\n+import scala.meta.internal.metals.MutableCancelable\n+import scala.meta.internal.metals.StatusBar\n+import scala.meta.internal.pc.InterruptException\n+import scala.util.control.NonFatal\n+\n+/**\n+ * Implements interactive worksheets for \"*.worksheet.sc\" file extensions.\n+ *\n+ * Code is evaluated on file save using mdoc: https://scalameta.org/mdoc/\n+ */\n+class MetalsWorksheetProvider(\n+    workspace: AbsolutePath,\n+    buffers: Buffers,\n+    buildTargets: BuildTargets,\n+    languageClient: MetalsLanguageClient,\n+    userConfig: () => UserConfiguration,\n+    sh: ScheduledExecutorService,\n+    statusBar: StatusBar\n+)(implicit ec: ExecutionContext)\n+    extends WorksheetProvider\n+    with Cancelable {\n+  // Worksheet evaluation happens on a single threaded job queue. Jobs are\n+  // prioritized using the same order as completion/hover requests:\n+  // first-come last-out.\n+  private val jobs = CompilerJobQueue()\n+  private val cancelables = new MutableCancelable()\n+  private val contexts = new TrieMap[BuildTargetIdentifier, Context]()\n+  private val reporter = new StoreReporter()\n+\n+  def clear(): Unit = {\n+    jobs.shutdown()\n+    contexts.values.foreach { context =>\n+      context.compiler.global.close()\n+    }\n+    contexts.clear()\n+  }\n+  def cancel(): Unit = {\n+    clear()\n+  }\n+\n+  override def decorations(\n+      path: AbsolutePath,\n+      token: CancelToken\n+  ): Future[Array[DecorationOptions]] = {\n+    if (path.extension != \"sc\") {\n+      Future.successful(Array.empty)\n+    } else {\n+      reporter.reset()\n+      val result = new CompletableFuture[Array[DecorationOptions]]()\n+      token.onCancel().asScala.foreach {\n+        case java.lang.Boolean.TRUE =>\n+          // Don't publish any"
+  },
+  {
+    "id" : "9cf9cd8c-7d7f-4d85-ac68-1a1c3593b41f",
+    "prId" : 1041,
+    "comments" : [
+      {
+        "id" : "87bba522-e0e5-40be-83b4-751e3db2bd65",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "the cancelation logic is repeated here and at line 90, is this intentional? Are these two different kinds of cancelation that can happen?",
+        "createdAt" : "2019-11-04T12:01:34Z",
+        "updatedAt" : "2019-11-09T20:01:12Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "fbe40931-c796-46f3-908f-8ecec1ec0301",
+        "parentId" : "87bba522-e0e5-40be-83b4-751e3db2bd65",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "I made both call the same method to complete the empty result.",
+        "createdAt" : "2019-11-06T06:29:59Z",
+        "updatedAt" : "2019-11-09T20:01:12Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "a2902a65a77773398f8ac710483906215a06bcf8",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,352 @@\n+package scala.meta.internal.worksheets\n+\n+import scala.meta._\n+import scala.meta.internal.decorations.DecorationOptions\n+import scala.meta.io.AbsolutePath\n+import scala.meta.internal.metals.Buffers\n+import scala.meta.internal.metals.BuildTargets\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.internal.metals.Cancelable\n+import scala.collection.concurrent.TrieMap\n+import ch.epfl.scala.bsp4j.BuildTargetIdentifier\n+import mdoc.internal.cli.Context\n+import mdoc.internal.markdown.SectionInput\n+import mdoc.internal.markdown.Modifier\n+import mdoc.internal.markdown.Instrumenter\n+import mdoc.internal.markdown.MarkdownCompiler\n+import org.eclipse.{lsp4j => l}\n+import scala.meta.internal.decorations.ThemableDecorationInstanceRenderOptions\n+import scala.meta.internal.decorations.ThemableDecorationAttachmentRenderOptions\n+import mdoc.internal.cli.Settings\n+import scala.meta.internal.metals.ScalaTarget\n+import scala.concurrent.Future\n+import scala.meta.pc.CancelToken\n+import pprint.TPrintColors\n+import scala.meta.internal.metals.UserConfiguration\n+import scala.collection.immutable.Nil\n+import mdoc.document.Statement\n+import scala.meta.internal.metals.MetalsLanguageClient\n+import scala.meta.internal.metals.ScalaVersions\n+import scala.meta.internal.metals.BuildInfo\n+import org.eclipse.lsp4j.PublishDiagnosticsParams\n+import scala.meta.internal.pc.CompilerJobQueue\n+import java.util.concurrent.CompletableFuture\n+import scala.concurrent.ExecutionContext\n+import java.util.concurrent.ScheduledExecutorService\n+import scala.meta.internal.metals.MetalsSlowTaskParams\n+import java.util.concurrent.TimeUnit\n+import scala.meta.internal.metals.MutableCancelable\n+import scala.meta.internal.metals.StatusBar\n+import scala.meta.internal.pc.InterruptException\n+import scala.util.control.NonFatal\n+\n+/**\n+ * Implements interactive worksheets for \"*.worksheet.sc\" file extensions.\n+ *\n+ * Code is evaluated on file save using mdoc: https://scalameta.org/mdoc/\n+ */\n+class MetalsWorksheetProvider(\n+    workspace: AbsolutePath,\n+    buffers: Buffers,\n+    buildTargets: BuildTargets,\n+    languageClient: MetalsLanguageClient,\n+    userConfig: () => UserConfiguration,\n+    sh: ScheduledExecutorService,\n+    statusBar: StatusBar\n+)(implicit ec: ExecutionContext)\n+    extends WorksheetProvider\n+    with Cancelable {\n+  // Worksheet evaluation happens on a single threaded job queue. Jobs are\n+  // prioritized using the same order as completion/hover requests:\n+  // first-come last-out.\n+  private val jobs = CompilerJobQueue()\n+  private val cancelables = new MutableCancelable()\n+  private val contexts = new TrieMap[BuildTargetIdentifier, Context]()\n+  private val reporter = new StoreReporter()\n+\n+  def clear(): Unit = {\n+    jobs.shutdown()\n+    contexts.values.foreach { context =>\n+      context.compiler.global.close()\n+    }\n+    contexts.clear()\n+  }\n+  def cancel(): Unit = {\n+    clear()\n+  }\n+\n+  override def decorations(\n+      path: AbsolutePath,\n+      token: CancelToken\n+  ): Future[Array[DecorationOptions]] = {\n+    if (path.extension != \"sc\") {\n+      Future.successful(Array.empty)\n+    } else {\n+      reporter.reset()\n+      val result = new CompletableFuture[Array[DecorationOptions]]()\n+      token.onCancel().asScala.foreach {\n+        case java.lang.Boolean.TRUE =>\n+          // Don't publish any\n+          result.complete(Array.empty)\n+        case _ =>\n+      }\n+      def runEvaluation(): Unit = {\n+        cancelables.add(Cancelable(() => result.complete(Array.empty)))"
+  },
+  {
+    "id" : "907c406e-8fa8-4e39-a3d1-925ccfb634fc",
+    "prId" : 1041,
+    "comments" : [
+      {
+        "id" : "024c8513-2161-4573-839a-86eb25b5166b",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "I understand the logic but seeing the `Sbt1` dialect here is a bit confusing. Can we have a `Worksheet` dialect instead? It can be a type alias, it's purely for readability.",
+        "createdAt" : "2019-11-04T12:04:29Z",
+        "updatedAt" : "2019-11-09T20:01:12Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "820d75ef-b81d-4c4c-93ae-683a24b55890",
+        "parentId" : "024c8513-2161-4573-839a-86eb25b5166b",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "I added a `Worksheet` alias. We could consider adding this to Scalameta itself.",
+        "createdAt" : "2019-11-06T06:31:07Z",
+        "updatedAt" : "2019-11-09T20:01:12Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "a2902a65a77773398f8ac710483906215a06bcf8",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,352 @@\n+package scala.meta.internal.worksheets\n+\n+import scala.meta._\n+import scala.meta.internal.decorations.DecorationOptions\n+import scala.meta.io.AbsolutePath\n+import scala.meta.internal.metals.Buffers\n+import scala.meta.internal.metals.BuildTargets\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.internal.metals.Cancelable\n+import scala.collection.concurrent.TrieMap\n+import ch.epfl.scala.bsp4j.BuildTargetIdentifier\n+import mdoc.internal.cli.Context\n+import mdoc.internal.markdown.SectionInput\n+import mdoc.internal.markdown.Modifier\n+import mdoc.internal.markdown.Instrumenter\n+import mdoc.internal.markdown.MarkdownCompiler\n+import org.eclipse.{lsp4j => l}\n+import scala.meta.internal.decorations.ThemableDecorationInstanceRenderOptions\n+import scala.meta.internal.decorations.ThemableDecorationAttachmentRenderOptions\n+import mdoc.internal.cli.Settings\n+import scala.meta.internal.metals.ScalaTarget\n+import scala.concurrent.Future\n+import scala.meta.pc.CancelToken\n+import pprint.TPrintColors\n+import scala.meta.internal.metals.UserConfiguration\n+import scala.collection.immutable.Nil\n+import mdoc.document.Statement\n+import scala.meta.internal.metals.MetalsLanguageClient\n+import scala.meta.internal.metals.ScalaVersions\n+import scala.meta.internal.metals.BuildInfo\n+import org.eclipse.lsp4j.PublishDiagnosticsParams\n+import scala.meta.internal.pc.CompilerJobQueue\n+import java.util.concurrent.CompletableFuture\n+import scala.concurrent.ExecutionContext\n+import java.util.concurrent.ScheduledExecutorService\n+import scala.meta.internal.metals.MetalsSlowTaskParams\n+import java.util.concurrent.TimeUnit\n+import scala.meta.internal.metals.MutableCancelable\n+import scala.meta.internal.metals.StatusBar\n+import scala.meta.internal.pc.InterruptException\n+import scala.util.control.NonFatal\n+\n+/**\n+ * Implements interactive worksheets for \"*.worksheet.sc\" file extensions.\n+ *\n+ * Code is evaluated on file save using mdoc: https://scalameta.org/mdoc/\n+ */\n+class MetalsWorksheetProvider(\n+    workspace: AbsolutePath,\n+    buffers: Buffers,\n+    buildTargets: BuildTargets,\n+    languageClient: MetalsLanguageClient,\n+    userConfig: () => UserConfiguration,\n+    sh: ScheduledExecutorService,\n+    statusBar: StatusBar\n+)(implicit ec: ExecutionContext)\n+    extends WorksheetProvider\n+    with Cancelable {\n+  // Worksheet evaluation happens on a single threaded job queue. Jobs are\n+  // prioritized using the same order as completion/hover requests:\n+  // first-come last-out.\n+  private val jobs = CompilerJobQueue()\n+  private val cancelables = new MutableCancelable()\n+  private val contexts = new TrieMap[BuildTargetIdentifier, Context]()\n+  private val reporter = new StoreReporter()\n+\n+  def clear(): Unit = {\n+    jobs.shutdown()\n+    contexts.values.foreach { context =>\n+      context.compiler.global.close()\n+    }\n+    contexts.clear()\n+  }\n+  def cancel(): Unit = {\n+    clear()\n+  }\n+\n+  override def decorations(\n+      path: AbsolutePath,\n+      token: CancelToken\n+  ): Future[Array[DecorationOptions]] = {\n+    if (path.extension != \"sc\") {\n+      Future.successful(Array.empty)\n+    } else {\n+      reporter.reset()\n+      val result = new CompletableFuture[Array[DecorationOptions]]()\n+      token.onCancel().asScala.foreach {\n+        case java.lang.Boolean.TRUE =>\n+          // Don't publish any\n+          result.complete(Array.empty)\n+        case _ =>\n+      }\n+      def runEvaluation(): Unit = {\n+        cancelables.add(Cancelable(() => result.complete(Array.empty)))\n+        statusBar.trackFuture(\n+          s\"Evaluting ${path.filename}\",\n+          result.asScala,\n+          showTimer = true\n+        )\n+        token.checkCanceled()\n+        // NOTE(olafurpg) Run evaluation in a custom thread so that we can\n+        // `Thread.stop()` it in case of infinite loop. I'm not aware of any\n+        // other JVM APIs that allow killing a runnable even in the face of\n+        // infinite loops.\n+        val thread = new Thread(s\"Evaluating Worksheet ${path.filename}\") {\n+          override def run(): Unit = {\n+            result.complete(evaluateWorksheet(path, token))\n+          }\n+        }\n+        cancelables.add(\n+          Cancelable(() => {\n+            if (thread.isAlive) {\n+              thread.stop()\n+            }\n+          })\n+        )\n+        stopThreadOnCancel(path, result, thread)\n+        thread.start()\n+        thread.join()\n+      }\n+      jobs.submit(\n+        result,\n+        () => {\n+          try runEvaluation()\n+          catch {\n+            case NonFatal(_) | InterruptException() =>\n+              () // allow job queue to process next worksheet evaluation request.\n+          }\n+        }\n+      )\n+      result.asScala.recover {\n+        case NonFatal(_) | InterruptException() =>\n+          // Clear all decorations when evaluation fails.\n+          Array.empty\n+      }\n+    }\n+  }\n+\n+  /**\n+   * Prompts the user to cancel the task after a few seconds.\n+   *\n+   * Attempts to gracefully shut down the thread when users requests to cancel:\n+   * First tries `Thread.interrupt()` with fallback to `Thread.stop()` after\n+   * one second if interruption doesn't work.\n+   */\n+  private def stopThreadOnCancel(\n+      path: AbsolutePath,\n+      result: CompletableFuture[Array[DecorationOptions]],\n+      thread: Thread\n+  ): Unit = {\n+    // Last resort, if everything else fails we use `Thread.stop()`.\n+    val stopThread = new Runnable {\n+      def run(): Unit = {\n+        if (thread.isAlive()) {\n+          scribe.warn(s\"thread stop: ${thread.getName()}\")\n+          Cancelable.cancelAll(\n+            List(\n+              Cancelable(() => thread.stop()),\n+              cancelables\n+            )\n+          )\n+        }\n+      }\n+    }\n+    // If the program is running for more than\n+    // `userConfig().worksheetCancelTimeout`, then display a prompt for the user\n+    // to cancel the program.\n+    val promptUserToCancel = new Runnable {\n+      def run(): Unit = {\n+        if (!result.isDone()) {\n+          val cancel = languageClient.metalsSlowTask(\n+            new MetalsSlowTaskParams(\n+              s\"Evaluating worksheet '${path.filename}'\",\n+              noLogs = true\n+            )\n+          )\n+          cancel.asScala.foreach { c =>\n+            if (c.cancel && thread.isAlive()) {\n+              // User has requested to cancel a running program. first line of\n+              // defense is `Thread.interrupt()`. Fingers crossed it's enough.\n+              result.complete(Array.empty)\n+              sh.schedule(stopThread, 1, TimeUnit.SECONDS)\n+              scribe.warn(s\"thread interrupt: ${thread.getName()}\")\n+              thread.interrupt()\n+            }\n+          }\n+          result.asScala.onComplete(_ => cancel.cancel(true))\n+        }\n+      }\n+    }\n+    sh.schedule(\n+      promptUserToCancel,\n+      userConfig().worksheetCancelTimeout,\n+      TimeUnit.SECONDS\n+    )\n+  }\n+\n+  private def evaluateWorksheet(\n+      path: AbsolutePath,\n+      token: CancelToken\n+  ): Array[DecorationOptions] = {\n+    val commentHeader = \" // \"\n+    val input = path.toInputFromBuffers(buffers)\n+    val decorations = for {\n+      ctx <- getContext(path)\n+      source <- dialects.Sbt1(input).parse[Source].toOption"
+  },
+  {
+    "id" : "d3d46722-58b8-4579-981c-df5a85fd01d5",
+    "prId" : 1041,
+    "comments" : [
+      {
+        "id" : "6d67635c-6049-4e91-b880-363af29293da",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "It's fine for this first iteration, but I wonder if we can let the editors decide on how to render these.\r\n\r\nIt feels strange to decide on styling details server-side.",
+        "createdAt" : "2019-11-04T12:07:31Z",
+        "updatedAt" : "2019-11-09T20:01:12Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "deba5ae1-267b-40fe-a96c-8e37de247b3b",
+        "parentId" : "6d67635c-6049-4e91-b880-363af29293da",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "I agree, but my understanding is that there's no way for us to access the colors for things like comments https://github.com/Microsoft/vscode/issues/32813",
+        "createdAt" : "2019-11-06T06:31:59Z",
+        "updatedAt" : "2019-11-09T20:01:12Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "0fdd12c6-ecec-4aed-ab50-928e61cbcd5d",
+        "parentId" : "6d67635c-6049-4e91-b880-363af29293da",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "We could hardcode this value in the client but I'm not sure that's any better 🤔 Or maybe it is better to send some enum to the client\r\n```scala\r\nobject Colors {\r\n  val comment = 1\r\n  val identifier = 2\r\n}\r\n```\r\nand then have the VS Code client translate that into colors",
+        "createdAt" : "2019-11-06T06:32:53Z",
+        "updatedAt" : "2019-11-09T20:01:12Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "85cb3bad-ebff-484c-ad87-4f790123e891",
+        "parentId" : "6d67635c-6049-4e91-b880-363af29293da",
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "My first idea would be to use tmLanguage classes, but then I don’t know how easy is for the client to use them",
+        "createdAt" : "2019-11-06T08:26:26Z",
+        "updatedAt" : "2019-11-09T20:01:12Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "a2902a65a77773398f8ac710483906215a06bcf8",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,352 @@\n+package scala.meta.internal.worksheets\n+\n+import scala.meta._\n+import scala.meta.internal.decorations.DecorationOptions\n+import scala.meta.io.AbsolutePath\n+import scala.meta.internal.metals.Buffers\n+import scala.meta.internal.metals.BuildTargets\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.internal.metals.Cancelable\n+import scala.collection.concurrent.TrieMap\n+import ch.epfl.scala.bsp4j.BuildTargetIdentifier\n+import mdoc.internal.cli.Context\n+import mdoc.internal.markdown.SectionInput\n+import mdoc.internal.markdown.Modifier\n+import mdoc.internal.markdown.Instrumenter\n+import mdoc.internal.markdown.MarkdownCompiler\n+import org.eclipse.{lsp4j => l}\n+import scala.meta.internal.decorations.ThemableDecorationInstanceRenderOptions\n+import scala.meta.internal.decorations.ThemableDecorationAttachmentRenderOptions\n+import mdoc.internal.cli.Settings\n+import scala.meta.internal.metals.ScalaTarget\n+import scala.concurrent.Future\n+import scala.meta.pc.CancelToken\n+import pprint.TPrintColors\n+import scala.meta.internal.metals.UserConfiguration\n+import scala.collection.immutable.Nil\n+import mdoc.document.Statement\n+import scala.meta.internal.metals.MetalsLanguageClient\n+import scala.meta.internal.metals.ScalaVersions\n+import scala.meta.internal.metals.BuildInfo\n+import org.eclipse.lsp4j.PublishDiagnosticsParams\n+import scala.meta.internal.pc.CompilerJobQueue\n+import java.util.concurrent.CompletableFuture\n+import scala.concurrent.ExecutionContext\n+import java.util.concurrent.ScheduledExecutorService\n+import scala.meta.internal.metals.MetalsSlowTaskParams\n+import java.util.concurrent.TimeUnit\n+import scala.meta.internal.metals.MutableCancelable\n+import scala.meta.internal.metals.StatusBar\n+import scala.meta.internal.pc.InterruptException\n+import scala.util.control.NonFatal\n+\n+/**\n+ * Implements interactive worksheets for \"*.worksheet.sc\" file extensions.\n+ *\n+ * Code is evaluated on file save using mdoc: https://scalameta.org/mdoc/\n+ */\n+class MetalsWorksheetProvider(\n+    workspace: AbsolutePath,\n+    buffers: Buffers,\n+    buildTargets: BuildTargets,\n+    languageClient: MetalsLanguageClient,\n+    userConfig: () => UserConfiguration,\n+    sh: ScheduledExecutorService,\n+    statusBar: StatusBar\n+)(implicit ec: ExecutionContext)\n+    extends WorksheetProvider\n+    with Cancelable {\n+  // Worksheet evaluation happens on a single threaded job queue. Jobs are\n+  // prioritized using the same order as completion/hover requests:\n+  // first-come last-out.\n+  private val jobs = CompilerJobQueue()\n+  private val cancelables = new MutableCancelable()\n+  private val contexts = new TrieMap[BuildTargetIdentifier, Context]()\n+  private val reporter = new StoreReporter()\n+\n+  def clear(): Unit = {\n+    jobs.shutdown()\n+    contexts.values.foreach { context =>\n+      context.compiler.global.close()\n+    }\n+    contexts.clear()\n+  }\n+  def cancel(): Unit = {\n+    clear()\n+  }\n+\n+  override def decorations(\n+      path: AbsolutePath,\n+      token: CancelToken\n+  ): Future[Array[DecorationOptions]] = {\n+    if (path.extension != \"sc\") {\n+      Future.successful(Array.empty)\n+    } else {\n+      reporter.reset()\n+      val result = new CompletableFuture[Array[DecorationOptions]]()\n+      token.onCancel().asScala.foreach {\n+        case java.lang.Boolean.TRUE =>\n+          // Don't publish any\n+          result.complete(Array.empty)\n+        case _ =>\n+      }\n+      def runEvaluation(): Unit = {\n+        cancelables.add(Cancelable(() => result.complete(Array.empty)))\n+        statusBar.trackFuture(\n+          s\"Evaluting ${path.filename}\",\n+          result.asScala,\n+          showTimer = true\n+        )\n+        token.checkCanceled()\n+        // NOTE(olafurpg) Run evaluation in a custom thread so that we can\n+        // `Thread.stop()` it in case of infinite loop. I'm not aware of any\n+        // other JVM APIs that allow killing a runnable even in the face of\n+        // infinite loops.\n+        val thread = new Thread(s\"Evaluating Worksheet ${path.filename}\") {\n+          override def run(): Unit = {\n+            result.complete(evaluateWorksheet(path, token))\n+          }\n+        }\n+        cancelables.add(\n+          Cancelable(() => {\n+            if (thread.isAlive) {\n+              thread.stop()\n+            }\n+          })\n+        )\n+        stopThreadOnCancel(path, result, thread)\n+        thread.start()\n+        thread.join()\n+      }\n+      jobs.submit(\n+        result,\n+        () => {\n+          try runEvaluation()\n+          catch {\n+            case NonFatal(_) | InterruptException() =>\n+              () // allow job queue to process next worksheet evaluation request.\n+          }\n+        }\n+      )\n+      result.asScala.recover {\n+        case NonFatal(_) | InterruptException() =>\n+          // Clear all decorations when evaluation fails.\n+          Array.empty\n+      }\n+    }\n+  }\n+\n+  /**\n+   * Prompts the user to cancel the task after a few seconds.\n+   *\n+   * Attempts to gracefully shut down the thread when users requests to cancel:\n+   * First tries `Thread.interrupt()` with fallback to `Thread.stop()` after\n+   * one second if interruption doesn't work.\n+   */\n+  private def stopThreadOnCancel(\n+      path: AbsolutePath,\n+      result: CompletableFuture[Array[DecorationOptions]],\n+      thread: Thread\n+  ): Unit = {\n+    // Last resort, if everything else fails we use `Thread.stop()`.\n+    val stopThread = new Runnable {\n+      def run(): Unit = {\n+        if (thread.isAlive()) {\n+          scribe.warn(s\"thread stop: ${thread.getName()}\")\n+          Cancelable.cancelAll(\n+            List(\n+              Cancelable(() => thread.stop()),\n+              cancelables\n+            )\n+          )\n+        }\n+      }\n+    }\n+    // If the program is running for more than\n+    // `userConfig().worksheetCancelTimeout`, then display a prompt for the user\n+    // to cancel the program.\n+    val promptUserToCancel = new Runnable {\n+      def run(): Unit = {\n+        if (!result.isDone()) {\n+          val cancel = languageClient.metalsSlowTask(\n+            new MetalsSlowTaskParams(\n+              s\"Evaluating worksheet '${path.filename}'\",\n+              noLogs = true\n+            )\n+          )\n+          cancel.asScala.foreach { c =>\n+            if (c.cancel && thread.isAlive()) {\n+              // User has requested to cancel a running program. first line of\n+              // defense is `Thread.interrupt()`. Fingers crossed it's enough.\n+              result.complete(Array.empty)\n+              sh.schedule(stopThread, 1, TimeUnit.SECONDS)\n+              scribe.warn(s\"thread interrupt: ${thread.getName()}\")\n+              thread.interrupt()\n+            }\n+          }\n+          result.asScala.onComplete(_ => cancel.cancel(true))\n+        }\n+      }\n+    }\n+    sh.schedule(\n+      promptUserToCancel,\n+      userConfig().worksheetCancelTimeout,\n+      TimeUnit.SECONDS\n+    )\n+  }\n+\n+  private def evaluateWorksheet(\n+      path: AbsolutePath,\n+      token: CancelToken\n+  ): Array[DecorationOptions] = {\n+    val commentHeader = \" // \"\n+    val input = path.toInputFromBuffers(buffers)\n+    val decorations = for {\n+      ctx <- getContext(path)\n+      source <- dialects.Sbt1(input).parse[Source].toOption\n+    } yield {\n+      val sectionInput = SectionInput(\n+        path.toInputFromBuffers(buffers),\n+        source,\n+        Modifier.Default()\n+      )\n+      val sectionInputs = List(sectionInput)\n+      val instrumented = Instrumenter.instrument(sectionInputs)\n+      val rendered = MarkdownCompiler.buildDocument(\n+        ctx.compiler,\n+        ctx.reporter,\n+        sectionInputs,\n+        instrumented,\n+        path.toString\n+      )\n+      val decorations = for {\n+        section <- rendered.sections.iterator\n+        statement <- section.section.statements\n+      } yield {\n+        val pos = statement.position\n+        val range = new l.Range(\n+          new l.Position(pos.startLine, pos.startColumn),\n+          new l.Position(pos.endLine, pos.endColumn)\n+        )\n+        val margin = math.max(\n+          20,\n+          userConfig().screenWidth - statement.position.endColumn\n+        )\n+        val isEmptyValue = isUnitType(statement) || statement.binders.isEmpty\n+        val contentText: String = Iterator[Iterator[Char]](\n+          commentHeader.iterator, {\n+            if (isEmptyValue) {\n+              if (statement.out.isEmpty()) \"\".iterator\n+              else statement.out.linesIterator.next().toCharArray().iterator\n+            } else {\n+              val isSingle = statement.binders.lengthCompare(1) == 0\n+              for {\n+                (binder, i) <- statement.binders.iterator.zipWithIndex\n+                text <- Iterator[Iterator[Char]](\n+                  if (isSingle) List.empty[Char].iterator\n+                  else {\n+                    val comma = if (i == 0) \"\" else \", \"\n+                    s\"$comma${binder.name}=\".iterator\n+                  },\n+                  pprint.PPrinter.BlackWhite\n+                    .tokenize(\n+                      binder.value,\n+                      width = margin\n+                    )\n+                    .map(_.getChars)\n+                    .filterNot(_.iterator.forall(_.isWhitespace))\n+                    .flatMap(_.iterator)\n+                    .filter {\n+                      case '\\n' => false\n+                      case _ => true\n+                    }\n+                    .take(margin)\n+                )\n+                char <- text\n+              } yield char\n+            }\n+          }\n+        ).flatten.mkString\n+        val hoverMessage: String = Iterator[Iterator[String]](\n+          if (isEmptyValue) {\n+            List.empty[String].iterator\n+          } else {\n+            for {\n+              binder <- statement.binders.iterator\n+              text <- Iterator(\n+                \"\\n\",\n+                binder.name,\n+                \": \",\n+                binder.tpe.render(TPrintColors.BlackWhite),\n+                \" = \"\n+              ) ++ pprint.PPrinter.BlackWhite\n+                .tokenize(binder.value, width = 100)\n+                .map(_.plainText)\n+            } yield text\n+          },\n+          statement.out.linesIterator.flatMap { line =>\n+            Iterator(\"\\n// \", line)\n+          }\n+        ).flatten.mkString\n+        DecorationOptions(\n+          range,\n+          new l.MarkedString(\"scala\", hoverMessage),\n+          ThemableDecorationInstanceRenderOptions(\n+            after = ThemableDecorationAttachmentRenderOptions(\n+              contentText,\n+              color = \"green\","
+  },
+  {
+    "id" : "0602f70b-ab04-4551-beb1-c5db484b58e1",
+    "prId" : 1041,
+    "comments" : [
+      {
+        "id" : "785d740f-4909-4d39-9f41-186cc14587e3",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "do worksheets only work with Scala 2.12? If not, shouldn't we recommend 2.13 instead?",
+        "createdAt" : "2019-11-04T12:08:18Z",
+        "updatedAt" : "2019-11-09T20:01:12Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "4c4a9b01-ec6f-4833-b804-cd541512ebdc",
+        "parentId" : "785d740f-4909-4d39-9f41-186cc14587e3",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Worksheets currently only work with 2.12.10. To support 2.11/2.13 I would prefer to move some of the logic here into mdoc and publish a stable `mdoc-interfaces` Java library. I felt it would be better to leave that for a separate PR",
+        "createdAt" : "2019-11-06T06:34:05Z",
+        "updatedAt" : "2019-11-09T20:01:12Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "a2902a65a77773398f8ac710483906215a06bcf8",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,352 @@\n+package scala.meta.internal.worksheets\n+\n+import scala.meta._\n+import scala.meta.internal.decorations.DecorationOptions\n+import scala.meta.io.AbsolutePath\n+import scala.meta.internal.metals.Buffers\n+import scala.meta.internal.metals.BuildTargets\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.internal.metals.Cancelable\n+import scala.collection.concurrent.TrieMap\n+import ch.epfl.scala.bsp4j.BuildTargetIdentifier\n+import mdoc.internal.cli.Context\n+import mdoc.internal.markdown.SectionInput\n+import mdoc.internal.markdown.Modifier\n+import mdoc.internal.markdown.Instrumenter\n+import mdoc.internal.markdown.MarkdownCompiler\n+import org.eclipse.{lsp4j => l}\n+import scala.meta.internal.decorations.ThemableDecorationInstanceRenderOptions\n+import scala.meta.internal.decorations.ThemableDecorationAttachmentRenderOptions\n+import mdoc.internal.cli.Settings\n+import scala.meta.internal.metals.ScalaTarget\n+import scala.concurrent.Future\n+import scala.meta.pc.CancelToken\n+import pprint.TPrintColors\n+import scala.meta.internal.metals.UserConfiguration\n+import scala.collection.immutable.Nil\n+import mdoc.document.Statement\n+import scala.meta.internal.metals.MetalsLanguageClient\n+import scala.meta.internal.metals.ScalaVersions\n+import scala.meta.internal.metals.BuildInfo\n+import org.eclipse.lsp4j.PublishDiagnosticsParams\n+import scala.meta.internal.pc.CompilerJobQueue\n+import java.util.concurrent.CompletableFuture\n+import scala.concurrent.ExecutionContext\n+import java.util.concurrent.ScheduledExecutorService\n+import scala.meta.internal.metals.MetalsSlowTaskParams\n+import java.util.concurrent.TimeUnit\n+import scala.meta.internal.metals.MutableCancelable\n+import scala.meta.internal.metals.StatusBar\n+import scala.meta.internal.pc.InterruptException\n+import scala.util.control.NonFatal\n+\n+/**\n+ * Implements interactive worksheets for \"*.worksheet.sc\" file extensions.\n+ *\n+ * Code is evaluated on file save using mdoc: https://scalameta.org/mdoc/\n+ */\n+class MetalsWorksheetProvider(\n+    workspace: AbsolutePath,\n+    buffers: Buffers,\n+    buildTargets: BuildTargets,\n+    languageClient: MetalsLanguageClient,\n+    userConfig: () => UserConfiguration,\n+    sh: ScheduledExecutorService,\n+    statusBar: StatusBar\n+)(implicit ec: ExecutionContext)\n+    extends WorksheetProvider\n+    with Cancelable {\n+  // Worksheet evaluation happens on a single threaded job queue. Jobs are\n+  // prioritized using the same order as completion/hover requests:\n+  // first-come last-out.\n+  private val jobs = CompilerJobQueue()\n+  private val cancelables = new MutableCancelable()\n+  private val contexts = new TrieMap[BuildTargetIdentifier, Context]()\n+  private val reporter = new StoreReporter()\n+\n+  def clear(): Unit = {\n+    jobs.shutdown()\n+    contexts.values.foreach { context =>\n+      context.compiler.global.close()\n+    }\n+    contexts.clear()\n+  }\n+  def cancel(): Unit = {\n+    clear()\n+  }\n+\n+  override def decorations(\n+      path: AbsolutePath,\n+      token: CancelToken\n+  ): Future[Array[DecorationOptions]] = {\n+    if (path.extension != \"sc\") {\n+      Future.successful(Array.empty)\n+    } else {\n+      reporter.reset()\n+      val result = new CompletableFuture[Array[DecorationOptions]]()\n+      token.onCancel().asScala.foreach {\n+        case java.lang.Boolean.TRUE =>\n+          // Don't publish any\n+          result.complete(Array.empty)\n+        case _ =>\n+      }\n+      def runEvaluation(): Unit = {\n+        cancelables.add(Cancelable(() => result.complete(Array.empty)))\n+        statusBar.trackFuture(\n+          s\"Evaluting ${path.filename}\",\n+          result.asScala,\n+          showTimer = true\n+        )\n+        token.checkCanceled()\n+        // NOTE(olafurpg) Run evaluation in a custom thread so that we can\n+        // `Thread.stop()` it in case of infinite loop. I'm not aware of any\n+        // other JVM APIs that allow killing a runnable even in the face of\n+        // infinite loops.\n+        val thread = new Thread(s\"Evaluating Worksheet ${path.filename}\") {\n+          override def run(): Unit = {\n+            result.complete(evaluateWorksheet(path, token))\n+          }\n+        }\n+        cancelables.add(\n+          Cancelable(() => {\n+            if (thread.isAlive) {\n+              thread.stop()\n+            }\n+          })\n+        )\n+        stopThreadOnCancel(path, result, thread)\n+        thread.start()\n+        thread.join()\n+      }\n+      jobs.submit(\n+        result,\n+        () => {\n+          try runEvaluation()\n+          catch {\n+            case NonFatal(_) | InterruptException() =>\n+              () // allow job queue to process next worksheet evaluation request.\n+          }\n+        }\n+      )\n+      result.asScala.recover {\n+        case NonFatal(_) | InterruptException() =>\n+          // Clear all decorations when evaluation fails.\n+          Array.empty\n+      }\n+    }\n+  }\n+\n+  /**\n+   * Prompts the user to cancel the task after a few seconds.\n+   *\n+   * Attempts to gracefully shut down the thread when users requests to cancel:\n+   * First tries `Thread.interrupt()` with fallback to `Thread.stop()` after\n+   * one second if interruption doesn't work.\n+   */\n+  private def stopThreadOnCancel(\n+      path: AbsolutePath,\n+      result: CompletableFuture[Array[DecorationOptions]],\n+      thread: Thread\n+  ): Unit = {\n+    // Last resort, if everything else fails we use `Thread.stop()`.\n+    val stopThread = new Runnable {\n+      def run(): Unit = {\n+        if (thread.isAlive()) {\n+          scribe.warn(s\"thread stop: ${thread.getName()}\")\n+          Cancelable.cancelAll(\n+            List(\n+              Cancelable(() => thread.stop()),\n+              cancelables\n+            )\n+          )\n+        }\n+      }\n+    }\n+    // If the program is running for more than\n+    // `userConfig().worksheetCancelTimeout`, then display a prompt for the user\n+    // to cancel the program.\n+    val promptUserToCancel = new Runnable {\n+      def run(): Unit = {\n+        if (!result.isDone()) {\n+          val cancel = languageClient.metalsSlowTask(\n+            new MetalsSlowTaskParams(\n+              s\"Evaluating worksheet '${path.filename}'\",\n+              noLogs = true\n+            )\n+          )\n+          cancel.asScala.foreach { c =>\n+            if (c.cancel && thread.isAlive()) {\n+              // User has requested to cancel a running program. first line of\n+              // defense is `Thread.interrupt()`. Fingers crossed it's enough.\n+              result.complete(Array.empty)\n+              sh.schedule(stopThread, 1, TimeUnit.SECONDS)\n+              scribe.warn(s\"thread interrupt: ${thread.getName()}\")\n+              thread.interrupt()\n+            }\n+          }\n+          result.asScala.onComplete(_ => cancel.cancel(true))\n+        }\n+      }\n+    }\n+    sh.schedule(\n+      promptUserToCancel,\n+      userConfig().worksheetCancelTimeout,\n+      TimeUnit.SECONDS\n+    )\n+  }\n+\n+  private def evaluateWorksheet(\n+      path: AbsolutePath,\n+      token: CancelToken\n+  ): Array[DecorationOptions] = {\n+    val commentHeader = \" // \"\n+    val input = path.toInputFromBuffers(buffers)\n+    val decorations = for {\n+      ctx <- getContext(path)\n+      source <- dialects.Sbt1(input).parse[Source].toOption\n+    } yield {\n+      val sectionInput = SectionInput(\n+        path.toInputFromBuffers(buffers),\n+        source,\n+        Modifier.Default()\n+      )\n+      val sectionInputs = List(sectionInput)\n+      val instrumented = Instrumenter.instrument(sectionInputs)\n+      val rendered = MarkdownCompiler.buildDocument(\n+        ctx.compiler,\n+        ctx.reporter,\n+        sectionInputs,\n+        instrumented,\n+        path.toString\n+      )\n+      val decorations = for {\n+        section <- rendered.sections.iterator\n+        statement <- section.section.statements\n+      } yield {\n+        val pos = statement.position\n+        val range = new l.Range(\n+          new l.Position(pos.startLine, pos.startColumn),\n+          new l.Position(pos.endLine, pos.endColumn)\n+        )\n+        val margin = math.max(\n+          20,\n+          userConfig().screenWidth - statement.position.endColumn\n+        )\n+        val isEmptyValue = isUnitType(statement) || statement.binders.isEmpty\n+        val contentText: String = Iterator[Iterator[Char]](\n+          commentHeader.iterator, {\n+            if (isEmptyValue) {\n+              if (statement.out.isEmpty()) \"\".iterator\n+              else statement.out.linesIterator.next().toCharArray().iterator\n+            } else {\n+              val isSingle = statement.binders.lengthCompare(1) == 0\n+              for {\n+                (binder, i) <- statement.binders.iterator.zipWithIndex\n+                text <- Iterator[Iterator[Char]](\n+                  if (isSingle) List.empty[Char].iterator\n+                  else {\n+                    val comma = if (i == 0) \"\" else \", \"\n+                    s\"$comma${binder.name}=\".iterator\n+                  },\n+                  pprint.PPrinter.BlackWhite\n+                    .tokenize(\n+                      binder.value,\n+                      width = margin\n+                    )\n+                    .map(_.getChars)\n+                    .filterNot(_.iterator.forall(_.isWhitespace))\n+                    .flatMap(_.iterator)\n+                    .filter {\n+                      case '\\n' => false\n+                      case _ => true\n+                    }\n+                    .take(margin)\n+                )\n+                char <- text\n+              } yield char\n+            }\n+          }\n+        ).flatten.mkString\n+        val hoverMessage: String = Iterator[Iterator[String]](\n+          if (isEmptyValue) {\n+            List.empty[String].iterator\n+          } else {\n+            for {\n+              binder <- statement.binders.iterator\n+              text <- Iterator(\n+                \"\\n\",\n+                binder.name,\n+                \": \",\n+                binder.tpe.render(TPrintColors.BlackWhite),\n+                \" = \"\n+              ) ++ pprint.PPrinter.BlackWhite\n+                .tokenize(binder.value, width = 100)\n+                .map(_.plainText)\n+            } yield text\n+          },\n+          statement.out.linesIterator.flatMap { line =>\n+            Iterator(\"\\n// \", line)\n+          }\n+        ).flatten.mkString\n+        DecorationOptions(\n+          range,\n+          new l.MarkedString(\"scala\", hoverMessage),\n+          ThemableDecorationInstanceRenderOptions(\n+            after = ThemableDecorationAttachmentRenderOptions(\n+              contentText,\n+              color = \"green\",\n+              fontStyle = \"italic\"\n+            )\n+          )\n+        )\n+      }\n+      languageClient.publishDiagnostics(\n+        new PublishDiagnosticsParams(\n+          path.toURI.toString(),\n+          reporter.diagnostics.toSeq.asJava\n+        )\n+      )\n+      decorations\n+        .filterNot(_.renderOptions.after.contentText == commentHeader)\n+        .toArray\n+    }\n+    decorations.getOrElse(Array.empty)\n+  }\n+\n+  private def getContext(path: AbsolutePath): Option[Context] = {\n+    for {\n+      target <- buildTargets.inverseSources(path)\n+      info <- buildTargets.scalaTarget(target)\n+      scala <- info.info.asScalaBuildTarget\n+      scalaVersion = scala.getScalaVersion\n+      isSupported = ScalaVersions.isSupportedScalaVersion(scalaVersion)\n+      _ = {\n+        if (!isSupported) {\n+          scribe.warn(\n+            s\"worksheet: unsupported Scala version '${scalaVersion}', to fix this problem use Scala version '${BuildInfo.scala212}' instead.\""
+  },
+  {
+    "id" : "4a1ad492-76f6-467d-aab5-2783c44e683f",
+    "prId" : 1041,
+    "comments" : [
+      {
+        "id" : "3de7585d-da76-4ac2-a83c-2cfc8d89a153",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "This method looks a bit complex - can we move some functionalities to separate methods? It's a bit hard to review it, since a lot of the logic seems rendering specific.",
+        "createdAt" : "2019-11-04T16:17:29Z",
+        "updatedAt" : "2019-11-09T20:01:12Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "70c402b3-a13f-44ba-a5da-f16061bf9216",
+        "parentId" : "3de7585d-da76-4ac2-a83c-2cfc8d89a153",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "I agree, I should probably have opened a \"draft PR\". I had already refactored this method into smaller methods before seeing your review",
+        "createdAt" : "2019-11-06T06:30:49Z",
+        "updatedAt" : "2019-11-09T20:01:12Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "a2902a65a77773398f8ac710483906215a06bcf8",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,352 @@\n+package scala.meta.internal.worksheets\n+\n+import scala.meta._\n+import scala.meta.internal.decorations.DecorationOptions\n+import scala.meta.io.AbsolutePath\n+import scala.meta.internal.metals.Buffers\n+import scala.meta.internal.metals.BuildTargets\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.internal.metals.Cancelable\n+import scala.collection.concurrent.TrieMap\n+import ch.epfl.scala.bsp4j.BuildTargetIdentifier\n+import mdoc.internal.cli.Context\n+import mdoc.internal.markdown.SectionInput\n+import mdoc.internal.markdown.Modifier\n+import mdoc.internal.markdown.Instrumenter\n+import mdoc.internal.markdown.MarkdownCompiler\n+import org.eclipse.{lsp4j => l}\n+import scala.meta.internal.decorations.ThemableDecorationInstanceRenderOptions\n+import scala.meta.internal.decorations.ThemableDecorationAttachmentRenderOptions\n+import mdoc.internal.cli.Settings\n+import scala.meta.internal.metals.ScalaTarget\n+import scala.concurrent.Future\n+import scala.meta.pc.CancelToken\n+import pprint.TPrintColors\n+import scala.meta.internal.metals.UserConfiguration\n+import scala.collection.immutable.Nil\n+import mdoc.document.Statement\n+import scala.meta.internal.metals.MetalsLanguageClient\n+import scala.meta.internal.metals.ScalaVersions\n+import scala.meta.internal.metals.BuildInfo\n+import org.eclipse.lsp4j.PublishDiagnosticsParams\n+import scala.meta.internal.pc.CompilerJobQueue\n+import java.util.concurrent.CompletableFuture\n+import scala.concurrent.ExecutionContext\n+import java.util.concurrent.ScheduledExecutorService\n+import scala.meta.internal.metals.MetalsSlowTaskParams\n+import java.util.concurrent.TimeUnit\n+import scala.meta.internal.metals.MutableCancelable\n+import scala.meta.internal.metals.StatusBar\n+import scala.meta.internal.pc.InterruptException\n+import scala.util.control.NonFatal\n+\n+/**\n+ * Implements interactive worksheets for \"*.worksheet.sc\" file extensions.\n+ *\n+ * Code is evaluated on file save using mdoc: https://scalameta.org/mdoc/\n+ */\n+class MetalsWorksheetProvider(\n+    workspace: AbsolutePath,\n+    buffers: Buffers,\n+    buildTargets: BuildTargets,\n+    languageClient: MetalsLanguageClient,\n+    userConfig: () => UserConfiguration,\n+    sh: ScheduledExecutorService,\n+    statusBar: StatusBar\n+)(implicit ec: ExecutionContext)\n+    extends WorksheetProvider\n+    with Cancelable {\n+  // Worksheet evaluation happens on a single threaded job queue. Jobs are\n+  // prioritized using the same order as completion/hover requests:\n+  // first-come last-out.\n+  private val jobs = CompilerJobQueue()\n+  private val cancelables = new MutableCancelable()\n+  private val contexts = new TrieMap[BuildTargetIdentifier, Context]()\n+  private val reporter = new StoreReporter()\n+\n+  def clear(): Unit = {\n+    jobs.shutdown()\n+    contexts.values.foreach { context =>\n+      context.compiler.global.close()\n+    }\n+    contexts.clear()\n+  }\n+  def cancel(): Unit = {\n+    clear()\n+  }\n+\n+  override def decorations(\n+      path: AbsolutePath,\n+      token: CancelToken\n+  ): Future[Array[DecorationOptions]] = {\n+    if (path.extension != \"sc\") {\n+      Future.successful(Array.empty)\n+    } else {\n+      reporter.reset()\n+      val result = new CompletableFuture[Array[DecorationOptions]]()\n+      token.onCancel().asScala.foreach {\n+        case java.lang.Boolean.TRUE =>\n+          // Don't publish any\n+          result.complete(Array.empty)\n+        case _ =>\n+      }\n+      def runEvaluation(): Unit = {\n+        cancelables.add(Cancelable(() => result.complete(Array.empty)))\n+        statusBar.trackFuture(\n+          s\"Evaluting ${path.filename}\",\n+          result.asScala,\n+          showTimer = true\n+        )\n+        token.checkCanceled()\n+        // NOTE(olafurpg) Run evaluation in a custom thread so that we can\n+        // `Thread.stop()` it in case of infinite loop. I'm not aware of any\n+        // other JVM APIs that allow killing a runnable even in the face of\n+        // infinite loops.\n+        val thread = new Thread(s\"Evaluating Worksheet ${path.filename}\") {\n+          override def run(): Unit = {\n+            result.complete(evaluateWorksheet(path, token))\n+          }\n+        }\n+        cancelables.add(\n+          Cancelable(() => {\n+            if (thread.isAlive) {\n+              thread.stop()\n+            }\n+          })\n+        )\n+        stopThreadOnCancel(path, result, thread)\n+        thread.start()\n+        thread.join()\n+      }\n+      jobs.submit(\n+        result,\n+        () => {\n+          try runEvaluation()\n+          catch {\n+            case NonFatal(_) | InterruptException() =>\n+              () // allow job queue to process next worksheet evaluation request.\n+          }\n+        }\n+      )\n+      result.asScala.recover {\n+        case NonFatal(_) | InterruptException() =>\n+          // Clear all decorations when evaluation fails.\n+          Array.empty\n+      }\n+    }\n+  }\n+\n+  /**\n+   * Prompts the user to cancel the task after a few seconds.\n+   *\n+   * Attempts to gracefully shut down the thread when users requests to cancel:\n+   * First tries `Thread.interrupt()` with fallback to `Thread.stop()` after\n+   * one second if interruption doesn't work.\n+   */\n+  private def stopThreadOnCancel(\n+      path: AbsolutePath,\n+      result: CompletableFuture[Array[DecorationOptions]],\n+      thread: Thread\n+  ): Unit = {\n+    // Last resort, if everything else fails we use `Thread.stop()`.\n+    val stopThread = new Runnable {\n+      def run(): Unit = {\n+        if (thread.isAlive()) {\n+          scribe.warn(s\"thread stop: ${thread.getName()}\")\n+          Cancelable.cancelAll(\n+            List(\n+              Cancelable(() => thread.stop()),\n+              cancelables\n+            )\n+          )\n+        }\n+      }\n+    }\n+    // If the program is running for more than\n+    // `userConfig().worksheetCancelTimeout`, then display a prompt for the user\n+    // to cancel the program.\n+    val promptUserToCancel = new Runnable {\n+      def run(): Unit = {\n+        if (!result.isDone()) {\n+          val cancel = languageClient.metalsSlowTask(\n+            new MetalsSlowTaskParams(\n+              s\"Evaluating worksheet '${path.filename}'\",\n+              noLogs = true\n+            )\n+          )\n+          cancel.asScala.foreach { c =>\n+            if (c.cancel && thread.isAlive()) {\n+              // User has requested to cancel a running program. first line of\n+              // defense is `Thread.interrupt()`. Fingers crossed it's enough.\n+              result.complete(Array.empty)\n+              sh.schedule(stopThread, 1, TimeUnit.SECONDS)\n+              scribe.warn(s\"thread interrupt: ${thread.getName()}\")\n+              thread.interrupt()\n+            }\n+          }\n+          result.asScala.onComplete(_ => cancel.cancel(true))\n+        }\n+      }\n+    }\n+    sh.schedule(\n+      promptUserToCancel,\n+      userConfig().worksheetCancelTimeout,\n+      TimeUnit.SECONDS\n+    )\n+  }\n+\n+  private def evaluateWorksheet("
+  }
+]

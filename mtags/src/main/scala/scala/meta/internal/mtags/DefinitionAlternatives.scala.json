@@ -1,0 +1,249 @@
+[
+  {
+    "id" : "e907d75d-5e2d-49c7-bde0-fa90e80341ea",
+    "prId" : 332,
+    "comments" : [
+      {
+        "id" : "27c56b8d-e830-4fa2-a943-2c6910963a23",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "In case this becomes a hot path, maybe using `++` instead of `List.apply` + `flatten` is slightly more conservative.",
+        "createdAt" : "2018-10-13T12:17:40Z",
+        "updatedAt" : "2018-10-17T09:17:09Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "7074f9be-712c-45b4-9669-13af083cfba1",
+        "parentId" : "27c56b8d-e830-4fa2-a943-2c6910963a23",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "I don't think this is a bottleneck since is not on a critical path, it's a fallback to missing symbols. If we want to squeeze out the last juice of performance we should benchmark it first. I'm also not sure if `List[List[T]].flatten` is slower than `++`",
+        "createdAt" : "2018-10-13T13:08:22Z",
+        "updatedAt" : "2018-10-17T09:17:09Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "889b282a30a7ddd72b09da4b9328f7779b1cfae9",
+    "line" : 14,
+    "diffHunk" : "@@ -0,0 +1,86 @@\n+package scala.meta.internal.mtags\n+\n+import scala.meta.internal.semanticdb.Scala._\n+\n+object DefinitionAlternatives {\n+\n+  /** Returns a list of fallback symbols that can act instead of given symbol. */\n+  def apply(symbol: String): List[String] = {\n+    List(\n+      caseClassCompanionToType(symbol),\n+      caseClassApplyOrCopy(symbol),\n+      caseClassApplyOrCopyParams(symbol),\n+      methodToVal(symbol),\n+      methodOwner(symbol),\n+    ).flatten"
+  },
+  {
+    "id" : "8f361a45-0c92-4d0e-8b2b-98bce3738efb",
+    "prId" : 332,
+    "comments" : [
+      {
+        "id" : "ece3c758-03a9-4cd8-965a-0275d7366914",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "Can you give an example of this?",
+        "createdAt" : "2018-10-13T12:22:43Z",
+        "updatedAt" : "2018-10-17T09:17:09Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "f2043866-92ec-4b3a-b696-e7db8bff7f59",
+        "parentId" : "ece3c758-03a9-4cd8-965a-0275d7366914",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "It's not used, removed.",
+        "createdAt" : "2018-10-13T13:33:07Z",
+        "updatedAt" : "2018-10-17T09:17:09Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "889b282a30a7ddd72b09da4b9328f7779b1cfae9",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,86 @@\n+package scala.meta.internal.mtags\n+\n+import scala.meta.internal.semanticdb.Scala._\n+\n+object DefinitionAlternatives {\n+\n+  /** Returns a list of fallback symbols that can act instead of given symbol. */\n+  def apply(symbol: String): List[String] = {\n+    List(\n+      caseClassCompanionToType(symbol),\n+      caseClassApplyOrCopy(symbol),\n+      caseClassApplyOrCopyParams(symbol),\n+      methodToVal(symbol),\n+      methodOwner(symbol),\n+    ).flatten\n+  }\n+\n+  private object GlobalSymbol {\n+    def apply(owner: String, desc: Descriptor): String =\n+      Symbols.Global(owner, desc)\n+    def unapply(sym: String): Option[(String, Descriptor)] =\n+      Some(sym.owner -> sym.desc)\n+  }\n+\n+  /** If `case class A(a: Int)` and there is no companion object, resolve\n+   * `A` in `A(1)` to the class definition.\n+   */\n+  private def caseClassCompanionToType(symbol: String): Option[String] =\n+    Option(symbol).collect {\n+      case GlobalSymbol(owner, Descriptor.Term(name)) =>\n+        GlobalSymbol(owner, Descriptor.Type(name))\n+    }\n+\n+  /** If `case class Foo(a: Int)`, then resolve\n+   * `a` in `Foo.apply(a = 1)`, and\n+   * `a` in `Foo(1).copy(a = 2)`\n+   * to the `Foo.a` primary constructor definition.\n+   */\n+  private def caseClassApplyOrCopyParams(symbol: String): Option[String] =\n+    Option(symbol).collect {\n+      case GlobalSymbol(\n+          GlobalSymbol(\n+            GlobalSymbol(owner, signature),\n+            Descriptor.Method(\"copy\" | \"apply\", _)\n+          ),\n+          Descriptor.Parameter(param)\n+          ) =>\n+        GlobalSymbol(\n+          GlobalSymbol(owner, Descriptor.Type(signature.name.value)),\n+          Descriptor.Term(param)\n+        )\n+    }\n+\n+  /** If `case class Foo(a: Int)`, then resolve\n+   * `apply` in `Foo.apply(1)`, and\n+   * `copy` in `Foo(1).copy(a = 2)`\n+   * to the `Foo` class definition.\n+   */\n+  private def caseClassApplyOrCopy(symbol: String): Option[String] =\n+    Option(symbol).collect {\n+      case GlobalSymbol(\n+          GlobalSymbol(owner, signature),\n+          Descriptor.Method(\"apply\" | \"copy\", _)\n+          ) =>\n+        GlobalSymbol(owner, Descriptor.Type(signature.name.value))\n+    }\n+\n+  /** Fallback to the val term for a def with multiple params */\n+  private def methodToVal(symbol: String): Option[String] ="
+  },
+  {
+    "id" : "819b05f2-a03c-4bc1-9619-8134b58e049e",
+    "prId" : 332,
+    "comments" : [
+      {
+        "id" : "ef11c76e-e6d0-46dc-9b39-027110f690ae",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "Why? What's the scenario in which we need to fall back?",
+        "createdAt" : "2018-10-13T12:23:29Z",
+        "updatedAt" : "2018-10-17T09:17:09Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "f0e34043-e2b9-4dd2-ac44-3843adedcd13",
+        "parentId" : "ef11c76e-e6d0-46dc-9b39-027110f690ae",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "- Members generated by macro annotations\r\n- `java/lang/Object#==` and friends\r\n\r\nI updated the comment to motivate why fuzzy results like this are better than jumping nowhere.",
+        "createdAt" : "2018-10-13T13:14:24Z",
+        "updatedAt" : "2018-10-17T09:17:09Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "889b282a30a7ddd72b09da4b9328f7779b1cfae9",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,86 @@\n+package scala.meta.internal.mtags\n+\n+import scala.meta.internal.semanticdb.Scala._\n+\n+object DefinitionAlternatives {\n+\n+  /** Returns a list of fallback symbols that can act instead of given symbol. */\n+  def apply(symbol: String): List[String] = {\n+    List(\n+      caseClassCompanionToType(symbol),\n+      caseClassApplyOrCopy(symbol),\n+      caseClassApplyOrCopyParams(symbol),\n+      methodToVal(symbol),\n+      methodOwner(symbol),\n+    ).flatten\n+  }\n+\n+  private object GlobalSymbol {\n+    def apply(owner: String, desc: Descriptor): String =\n+      Symbols.Global(owner, desc)\n+    def unapply(sym: String): Option[(String, Descriptor)] =\n+      Some(sym.owner -> sym.desc)\n+  }\n+\n+  /** If `case class A(a: Int)` and there is no companion object, resolve\n+   * `A` in `A(1)` to the class definition.\n+   */\n+  private def caseClassCompanionToType(symbol: String): Option[String] =\n+    Option(symbol).collect {\n+      case GlobalSymbol(owner, Descriptor.Term(name)) =>\n+        GlobalSymbol(owner, Descriptor.Type(name))\n+    }\n+\n+  /** If `case class Foo(a: Int)`, then resolve\n+   * `a` in `Foo.apply(a = 1)`, and\n+   * `a` in `Foo(1).copy(a = 2)`\n+   * to the `Foo.a` primary constructor definition.\n+   */\n+  private def caseClassApplyOrCopyParams(symbol: String): Option[String] =\n+    Option(symbol).collect {\n+      case GlobalSymbol(\n+          GlobalSymbol(\n+            GlobalSymbol(owner, signature),\n+            Descriptor.Method(\"copy\" | \"apply\", _)\n+          ),\n+          Descriptor.Parameter(param)\n+          ) =>\n+        GlobalSymbol(\n+          GlobalSymbol(owner, Descriptor.Type(signature.name.value)),\n+          Descriptor.Term(param)\n+        )\n+    }\n+\n+  /** If `case class Foo(a: Int)`, then resolve\n+   * `apply` in `Foo.apply(1)`, and\n+   * `copy` in `Foo(1).copy(a = 2)`\n+   * to the `Foo` class definition.\n+   */\n+  private def caseClassApplyOrCopy(symbol: String): Option[String] =\n+    Option(symbol).collect {\n+      case GlobalSymbol(\n+          GlobalSymbol(owner, signature),\n+          Descriptor.Method(\"apply\" | \"copy\", _)\n+          ) =>\n+        GlobalSymbol(owner, Descriptor.Type(signature.name.value))\n+    }\n+\n+  /** Fallback to the val term for a def with multiple params */\n+  private def methodToVal(symbol: String): Option[String] =\n+    Option(symbol).collect {\n+      case GlobalSymbol(owner, Descriptor.Method(name, _)) =>\n+        GlobalSymbol(owner, Descriptor.Term(name))\n+    }\n+\n+  /** For methods and vals, fall back to the enclosing class */\n+  private def methodOwner(symbol: String): Option[String] ="
+  },
+  {
+    "id" : "f8ee7425-c578-4263-af7d-b18afd8f63f8",
+    "prId" : 332,
+    "comments" : [
+      {
+        "id" : "b04990fe-c53e-412b-9fa8-4f58f50efdf9",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "Alternatively re-using the utility from `Enrichments` \r\n\r\n```scala\r\ncase GlobalSymbol(\r\n  GlobalSymbol(\r\n    GlobalSymbol(owner, signature),\r\n    desc\r\n  ),\r\n  Descriptor.Parameter(param)\r\n) if desc.isCaseClassSynthetic => // ...\r\n```",
+        "createdAt" : "2018-10-13T12:26:26Z",
+        "updatedAt" : "2018-10-17T09:17:09Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "adb7fb6e-231f-4bf0-aaf3-922cdc803820",
+        "parentId" : "b04990fe-c53e-412b-9fa8-4f58f50efdf9",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "I remove that method, it wasn't used anywhere. Somebody ™️ should write a scalafix linter that warns about unused global symbols 🤔 ",
+        "createdAt" : "2018-10-13T13:09:34Z",
+        "updatedAt" : "2018-10-17T09:17:09Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "889b282a30a7ddd72b09da4b9328f7779b1cfae9",
+    "line" : 44,
+    "diffHunk" : "@@ -0,0 +1,86 @@\n+package scala.meta.internal.mtags\n+\n+import scala.meta.internal.semanticdb.Scala._\n+\n+object DefinitionAlternatives {\n+\n+  /** Returns a list of fallback symbols that can act instead of given symbol. */\n+  def apply(symbol: String): List[String] = {\n+    List(\n+      caseClassCompanionToType(symbol),\n+      caseClassApplyOrCopy(symbol),\n+      caseClassApplyOrCopyParams(symbol),\n+      methodToVal(symbol),\n+      methodOwner(symbol),\n+    ).flatten\n+  }\n+\n+  private object GlobalSymbol {\n+    def apply(owner: String, desc: Descriptor): String =\n+      Symbols.Global(owner, desc)\n+    def unapply(sym: String): Option[(String, Descriptor)] =\n+      Some(sym.owner -> sym.desc)\n+  }\n+\n+  /** If `case class A(a: Int)` and there is no companion object, resolve\n+   * `A` in `A(1)` to the class definition.\n+   */\n+  private def caseClassCompanionToType(symbol: String): Option[String] =\n+    Option(symbol).collect {\n+      case GlobalSymbol(owner, Descriptor.Term(name)) =>\n+        GlobalSymbol(owner, Descriptor.Type(name))\n+    }\n+\n+  /** If `case class Foo(a: Int)`, then resolve\n+   * `a` in `Foo.apply(a = 1)`, and\n+   * `a` in `Foo(1).copy(a = 2)`\n+   * to the `Foo.a` primary constructor definition.\n+   */\n+  private def caseClassApplyOrCopyParams(symbol: String): Option[String] =\n+    Option(symbol).collect {\n+      case GlobalSymbol(\n+          GlobalSymbol(\n+            GlobalSymbol(owner, signature),\n+            Descriptor.Method(\"copy\" | \"apply\", _)\n+          ),"
+  },
+  {
+    "id" : "168f0001-8264-4852-8d47-7dc2691295ba",
+    "prId" : 332,
+    "comments" : [
+      {
+        "id" : "a6a0eabe-e958-447e-bb9a-a1299e3e8e02",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "Same as above, alternatively\r\n\r\n```scala\r\ncase GlobalSymbol(GlobalSymbol(owner, signature), desc) if desc.isCaseClassSynthetic => // ...\r\n```",
+        "createdAt" : "2018-10-13T12:27:29Z",
+        "updatedAt" : "2018-10-17T09:17:09Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "91bce5cd-1f20-4597-9d6b-e52e72e417f7",
+        "parentId" : "a6a0eabe-e958-447e-bb9a-a1299e3e8e02",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "I think it's fine to hardcode it here instead of using the other method ",
+        "createdAt" : "2018-10-13T13:10:00Z",
+        "updatedAt" : "2018-10-17T09:17:09Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "889b282a30a7ddd72b09da4b9328f7779b1cfae9",
+    "line" : 63,
+    "diffHunk" : "@@ -0,0 +1,86 @@\n+package scala.meta.internal.mtags\n+\n+import scala.meta.internal.semanticdb.Scala._\n+\n+object DefinitionAlternatives {\n+\n+  /** Returns a list of fallback symbols that can act instead of given symbol. */\n+  def apply(symbol: String): List[String] = {\n+    List(\n+      caseClassCompanionToType(symbol),\n+      caseClassApplyOrCopy(symbol),\n+      caseClassApplyOrCopyParams(symbol),\n+      methodToVal(symbol),\n+      methodOwner(symbol),\n+    ).flatten\n+  }\n+\n+  private object GlobalSymbol {\n+    def apply(owner: String, desc: Descriptor): String =\n+      Symbols.Global(owner, desc)\n+    def unapply(sym: String): Option[(String, Descriptor)] =\n+      Some(sym.owner -> sym.desc)\n+  }\n+\n+  /** If `case class A(a: Int)` and there is no companion object, resolve\n+   * `A` in `A(1)` to the class definition.\n+   */\n+  private def caseClassCompanionToType(symbol: String): Option[String] =\n+    Option(symbol).collect {\n+      case GlobalSymbol(owner, Descriptor.Term(name)) =>\n+        GlobalSymbol(owner, Descriptor.Type(name))\n+    }\n+\n+  /** If `case class Foo(a: Int)`, then resolve\n+   * `a` in `Foo.apply(a = 1)`, and\n+   * `a` in `Foo(1).copy(a = 2)`\n+   * to the `Foo.a` primary constructor definition.\n+   */\n+  private def caseClassApplyOrCopyParams(symbol: String): Option[String] =\n+    Option(symbol).collect {\n+      case GlobalSymbol(\n+          GlobalSymbol(\n+            GlobalSymbol(owner, signature),\n+            Descriptor.Method(\"copy\" | \"apply\", _)\n+          ),\n+          Descriptor.Parameter(param)\n+          ) =>\n+        GlobalSymbol(\n+          GlobalSymbol(owner, Descriptor.Type(signature.name.value)),\n+          Descriptor.Term(param)\n+        )\n+    }\n+\n+  /** If `case class Foo(a: Int)`, then resolve\n+   * `apply` in `Foo.apply(1)`, and\n+   * `copy` in `Foo(1).copy(a = 2)`\n+   * to the `Foo` class definition.\n+   */\n+  private def caseClassApplyOrCopy(symbol: String): Option[String] =\n+    Option(symbol).collect {\n+      case GlobalSymbol(\n+          GlobalSymbol(owner, signature),\n+          Descriptor.Method(\"apply\" | \"copy\", _)\n+          ) =>"
+  }
+]

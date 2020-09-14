@@ -1,0 +1,227 @@
+[
+  {
+    "id" : "51cd259f-f123-4f21-997e-a49b53c5175e",
+    "prId" : 275,
+    "comments" : [
+      {
+        "id" : "a1d248fe-e81e-47cd-a939-ef8cca9d56b3",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "Is is right that `Defn.Var/Val` are all `Kind.METHOD`?\r\n\r\nI've read https://github.com/scalameta/scalameta/blob/master/semanticdb/semanticdb3/semanticdb3.md#symbolinformation-1, it's not clear whether `t` is the field or the synthetic method here.",
+        "createdAt" : "2018-04-10T08:37:12Z",
+        "updatedAt" : "2018-05-06T12:40:25Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "54ed0b38-c608-4f1e-8ef8-ac182aa1c2dc",
+        "parentId" : "a1d248fe-e81e-47cd-a939-ef8cca9d56b3",
+        "author" : {
+          "login" : "xeno-by",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/609152?u=20bb3a58b554d0984a33eaa519c5cf3fd09e88fc&v=4"
+        },
+        "body" : "The `SymbolOccurrence` part of the format is still unspecified at this point. For now, I propose that we do whatever semanticdb-scalac does.",
+        "createdAt" : "2018-04-10T17:56:06Z",
+        "updatedAt" : "2018-05-06T12:40:25Z",
+        "lastEditedBy" : {
+          "login" : "xeno-by",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/609152?u=20bb3a58b554d0984a33eaa519c5cf3fd09e88fc&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "42765d7effb4a73998347fa6fb448b3c5e13c5ab",
+    "line" : 94,
+    "diffHunk" : "@@ -2,52 +2,62 @@ package scala.meta.metals.mtags\n \n import scala.meta._\n import org.langmeta.inputs.Input\n+import scala.meta.internal.semanticdb3.SymbolInformation.Kind\n+import scala.meta.internal.semanticdb3.Language\n+import scala.meta.internal.semanticdb3.SymbolInformation.Property\n \n object ScalaMtags {\n   def index(input: Input.VirtualFile): MtagsIndexer = {\n     val root: Source = input.parse[Source].get\n     new Traverser with MtagsIndexer {\n-      override def language: String =\n-        \"Scala212\" // TODO(olafur) more accurate dialect\n+      override def language: Language = Language.SCALA\n       override def indexRoot(): Unit = apply(root)\n       override def apply(tree: Tree): Unit = withOwner() {\n         def continue(): Unit = super.apply(tree)\n         def stop(): Unit = ()\n-        def pats(ps: List[Pat], flag: Long): Unit = {\n+        def pats(ps: List[Pat], kind: Kind, properties: Int): Unit = {\n           ps.foreach {\n-            case Pat.Var(name) => withOwner() { term(name, flag) }\n+            case Pat.Var(name) => withOwner() { term(name, kind, properties) }\n             case _ =>\n           }\n         }\n         tree match {\n-          case t: Source => continue()\n-          case t: Template => continue()\n+          case _: Source => continue()\n+          case _: Template => continue()\n           case t: Pkg => pkg(t.ref); continue()\n           case t: Pkg.Object =>\n-            term(t.name, PACKAGEOBJECT);\n-            term(\"package\", t.name.pos, OBJECT);\n+            term(t.name, Kind.PACKAGE_OBJECT, 0);\n+            term(\"package\", t.name.pos, Kind.OBJECT, 0);\n             continue()\n           case t: Defn.Class =>\n-            tpe(t.name, CLASS)\n+            tpe(t.name, Kind.CLASS, 0)\n             for {\n               params <- t.ctor.paramss\n               param <- params\n             } withOwner() {\n-              // TODO(olafur) More precise flags, we add VAL here blindly even if\n-              // it's not a val, it might even be a var!\n-              super.param(param.name, VAL | PARAM)\n+              super.param(param.name, Kind.PARAMETER, 0)\n             }\n             continue()\n-          case t: Defn.Trait => tpe(t.name, TRAIT); continue()\n-          case t: Defn.Object => term(t.name, OBJECT); continue()\n-          case t: Defn.Type => tpe(t.name, TYPE); stop()\n-          case t: Decl.Type => tpe(t.name, TYPE); stop()\n-          case t: Defn.Def => term(t.name, DEF); stop()\n-          case t: Decl.Def => term(t.name, DEF); stop()\n-          case t: Defn.Val => pats(t.pats, VAL); stop()\n-          case t: Decl.Val => pats(t.pats, VAL); stop()\n-          case t: Defn.Var => pats(t.pats, VAR); stop()\n-          case t: Decl.Var => pats(t.pats, VAR); stop()\n+          case t: Defn.Trait =>\n+            tpe(t.name, Kind.TRAIT, 0); continue()\n+          case t: Defn.Object =>\n+            term(t.name, Kind.OBJECT, 0); continue()\n+          case t: Defn.Type =>\n+            tpe(t.name, Kind.TYPE, 0); stop()\n+          case t: Decl.Type =>\n+            tpe(t.name, Kind.TYPE, 0); stop()\n+          case t: Defn.Def =>\n+            term(t.name, Kind.METHOD, 0); stop()\n+          case t: Decl.Def =>\n+            term(t.name, Kind.METHOD, 0); stop()\n+          case t: Defn.Val =>\n+            pats(t.pats, Kind.METHOD, Property.VAL.value); stop()\n+          case t: Decl.Val =>\n+            pats(t.pats, Kind.METHOD, Property.VAL.value); stop()\n+          case t: Defn.Var =>\n+            pats(t.pats, Kind.METHOD, Property.VAR.value); stop()\n+          case t: Decl.Var =>\n+            pats(t.pats, Kind.METHOD, Property.VAR.value); stop()"
+  },
+  {
+    "id" : "0686dbda-5082-4b9a-8b02-59d949c7e0cb",
+    "prId" : 286,
+    "comments" : [
+      {
+        "id" : "4e021276-c0cb-4259-8d64-9c90d945964f",
+        "parentId" : null,
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "Unless I'm mistaken, the two implementations for `Decl/Defn` are identical. This could probably be made an helper that takes `Seq[Term.Param]` in input. Something like\r\n\r\n```scala\r\ncase t: Defn.Def => def(t.paramss)\r\ncase t: Decl.Def => def(t.paramss)\r\n```",
+        "createdAt" : "2018-04-15T13:04:40Z",
+        "updatedAt" : "2018-04-15T14:12:20Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "e4464a9f-0b52-47c8-a04b-442d281ef7fa",
+        "parentId" : "4e021276-c0cb-4259-8d64-9c90d945964f",
+        "author" : {
+          "login" : "amarrella",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1425877?u=18413a5b4d734398f3da1eea5b465539604dc3a7&v=4"
+        },
+        "body" : "I cannot find a common type between Defn.Def and Decl.Def that has `paramss` :/ So either I repeat the logic or I do a weird pattern match only on those in the helper. Any suggestions?",
+        "createdAt" : "2018-04-15T13:13:53Z",
+        "updatedAt" : "2018-04-15T14:12:20Z",
+        "lastEditedBy" : {
+          "login" : "amarrella",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1425877?u=18413a5b4d734398f3da1eea5b465539604dc3a7&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "dd7383ac-8184-4575-89e1-1ae30ac2e2f8",
+        "parentId" : "4e021276-c0cb-4259-8d64-9c90d945964f",
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "If you write an helper like\r\n\r\n```scala\r\ndef def(paramss: Seq[Term.Param]) = {\r\n  // ...\r\n}\r\n```\r\n\r\nyou can then pattern-match separately and pass the parameters to the helper:\r\n\r\n```scala\r\ncase t: Defn.Def => def(t.paramss)\r\ncase t: Decl.Def => def(t.paramss)\r\n```",
+        "createdAt" : "2018-04-15T13:14:46Z",
+        "updatedAt" : "2018-04-15T14:12:20Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "63a0152a-1c32-4f97-85fd-637d2a4fb7a0",
+        "parentId" : "4e021276-c0cb-4259-8d64-9c90d945964f",
+        "author" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "body" : "You probably need the name too, so it would be\r\n\r\n```scala\r\ndef defTerm(name: Term.Name, paramss: Seq[Term.Param]) = {\r\n  // ...\r\n}\r\n```\r\n\r\nor similar (I suspect you can't call a `def` `\"def\"` :-P)",
+        "createdAt" : "2018-04-15T13:17:49Z",
+        "updatedAt" : "2018-04-15T14:12:20Z",
+        "lastEditedBy" : {
+          "login" : "gabro",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/691940?u=5aaf176f5da60764f857b8f8c6842217f737627f&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "a812ff77-13a8-4604-be14-ed0e533a8445",
+        "parentId" : "4e021276-c0cb-4259-8d64-9c90d945964f",
+        "author" : {
+          "login" : "amarrella",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1425877?u=18413a5b4d734398f3da1eea5b465539604dc3a7&v=4"
+        },
+        "body" : "Sounds good, will do thanks!",
+        "createdAt" : "2018-04-15T13:18:45Z",
+        "updatedAt" : "2018-04-15T14:12:20Z",
+        "lastEditedBy" : {
+          "login" : "amarrella",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1425877?u=18413a5b4d734398f3da1eea5b465539604dc3a7&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "191b3887a75f637235c80257526e6d20e3807359",
+    "line" : null,
+    "diffHunk" : "@@ -42,8 +42,30 @@ object ScalaMtags {\n           case t: Defn.Object => term(t.name, OBJECT); continue()\n           case t: Defn.Type => tpe(t.name, TYPE); stop()\n           case t: Decl.Type => tpe(t.name, TYPE); stop()\n-          case t: Defn.Def => term(t.name, DEF); stop()\n-          case t: Decl.Def => term(t.name, DEF); stop()\n+          case t: Defn.Def => \n+            for {\n+              params <- t.paramss\n+              tpes = params.flatMap(_.decltpe)\n+              names = tpes.map{\n+                case d: Type.Name => d\n+              }\n+            } withOwner() {\n+              val params = names.mkString(\"(\", \",\", \")\")\n+              super.method(t.name, params, DEF)\n+            }\n+            stop()\n+          case t: Decl.Def => \n+            for {\n+              params <- t.paramss\n+              tpes = params.flatMap(_.decltpe)\n+              names = tpes.map{\n+                case d: Type.Name => d\n+              }\n+            } withOwner() {\n+              val params = names.mkString(\"(\", \",\", \")\")\n+              super.method(t.name, params, DEF)\n+            }\n+            stop()"
+  },
+  {
+    "id" : "a6442d2d-0995-4a40-80c6-6f4738e98fb1",
+    "prId" : 286,
+    "comments" : [
+      {
+        "id" : "dd8d2b1e-3639-4bc9-bfb5-2277da36120a",
+        "parentId" : null,
+        "author" : {
+          "login" : "amarrella",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1425877?u=18413a5b4d734398f3da1eea5b465539604dc3a7&v=4"
+        },
+        "body" : "Doing `.type` as in the spec makes the test crash.",
+        "createdAt" : "2018-04-15T13:14:47Z",
+        "updatedAt" : "2018-04-15T14:12:20Z",
+        "lastEditedBy" : {
+          "login" : "amarrella",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1425877?u=18413a5b4d734398f3da1eea5b465539604dc3a7&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "191b3887a75f637235c80257526e6d20e3807359",
+    "line" : null,
+    "diffHunk" : "@@ -53,4 +73,25 @@ object ScalaMtags {\n       }\n     }\n   }\n+\n+  private def getDisambiguator(t: Type): String =\n+   t match {\n+      case d: Type.Name => d.value\n+      case d: Type.Select => d.name.value\n+      case d: Type.Project => d.name.value\n+      case d: Type.Singleton => \"type\""
+  },
+  {
+    "id" : "71631268-6323-43c4-9caa-53225e430e89",
+    "prId" : 286,
+    "comments" : [
+      {
+        "id" : "48cf2335-a6cd-4d2c-be4f-85a07b58d5f4",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Can we link to the spec (closest enclosing section, think it's \"#scala-syntax\") to explain what is happening here",
+        "createdAt" : "2018-04-15T14:20:31Z",
+        "updatedAt" : "2018-04-15T15:12:27Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "191b3887a75f637235c80257526e6d20e3807359",
+    "line" : 37,
+    "diffHunk" : "@@ -53,4 +67,31 @@ object ScalaMtags {\n       }\n     }\n   }\n+\n+  private def getDisambiguator(t: Type): String ="
+  }
+]

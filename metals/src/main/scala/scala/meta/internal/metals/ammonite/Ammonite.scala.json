@@ -1,0 +1,501 @@
+[
+  {
+    "id" : "1e43e1b1-a82b-4bf6-9c8b-384379e72c62",
+    "prId" : 1538,
+    "comments" : [
+      {
+        "id" : "99da6d38-25a0-44ce-84ba-b3a403c044b9",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "TODO? Is it just leftover?",
+        "createdAt" : "2020-04-09T11:35:22Z",
+        "updatedAt" : "2020-05-21T11:17:44Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "62d1fdd6-41a9-44fe-9c76-b12f9611f097",
+        "parentId" : "99da6d38-25a0-44ce-84ba-b3a403c044b9",
+        "author" : {
+          "login" : "alexarchambault",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/7063723?u=d5befca0ebfec0042dad7ef93973490eef750ff4&v=4"
+        },
+        "body" : "Yes, just removed it.",
+        "createdAt" : "2020-04-11T15:39:13Z",
+        "updatedAt" : "2020-05-21T11:17:44Z",
+        "lastEditedBy" : {
+          "login" : "alexarchambault",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/7063723?u=d5befca0ebfec0042dad7ef93973490eef750ff4&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "0681fa0b1417b7ac622101d279667c6900a2506e",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,435 @@\n+package scala.meta.internal.metals.ammonite\n+\n+import java.io.InputStream\n+import java.net.URI\n+import java.nio.charset.Charset\n+import java.nio.file.Paths\n+import java.util.concurrent.atomic.AtomicBoolean\n+import java.util.concurrent.CompletableFuture\n+import java.util.concurrent.TimeoutException\n+import java.util.concurrent.TimeUnit\n+\n+import ammrunner.AmmoniteFetcher\n+import ammrunner.AmmoniteFetcherException\n+import ammrunner.{Command => AmmCommand}\n+import ammrunner.{Versions => AmmVersions}\n+import ammrunner.VersionsOption\n+import ch.epfl.scala.bsp4j.BuildTargetIdentifier\n+import org.eclipse.lsp4j.CompletionList\n+import org.eclipse.lsp4j.Hover\n+import org.eclipse.lsp4j.Position\n+import org.eclipse.lsp4j.{Range => LspRange}\n+\n+import scala.concurrent.ExecutionContext\n+import scala.concurrent.ExecutionContextExecutorService\n+import scala.concurrent.Future\n+import scala.meta.inputs.Input\n+import scala.meta.internal.builds.BuildTools\n+import scala.meta.internal.metals._\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.io.AbsolutePath\n+import scala.util.control.NonFatal\n+import scala.util.Failure\n+import scala.util.Success\n+\n+final class Ammonite(\n+    buffers: Buffers,\n+    compilers: Compilers,\n+    compilations: Compilations,\n+    statusBar: StatusBar,\n+    diagnostics: Diagnostics,\n+    doctor: Doctor,\n+    tables: () => Tables,\n+    languageClient: MetalsLanguageClient,\n+    buildClient: ForwardingMetalsBuildClient,\n+    userConfig: () => UserConfiguration,\n+    indexWorkspace: () => Future[Unit],\n+    workspace: () => AbsolutePath,\n+    focusedDocument: () => Option[AbsolutePath],\n+    buildTargets: BuildTargets,\n+    buildTools: () => BuildTools\n+)(implicit ec: ExecutionContextExecutorService)\n+    extends Cancelable {\n+\n+  def buildServer: Option[BuildServerConnection] =\n+    buildServer0\n+  def lastImportedBuild: ImportedBuild =\n+    lastImportedBuild0\n+\n+  private var buildServer0 = Option.empty[BuildServerConnection]\n+  private var lastImportedBuild0 = ImportedBuild.empty\n+  private var lastImportVersions = VersionsOption(None, None)\n+\n+  private val cancelables = new MutableCancelable()\n+  private val isCancelled = new AtomicBoolean(false)\n+  def cancel(): Unit = {\n+    if (isCancelled.compareAndSet(false, true)) {\n+      val buildShutdown = buildServer0 match {\n+        case Some(build) => build.shutdown()\n+        case None => Future.unit\n+      }\n+      try cancelables.cancel()\n+      catch {\n+        case NonFatal(_) =>\n+      }\n+      try buildShutdown.asJava.get(100, TimeUnit.MILLISECONDS)\n+      catch {\n+        case _: TimeoutException =>\n+      }\n+    }\n+  }\n+\n+  def loaded(path: AbsolutePath): Boolean =\n+    path.isAmmoniteScript && {\n+      val uri = path.toNIO.toUri.toASCIIString\n+      lastImportedBuild0.targetUris.contains(uri)\n+    }\n+\n+  private def connectToNewBuildServer(\n+      build: BuildServerConnection\n+  ): Future[BuildChange] = {\n+    scribe.info(s\"Connected to Ammonite Build server v${build.version}\")\n+    cancelables.add(build)\n+    compilers.cancel()\n+    buildServer0 = Some(build)\n+    val importedBuild0 = // FIXME timed(\"imported ammonite build\") {\n+      MetalsLanguageServer.importedBuild(build)\n+    for {\n+      build0 <- statusBar.trackFuture(\n+        \"Importing Ammonite scripts\",\n+        importedBuild0\n+      )\n+      _ = {\n+        lastImportedBuild0 = build0\n+      }\n+      _ <- indexWorkspace()\n+      // _ = checkRunningBloopVersion(build.version)\n+      _ <- Future.sequence[Unit, List](\n+        compilations\n+          .cascadeCompileFiles(buffers.open.toSeq) ::\n+          compilers.load(\n+            buffers.open.toSeq.filter(!_.isAmmoniteScript)\n+          ) ::\n+          Nil\n+      )\n+    } yield BuildChange.Reconnected\n+  }\n+\n+  private def disconnectOldBuildServer(): Future[Unit] = {\n+    if (buildServer0.isDefined)\n+      scribe.info(\"disconnected: ammonite build server\")\n+    buildServer0 match {\n+      case None => Future.unit\n+      case Some(value) =>\n+        // remove from cancellable too?\n+        buildServer0 = None\n+        lastImportedBuild0 = ImportedBuild.empty\n+        cancelables.remove(value)\n+        diagnostics.resetAmmoniteScripts()\n+        value.shutdown()\n+    }\n+  }\n+\n+  private def command(\n+      path: AbsolutePath\n+  ): Either[AmmoniteFetcherException, (AmmCommand, AbsolutePath)] = {\n+    val it = path.toInputFromBuffers(buffers).value.linesIterator\n+    val versionsOpt = VersionsOption.fromScript(it)\n+    val versions = versionsOpt\n+      .orElse(lastImportVersions)\n+      .getOrElse(\n+        // TODO Warn if any of these is used"
+  },
+  {
+    "id" : "4d934697-daff-4a64-8bd8-faf22f04a786",
+    "prId" : 1538,
+    "comments" : [
+      {
+        "id" : "e709f1b9-4106-4f8c-b5fd-846df1881fe3",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Maybe we should just do `cancelables.cancel()` this will also remove the value.",
+        "createdAt" : "2020-04-09T11:42:38Z",
+        "updatedAt" : "2020-05-21T11:17:44Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "722c4b0e-e71b-4409-9bcc-58ba35a107e6",
+        "parentId" : "e709f1b9-4106-4f8c-b5fd-846df1881fe3",
+        "author" : {
+          "login" : "alexarchambault",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/7063723?u=d5befca0ebfec0042dad7ef93973490eef750ff4&v=4"
+        },
+        "body" : "Yes, fixed.",
+        "createdAt" : "2020-04-11T15:39:22Z",
+        "updatedAt" : "2020-05-21T11:17:44Z",
+        "lastEditedBy" : {
+          "login" : "alexarchambault",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/7063723?u=d5befca0ebfec0042dad7ef93973490eef750ff4&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "0681fa0b1417b7ac622101d279667c6900a2506e",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,435 @@\n+package scala.meta.internal.metals.ammonite\n+\n+import java.io.InputStream\n+import java.net.URI\n+import java.nio.charset.Charset\n+import java.nio.file.Paths\n+import java.util.concurrent.atomic.AtomicBoolean\n+import java.util.concurrent.CompletableFuture\n+import java.util.concurrent.TimeoutException\n+import java.util.concurrent.TimeUnit\n+\n+import ammrunner.AmmoniteFetcher\n+import ammrunner.AmmoniteFetcherException\n+import ammrunner.{Command => AmmCommand}\n+import ammrunner.{Versions => AmmVersions}\n+import ammrunner.VersionsOption\n+import ch.epfl.scala.bsp4j.BuildTargetIdentifier\n+import org.eclipse.lsp4j.CompletionList\n+import org.eclipse.lsp4j.Hover\n+import org.eclipse.lsp4j.Position\n+import org.eclipse.lsp4j.{Range => LspRange}\n+\n+import scala.concurrent.ExecutionContext\n+import scala.concurrent.ExecutionContextExecutorService\n+import scala.concurrent.Future\n+import scala.meta.inputs.Input\n+import scala.meta.internal.builds.BuildTools\n+import scala.meta.internal.metals._\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.io.AbsolutePath\n+import scala.util.control.NonFatal\n+import scala.util.Failure\n+import scala.util.Success\n+\n+final class Ammonite(\n+    buffers: Buffers,\n+    compilers: Compilers,\n+    compilations: Compilations,\n+    statusBar: StatusBar,\n+    diagnostics: Diagnostics,\n+    doctor: Doctor,\n+    tables: () => Tables,\n+    languageClient: MetalsLanguageClient,\n+    buildClient: ForwardingMetalsBuildClient,\n+    userConfig: () => UserConfiguration,\n+    indexWorkspace: () => Future[Unit],\n+    workspace: () => AbsolutePath,\n+    focusedDocument: () => Option[AbsolutePath],\n+    buildTargets: BuildTargets,\n+    buildTools: () => BuildTools\n+)(implicit ec: ExecutionContextExecutorService)\n+    extends Cancelable {\n+\n+  def buildServer: Option[BuildServerConnection] =\n+    buildServer0\n+  def lastImportedBuild: ImportedBuild =\n+    lastImportedBuild0\n+\n+  private var buildServer0 = Option.empty[BuildServerConnection]\n+  private var lastImportedBuild0 = ImportedBuild.empty\n+  private var lastImportVersions = VersionsOption(None, None)\n+\n+  private val cancelables = new MutableCancelable()\n+  private val isCancelled = new AtomicBoolean(false)\n+  def cancel(): Unit = {\n+    if (isCancelled.compareAndSet(false, true)) {\n+      val buildShutdown = buildServer0 match {\n+        case Some(build) => build.shutdown()\n+        case None => Future.unit\n+      }\n+      try cancelables.cancel()\n+      catch {\n+        case NonFatal(_) =>\n+      }\n+      try buildShutdown.asJava.get(100, TimeUnit.MILLISECONDS)\n+      catch {\n+        case _: TimeoutException =>\n+      }\n+    }\n+  }\n+\n+  def loaded(path: AbsolutePath): Boolean =\n+    path.isAmmoniteScript && {\n+      val uri = path.toNIO.toUri.toASCIIString\n+      lastImportedBuild0.targetUris.contains(uri)\n+    }\n+\n+  private def connectToNewBuildServer(\n+      build: BuildServerConnection\n+  ): Future[BuildChange] = {\n+    scribe.info(s\"Connected to Ammonite Build server v${build.version}\")\n+    cancelables.add(build)\n+    compilers.cancel()\n+    buildServer0 = Some(build)\n+    val importedBuild0 = // FIXME timed(\"imported ammonite build\") {\n+      MetalsLanguageServer.importedBuild(build)\n+    for {\n+      build0 <- statusBar.trackFuture(\n+        \"Importing Ammonite scripts\",\n+        importedBuild0\n+      )\n+      _ = {\n+        lastImportedBuild0 = build0\n+      }\n+      _ <- indexWorkspace()\n+      // _ = checkRunningBloopVersion(build.version)\n+      _ <- Future.sequence[Unit, List](\n+        compilations\n+          .cascadeCompileFiles(buffers.open.toSeq) ::\n+          compilers.load(\n+            buffers.open.toSeq.filter(!_.isAmmoniteScript)\n+          ) ::\n+          Nil\n+      )\n+    } yield BuildChange.Reconnected\n+  }\n+\n+  private def disconnectOldBuildServer(): Future[Unit] = {\n+    if (buildServer0.isDefined)\n+      scribe.info(\"disconnected: ammonite build server\")\n+    buildServer0 match {\n+      case None => Future.unit\n+      case Some(value) =>\n+        // remove from cancellable too?\n+        buildServer0 = None\n+        lastImportedBuild0 = ImportedBuild.empty\n+        cancelables.remove(value)"
+  },
+  {
+    "id" : "e4d1d316-34b1-43c2-8eea-bd5238406808",
+    "prId" : 1538,
+    "comments" : [
+      {
+        "id" : "689399a6-1a01-4907-ae2a-6d90ccd48938",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "We should most likely do showMessage too.",
+        "createdAt" : "2020-04-09T11:44:23Z",
+        "updatedAt" : "2020-05-21T11:17:44Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "28937270-8374-44fc-9448-643d234fd628",
+        "parentId" : "689399a6-1a01-4907-ae2a-6d90ccd48938",
+        "author" : {
+          "login" : "alexarchambault",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/7063723?u=d5befca0ebfec0042dad7ef93973490eef750ff4&v=4"
+        },
+        "body" : "Done.",
+        "createdAt" : "2020-04-11T15:39:28Z",
+        "updatedAt" : "2020-05-21T11:17:44Z",
+        "lastEditedBy" : {
+          "login" : "alexarchambault",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/7063723?u=d5befca0ebfec0042dad7ef93973490eef750ff4&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "0681fa0b1417b7ac622101d279667c6900a2506e",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,435 @@\n+package scala.meta.internal.metals.ammonite\n+\n+import java.io.InputStream\n+import java.net.URI\n+import java.nio.charset.Charset\n+import java.nio.file.Paths\n+import java.util.concurrent.atomic.AtomicBoolean\n+import java.util.concurrent.CompletableFuture\n+import java.util.concurrent.TimeoutException\n+import java.util.concurrent.TimeUnit\n+\n+import ammrunner.AmmoniteFetcher\n+import ammrunner.AmmoniteFetcherException\n+import ammrunner.{Command => AmmCommand}\n+import ammrunner.{Versions => AmmVersions}\n+import ammrunner.VersionsOption\n+import ch.epfl.scala.bsp4j.BuildTargetIdentifier\n+import org.eclipse.lsp4j.CompletionList\n+import org.eclipse.lsp4j.Hover\n+import org.eclipse.lsp4j.Position\n+import org.eclipse.lsp4j.{Range => LspRange}\n+\n+import scala.concurrent.ExecutionContext\n+import scala.concurrent.ExecutionContextExecutorService\n+import scala.concurrent.Future\n+import scala.meta.inputs.Input\n+import scala.meta.internal.builds.BuildTools\n+import scala.meta.internal.metals._\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.io.AbsolutePath\n+import scala.util.control.NonFatal\n+import scala.util.Failure\n+import scala.util.Success\n+\n+final class Ammonite(\n+    buffers: Buffers,\n+    compilers: Compilers,\n+    compilations: Compilations,\n+    statusBar: StatusBar,\n+    diagnostics: Diagnostics,\n+    doctor: Doctor,\n+    tables: () => Tables,\n+    languageClient: MetalsLanguageClient,\n+    buildClient: ForwardingMetalsBuildClient,\n+    userConfig: () => UserConfiguration,\n+    indexWorkspace: () => Future[Unit],\n+    workspace: () => AbsolutePath,\n+    focusedDocument: () => Option[AbsolutePath],\n+    buildTargets: BuildTargets,\n+    buildTools: () => BuildTools\n+)(implicit ec: ExecutionContextExecutorService)\n+    extends Cancelable {\n+\n+  def buildServer: Option[BuildServerConnection] =\n+    buildServer0\n+  def lastImportedBuild: ImportedBuild =\n+    lastImportedBuild0\n+\n+  private var buildServer0 = Option.empty[BuildServerConnection]\n+  private var lastImportedBuild0 = ImportedBuild.empty\n+  private var lastImportVersions = VersionsOption(None, None)\n+\n+  private val cancelables = new MutableCancelable()\n+  private val isCancelled = new AtomicBoolean(false)\n+  def cancel(): Unit = {\n+    if (isCancelled.compareAndSet(false, true)) {\n+      val buildShutdown = buildServer0 match {\n+        case Some(build) => build.shutdown()\n+        case None => Future.unit\n+      }\n+      try cancelables.cancel()\n+      catch {\n+        case NonFatal(_) =>\n+      }\n+      try buildShutdown.asJava.get(100, TimeUnit.MILLISECONDS)\n+      catch {\n+        case _: TimeoutException =>\n+      }\n+    }\n+  }\n+\n+  def loaded(path: AbsolutePath): Boolean =\n+    path.isAmmoniteScript && {\n+      val uri = path.toNIO.toUri.toASCIIString\n+      lastImportedBuild0.targetUris.contains(uri)\n+    }\n+\n+  private def connectToNewBuildServer(\n+      build: BuildServerConnection\n+  ): Future[BuildChange] = {\n+    scribe.info(s\"Connected to Ammonite Build server v${build.version}\")\n+    cancelables.add(build)\n+    compilers.cancel()\n+    buildServer0 = Some(build)\n+    val importedBuild0 = // FIXME timed(\"imported ammonite build\") {\n+      MetalsLanguageServer.importedBuild(build)\n+    for {\n+      build0 <- statusBar.trackFuture(\n+        \"Importing Ammonite scripts\",\n+        importedBuild0\n+      )\n+      _ = {\n+        lastImportedBuild0 = build0\n+      }\n+      _ <- indexWorkspace()\n+      // _ = checkRunningBloopVersion(build.version)\n+      _ <- Future.sequence[Unit, List](\n+        compilations\n+          .cascadeCompileFiles(buffers.open.toSeq) ::\n+          compilers.load(\n+            buffers.open.toSeq.filter(!_.isAmmoniteScript)\n+          ) ::\n+          Nil\n+      )\n+    } yield BuildChange.Reconnected\n+  }\n+\n+  private def disconnectOldBuildServer(): Future[Unit] = {\n+    if (buildServer0.isDefined)\n+      scribe.info(\"disconnected: ammonite build server\")\n+    buildServer0 match {\n+      case None => Future.unit\n+      case Some(value) =>\n+        // remove from cancellable too?\n+        buildServer0 = None\n+        lastImportedBuild0 = ImportedBuild.empty\n+        cancelables.remove(value)\n+        diagnostics.resetAmmoniteScripts()\n+        value.shutdown()\n+    }\n+  }\n+\n+  private def command(\n+      path: AbsolutePath\n+  ): Either[AmmoniteFetcherException, (AmmCommand, AbsolutePath)] = {\n+    val it = path.toInputFromBuffers(buffers).value.linesIterator\n+    val versionsOpt = VersionsOption.fromScript(it)\n+    val versions = versionsOpt\n+      .orElse(lastImportVersions)\n+      .getOrElse(\n+        // TODO Warn if any of these is used\n+        AmmVersions\n+          .default()\n+          // temporary, remove once Ammonite is available for 2.12.11\n+          // .withScalaVersion(BuildInfo.scala212)\n+          .withScalaVersion(\"2.12.10\")\n+          // do not merge, remove once lihaoyi/Ammonite#1053 is merged\n+          .withAmmoniteVersion(\"2.0.5-bsp-4\")\n+      )\n+    val res = AmmoniteFetcher(versions)\n+      .withInterpOnly(false)\n+      .withProgressBars(false)\n+      .withResolutionParams(\n+        coursierapi.ResolutionParams.create().withScalaVersion(\"2.12.10\")\n+      )\n+      // do not merge, remove once lihaoyi/Ammonite#1053 is merged\n+      .withTransformFetch(Some { fetch =>\n+        fetch.addRepositories(\n+          coursierapi.MavenRepository\n+            .of(\"https://dl.bintray.com/alexarchambault/metals-amm\")\n+        )\n+      })\n+      .command()\n+    res match {\n+      case Left(e) =>\n+        scribe.error(\n+          s\"Error getting Ammonite ${versions.ammoniteVersion} (scala ${versions.scalaVersion})\",\n+          e\n+        )\n+        Left(e)\n+      case Right(command) =>\n+        lastImportVersions = VersionsOption(\n+          Some(versions.ammoniteVersion),\n+          Some(versions.scalaVersion)\n+        )\n+        Right((command, path))\n+    }\n+  }\n+\n+  private def isMillBuildSc(path: AbsolutePath): Boolean =\n+    path.toNIO.getFileName.toString == \"build.sc\" &&\n+      // for now, this only checks for build.sc, but this could be made more strict in the future\n+      // (require ./mill or ./.mill-version)\n+      buildTools().isMill\n+\n+  def maybeImport(path: AbsolutePath): Future[Unit] =\n+    if (path.isAmmoniteScript && !isMillBuildSc(path) && !loaded(path)) {\n+      val futureResp = languageClient\n+        .showMessageRequest(Messages.ImportAmmoniteScript.params())\n+        .asScala\n+      futureResp.onComplete {\n+        case Failure(e) => scribe.warn(\"Error requesting Ammonite import\", e)\n+        case Success(resp) =>\n+          resp.getTitle match {\n+            case Messages.ImportAmmoniteScript.doImport =>\n+              start(Some(path)).onComplete {\n+                case Failure(e) =>\n+                  scribe.warn(s\"Error importing Ammonite script $path\", e)"
+  },
+  {
+    "id" : "3ed4e06f-90d3-4d7c-84b9-c4f8fddf3185",
+    "prId" : 1538,
+    "comments" : [
+      {
+        "id" : "a5f0ffad-cdcf-44f0-a025-721b4b791862",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Can we just do `Future.failed` and then map over it?",
+        "createdAt" : "2020-04-09T11:45:59Z",
+        "updatedAt" : "2020-05-21T11:17:44Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "9e0ef72c-cb6f-4509-b4f1-7821e50f3420",
+        "parentId" : "a5f0ffad-cdcf-44f0-a025-721b4b791862",
+        "author" : {
+          "login" : "alexarchambault",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/7063723?u=d5befca0ebfec0042dad7ef93973490eef750ff4&v=4"
+        },
+        "body" : "Done.",
+        "createdAt" : "2020-04-11T15:39:58Z",
+        "updatedAt" : "2020-05-21T11:17:44Z",
+        "lastEditedBy" : {
+          "login" : "alexarchambault",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/7063723?u=d5befca0ebfec0042dad7ef93973490eef750ff4&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "0681fa0b1417b7ac622101d279667c6900a2506e",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,435 @@\n+package scala.meta.internal.metals.ammonite\n+\n+import java.io.InputStream\n+import java.net.URI\n+import java.nio.charset.Charset\n+import java.nio.file.Paths\n+import java.util.concurrent.atomic.AtomicBoolean\n+import java.util.concurrent.CompletableFuture\n+import java.util.concurrent.TimeoutException\n+import java.util.concurrent.TimeUnit\n+\n+import ammrunner.AmmoniteFetcher\n+import ammrunner.AmmoniteFetcherException\n+import ammrunner.{Command => AmmCommand}\n+import ammrunner.{Versions => AmmVersions}\n+import ammrunner.VersionsOption\n+import ch.epfl.scala.bsp4j.BuildTargetIdentifier\n+import org.eclipse.lsp4j.CompletionList\n+import org.eclipse.lsp4j.Hover\n+import org.eclipse.lsp4j.Position\n+import org.eclipse.lsp4j.{Range => LspRange}\n+\n+import scala.concurrent.ExecutionContext\n+import scala.concurrent.ExecutionContextExecutorService\n+import scala.concurrent.Future\n+import scala.meta.inputs.Input\n+import scala.meta.internal.builds.BuildTools\n+import scala.meta.internal.metals._\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.io.AbsolutePath\n+import scala.util.control.NonFatal\n+import scala.util.Failure\n+import scala.util.Success\n+\n+final class Ammonite(\n+    buffers: Buffers,\n+    compilers: Compilers,\n+    compilations: Compilations,\n+    statusBar: StatusBar,\n+    diagnostics: Diagnostics,\n+    doctor: Doctor,\n+    tables: () => Tables,\n+    languageClient: MetalsLanguageClient,\n+    buildClient: ForwardingMetalsBuildClient,\n+    userConfig: () => UserConfiguration,\n+    indexWorkspace: () => Future[Unit],\n+    workspace: () => AbsolutePath,\n+    focusedDocument: () => Option[AbsolutePath],\n+    buildTargets: BuildTargets,\n+    buildTools: () => BuildTools\n+)(implicit ec: ExecutionContextExecutorService)\n+    extends Cancelable {\n+\n+  def buildServer: Option[BuildServerConnection] =\n+    buildServer0\n+  def lastImportedBuild: ImportedBuild =\n+    lastImportedBuild0\n+\n+  private var buildServer0 = Option.empty[BuildServerConnection]\n+  private var lastImportedBuild0 = ImportedBuild.empty\n+  private var lastImportVersions = VersionsOption(None, None)\n+\n+  private val cancelables = new MutableCancelable()\n+  private val isCancelled = new AtomicBoolean(false)\n+  def cancel(): Unit = {\n+    if (isCancelled.compareAndSet(false, true)) {\n+      val buildShutdown = buildServer0 match {\n+        case Some(build) => build.shutdown()\n+        case None => Future.unit\n+      }\n+      try cancelables.cancel()\n+      catch {\n+        case NonFatal(_) =>\n+      }\n+      try buildShutdown.asJava.get(100, TimeUnit.MILLISECONDS)\n+      catch {\n+        case _: TimeoutException =>\n+      }\n+    }\n+  }\n+\n+  def loaded(path: AbsolutePath): Boolean =\n+    path.isAmmoniteScript && {\n+      val uri = path.toNIO.toUri.toASCIIString\n+      lastImportedBuild0.targetUris.contains(uri)\n+    }\n+\n+  private def connectToNewBuildServer(\n+      build: BuildServerConnection\n+  ): Future[BuildChange] = {\n+    scribe.info(s\"Connected to Ammonite Build server v${build.version}\")\n+    cancelables.add(build)\n+    compilers.cancel()\n+    buildServer0 = Some(build)\n+    val importedBuild0 = // FIXME timed(\"imported ammonite build\") {\n+      MetalsLanguageServer.importedBuild(build)\n+    for {\n+      build0 <- statusBar.trackFuture(\n+        \"Importing Ammonite scripts\",\n+        importedBuild0\n+      )\n+      _ = {\n+        lastImportedBuild0 = build0\n+      }\n+      _ <- indexWorkspace()\n+      // _ = checkRunningBloopVersion(build.version)\n+      _ <- Future.sequence[Unit, List](\n+        compilations\n+          .cascadeCompileFiles(buffers.open.toSeq) ::\n+          compilers.load(\n+            buffers.open.toSeq.filter(!_.isAmmoniteScript)\n+          ) ::\n+          Nil\n+      )\n+    } yield BuildChange.Reconnected\n+  }\n+\n+  private def disconnectOldBuildServer(): Future[Unit] = {\n+    if (buildServer0.isDefined)\n+      scribe.info(\"disconnected: ammonite build server\")\n+    buildServer0 match {\n+      case None => Future.unit\n+      case Some(value) =>\n+        // remove from cancellable too?\n+        buildServer0 = None\n+        lastImportedBuild0 = ImportedBuild.empty\n+        cancelables.remove(value)\n+        diagnostics.resetAmmoniteScripts()\n+        value.shutdown()\n+    }\n+  }\n+\n+  private def command(\n+      path: AbsolutePath\n+  ): Either[AmmoniteFetcherException, (AmmCommand, AbsolutePath)] = {\n+    val it = path.toInputFromBuffers(buffers).value.linesIterator\n+    val versionsOpt = VersionsOption.fromScript(it)\n+    val versions = versionsOpt\n+      .orElse(lastImportVersions)\n+      .getOrElse(\n+        // TODO Warn if any of these is used\n+        AmmVersions\n+          .default()\n+          // temporary, remove once Ammonite is available for 2.12.11\n+          // .withScalaVersion(BuildInfo.scala212)\n+          .withScalaVersion(\"2.12.10\")\n+          // do not merge, remove once lihaoyi/Ammonite#1053 is merged\n+          .withAmmoniteVersion(\"2.0.5-bsp-4\")\n+      )\n+    val res = AmmoniteFetcher(versions)\n+      .withInterpOnly(false)\n+      .withProgressBars(false)\n+      .withResolutionParams(\n+        coursierapi.ResolutionParams.create().withScalaVersion(\"2.12.10\")\n+      )\n+      // do not merge, remove once lihaoyi/Ammonite#1053 is merged\n+      .withTransformFetch(Some { fetch =>\n+        fetch.addRepositories(\n+          coursierapi.MavenRepository\n+            .of(\"https://dl.bintray.com/alexarchambault/metals-amm\")\n+        )\n+      })\n+      .command()\n+    res match {\n+      case Left(e) =>\n+        scribe.error(\n+          s\"Error getting Ammonite ${versions.ammoniteVersion} (scala ${versions.scalaVersion})\",\n+          e\n+        )\n+        Left(e)\n+      case Right(command) =>\n+        lastImportVersions = VersionsOption(\n+          Some(versions.ammoniteVersion),\n+          Some(versions.scalaVersion)\n+        )\n+        Right((command, path))\n+    }\n+  }\n+\n+  private def isMillBuildSc(path: AbsolutePath): Boolean =\n+    path.toNIO.getFileName.toString == \"build.sc\" &&\n+      // for now, this only checks for build.sc, but this could be made more strict in the future\n+      // (require ./mill or ./.mill-version)\n+      buildTools().isMill\n+\n+  def maybeImport(path: AbsolutePath): Future[Unit] =\n+    if (path.isAmmoniteScript && !isMillBuildSc(path) && !loaded(path)) {\n+      val futureResp = languageClient\n+        .showMessageRequest(Messages.ImportAmmoniteScript.params())\n+        .asScala\n+      futureResp.onComplete {\n+        case Failure(e) => scribe.warn(\"Error requesting Ammonite import\", e)\n+        case Success(resp) =>\n+          resp.getTitle match {\n+            case Messages.ImportAmmoniteScript.doImport =>\n+              start(Some(path)).onComplete {\n+                case Failure(e) =>\n+                  scribe.warn(s\"Error importing Ammonite script $path\", e)\n+                case Success(_) =>\n+              }\n+            case _ =>\n+          }\n+      }\n+      futureResp.ignoreValue\n+    } else\n+      Future.unit\n+\n+  def start(doc: Option[AbsolutePath] = None): Future[Unit] = {\n+\n+    disconnectOldBuildServer().onComplete {\n+      case Failure(e) =>\n+        scribe.warn(\"Error disconnecting old Ammonite build server\", e)\n+      case Success(()) =>\n+    }\n+\n+    // TODO Look at buffers.open rather than focusedDocument?\n+    val commandScriptOpt = doc.orElse(focusedDocument()) match {\n+      case None =>\n+        val msg = \"No Ammonite script is opened\"\n+        scribe.error(msg)\n+        Left(new Exception(msg))\n+      case Some(path) if path.isAmmoniteScript =>\n+        command(path)\n+      case Some(path) =>\n+        val msg =\n+          if (path.toNIO.getFileName.toString.endsWith(\".worksheet.sc\"))\n+            \"Current document is a worksheet, not an Ammonite script\"\n+          else\n+            \"Current document is not an Ammonite script\"\n+        scribe.error(msg)\n+        Left(new Exception(msg))"
+  },
+  {
+    "id" : "6d190dce-ee8b-4be9-870a-ad8140d0292c",
+    "prId" : 1538,
+    "comments" : [
+      {
+        "id" : "f707e523-20e5-4612-8f3a-77bfa13edf97",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Focused document would be when we run the command by hand? If so I think it's fine to have it this way.",
+        "createdAt" : "2020-04-09T11:47:25Z",
+        "updatedAt" : "2020-05-21T11:17:44Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "0681fa0b1417b7ac622101d279667c6900a2506e",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,435 @@\n+package scala.meta.internal.metals.ammonite\n+\n+import java.io.InputStream\n+import java.net.URI\n+import java.nio.charset.Charset\n+import java.nio.file.Paths\n+import java.util.concurrent.atomic.AtomicBoolean\n+import java.util.concurrent.CompletableFuture\n+import java.util.concurrent.TimeoutException\n+import java.util.concurrent.TimeUnit\n+\n+import ammrunner.AmmoniteFetcher\n+import ammrunner.AmmoniteFetcherException\n+import ammrunner.{Command => AmmCommand}\n+import ammrunner.{Versions => AmmVersions}\n+import ammrunner.VersionsOption\n+import ch.epfl.scala.bsp4j.BuildTargetIdentifier\n+import org.eclipse.lsp4j.CompletionList\n+import org.eclipse.lsp4j.Hover\n+import org.eclipse.lsp4j.Position\n+import org.eclipse.lsp4j.{Range => LspRange}\n+\n+import scala.concurrent.ExecutionContext\n+import scala.concurrent.ExecutionContextExecutorService\n+import scala.concurrent.Future\n+import scala.meta.inputs.Input\n+import scala.meta.internal.builds.BuildTools\n+import scala.meta.internal.metals._\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.io.AbsolutePath\n+import scala.util.control.NonFatal\n+import scala.util.Failure\n+import scala.util.Success\n+\n+final class Ammonite(\n+    buffers: Buffers,\n+    compilers: Compilers,\n+    compilations: Compilations,\n+    statusBar: StatusBar,\n+    diagnostics: Diagnostics,\n+    doctor: Doctor,\n+    tables: () => Tables,\n+    languageClient: MetalsLanguageClient,\n+    buildClient: ForwardingMetalsBuildClient,\n+    userConfig: () => UserConfiguration,\n+    indexWorkspace: () => Future[Unit],\n+    workspace: () => AbsolutePath,\n+    focusedDocument: () => Option[AbsolutePath],\n+    buildTargets: BuildTargets,\n+    buildTools: () => BuildTools\n+)(implicit ec: ExecutionContextExecutorService)\n+    extends Cancelable {\n+\n+  def buildServer: Option[BuildServerConnection] =\n+    buildServer0\n+  def lastImportedBuild: ImportedBuild =\n+    lastImportedBuild0\n+\n+  private var buildServer0 = Option.empty[BuildServerConnection]\n+  private var lastImportedBuild0 = ImportedBuild.empty\n+  private var lastImportVersions = VersionsOption(None, None)\n+\n+  private val cancelables = new MutableCancelable()\n+  private val isCancelled = new AtomicBoolean(false)\n+  def cancel(): Unit = {\n+    if (isCancelled.compareAndSet(false, true)) {\n+      val buildShutdown = buildServer0 match {\n+        case Some(build) => build.shutdown()\n+        case None => Future.unit\n+      }\n+      try cancelables.cancel()\n+      catch {\n+        case NonFatal(_) =>\n+      }\n+      try buildShutdown.asJava.get(100, TimeUnit.MILLISECONDS)\n+      catch {\n+        case _: TimeoutException =>\n+      }\n+    }\n+  }\n+\n+  def loaded(path: AbsolutePath): Boolean =\n+    path.isAmmoniteScript && {\n+      val uri = path.toNIO.toUri.toASCIIString\n+      lastImportedBuild0.targetUris.contains(uri)\n+    }\n+\n+  private def connectToNewBuildServer(\n+      build: BuildServerConnection\n+  ): Future[BuildChange] = {\n+    scribe.info(s\"Connected to Ammonite Build server v${build.version}\")\n+    cancelables.add(build)\n+    compilers.cancel()\n+    buildServer0 = Some(build)\n+    val importedBuild0 = // FIXME timed(\"imported ammonite build\") {\n+      MetalsLanguageServer.importedBuild(build)\n+    for {\n+      build0 <- statusBar.trackFuture(\n+        \"Importing Ammonite scripts\",\n+        importedBuild0\n+      )\n+      _ = {\n+        lastImportedBuild0 = build0\n+      }\n+      _ <- indexWorkspace()\n+      // _ = checkRunningBloopVersion(build.version)\n+      _ <- Future.sequence[Unit, List](\n+        compilations\n+          .cascadeCompileFiles(buffers.open.toSeq) ::\n+          compilers.load(\n+            buffers.open.toSeq.filter(!_.isAmmoniteScript)\n+          ) ::\n+          Nil\n+      )\n+    } yield BuildChange.Reconnected\n+  }\n+\n+  private def disconnectOldBuildServer(): Future[Unit] = {\n+    if (buildServer0.isDefined)\n+      scribe.info(\"disconnected: ammonite build server\")\n+    buildServer0 match {\n+      case None => Future.unit\n+      case Some(value) =>\n+        // remove from cancellable too?\n+        buildServer0 = None\n+        lastImportedBuild0 = ImportedBuild.empty\n+        cancelables.remove(value)\n+        diagnostics.resetAmmoniteScripts()\n+        value.shutdown()\n+    }\n+  }\n+\n+  private def command(\n+      path: AbsolutePath\n+  ): Either[AmmoniteFetcherException, (AmmCommand, AbsolutePath)] = {\n+    val it = path.toInputFromBuffers(buffers).value.linesIterator\n+    val versionsOpt = VersionsOption.fromScript(it)\n+    val versions = versionsOpt\n+      .orElse(lastImportVersions)\n+      .getOrElse(\n+        // TODO Warn if any of these is used\n+        AmmVersions\n+          .default()\n+          // temporary, remove once Ammonite is available for 2.12.11\n+          // .withScalaVersion(BuildInfo.scala212)\n+          .withScalaVersion(\"2.12.10\")\n+          // do not merge, remove once lihaoyi/Ammonite#1053 is merged\n+          .withAmmoniteVersion(\"2.0.5-bsp-4\")\n+      )\n+    val res = AmmoniteFetcher(versions)\n+      .withInterpOnly(false)\n+      .withProgressBars(false)\n+      .withResolutionParams(\n+        coursierapi.ResolutionParams.create().withScalaVersion(\"2.12.10\")\n+      )\n+      // do not merge, remove once lihaoyi/Ammonite#1053 is merged\n+      .withTransformFetch(Some { fetch =>\n+        fetch.addRepositories(\n+          coursierapi.MavenRepository\n+            .of(\"https://dl.bintray.com/alexarchambault/metals-amm\")\n+        )\n+      })\n+      .command()\n+    res match {\n+      case Left(e) =>\n+        scribe.error(\n+          s\"Error getting Ammonite ${versions.ammoniteVersion} (scala ${versions.scalaVersion})\",\n+          e\n+        )\n+        Left(e)\n+      case Right(command) =>\n+        lastImportVersions = VersionsOption(\n+          Some(versions.ammoniteVersion),\n+          Some(versions.scalaVersion)\n+        )\n+        Right((command, path))\n+    }\n+  }\n+\n+  private def isMillBuildSc(path: AbsolutePath): Boolean =\n+    path.toNIO.getFileName.toString == \"build.sc\" &&\n+      // for now, this only checks for build.sc, but this could be made more strict in the future\n+      // (require ./mill or ./.mill-version)\n+      buildTools().isMill\n+\n+  def maybeImport(path: AbsolutePath): Future[Unit] =\n+    if (path.isAmmoniteScript && !isMillBuildSc(path) && !loaded(path)) {\n+      val futureResp = languageClient\n+        .showMessageRequest(Messages.ImportAmmoniteScript.params())\n+        .asScala\n+      futureResp.onComplete {\n+        case Failure(e) => scribe.warn(\"Error requesting Ammonite import\", e)\n+        case Success(resp) =>\n+          resp.getTitle match {\n+            case Messages.ImportAmmoniteScript.doImport =>\n+              start(Some(path)).onComplete {\n+                case Failure(e) =>\n+                  scribe.warn(s\"Error importing Ammonite script $path\", e)\n+                case Success(_) =>\n+              }\n+            case _ =>\n+          }\n+      }\n+      futureResp.ignoreValue\n+    } else\n+      Future.unit\n+\n+  def start(doc: Option[AbsolutePath] = None): Future[Unit] = {\n+\n+    disconnectOldBuildServer().onComplete {\n+      case Failure(e) =>\n+        scribe.warn(\"Error disconnecting old Ammonite build server\", e)\n+      case Success(()) =>\n+    }\n+\n+    // TODO Look at buffers.open rather than focusedDocument?"
+  },
+  {
+    "id" : "9080a475-2f8e-4160-886e-534266168977",
+    "prId" : 1538,
+    "comments" : [
+      {
+        "id" : "d6523289-890c-4454-961e-5136b7b69bab",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Join the filters?",
+        "createdAt" : "2020-04-09T11:48:08Z",
+        "updatedAt" : "2020-05-21T11:17:44Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "534db8b3-5a94-4061-b1f0-5174ea0bb7c1",
+        "parentId" : "d6523289-890c-4454-961e-5136b7b69bab",
+        "author" : {
+          "login" : "alexarchambault",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/7063723?u=d5befca0ebfec0042dad7ef93973490eef750ff4&v=4"
+        },
+        "body" : "Fixed.",
+        "createdAt" : "2020-04-11T15:40:11Z",
+        "updatedAt" : "2020-05-21T11:17:44Z",
+        "lastEditedBy" : {
+          "login" : "alexarchambault",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/7063723?u=d5befca0ebfec0042dad7ef93973490eef750ff4&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "0681fa0b1417b7ac622101d279667c6900a2506e",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,435 @@\n+package scala.meta.internal.metals.ammonite\n+\n+import java.io.InputStream\n+import java.net.URI\n+import java.nio.charset.Charset\n+import java.nio.file.Paths\n+import java.util.concurrent.atomic.AtomicBoolean\n+import java.util.concurrent.CompletableFuture\n+import java.util.concurrent.TimeoutException\n+import java.util.concurrent.TimeUnit\n+\n+import ammrunner.AmmoniteFetcher\n+import ammrunner.AmmoniteFetcherException\n+import ammrunner.{Command => AmmCommand}\n+import ammrunner.{Versions => AmmVersions}\n+import ammrunner.VersionsOption\n+import ch.epfl.scala.bsp4j.BuildTargetIdentifier\n+import org.eclipse.lsp4j.CompletionList\n+import org.eclipse.lsp4j.Hover\n+import org.eclipse.lsp4j.Position\n+import org.eclipse.lsp4j.{Range => LspRange}\n+\n+import scala.concurrent.ExecutionContext\n+import scala.concurrent.ExecutionContextExecutorService\n+import scala.concurrent.Future\n+import scala.meta.inputs.Input\n+import scala.meta.internal.builds.BuildTools\n+import scala.meta.internal.metals._\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.io.AbsolutePath\n+import scala.util.control.NonFatal\n+import scala.util.Failure\n+import scala.util.Success\n+\n+final class Ammonite(\n+    buffers: Buffers,\n+    compilers: Compilers,\n+    compilations: Compilations,\n+    statusBar: StatusBar,\n+    diagnostics: Diagnostics,\n+    doctor: Doctor,\n+    tables: () => Tables,\n+    languageClient: MetalsLanguageClient,\n+    buildClient: ForwardingMetalsBuildClient,\n+    userConfig: () => UserConfiguration,\n+    indexWorkspace: () => Future[Unit],\n+    workspace: () => AbsolutePath,\n+    focusedDocument: () => Option[AbsolutePath],\n+    buildTargets: BuildTargets,\n+    buildTools: () => BuildTools\n+)(implicit ec: ExecutionContextExecutorService)\n+    extends Cancelable {\n+\n+  def buildServer: Option[BuildServerConnection] =\n+    buildServer0\n+  def lastImportedBuild: ImportedBuild =\n+    lastImportedBuild0\n+\n+  private var buildServer0 = Option.empty[BuildServerConnection]\n+  private var lastImportedBuild0 = ImportedBuild.empty\n+  private var lastImportVersions = VersionsOption(None, None)\n+\n+  private val cancelables = new MutableCancelable()\n+  private val isCancelled = new AtomicBoolean(false)\n+  def cancel(): Unit = {\n+    if (isCancelled.compareAndSet(false, true)) {\n+      val buildShutdown = buildServer0 match {\n+        case Some(build) => build.shutdown()\n+        case None => Future.unit\n+      }\n+      try cancelables.cancel()\n+      catch {\n+        case NonFatal(_) =>\n+      }\n+      try buildShutdown.asJava.get(100, TimeUnit.MILLISECONDS)\n+      catch {\n+        case _: TimeoutException =>\n+      }\n+    }\n+  }\n+\n+  def loaded(path: AbsolutePath): Boolean =\n+    path.isAmmoniteScript && {\n+      val uri = path.toNIO.toUri.toASCIIString\n+      lastImportedBuild0.targetUris.contains(uri)\n+    }\n+\n+  private def connectToNewBuildServer(\n+      build: BuildServerConnection\n+  ): Future[BuildChange] = {\n+    scribe.info(s\"Connected to Ammonite Build server v${build.version}\")\n+    cancelables.add(build)\n+    compilers.cancel()\n+    buildServer0 = Some(build)\n+    val importedBuild0 = // FIXME timed(\"imported ammonite build\") {\n+      MetalsLanguageServer.importedBuild(build)\n+    for {\n+      build0 <- statusBar.trackFuture(\n+        \"Importing Ammonite scripts\",\n+        importedBuild0\n+      )\n+      _ = {\n+        lastImportedBuild0 = build0\n+      }\n+      _ <- indexWorkspace()\n+      // _ = checkRunningBloopVersion(build.version)\n+      _ <- Future.sequence[Unit, List](\n+        compilations\n+          .cascadeCompileFiles(buffers.open.toSeq) ::\n+          compilers.load(\n+            buffers.open.toSeq.filter(!_.isAmmoniteScript)\n+          ) ::\n+          Nil\n+      )\n+    } yield BuildChange.Reconnected\n+  }\n+\n+  private def disconnectOldBuildServer(): Future[Unit] = {\n+    if (buildServer0.isDefined)\n+      scribe.info(\"disconnected: ammonite build server\")\n+    buildServer0 match {\n+      case None => Future.unit\n+      case Some(value) =>\n+        // remove from cancellable too?\n+        buildServer0 = None\n+        lastImportedBuild0 = ImportedBuild.empty\n+        cancelables.remove(value)\n+        diagnostics.resetAmmoniteScripts()\n+        value.shutdown()\n+    }\n+  }\n+\n+  private def command(\n+      path: AbsolutePath\n+  ): Either[AmmoniteFetcherException, (AmmCommand, AbsolutePath)] = {\n+    val it = path.toInputFromBuffers(buffers).value.linesIterator\n+    val versionsOpt = VersionsOption.fromScript(it)\n+    val versions = versionsOpt\n+      .orElse(lastImportVersions)\n+      .getOrElse(\n+        // TODO Warn if any of these is used\n+        AmmVersions\n+          .default()\n+          // temporary, remove once Ammonite is available for 2.12.11\n+          // .withScalaVersion(BuildInfo.scala212)\n+          .withScalaVersion(\"2.12.10\")\n+          // do not merge, remove once lihaoyi/Ammonite#1053 is merged\n+          .withAmmoniteVersion(\"2.0.5-bsp-4\")\n+      )\n+    val res = AmmoniteFetcher(versions)\n+      .withInterpOnly(false)\n+      .withProgressBars(false)\n+      .withResolutionParams(\n+        coursierapi.ResolutionParams.create().withScalaVersion(\"2.12.10\")\n+      )\n+      // do not merge, remove once lihaoyi/Ammonite#1053 is merged\n+      .withTransformFetch(Some { fetch =>\n+        fetch.addRepositories(\n+          coursierapi.MavenRepository\n+            .of(\"https://dl.bintray.com/alexarchambault/metals-amm\")\n+        )\n+      })\n+      .command()\n+    res match {\n+      case Left(e) =>\n+        scribe.error(\n+          s\"Error getting Ammonite ${versions.ammoniteVersion} (scala ${versions.scalaVersion})\",\n+          e\n+        )\n+        Left(e)\n+      case Right(command) =>\n+        lastImportVersions = VersionsOption(\n+          Some(versions.ammoniteVersion),\n+          Some(versions.scalaVersion)\n+        )\n+        Right((command, path))\n+    }\n+  }\n+\n+  private def isMillBuildSc(path: AbsolutePath): Boolean =\n+    path.toNIO.getFileName.toString == \"build.sc\" &&\n+      // for now, this only checks for build.sc, but this could be made more strict in the future\n+      // (require ./mill or ./.mill-version)\n+      buildTools().isMill\n+\n+  def maybeImport(path: AbsolutePath): Future[Unit] =\n+    if (path.isAmmoniteScript && !isMillBuildSc(path) && !loaded(path)) {\n+      val futureResp = languageClient\n+        .showMessageRequest(Messages.ImportAmmoniteScript.params())\n+        .asScala\n+      futureResp.onComplete {\n+        case Failure(e) => scribe.warn(\"Error requesting Ammonite import\", e)\n+        case Success(resp) =>\n+          resp.getTitle match {\n+            case Messages.ImportAmmoniteScript.doImport =>\n+              start(Some(path)).onComplete {\n+                case Failure(e) =>\n+                  scribe.warn(s\"Error importing Ammonite script $path\", e)\n+                case Success(_) =>\n+              }\n+            case _ =>\n+          }\n+      }\n+      futureResp.ignoreValue\n+    } else\n+      Future.unit\n+\n+  def start(doc: Option[AbsolutePath] = None): Future[Unit] = {\n+\n+    disconnectOldBuildServer().onComplete {\n+      case Failure(e) =>\n+        scribe.warn(\"Error disconnecting old Ammonite build server\", e)\n+      case Success(()) =>\n+    }\n+\n+    // TODO Look at buffers.open rather than focusedDocument?\n+    val commandScriptOpt = doc.orElse(focusedDocument()) match {\n+      case None =>\n+        val msg = \"No Ammonite script is opened\"\n+        scribe.error(msg)\n+        Left(new Exception(msg))\n+      case Some(path) if path.isAmmoniteScript =>\n+        command(path)\n+      case Some(path) =>\n+        val msg =\n+          if (path.toNIO.getFileName.toString.endsWith(\".worksheet.sc\"))\n+            \"Current document is a worksheet, not an Ammonite script\"\n+          else\n+            \"Current document is not an Ammonite script\"\n+        scribe.error(msg)\n+        Left(new Exception(msg))\n+    }\n+\n+    commandScriptOpt match {\n+      case Left(e) =>\n+        Future.failed(e)\n+      case Right((command, script)) =>\n+        val extraScripts = buffers.open.toVector\n+          .filter(_.isAmmoniteScript)"
+  },
+  {
+    "id" : "85231b3b-6cde-45a1-96e6-ee50ea260111",
+    "prId" : 1538,
+    "comments" : [
+      {
+        "id" : "bd6fd8aa-e90a-4e17-a8f4-adef4b462abe",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Should we only compile ammonite scripts here?",
+        "createdAt" : "2020-05-19T15:01:15Z",
+        "updatedAt" : "2020-05-21T11:17:44Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "5b4b67ee-adde-42bc-ab5f-f978449dd254",
+        "parentId" : "bd6fd8aa-e90a-4e17-a8f4-adef4b462abe",
+        "author" : {
+          "login" : "alexarchambault",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/7063723?u=d5befca0ebfec0042dad7ef93973490eef750ff4&v=4"
+        },
+        "body" : "Probably, yes. Fixed that.\r\n\r\nNote that the whole workspace (Ammonite scripts + main project) is re-indexed, even though we don't re-import the build for the main project, we just re-use what was already imported. I'm not sure if we need to re-compile the main project or not, in that case.",
+        "createdAt" : "2020-05-20T11:40:39Z",
+        "updatedAt" : "2020-05-21T11:17:44Z",
+        "lastEditedBy" : {
+          "login" : "alexarchambault",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/7063723?u=d5befca0ebfec0042dad7ef93973490eef750ff4&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "bd24b9ad-43fd-416a-8aaa-87f8a5c28881",
+        "parentId" : "bd6fd8aa-e90a-4e17-a8f4-adef4b462abe",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Since, nothing changes for the Bloop connection, no recompilation should be needed.",
+        "createdAt" : "2020-05-20T12:02:30Z",
+        "updatedAt" : "2020-05-21T11:17:44Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "0681fa0b1417b7ac622101d279667c6900a2506e",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,470 @@\n+package scala.meta.internal.metals.ammonite\n+\n+import java.io.InputStream\n+import java.net.URI\n+import java.nio.charset.Charset\n+import java.nio.file.Paths\n+import java.util.concurrent.atomic.AtomicBoolean\n+import java.util.concurrent.CompletableFuture\n+import java.util.concurrent.TimeoutException\n+import java.util.concurrent.TimeUnit\n+\n+import ammrunner.AmmoniteFetcher\n+import ammrunner.AmmoniteFetcherException\n+import ammrunner.{Command => AmmCommand}\n+import ammrunner.{Versions => AmmVersions}\n+import ammrunner.VersionsOption\n+import ch.epfl.scala.bsp4j.BuildTargetIdentifier\n+import org.eclipse.lsp4j.CompletionList\n+import org.eclipse.lsp4j.Hover\n+import org.eclipse.lsp4j.Position\n+import org.eclipse.lsp4j.{Range => LspRange}\n+\n+import scala.concurrent.ExecutionContext\n+import scala.concurrent.ExecutionContextExecutorService\n+import scala.concurrent.Future\n+import scala.concurrent.Promise\n+import scala.meta.inputs.Input\n+import scala.meta.internal.builds.BuildTools\n+import scala.meta.internal.metals._\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.io.AbsolutePath\n+import scala.util.control.NonFatal\n+import scala.util.Failure\n+import scala.util.Success\n+\n+final class Ammonite(\n+    buffers: Buffers,\n+    compilers: Compilers,\n+    compilations: Compilations,\n+    statusBar: StatusBar,\n+    diagnostics: Diagnostics,\n+    doctor: Doctor,\n+    tables: () => Tables,\n+    languageClient: MetalsLanguageClient,\n+    buildClient: ForwardingMetalsBuildClient,\n+    userConfig: () => UserConfiguration,\n+    indexWorkspace: () => Future[Unit],\n+    workspace: () => AbsolutePath,\n+    focusedDocument: () => Option[AbsolutePath],\n+    buildTargets: BuildTargets,\n+    buildTools: () => BuildTools,\n+    config: MetalsServerConfig\n+)(implicit ec: ExecutionContextExecutorService)\n+    extends Cancelable {\n+\n+  def buildServer: Option[BuildServerConnection] =\n+    buildServer0\n+  def lastImportedBuild: ImportedBuild =\n+    lastImportedBuild0\n+\n+  private var buildServer0 = Option.empty[BuildServerConnection]\n+  private var lastImportedBuild0 = ImportedBuild.empty\n+  private var lastImportVersions = VersionsOption(None, None)\n+\n+  private val cancelables = new MutableCancelable()\n+  private val isCancelled = new AtomicBoolean(false)\n+  def cancel(): Unit = {\n+    if (isCancelled.compareAndSet(false, true)) {\n+      val buildShutdown = buildServer0 match {\n+        case Some(build) => build.shutdown()\n+        case None => Future.unit\n+      }\n+      try cancelables.cancel()\n+      catch {\n+        case NonFatal(_) =>\n+      }\n+      try buildShutdown.asJava.get(100, TimeUnit.MILLISECONDS)\n+      catch {\n+        case _: TimeoutException =>\n+      }\n+    }\n+  }\n+\n+  def loaded(path: AbsolutePath): Boolean =\n+    path.isAmmoniteScript && {\n+      val uri = path.toNIO.toUri.toASCIIString\n+      lastImportedBuild0.targetUris.contains(uri)\n+    }\n+\n+  def importBuild(): Future[Unit] =\n+    buildServer0 match {\n+      case None =>\n+        Future.failed(new Exception(\"No Ammonite build server running\"))\n+      case Some(buildServer) =>\n+        compilers.cancel()\n+        for {\n+          build0 <- statusBar.trackFuture(\n+            \"Importing Ammonite scripts\",\n+            MetalsLanguageServer.importedBuild(buildServer)\n+          )\n+          _ = {\n+            lastImportedBuild0 = build0\n+          }\n+          _ <- indexWorkspace()\n+          _ <- Future.sequence[Unit, List](\n+            compilations\n+              .cascadeCompileFiles(buffers.open.toSeq) ::"
+  },
+  {
+    "id" : "376be862-93ea-47bc-a09f-508369fdb1e0",
+    "prId" : 1853,
+    "comments" : [
+      {
+        "id" : "0081f9eb-02c2-48bf-841e-eaa76d90761c",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "The priority is the ammonite options specified in the configuration, otherwise we use JVM_OPTS variable and `.jvmopts` file.\r\n\r\nThis is the same as in the case of Metals server. I wonder whether we should use jvmopts, maybe just the settings?",
+        "createdAt" : "2020-06-25T12:19:35Z",
+        "updatedAt" : "2020-06-25T18:58:20Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "aeade424-f113-42b5-b711-a158bc4147c3",
+        "parentId" : "0081f9eb-02c2-48bf-841e-eaa76d90761c",
+        "author" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "body" : "I would keep it as simple as possible and only use UseConfig.\r\nYou don't have to worry what if I have `.jvmopts` but don't want to use if for ammonite, is `.jvmopts` prioritized over JVM_OPTS etc.\r\n\r\nAlso I think JVM_OPTS are only used by CI and those systems, users normally specify JAVA_OPTS (e.g. `amm` script respects JAVA_OPTS not JVM_OPTS).",
+        "createdAt" : "2020-06-25T17:07:27Z",
+        "updatedAt" : "2020-06-25T18:58:20Z",
+        "lastEditedBy" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "28bcd237-6f6c-4669-ada9-952c4bb7f121",
+        "parentId" : "0081f9eb-02c2-48bf-841e-eaa76d90761c",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "I remove the alternatives and using only user config now.",
+        "createdAt" : "2020-06-25T18:58:38Z",
+        "updatedAt" : "2020-06-25T18:58:38Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "260dcc28a1d6bb9ca8ef07702ee8d2697b212ea8",
+    "line" : null,
+    "diffHunk" : "@@ -246,13 +246,22 @@ final class Ammonite(\n       case (command, script) =>\n         val extraScripts = buffers.open.toVector\n           .filter(path => path.isAmmoniteScript && path != script)\n+        val jvmOpts = userConfig().ammoniteJvmProperties.getOrElse("
+  },
+  {
+    "id" : "2e8151dc-b5e3-484f-b918-a64b36a822c9",
+    "prId" : 1907,
+    "comments" : [
+      {
+        "id" : "21572505-7369-48cd-a6f5-b6cdd09e8220",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "This is the default version for Ammonite",
+        "createdAt" : "2020-07-13T17:28:41Z",
+        "updatedAt" : "2020-07-14T14:12:19Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "75977620-384f-468b-a0a9-eabaefa9bbda",
+        "parentId" : "21572505-7369-48cd-a6f5-b6cdd09e8220",
+        "author" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "body" : ":+1: ",
+        "createdAt" : "2020-07-13T17:34:13Z",
+        "updatedAt" : "2020-07-14T14:12:19Z",
+        "lastEditedBy" : {
+          "login" : "kpbochenek",
+          "name" : null,
+          "avatarUrl" : "https://avatars2.githubusercontent.com/u/10478402?u=7a7840d3f5ce4047a19639e6b7977d43e3557158&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "83455480d30cbb0be46ee4041066fdb246f3f072",
+    "line" : null,
+    "diffHunk" : "@@ -149,7 +149,8 @@ final class Ammonite(\n       .getOrElse(\n         AmmVersions(\n           ammoniteVersion = BuildInfo.ammoniteVersion,\n-          scalaVersion = BuildInfo.scala212\n+          // TODO: https://github.com/scalameta/metals/issues/1908\n+          scalaVersion = \"2.12.11\""
+  }
+]

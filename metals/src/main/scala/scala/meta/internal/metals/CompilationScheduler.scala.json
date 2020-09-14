@@ -1,0 +1,210 @@
+[
+  {
+    "id" : "6c1d1166-342e-42f8-8826-9419abacbdae",
+    "prId" : 721,
+    "comments" : [
+      {
+        "id" : "2560aa2a-f62e-4730-af42-7cdc53b265b2",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Would the name `Compilations` make sense? For consistency with the naming convention in the code base (Compilers, BuildTargets, Diagnostics, ...).",
+        "createdAt" : "2019-05-20T10:02:32Z",
+        "updatedAt" : "2019-05-22T07:33:25Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "d0d82540-001a-4c97-b637-5d19296002f9",
+        "parentId" : "2560aa2a-f62e-4730-af42-7cdc53b265b2",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "BTW Great idea to extract this part out of MetalsLanguageServer 👍 ",
+        "createdAt" : "2019-05-20T10:02:57Z",
+        "updatedAt" : "2019-05-22T07:33:25Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "e3c999e9b79f7d0d6a4c95756d12ec54f6abbc90",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,108 @@\n+package scala.meta.internal.metals\n+import ch.epfl.scala.{bsp4j => b}\n+import scala.collection.concurrent.TrieMap\n+import scala.concurrent.ExecutionContext\n+import scala.concurrent.Future\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.io.AbsolutePath\n+\n+final class CompilationScheduler("
+  },
+  {
+    "id" : "2ef10087-60e4-4101-8a60-521c50a4596e",
+    "prId" : 721,
+    "comments" : [
+      {
+        "id" : "d2d6d1aa-443d-49a8-9eed-cdb9810ce669",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "`isCompileable` ",
+        "createdAt" : "2019-05-20T10:09:42Z",
+        "updatedAt" : "2019-05-22T07:33:25Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "e3c999e9b79f7d0d6a4c95756d12ec54f6abbc90",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,108 @@\n+package scala.meta.internal.metals\n+import ch.epfl.scala.{bsp4j => b}\n+import scala.collection.concurrent.TrieMap\n+import scala.concurrent.ExecutionContext\n+import scala.concurrent.Future\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.io.AbsolutePath\n+\n+final class CompilationScheduler(\n+    buildTargets: BuildTargets,\n+    classes: BuildTargetClasses,\n+    workspace: () => AbsolutePath,\n+    buildServer: () => Option[BuildServerConnection]\n+)(implicit ec: ExecutionContext) {\n+  private val batch = new BatchedFunction[Request, b.CompileResult](compile)\n+\n+  private val isCompiling = TrieMap.empty[b.BuildTargetIdentifier, Boolean]\n+  private var lastCompile: collection.Set[b.BuildTargetIdentifier] = Set.empty\n+\n+  def currentlyCompiling: Iterable[b.BuildTargetIdentifier] = isCompiling.keys\n+  def currentlyCompiling(buildTarget: b.BuildTargetIdentifier): Boolean =\n+    isCompiling.contains(buildTarget)\n+\n+  def previouslyCompiled: Iterable[b.BuildTargetIdentifier] = lastCompile\n+  def previouslyCompiled(buildTarget: b.BuildTargetIdentifier): Boolean =\n+    lastCompile.contains(buildTarget)\n+\n+  def compileFiles(paths: Seq[AbsolutePath]): Future[b.CompileResult] =\n+    batch(Request.fromFiles(paths, cascade = false))\n+\n+  def cascadeCompileFiles(paths: Seq[AbsolutePath]): Future[b.CompileResult] =\n+    batch(Request.fromFiles(paths, cascade = true))\n+\n+  def cascadeCompile(target: b.BuildTargetIdentifier): Future[b.CompileResult] =\n+    batch(Request(List(target), cascade = true))\n+\n+  def cancel(): Unit = batch.cancelCurrentRequest()\n+\n+  private def compile(\n+      requests: Seq[Request]\n+  ): CancelableFuture[b.CompileResult] = {\n+    val result = for {\n+      connection <- buildServer()\n+      targets = requests.flatMap(_.targets())\n+      if targets.nonEmpty\n+    } yield compile(connection, targets)\n+\n+    result.getOrElse {\n+      val result = new b.CompileResult(b.StatusCode.CANCELLED)\n+      Future.successful(result).asCancelable\n+    }\n+  }\n+\n+  private def compile(\n+      connection: BuildServerConnection,\n+      targets: Seq[b.BuildTargetIdentifier]\n+  ): CancelableFuture[b.CompileResult] = {\n+    val params = new b.CompileParams(targets.asJava)\n+    targets.foreach(target => isCompiling(target) = true)\n+    val compilation = connection.compile(params)\n+    val task = for {\n+      result <- compilation.asScala\n+      _ <- {\n+        lastCompile = isCompiling.keySet\n+        isCompiling.clear()\n+        if (result.succeeded) classes.onCompiled(targets)\n+        else Future.successful(())\n+      }\n+    } yield result\n+\n+    CancelableFuture(\n+      task,\n+      Cancelable(() => compilation.cancel(false))\n+    )\n+  }\n+\n+  private trait Request {\n+    def targets(): Seq[b.BuildTargetIdentifier]\n+  }\n+\n+  private object Request {\n+    private def compilable(path: AbsolutePath): Boolean ="
+  },
+  {
+    "id" : "28ee7f1e-aa80-4054-86e1-61fc91f8bec1",
+    "prId" : 721,
+    "comments" : [
+      {
+        "id" : "d506c60f-f8c9-4367-b34a-44f02444899e",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "As discussed offline, there should be two separate compile queues\r\n\r\n- regular compiles for `didSave`\r\n- cascade compiles for miscellaneous use-cases (import build, find references, manual invocation)",
+        "createdAt" : "2019-05-20T13:52:20Z",
+        "updatedAt" : "2019-05-22T07:33:25Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "e3c999e9b79f7d0d6a4c95756d12ec54f6abbc90",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,108 @@\n+package scala.meta.internal.metals\n+import ch.epfl.scala.{bsp4j => b}\n+import scala.collection.concurrent.TrieMap\n+import scala.concurrent.ExecutionContext\n+import scala.concurrent.Future\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.io.AbsolutePath\n+\n+final class CompilationScheduler(\n+    buildTargets: BuildTargets,\n+    classes: BuildTargetClasses,\n+    workspace: () => AbsolutePath,\n+    buildServer: () => Option[BuildServerConnection]\n+)(implicit ec: ExecutionContext) {\n+  private val batch = new BatchedFunction[Request, b.CompileResult](compile)"
+  },
+  {
+    "id" : "d322291a-7d40-432b-939a-a8f6d6946c73",
+    "prId" : 721,
+    "comments" : [
+      {
+        "id" : "91d4215d-a5b1-432f-8924-4eb30801274a",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "I feel like the code would be clearer by using `Seq[BuildTargetIdentifier]` directly. Traits and SAM types are heavyweight abstractions for such a simple task.",
+        "createdAt" : "2019-05-20T14:50:55Z",
+        "updatedAt" : "2019-05-22T07:33:25Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "e3c999e9b79f7d0d6a4c95756d12ec54f6abbc90",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,108 @@\n+package scala.meta.internal.metals\n+import ch.epfl.scala.{bsp4j => b}\n+import scala.collection.concurrent.TrieMap\n+import scala.concurrent.ExecutionContext\n+import scala.concurrent.Future\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.io.AbsolutePath\n+\n+final class CompilationScheduler(\n+    buildTargets: BuildTargets,\n+    classes: BuildTargetClasses,\n+    workspace: () => AbsolutePath,\n+    buildServer: () => Option[BuildServerConnection]\n+)(implicit ec: ExecutionContext) {\n+  private val batch = new BatchedFunction[Request, b.CompileResult](compile)\n+\n+  private val isCompiling = TrieMap.empty[b.BuildTargetIdentifier, Boolean]\n+  private var lastCompile: collection.Set[b.BuildTargetIdentifier] = Set.empty\n+\n+  def currentlyCompiling: Iterable[b.BuildTargetIdentifier] = isCompiling.keys\n+  def currentlyCompiling(buildTarget: b.BuildTargetIdentifier): Boolean =\n+    isCompiling.contains(buildTarget)\n+\n+  def previouslyCompiled: Iterable[b.BuildTargetIdentifier] = lastCompile\n+  def previouslyCompiled(buildTarget: b.BuildTargetIdentifier): Boolean =\n+    lastCompile.contains(buildTarget)\n+\n+  def compileFiles(paths: Seq[AbsolutePath]): Future[b.CompileResult] =\n+    batch(Request.fromFiles(paths, cascade = false))\n+\n+  def cascadeCompileFiles(paths: Seq[AbsolutePath]): Future[b.CompileResult] =\n+    batch(Request.fromFiles(paths, cascade = true))\n+\n+  def cascadeCompile(target: b.BuildTargetIdentifier): Future[b.CompileResult] =\n+    batch(Request(List(target), cascade = true))\n+\n+  def cancel(): Unit = batch.cancelCurrentRequest()\n+\n+  private def compile(\n+      requests: Seq[Request]\n+  ): CancelableFuture[b.CompileResult] = {\n+    val result = for {\n+      connection <- buildServer()\n+      targets = requests.flatMap(_.targets())\n+      if targets.nonEmpty\n+    } yield compile(connection, targets)\n+\n+    result.getOrElse {\n+      val result = new b.CompileResult(b.StatusCode.CANCELLED)\n+      Future.successful(result).asCancelable\n+    }\n+  }\n+\n+  private def compile(\n+      connection: BuildServerConnection,\n+      targets: Seq[b.BuildTargetIdentifier]\n+  ): CancelableFuture[b.CompileResult] = {\n+    val params = new b.CompileParams(targets.asJava)\n+    targets.foreach(target => isCompiling(target) = true)\n+    val compilation = connection.compile(params)\n+    val task = for {\n+      result <- compilation.asScala\n+      _ <- {\n+        lastCompile = isCompiling.keySet\n+        isCompiling.clear()\n+        if (result.succeeded) classes.onCompiled(targets)\n+        else Future.successful(())\n+      }\n+    } yield result\n+\n+    CancelableFuture(\n+      task,\n+      Cancelable(() => compilation.cancel(false))\n+    )\n+  }\n+\n+  private trait Request {"
+  },
+  {
+    "id" : "9d5a280d-43a9-4632-a366-80fe48d4b7a0",
+    "prId" : 721,
+    "comments" : [
+      {
+        "id" : "ab1e118c-6e11-4ecf-a0a0-f4d7ef5bf533",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Can we replace this method with \r\n```scala\r\ndef cascadeCompileTargets(targets: Seq[BTI]): Seq[BTI] = ...\r\n```\r\nand then instead only call from call-sites where `cascade = true`? I feel that `cascade: Boolean` arguments like this are a smell.",
+        "createdAt" : "2019-05-20T14:54:24Z",
+        "updatedAt" : "2019-05-22T07:33:25Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "e3c999e9b79f7d0d6a4c95756d12ec54f6abbc90",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,108 @@\n+package scala.meta.internal.metals\n+import ch.epfl.scala.{bsp4j => b}\n+import scala.collection.concurrent.TrieMap\n+import scala.concurrent.ExecutionContext\n+import scala.concurrent.Future\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.io.AbsolutePath\n+\n+final class CompilationScheduler(\n+    buildTargets: BuildTargets,\n+    classes: BuildTargetClasses,\n+    workspace: () => AbsolutePath,\n+    buildServer: () => Option[BuildServerConnection]\n+)(implicit ec: ExecutionContext) {\n+  private val batch = new BatchedFunction[Request, b.CompileResult](compile)\n+\n+  private val isCompiling = TrieMap.empty[b.BuildTargetIdentifier, Boolean]\n+  private var lastCompile: collection.Set[b.BuildTargetIdentifier] = Set.empty\n+\n+  def currentlyCompiling: Iterable[b.BuildTargetIdentifier] = isCompiling.keys\n+  def currentlyCompiling(buildTarget: b.BuildTargetIdentifier): Boolean =\n+    isCompiling.contains(buildTarget)\n+\n+  def previouslyCompiled: Iterable[b.BuildTargetIdentifier] = lastCompile\n+  def previouslyCompiled(buildTarget: b.BuildTargetIdentifier): Boolean =\n+    lastCompile.contains(buildTarget)\n+\n+  def compileFiles(paths: Seq[AbsolutePath]): Future[b.CompileResult] =\n+    batch(Request.fromFiles(paths, cascade = false))\n+\n+  def cascadeCompileFiles(paths: Seq[AbsolutePath]): Future[b.CompileResult] =\n+    batch(Request.fromFiles(paths, cascade = true))\n+\n+  def cascadeCompile(target: b.BuildTargetIdentifier): Future[b.CompileResult] =\n+    batch(Request(List(target), cascade = true))\n+\n+  def cancel(): Unit = batch.cancelCurrentRequest()\n+\n+  private def compile(\n+      requests: Seq[Request]\n+  ): CancelableFuture[b.CompileResult] = {\n+    val result = for {\n+      connection <- buildServer()\n+      targets = requests.flatMap(_.targets())\n+      if targets.nonEmpty\n+    } yield compile(connection, targets)\n+\n+    result.getOrElse {\n+      val result = new b.CompileResult(b.StatusCode.CANCELLED)\n+      Future.successful(result).asCancelable\n+    }\n+  }\n+\n+  private def compile(\n+      connection: BuildServerConnection,\n+      targets: Seq[b.BuildTargetIdentifier]\n+  ): CancelableFuture[b.CompileResult] = {\n+    val params = new b.CompileParams(targets.asJava)\n+    targets.foreach(target => isCompiling(target) = true)\n+    val compilation = connection.compile(params)\n+    val task = for {\n+      result <- compilation.asScala\n+      _ <- {\n+        lastCompile = isCompiling.keySet\n+        isCompiling.clear()\n+        if (result.succeeded) classes.onCompiled(targets)\n+        else Future.successful(())\n+      }\n+    } yield result\n+\n+    CancelableFuture(\n+      task,\n+      Cancelable(() => compilation.cancel(false))\n+    )\n+  }\n+\n+  private trait Request {\n+    def targets(): Seq[b.BuildTargetIdentifier]\n+  }\n+\n+  private object Request {\n+    private def compilable(path: AbsolutePath): Boolean =\n+      path.isScalaOrJava && !path.isDependencySource(workspace())\n+\n+    private def targetsFrom(\n+        paths: Seq[AbsolutePath]\n+    ): Seq[b.BuildTargetIdentifier] = {\n+      val targets =\n+        paths.filter(compilable).flatMap(buildTargets.inverseSources).distinct\n+\n+      if (targets.isEmpty) {\n+        scribe.warn(s\"no build target: ${paths.mkString(\"\\n  \")}\")\n+      }\n+      targets\n+    }\n+\n+    def apply(\n+        targets: Seq[b.BuildTargetIdentifier],\n+        cascade: Boolean"
+  },
+  {
+    "id" : "e07657de-6482-4cae-bdb8-fc398e3783cf",
+    "prId" : 721,
+    "comments" : [
+      {
+        "id" : "3d3e7171-01d8-4a7e-abdd-2f73e644a0bf",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Let's inline this method, it's only used in one place where the call-site is a trivial method implementation forwarding to this helper.",
+        "createdAt" : "2019-05-20T14:55:43Z",
+        "updatedAt" : "2019-05-22T07:33:25Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "e3c999e9b79f7d0d6a4c95756d12ec54f6abbc90",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,108 @@\n+package scala.meta.internal.metals\n+import ch.epfl.scala.{bsp4j => b}\n+import scala.collection.concurrent.TrieMap\n+import scala.concurrent.ExecutionContext\n+import scala.concurrent.Future\n+import scala.meta.internal.metals.MetalsEnrichments._\n+import scala.meta.io.AbsolutePath\n+\n+final class CompilationScheduler(\n+    buildTargets: BuildTargets,\n+    classes: BuildTargetClasses,\n+    workspace: () => AbsolutePath,\n+    buildServer: () => Option[BuildServerConnection]\n+)(implicit ec: ExecutionContext) {\n+  private val batch = new BatchedFunction[Request, b.CompileResult](compile)\n+\n+  private val isCompiling = TrieMap.empty[b.BuildTargetIdentifier, Boolean]\n+  private var lastCompile: collection.Set[b.BuildTargetIdentifier] = Set.empty\n+\n+  def currentlyCompiling: Iterable[b.BuildTargetIdentifier] = isCompiling.keys\n+  def currentlyCompiling(buildTarget: b.BuildTargetIdentifier): Boolean =\n+    isCompiling.contains(buildTarget)\n+\n+  def previouslyCompiled: Iterable[b.BuildTargetIdentifier] = lastCompile\n+  def previouslyCompiled(buildTarget: b.BuildTargetIdentifier): Boolean =\n+    lastCompile.contains(buildTarget)\n+\n+  def compileFiles(paths: Seq[AbsolutePath]): Future[b.CompileResult] =\n+    batch(Request.fromFiles(paths, cascade = false))\n+\n+  def cascadeCompileFiles(paths: Seq[AbsolutePath]): Future[b.CompileResult] =\n+    batch(Request.fromFiles(paths, cascade = true))\n+\n+  def cascadeCompile(target: b.BuildTargetIdentifier): Future[b.CompileResult] =\n+    batch(Request(List(target), cascade = true))\n+\n+  def cancel(): Unit = batch.cancelCurrentRequest()\n+\n+  private def compile(\n+      requests: Seq[Request]\n+  ): CancelableFuture[b.CompileResult] = {\n+    val result = for {\n+      connection <- buildServer()\n+      targets = requests.flatMap(_.targets())\n+      if targets.nonEmpty\n+    } yield compile(connection, targets)\n+\n+    result.getOrElse {\n+      val result = new b.CompileResult(b.StatusCode.CANCELLED)\n+      Future.successful(result).asCancelable\n+    }\n+  }\n+\n+  private def compile(\n+      connection: BuildServerConnection,\n+      targets: Seq[b.BuildTargetIdentifier]\n+  ): CancelableFuture[b.CompileResult] = {\n+    val params = new b.CompileParams(targets.asJava)\n+    targets.foreach(target => isCompiling(target) = true)\n+    val compilation = connection.compile(params)\n+    val task = for {\n+      result <- compilation.asScala\n+      _ <- {\n+        lastCompile = isCompiling.keySet\n+        isCompiling.clear()\n+        if (result.succeeded) classes.onCompiled(targets)\n+        else Future.successful(())\n+      }\n+    } yield result\n+\n+    CancelableFuture(\n+      task,\n+      Cancelable(() => compilation.cancel(false))\n+    )\n+  }\n+\n+  private trait Request {\n+    def targets(): Seq[b.BuildTargetIdentifier]\n+  }\n+\n+  private object Request {\n+    private def compilable(path: AbsolutePath): Boolean =\n+      path.isScalaOrJava && !path.isDependencySource(workspace())\n+\n+    private def targetsFrom("
+  }
+]

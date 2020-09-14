@@ -1,0 +1,124 @@
+[
+  {
+    "id" : "4c1fefbe-6b31-4c6a-aa6b-95c0a16de748",
+    "prId" : 45,
+    "comments" : [
+      {
+        "id" : "2fea0a67-0fc2-4e75-a3eb-8317535a010a",
+        "parentId" : null,
+        "author" : {
+          "login" : "ShaneDelmore",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/4604933?v=4"
+        },
+        "body" : "Why should we continue here if there was a DBException instead of rethrowing it?",
+        "createdAt" : "2017-11-22T21:27:55Z",
+        "updatedAt" : "2017-11-22T21:53:24Z",
+        "lastEditedBy" : {
+          "login" : "ShaneDelmore",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/4604933?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "3839f382-33ee-4d1d-93f3-d9e4fbd96a6e",
+        "parentId" : "2fea0a67-0fc2-4e75-a3eb-8317535a010a",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Good point, let's throw rethrow them.",
+        "createdAt" : "2017-11-22T21:29:40Z",
+        "updatedAt" : "2017-11-22T21:53:24Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "158c48f9-1478-4239-ab28-33bcd9982e7a",
+        "parentId" : "2fea0a67-0fc2-4e75-a3eb-8317535a010a",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Actually, let's just skip the whole try/catch thing ",
+        "createdAt" : "2017-11-22T21:31:31Z",
+        "updatedAt" : "2017-11-22T21:53:24Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "07b899d0ababc60348d3fbfc05eefbfd0ba43538",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,102 @@\n+package scala.meta.languageserver.storage\n+\n+import java.io.File\n+import com.typesafe.scalalogging.LazyLogging\n+import monix.execution.schedulers.TestScheduler.Task\n+import monix.reactive.Observable\n+import org.fusesource.leveldbjni.JniDBFactory\n+import org.iq80.leveldb.DB\n+import org.iq80.leveldb.DBException\n+import org.iq80.leveldb.Options\n+\n+/**\n+ * A Scala-friendly wrapper around the JniDBFactory Java-wrapper around leveldb.\n+ *\n+ * @param db The leveldb, remember to close it after using. This wrapper will NOT\n+ *           close the db for you.\n+ */\n+class LevelDBMap(db: DB) extends LazyLogging {\n+\n+  /** Returns the value matching key, if any. */\n+  def get[Key, Value](key: Key)(\n+      implicit\n+      keys: ToBytes[Key],\n+      values: FromBytes[Value]\n+  ): Option[Value] = {\n+    try {\n+      Option(db.get(keys.toBytes(key))).map(values.fromBytes)\n+    } catch {\n+      case e: DBException =>\n+        logger.error(e.getMessage, e)\n+        None\n+    }\n+  }\n+\n+  /**\n+   * Gets the value if it exists, otherwise computes the fallback value and stores it.\n+   *\n+   * This method is not thread-safe, the computed fallback value may get overwritten.\n+   */\n+  def getOrElseUpdate[Key, Value](key: Key, orElse: () => Value)(\n+      implicit\n+      keys: ToBytes[Key],\n+      valuesFrom: FromBytes[Value],\n+      valuesTo: ToBytes[Value]\n+  ): Value = {\n+    get(key) match {\n+      case Some(value) => value\n+      case None =>\n+        val computed = orElse()\n+        put(key, computed)\n+    }\n+  }\n+\n+  /** Inserts a new value for the given key. */\n+  def put[Key, Value](key: Key, value: Value)(\n+      implicit\n+      keys: ToBytes[Key],\n+      values: ToBytes[Value]\n+  ): Value = {\n+    try {\n+      db.put(keys.toBytes(key), values.toBytes(value))\n+      value\n+    } catch {\n+      case e: DBException =>\n+        logger.error(e.getMessage, e)\n+        value"
+  },
+  {
+    "id" : "faec2f53-e02c-4541-a4d0-2b164eb9feb6",
+    "prId" : 45,
+    "comments" : [
+      {
+        "id" : "55ae78cb-1841-41be-8658-2925c7573674",
+        "parentId" : null,
+        "author" : {
+          "login" : "ShaneDelmore",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/4604933?v=4"
+        },
+        "body" : "Given that withDB looks safe and convenient, and createDBThatIPromiseToClose looks less attractive, when would I use the unsafe version?  Is there enough overhead to withDB that I don't want to use it in some scenarios?",
+        "createdAt" : "2017-11-22T21:33:28Z",
+        "updatedAt" : "2017-11-22T21:53:24Z",
+        "lastEditedBy" : {
+          "login" : "ShaneDelmore",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/4604933?v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "2e331261-622d-4116-bcf0-644c24f53cb7",
+        "parentId" : "55ae78cb-1841-41be-8658-2925c7573674",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "I'm not sure yet. To be honest I'm kind of leaning towards sqlite with a single table\r\n\r\n```\r\ncreate table index(\r\nkey bytes primary key,\r\nvalue bytes,\r\nbinaryVersion string\r\n)\r\n```\r\nwhere we can upgrade binary version when we change the indexing algorithms and want clean up old indices.\r\n\r\nIt wouldn't be a big change from what we have now using plain jdbc, and we could avoid the locking issues.",
+        "createdAt" : "2017-11-22T21:41:46Z",
+        "updatedAt" : "2017-11-22T21:53:24Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "07b899d0ababc60348d3fbfc05eefbfd0ba43538",
+    "line" : 82,
+    "diffHunk" : "@@ -0,0 +1,93 @@\n+package scala.meta.languageserver.storage\n+\n+import java.io.File\n+import com.typesafe.scalalogging.LazyLogging\n+import monix.execution.schedulers.TestScheduler.Task\n+import monix.reactive.Observable\n+import org.fusesource.leveldbjni.JniDBFactory\n+import org.iq80.leveldb.DB\n+import org.iq80.leveldb.DBException\n+import org.iq80.leveldb.Options\n+\n+/**\n+ * A Scala-friendly wrapper around the JniDBFactory Java-wrapper around leveldb.\n+ *\n+ * @param db The leveldb, remember to close it after using. This wrapper will NOT\n+ *           close the db for you.\n+ */\n+class LevelDBMap(db: DB) extends LazyLogging {\n+\n+  /** Returns the value matching key, if any. */\n+  @throws[DBException]\n+  def get[Key, Value](key: Key)(\n+      implicit\n+      keys: ToBytes[Key],\n+      values: FromBytes[Value]\n+  ): Option[Value] = {\n+    Option(db.get(keys.toBytes(key))).map(values.fromBytes)\n+  }\n+\n+  /**\n+   * Gets the value if it exists, otherwise computes the fallback value and stores it.\n+   *\n+   * This method is not thread-safe, the computed fallback value may get overwritten.\n+   */\n+  @throws[DBException]\n+  def getOrElseUpdate[Key, Value](key: Key, orElse: () => Value)(\n+      implicit\n+      keys: ToBytes[Key],\n+      valuesFrom: FromBytes[Value],\n+      valuesTo: ToBytes[Value]\n+  ): Value = {\n+    get(key) match {\n+      case Some(value) => value\n+      case None =>\n+        val computed = orElse()\n+        put(key, computed)\n+    }\n+  }\n+\n+  /** Inserts a new value for the given key. */\n+  @throws[DBException]\n+  def put[Key, Value](key: Key, value: Value)(\n+      implicit\n+      keys: ToBytes[Key],\n+      values: ToBytes[Value]\n+  ): Value = {\n+    db.put(keys.toBytes(key), values.toBytes(value))\n+    value\n+  }\n+\n+  def close(): Unit = db.close()\n+}\n+\n+object LevelDBMap {\n+\n+  /** Construct new wrapper around a leveldb. */\n+  def apply(db: DB): LevelDBMap =\n+    new LevelDBMap(db)\n+\n+  /**\n+   * Creates a new leveldb in the given directory.\n+   *\n+   * Make sure to `db.close()`.\n+   */\n+  def createDBThatIPromiseToClose(directory: File): DB = {\n+    val options = new Options\n+    options.createIfMissing(true)\n+    options.maxOpenFiles()\n+    JniDBFactory.factory.open(directory, options)\n+  }\n+\n+  def withDB[T](directory: File)(f: LevelDBMap => T): T = {"
+  }
+]

@@ -1,0 +1,725 @@
+[
+  {
+    "id" : "3c28be03-cda5-4a4d-95e8-c93865b1dc25",
+    "prId" : 721,
+    "comments" : [
+      {
+        "id" : "05d2e379-0e66-4cfe-b935-34fecc411246",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "`val index = TrieMap.empty[b.BuildTargetIdentifier, Classes]`",
+        "createdAt" : "2019-05-20T14:01:30Z",
+        "updatedAt" : "2019-05-22T07:33:25Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "e3c999e9b79f7d0d6a4c95756d12ec54f6abbc90",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,82 @@\n+package scala.meta.internal.metals\n+\n+import java.util\n+import java.util.concurrent.ConcurrentHashMap\n+import java.util.concurrent.atomic.AtomicReference\n+import ch.epfl.scala.bsp4j.ScalaMainClass\n+import ch.epfl.scala.{bsp4j => b}\n+import scala.concurrent.ExecutionContext\n+import scala.concurrent.Future\n+import scala.meta.internal.metals.MetalsEnrichments._\n+\n+final class BuildTargetClasses(\n+    buildServer: () => Option[BuildServerConnection]\n+)(implicit val ec: ExecutionContext) {\n+  private val buildTargets ="
+  },
+  {
+    "id" : "c6c98fa8-c853-4332-a848-392d977e14f7",
+    "prId" : 721,
+    "comments" : [
+      {
+        "id" : "dde697cf-6e7b-40de-b589-9bc9a31dbec8",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "`isInitialized`",
+        "createdAt" : "2019-05-20T14:01:59Z",
+        "updatedAt" : "2019-05-22T07:33:25Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "e3c999e9b79f7d0d6a4c95756d12ec54f6abbc90",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,82 @@\n+package scala.meta.internal.metals\n+\n+import java.util\n+import java.util.concurrent.ConcurrentHashMap\n+import java.util.concurrent.atomic.AtomicReference\n+import ch.epfl.scala.bsp4j.ScalaMainClass\n+import ch.epfl.scala.{bsp4j => b}\n+import scala.concurrent.ExecutionContext\n+import scala.concurrent.Future\n+import scala.meta.internal.metals.MetalsEnrichments._\n+\n+final class BuildTargetClasses(\n+    buildServer: () => Option[BuildServerConnection]\n+)(implicit val ec: ExecutionContext) {\n+  private val buildTargets =\n+    new ConcurrentHashMap[b.BuildTargetIdentifier, Classes]()\n+\n+  def isInitialized(target: b.BuildTargetIdentifier): Boolean =\n+    classesOf(target).initialized.get()\n+\n+  def main(target: b.BuildTargetIdentifier): util.Map[String, ScalaMainClass] =\n+    classesOf(target).main\n+\n+  val onCompiled: BatchedFunction[b.BuildTargetIdentifier, Unit] =\n+    BatchedFunction.fromFuture(fetchMainClassesFor)\n+\n+  private def fetchMainClassesFor(\n+      targets: Seq[b.BuildTargetIdentifier]\n+  ): Future[Unit] = {\n+    for (target <- targets) {\n+      classesOf(target).clear()\n+    }\n+\n+    buildServer() match {\n+      case Some(connection) =>\n+        val parameters = new b.ScalaMainClassesParams(targets.asJava)\n+        val task = for {\n+          mainClasses <- connection.mainClasses(parameters).asScala\n+          _ = initializeMainClasses(mainClasses)\n+        } yield\n+          for (target <- targets) {\n+            classesOf(target).initialized.set(true)\n+          }\n+\n+        task\n+      case None =>\n+        Future.successful(())\n+    }\n+  }\n+\n+  private def classesOf(target: b.BuildTargetIdentifier): Classes =\n+    buildTargets.computeIfAbsent(target, _ => new Classes)\n+\n+  private def initializeMainClasses(result: b.ScalaMainClassesResult): Unit = {\n+    def createObjectSymbol(className: String): String = {\n+      val isRootPackage = !className.contains(\".\")\n+      val symbol = className.replaceAll(\"\\\\.\", \"/\") + \".\"\n+      scribe.info(s\"$className, $isRootPackage, $symbol\")\n+      if (isRootPackage) {\n+        \"_empty_/\" + symbol\n+      } else {\n+        symbol\n+      }\n+    }\n+\n+    for {\n+      item <- result.getItems.asScala\n+      target = item.getTarget\n+      aClass <- item.getClasses.asScala\n+      objectSymbol = createObjectSymbol(aClass.getClassName)\n+    } classesOf(target).main.put(objectSymbol, aClass)\n+  }\n+\n+  final class Classes {\n+    val initialized = new AtomicReference[Boolean](false)"
+  },
+  {
+    "id" : "21ed6a1c-6c36-40c6-a2fc-4922ff3a43af",
+    "prId" : 721,
+    "comments" : [
+      {
+        "id" : "f4493eaf-92ac-469e-96c7-4cdfaa7634a4",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "> `isInsideEmptyPackage`\r\n\r\nThere's a difference between the root package and empty package\r\n\r\n- `_empty_` is the enclosing package for classes that are not defined inside a package\r\n- `_root_` is the owner of all packages (including `_empty_`).\r\n\r\nTo work with SemanticDB symbols we normally use the following helpers\r\n```scala\r\nimport scala.meta.internal.semanticdb.Scala._\r\nval sym = \"Toplevel.\"\r\nSymbols.Global(EmptyPackage, sym) // \"_empty_/Toplevel.\"\r\n```",
+        "createdAt" : "2019-05-20T14:17:24Z",
+        "updatedAt" : "2019-05-22T07:33:25Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "57056b4d-04fd-48fb-965e-861451ab2364",
+        "parentId" : "f4493eaf-92ac-469e-96c7-4cdfaa7634a4",
+        "author" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "body" : "I will use `isInsideDefaultPackage`. When I hear \"it is inside an empty package\" then I think: How can it be an empty package if it has something inside.\r\nOr maybe `isInsideUnnamedPackage`? :)",
+        "createdAt" : "2019-05-22T07:31:54Z",
+        "updatedAt" : "2019-05-22T07:33:25Z",
+        "lastEditedBy" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "d768a4ac-11f4-4c8b-bce3-4ff9a484595a",
+        "parentId" : "f4493eaf-92ac-469e-96c7-4cdfaa7634a4",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "The “empty package” is defined in the Scala language spec https://www.scala-lang.org/files/archive/spec/2.12/09-top-level-definitions.html#packagings\r\n\r\nIn the Java language spec the same package is called “unnamed”.\r\n\r\nWe are dealing with SemanticDB symbols here where we use the “empty package” for both languages https://scalameta.org/docs/semanticdb/specification.html#symbol-1",
+        "createdAt" : "2019-05-22T07:37:10Z",
+        "updatedAt" : "2019-05-22T07:37:10Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "e3c999e9b79f7d0d6a4c95756d12ec54f6abbc90",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,82 @@\n+package scala.meta.internal.metals\n+\n+import java.util\n+import java.util.concurrent.ConcurrentHashMap\n+import java.util.concurrent.atomic.AtomicReference\n+import ch.epfl.scala.bsp4j.ScalaMainClass\n+import ch.epfl.scala.{bsp4j => b}\n+import scala.concurrent.ExecutionContext\n+import scala.concurrent.Future\n+import scala.meta.internal.metals.MetalsEnrichments._\n+\n+final class BuildTargetClasses(\n+    buildServer: () => Option[BuildServerConnection]\n+)(implicit val ec: ExecutionContext) {\n+  private val buildTargets =\n+    new ConcurrentHashMap[b.BuildTargetIdentifier, Classes]()\n+\n+  def isInitialized(target: b.BuildTargetIdentifier): Boolean =\n+    classesOf(target).initialized.get()\n+\n+  def main(target: b.BuildTargetIdentifier): util.Map[String, ScalaMainClass] =\n+    classesOf(target).main\n+\n+  val onCompiled: BatchedFunction[b.BuildTargetIdentifier, Unit] =\n+    BatchedFunction.fromFuture(fetchMainClassesFor)\n+\n+  private def fetchMainClassesFor(\n+      targets: Seq[b.BuildTargetIdentifier]\n+  ): Future[Unit] = {\n+    for (target <- targets) {\n+      classesOf(target).clear()\n+    }\n+\n+    buildServer() match {\n+      case Some(connection) =>\n+        val parameters = new b.ScalaMainClassesParams(targets.asJava)\n+        val task = for {\n+          mainClasses <- connection.mainClasses(parameters).asScala\n+          _ = initializeMainClasses(mainClasses)\n+        } yield\n+          for (target <- targets) {\n+            classesOf(target).initialized.set(true)\n+          }\n+\n+        task\n+      case None =>\n+        Future.successful(())\n+    }\n+  }\n+\n+  private def classesOf(target: b.BuildTargetIdentifier): Classes =\n+    buildTargets.computeIfAbsent(target, _ => new Classes)\n+\n+  private def initializeMainClasses(result: b.ScalaMainClassesResult): Unit = {\n+    def createObjectSymbol(className: String): String = {\n+      val isRootPackage = !className.contains(\".\")"
+  },
+  {
+    "id" : "7e2dde8f-377c-4658-a10a-df6d19539a16",
+    "prId" : 721,
+    "comments" : [
+      {
+        "id" : "7fa3aa4a-3919-484d-826a-4662f3eac19e",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "`TrieMap.empty[String, ScalaMainClass]`",
+        "createdAt" : "2019-05-20T14:43:39Z",
+        "updatedAt" : "2019-05-22T07:33:25Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "e3c999e9b79f7d0d6a4c95756d12ec54f6abbc90",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,82 @@\n+package scala.meta.internal.metals\n+\n+import java.util\n+import java.util.concurrent.ConcurrentHashMap\n+import java.util.concurrent.atomic.AtomicReference\n+import ch.epfl.scala.bsp4j.ScalaMainClass\n+import ch.epfl.scala.{bsp4j => b}\n+import scala.concurrent.ExecutionContext\n+import scala.concurrent.Future\n+import scala.meta.internal.metals.MetalsEnrichments._\n+\n+final class BuildTargetClasses(\n+    buildServer: () => Option[BuildServerConnection]\n+)(implicit val ec: ExecutionContext) {\n+  private val buildTargets =\n+    new ConcurrentHashMap[b.BuildTargetIdentifier, Classes]()\n+\n+  def isInitialized(target: b.BuildTargetIdentifier): Boolean =\n+    classesOf(target).initialized.get()\n+\n+  def main(target: b.BuildTargetIdentifier): util.Map[String, ScalaMainClass] =\n+    classesOf(target).main\n+\n+  val onCompiled: BatchedFunction[b.BuildTargetIdentifier, Unit] =\n+    BatchedFunction.fromFuture(fetchMainClassesFor)\n+\n+  private def fetchMainClassesFor(\n+      targets: Seq[b.BuildTargetIdentifier]\n+  ): Future[Unit] = {\n+    for (target <- targets) {\n+      classesOf(target).clear()\n+    }\n+\n+    buildServer() match {\n+      case Some(connection) =>\n+        val parameters = new b.ScalaMainClassesParams(targets.asJava)\n+        val task = for {\n+          mainClasses <- connection.mainClasses(parameters).asScala\n+          _ = initializeMainClasses(mainClasses)\n+        } yield\n+          for (target <- targets) {\n+            classesOf(target).initialized.set(true)\n+          }\n+\n+        task\n+      case None =>\n+        Future.successful(())\n+    }\n+  }\n+\n+  private def classesOf(target: b.BuildTargetIdentifier): Classes =\n+    buildTargets.computeIfAbsent(target, _ => new Classes)\n+\n+  private def initializeMainClasses(result: b.ScalaMainClassesResult): Unit = {\n+    def createObjectSymbol(className: String): String = {\n+      val isRootPackage = !className.contains(\".\")\n+      val symbol = className.replaceAll(\"\\\\.\", \"/\") + \".\"\n+      scribe.info(s\"$className, $isRootPackage, $symbol\")\n+      if (isRootPackage) {\n+        \"_empty_/\" + symbol\n+      } else {\n+        symbol\n+      }\n+    }\n+\n+    for {\n+      item <- result.getItems.asScala\n+      target = item.getTarget\n+      aClass <- item.getClasses.asScala\n+      objectSymbol = createObjectSymbol(aClass.getClassName)\n+    } classesOf(target).main.put(objectSymbol, aClass)\n+  }\n+\n+  final class Classes {\n+    val initialized = new AtomicReference[Boolean](false)\n+    val main = new ConcurrentHashMap[String, ScalaMainClass]()"
+  },
+  {
+    "id" : "5dfaf7d3-eff2-422d-80e0-968038167782",
+    "prId" : 728,
+    "comments" : [
+      {
+        "id" : "8b5e3682-337f-490d-be0e-940037d0a877",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Docstring proposal\r\n\r\n> Manages in-memory index of main/test class symbols grouped by their enclosing build targets.",
+        "createdAt" : "2019-05-23T13:13:20Z",
+        "updatedAt" : "2019-05-24T09:17:46Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "9d3f311622eae8bedf5d893e5016c35523e74815",
+    "line" : 14,
+    "diffHunk" : "@@ -0,0 +1,79 @@\n+package scala.meta.internal.metals\n+\n+import java.util.concurrent.atomic.AtomicReference\n+import ch.epfl.scala.bsp4j.ScalaMainClass\n+import ch.epfl.scala.{bsp4j => b}\n+import scala.collection.concurrent.TrieMap\n+import scala.concurrent.ExecutionContext\n+import scala.concurrent.Future\n+import scala.meta.internal.metals.MetalsEnrichments._\n+\n+final class BuildTargetClasses("
+  },
+  {
+    "id" : "da016361-aa1a-4634-8b68-def3015bb9d7",
+    "prId" : 728,
+    "comments" : [
+      {
+        "id" : "5dd7ff5e-780b-4bfa-a6db-4323566d7f9b",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Where is `isInitialized` used?",
+        "createdAt" : "2019-05-23T13:17:33Z",
+        "updatedAt" : "2019-05-24T09:17:46Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "9d3f311622eae8bedf5d893e5016c35523e74815",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,79 @@\n+package scala.meta.internal.metals\n+\n+import java.util.concurrent.atomic.AtomicReference\n+import ch.epfl.scala.bsp4j.ScalaMainClass\n+import ch.epfl.scala.{bsp4j => b}\n+import scala.collection.concurrent.TrieMap\n+import scala.concurrent.ExecutionContext\n+import scala.concurrent.Future\n+import scala.meta.internal.metals.MetalsEnrichments._\n+\n+final class BuildTargetClasses(\n+    buildServer: () => Option[BuildServerConnection]\n+)(implicit val ec: ExecutionContext) {\n+  private val index = new TrieMap[b.BuildTargetIdentifier, Classes]()\n+\n+  def isInitialized(target: b.BuildTargetIdentifier): Boolean ="
+  },
+  {
+    "id" : "17a2f315-1ff8-454c-9425-54b933fceb5f",
+    "prId" : 728,
+    "comments" : [
+      {
+        "id" : "2eb28e51-ad91-48e5-a32e-ecec1f399c6c",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "nit: Please use `targets.foreach { target => ... }` instead. This codebase \r\n\r\n- uses `.foreach` for basic iterations\r\n- uses for comprehensions for non-trivial `map/filter/flatMap` chains\r\n- never uses the `for (a <- b)` because it's not very flexible",
+        "createdAt" : "2019-05-23T13:19:49Z",
+        "updatedAt" : "2019-05-24T09:17:46Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "9d3f311622eae8bedf5d893e5016c35523e74815",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,79 @@\n+package scala.meta.internal.metals\n+\n+import java.util.concurrent.atomic.AtomicReference\n+import ch.epfl.scala.bsp4j.ScalaMainClass\n+import ch.epfl.scala.{bsp4j => b}\n+import scala.collection.concurrent.TrieMap\n+import scala.concurrent.ExecutionContext\n+import scala.concurrent.Future\n+import scala.meta.internal.metals.MetalsEnrichments._\n+\n+final class BuildTargetClasses(\n+    buildServer: () => Option[BuildServerConnection]\n+)(implicit val ec: ExecutionContext) {\n+  private val index = new TrieMap[b.BuildTargetIdentifier, Classes]()\n+\n+  def isInitialized(target: b.BuildTargetIdentifier): Boolean =\n+    classesOf(target).isInitialized.get()\n+\n+  def main(target: b.BuildTargetIdentifier): TrieMap[String, ScalaMainClass] =\n+    classesOf(target).main\n+\n+  val onCompiled: BatchedFunction[b.BuildTargetIdentifier, Unit] =\n+    BatchedFunction.fromFuture(fetchMainClassesFor)\n+\n+  private def fetchMainClassesFor(\n+      targets: Seq[b.BuildTargetIdentifier]\n+  ): Future[Unit] = {\n+    for (target <- targets) {\n+      classesOf(target).clear()\n+    }\n+\n+    buildServer() match {\n+      case Some(connection) =>\n+        val parameters = new b.ScalaMainClassesParams(targets.asJava)\n+        val task = for {\n+          mainClasses <- connection.mainClasses(parameters).asScala\n+          _ = initializeMainClasses(mainClasses)\n+        } yield\n+          for (target <- targets) {"
+  },
+  {
+    "id" : "a1ecfde0-9501-4af4-a33d-36dfac7f199d",
+    "prId" : 728,
+    "comments" : [
+      {
+        "id" : "649baac1-261e-4ced-9460-ada626964da3",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Let's use the SemanticDB symbol constructors\r\n```scala\r\nimport scala.meta.internal.semanticdb.Scala._\r\nSymbols.Global(EmptyPackage, symbol)\r\n```",
+        "createdAt" : "2019-05-23T13:20:33Z",
+        "updatedAt" : "2019-05-24T09:17:46Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "e731afb5-c6c6-4efc-b672-8f7c230afc9d",
+        "parentId" : "649baac1-261e-4ced-9460-ada626964da3",
+        "author" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "body" : "Is there something like `Symbol{ def apply(aClass: Class[_]) }` somewhere in metals/semanticdb/anywhere?",
+        "createdAt" : "2019-05-24T08:41:02Z",
+        "updatedAt" : "2019-05-24T09:17:46Z",
+        "lastEditedBy" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "ccb6efe2-024a-43cb-859c-7766cd7259ed",
+        "parentId" : "649baac1-261e-4ced-9460-ada626964da3",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "No, because it's not always the case that the symbol we're processing is available on the classpath. Also, many symbols have no corresponding `Class[_]`, for example vals.",
+        "createdAt" : "2019-05-24T08:46:53Z",
+        "updatedAt" : "2019-05-24T09:17:46Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "9d3f311622eae8bedf5d893e5016c35523e74815",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,79 @@\n+package scala.meta.internal.metals\n+\n+import java.util.concurrent.atomic.AtomicReference\n+import ch.epfl.scala.bsp4j.ScalaMainClass\n+import ch.epfl.scala.{bsp4j => b}\n+import scala.collection.concurrent.TrieMap\n+import scala.concurrent.ExecutionContext\n+import scala.concurrent.Future\n+import scala.meta.internal.metals.MetalsEnrichments._\n+\n+final class BuildTargetClasses(\n+    buildServer: () => Option[BuildServerConnection]\n+)(implicit val ec: ExecutionContext) {\n+  private val index = new TrieMap[b.BuildTargetIdentifier, Classes]()\n+\n+  def isInitialized(target: b.BuildTargetIdentifier): Boolean =\n+    classesOf(target).isInitialized.get()\n+\n+  def main(target: b.BuildTargetIdentifier): TrieMap[String, ScalaMainClass] =\n+    classesOf(target).main\n+\n+  val onCompiled: BatchedFunction[b.BuildTargetIdentifier, Unit] =\n+    BatchedFunction.fromFuture(fetchMainClassesFor)\n+\n+  private def fetchMainClassesFor(\n+      targets: Seq[b.BuildTargetIdentifier]\n+  ): Future[Unit] = {\n+    for (target <- targets) {\n+      classesOf(target).clear()\n+    }\n+\n+    buildServer() match {\n+      case Some(connection) =>\n+        val parameters = new b.ScalaMainClassesParams(targets.asJava)\n+        val task = for {\n+          mainClasses <- connection.mainClasses(parameters).asScala\n+          _ = initializeMainClasses(mainClasses)\n+        } yield\n+          for (target <- targets) {\n+            classesOf(target).isInitialized.set(true)\n+          }\n+\n+        task\n+      case None =>\n+        Future.successful(())\n+    }\n+  }\n+\n+  private def classesOf(target: b.BuildTargetIdentifier): Classes =\n+    index.getOrElseUpdate(target, new Classes)\n+\n+  private def initializeMainClasses(result: b.ScalaMainClassesResult): Unit = {\n+    def createObjectSymbol(className: String): String = {\n+      val symbol = className.replaceAll(\"\\\\.\", \"/\") + \".\"\n+      val isInsideEmptyPackage = !className.contains(\".\")\n+      if (isInsideEmptyPackage) {\n+        \"_empty_/\" + symbol"
+  },
+  {
+    "id" : "9b8dcd5e-b24e-4dad-860b-eed6fb350027",
+    "prId" : 728,
+    "comments" : [
+      {
+        "id" : "84a713e2-c2f3-4b90-8cb7-374790e364dc",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "nit: `TrieMap.empty[...]`",
+        "createdAt" : "2019-05-23T13:20:51Z",
+        "updatedAt" : "2019-05-24T09:17:46Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "3ed8dff5-dad7-43cb-83c4-01e305c23ff1",
+        "parentId" : "84a713e2-c2f3-4b90-8cb7-374790e364dc",
+        "author" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "body" : "then the compiler spits warnings at me (it wants type annotation and I don't)",
+        "createdAt" : "2019-05-24T08:39:52Z",
+        "updatedAt" : "2019-05-24T09:17:46Z",
+        "lastEditedBy" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "d728e1e0-aab5-4575-873f-73eafef5bc7d",
+        "parentId" : "84a713e2-c2f3-4b90-8cb7-374790e364dc",
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Aah, I had forgotten about that one in IntelliJ 😅 It's not really the \"compiler\" though, just a custom IntelliJ inspection that you can disable if you want :p \r\n\r\nAnyways, fair enough, we might want to use `new` in other places as well in that case... I generally like `.empty[T]` constructors because they read nicely and work consistently for options and collections.",
+        "createdAt" : "2019-05-24T08:43:51Z",
+        "updatedAt" : "2019-05-24T09:17:46Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "9d3f311622eae8bedf5d893e5016c35523e74815",
+    "line" : null,
+    "diffHunk" : "@@ -0,0 +1,79 @@\n+package scala.meta.internal.metals\n+\n+import java.util.concurrent.atomic.AtomicReference\n+import ch.epfl.scala.bsp4j.ScalaMainClass\n+import ch.epfl.scala.{bsp4j => b}\n+import scala.collection.concurrent.TrieMap\n+import scala.concurrent.ExecutionContext\n+import scala.concurrent.Future\n+import scala.meta.internal.metals.MetalsEnrichments._\n+\n+final class BuildTargetClasses(\n+    buildServer: () => Option[BuildServerConnection]\n+)(implicit val ec: ExecutionContext) {\n+  private val index = new TrieMap[b.BuildTargetIdentifier, Classes]()\n+\n+  def isInitialized(target: b.BuildTargetIdentifier): Boolean =\n+    classesOf(target).isInitialized.get()\n+\n+  def main(target: b.BuildTargetIdentifier): TrieMap[String, ScalaMainClass] =\n+    classesOf(target).main\n+\n+  val onCompiled: BatchedFunction[b.BuildTargetIdentifier, Unit] =\n+    BatchedFunction.fromFuture(fetchMainClassesFor)\n+\n+  private def fetchMainClassesFor(\n+      targets: Seq[b.BuildTargetIdentifier]\n+  ): Future[Unit] = {\n+    for (target <- targets) {\n+      classesOf(target).clear()\n+    }\n+\n+    buildServer() match {\n+      case Some(connection) =>\n+        val parameters = new b.ScalaMainClassesParams(targets.asJava)\n+        val task = for {\n+          mainClasses <- connection.mainClasses(parameters).asScala\n+          _ = initializeMainClasses(mainClasses)\n+        } yield\n+          for (target <- targets) {\n+            classesOf(target).isInitialized.set(true)\n+          }\n+\n+        task\n+      case None =>\n+        Future.successful(())\n+    }\n+  }\n+\n+  private def classesOf(target: b.BuildTargetIdentifier): Classes =\n+    index.getOrElseUpdate(target, new Classes)\n+\n+  private def initializeMainClasses(result: b.ScalaMainClassesResult): Unit = {\n+    def createObjectSymbol(className: String): String = {\n+      val symbol = className.replaceAll(\"\\\\.\", \"/\") + \".\"\n+      val isInsideEmptyPackage = !className.contains(\".\")\n+      if (isInsideEmptyPackage) {\n+        \"_empty_/\" + symbol\n+      } else {\n+        symbol\n+      }\n+    }\n+\n+    for {\n+      item <- result.getItems.asScala\n+      target = item.getTarget\n+      aClass <- item.getClasses.asScala\n+      objectSymbol = createObjectSymbol(aClass.getClassName)\n+    } classesOf(target).main.put(objectSymbol, aClass)\n+  }\n+\n+  final class Classes {\n+    val isInitialized = new AtomicReference[Boolean](false)\n+    val main = new TrieMap[String, ScalaMainClass]()"
+  },
+  {
+    "id" : "523660da-ee3d-4136-a5e4-889c84ceecb4",
+    "prId" : 942,
+    "comments" : [
+      {
+        "id" : "7edb1c27-5fc0-4118-be2b-f6f7705a5669",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Can you please configure IntelliJ to format imports with no blank lines and no grouping by prefix?",
+        "createdAt" : "2019-09-29T21:48:40Z",
+        "updatedAt" : "2019-10-04T07:32:50Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "1663e616-a116-47f3-a93b-9f86a578d7b5",
+        "parentId" : "7edb1c27-5fc0-4118-be2b-f6f7705a5669",
+        "author" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "body" : "yup, it is already done - the file was just not modified after setting the config in intellij, so it was not reformatted :(",
+        "createdAt" : "2019-09-30T07:30:57Z",
+        "updatedAt" : "2019-10-04T07:32:50Z",
+        "lastEditedBy" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "47ea581fbaa603a2dc171e3e913392f05fc4ba11",
+    "line" : null,
+    "diffHunk" : "@@ -1,75 +1,91 @@\n package scala.meta.internal.metals\n \n import ch.epfl.scala.{bsp4j => b}\n+"
+  },
+  {
+    "id" : "9614351f-5ab9-4397-ba69-7156897af174",
+    "prId" : 942,
+    "comments" : [
+      {
+        "id" : "bf72adc8-74e1-49fc-9ff5-9b00858fde13",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Let's avoid using `CompletableFuture` combinators such as `thenAccept` since it's easy to use the default executor instead of the implicit `ExecutionContext` that we have in scope. \r\n```suggestion\r\nfor {\r\n  newMainClasses <- connection.mainClasses(new b.ScalaMainClassesParams(targetsList)).asScala\r\n  newTestClasses <- connection.testClasses(new b.ScalaTestClassesParams(targetsList))\r\n} yield {\r\n  cacheMainClasses(newMainClasses)\r\n  cacheTestClasses(newTestClasses)\r\n}\r\n```",
+        "createdAt" : "2019-09-29T21:52:31Z",
+        "updatedAt" : "2019-10-04T07:32:50Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "47ea581fbaa603a2dc171e3e913392f05fc4ba11",
+    "line" : null,
+    "diffHunk" : "@@ -1,75 +1,91 @@\n package scala.meta.internal.metals\n \n import ch.epfl.scala.{bsp4j => b}\n+\n import scala.collection.concurrent.TrieMap\n-import scala.concurrent.ExecutionContext\n-import scala.concurrent.Future\n+import scala.concurrent.{ExecutionContext, Future}\n+import scala.meta.internal.metals.BuildTargetClasses.Classes\n import scala.meta.internal.metals.MetalsEnrichments._\n-import scala.meta.internal.semanticdb.Scala.Descriptor\n-import scala.meta.internal.semanticdb.Scala.Symbols\n+import scala.meta.internal.semanticdb.Scala.{Descriptor, Symbols}\n \n /**\n  * In-memory index of main class symbols grouped by their enclosing build target\n  */\n final class BuildTargetClasses(\n     buildServer: () => Option[BuildServerConnection]\n )(implicit val ec: ExecutionContext) {\n-  private val index = new TrieMap[b.BuildTargetIdentifier, Classes]()\n+  private val index = TrieMap.empty[b.BuildTargetIdentifier, Classes]\n \n-  def main(target: b.BuildTargetIdentifier): TrieMap[String, b.ScalaMainClass] =\n-    classesOf(target).main\n+  val rebuildIndex: BatchedFunction[b.BuildTargetIdentifier, Unit] =\n+    BatchedFunction.fromFuture(fetchClasses)\n \n-  val onCompiled: BatchedFunction[b.BuildTargetIdentifier, Unit] =\n-    BatchedFunction.fromFuture(fetchMainClassesFor)\n+  def classesOf(target: b.BuildTargetIdentifier): Classes = {\n+    index.getOrElseUpdate(target, new Classes)\n+  }\n \n-  private def fetchMainClassesFor(\n+  private def fetchClasses(\n       targets: Seq[b.BuildTargetIdentifier]\n   ): Future[Unit] = {\n-    targets.foreach { target =>\n-      classesOf(target).clear()\n-    }\n-\n     buildServer() match {\n       case Some(connection) =>\n-        val parameters = new b.ScalaMainClassesParams(targets.asJava)\n-        val task = for {\n-          result <- connection.mainClasses(parameters).asScala\n-          _ = cacheMainClasses(result)\n-        } yield ()\n+        val targetsList = targets.asJava\n \n-        task\n+        val updateMainClasses = connection\n+          .mainClasses(new b.ScalaMainClassesParams(targetsList))\n+          .thenAccept(cacheMainClasses)"
+  },
+  {
+    "id" : "fd4ee56b-7d02-4592-86cd-eeeeaacfefb3",
+    "prId" : 942,
+    "comments" : [
+      {
+        "id" : "3803ab40-bdea-4eec-ba95-9f8d7578c0a3",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "Nit: for consistency with the rest of the codebase\r\n```suggestion\r\n    } {\r\n      classesOf(target).testSuites.put(objectSymbol, className)\r\n    }\r\n```",
+        "createdAt" : "2019-09-29T21:53:19Z",
+        "updatedAt" : "2019-10-04T07:32:50Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "47ea581fbaa603a2dc171e3e913392f05fc4ba11",
+    "line" : null,
+    "diffHunk" : "@@ -1,75 +1,91 @@\n package scala.meta.internal.metals\n \n import ch.epfl.scala.{bsp4j => b}\n+\n import scala.collection.concurrent.TrieMap\n-import scala.concurrent.ExecutionContext\n-import scala.concurrent.Future\n+import scala.concurrent.{ExecutionContext, Future}\n+import scala.meta.internal.metals.BuildTargetClasses.Classes\n import scala.meta.internal.metals.MetalsEnrichments._\n-import scala.meta.internal.semanticdb.Scala.Descriptor\n-import scala.meta.internal.semanticdb.Scala.Symbols\n+import scala.meta.internal.semanticdb.Scala.{Descriptor, Symbols}\n \n /**\n  * In-memory index of main class symbols grouped by their enclosing build target\n  */\n final class BuildTargetClasses(\n     buildServer: () => Option[BuildServerConnection]\n )(implicit val ec: ExecutionContext) {\n-  private val index = new TrieMap[b.BuildTargetIdentifier, Classes]()\n+  private val index = TrieMap.empty[b.BuildTargetIdentifier, Classes]\n \n-  def main(target: b.BuildTargetIdentifier): TrieMap[String, b.ScalaMainClass] =\n-    classesOf(target).main\n+  val rebuildIndex: BatchedFunction[b.BuildTargetIdentifier, Unit] =\n+    BatchedFunction.fromFuture(fetchClasses)\n \n-  val onCompiled: BatchedFunction[b.BuildTargetIdentifier, Unit] =\n-    BatchedFunction.fromFuture(fetchMainClassesFor)\n+  def classesOf(target: b.BuildTargetIdentifier): Classes = {\n+    index.getOrElseUpdate(target, new Classes)\n+  }\n \n-  private def fetchMainClassesFor(\n+  private def fetchClasses(\n       targets: Seq[b.BuildTargetIdentifier]\n   ): Future[Unit] = {\n-    targets.foreach { target =>\n-      classesOf(target).clear()\n-    }\n-\n     buildServer() match {\n       case Some(connection) =>\n-        val parameters = new b.ScalaMainClassesParams(targets.asJava)\n-        val task = for {\n-          result <- connection.mainClasses(parameters).asScala\n-          _ = cacheMainClasses(result)\n-        } yield ()\n+        val targetsList = targets.asJava\n \n-        task\n+        val updateMainClasses = connection\n+          .mainClasses(new b.ScalaMainClassesParams(targetsList))\n+          .thenAccept(cacheMainClasses)\n+          .asScala\n+\n+        val updateTestSuites = connection\n+          .testSuites(new b.ScalaTestClassesParams(targetsList))\n+          .thenAccept(cacheTestSuites)\n+          .asScala\n+\n+        for {\n+          _ <- updateMainClasses\n+          _ <- updateTestSuites\n+        } yield ()\n       case None =>\n         Future.successful(())\n     }\n   }\n \n-  private def classesOf(target: b.BuildTargetIdentifier): Classes =\n-    index.getOrElseUpdate(target, new Classes)\n-\n   private def cacheMainClasses(result: b.ScalaMainClassesResult): Unit = {\n-    def createObjectSymbol(className: String): String = {\n-      val symbol = className.replaceAll(\"\\\\.\", \"/\")\n-      val isInsideEmptyPackage = !className.contains(\".\")\n-      if (isInsideEmptyPackage) {\n-        Symbols.Global(Symbols.EmptyPackage, Descriptor.Term(symbol))\n-      } else {\n-        symbol\n-      }\n-    }\n-\n     for {\n       item <- result.getItems.asScala\n       target = item.getTarget\n       aClass <- item.getClasses.asScala\n       objectSymbol = createObjectSymbol(aClass.getClassName)\n-    } classesOf(target).main.put(objectSymbol, aClass)\n+    } classesOf(target).mainClasses.put(objectSymbol, aClass)\n   }\n \n+  private def cacheTestSuites(result: b.ScalaTestClassesResult): Unit = {\n+    for {\n+      item <- result.getItems.asScala\n+      target = item.getTarget\n+      className <- item.getClasses.asScala\n+      objectSymbol = createObjectSymbol(className)\n+    } classesOf(target).testSuites.put(objectSymbol, className)"
+  },
+  {
+    "id" : "1c927ad5-0d0c-482f-9d22-4ec4716374a5",
+    "prId" : 942,
+    "comments" : [
+      {
+        "id" : "2caac14d-b427-437f-abdf-ec53c5364ef7",
+        "parentId" : null,
+        "author" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "body" : "This conversion will fail for non-ascii class names such as `HælsingSuite` or `::`. Although, I don't think these will be common, I believe the following change could make it work even in those cases\r\n\r\n```suggestion\r\n      import scala.reflect.NameTransformer\r\n      symbol.split(\".\").foldLeft(Symbols.RootPackage) {\r\n        case (owner, name) => Symbols.Global(owner, Descriptor.Term(NameTransformer.decode(name))\r\n```\r\n\r\nEither way, it would be good to have a test case to show that it does or doesn't work with non-ascii class names.",
+        "createdAt" : "2019-09-29T22:02:22Z",
+        "updatedAt" : "2019-10-04T07:32:50Z",
+        "lastEditedBy" : {
+          "login" : "olafurpg",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/1408093?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "a5ed8e3d-2f0a-4c14-bbf3-f032e12deb0f",
+        "parentId" : "2caac14d-b427-437f-abdf-ec53c5364ef7",
+        "author" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "body" : "`HælsingSuite` worked out of the box, but indeed the `::` was failing. Thanks!",
+        "createdAt" : "2019-09-30T09:03:42Z",
+        "updatedAt" : "2019-10-04T07:32:50Z",
+        "lastEditedBy" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "47ea581fbaa603a2dc171e3e913392f05fc4ba11",
+    "line" : null,
+    "diffHunk" : "@@ -1,75 +1,91 @@\n package scala.meta.internal.metals\n \n import ch.epfl.scala.{bsp4j => b}\n+\n import scala.collection.concurrent.TrieMap\n-import scala.concurrent.ExecutionContext\n-import scala.concurrent.Future\n+import scala.concurrent.{ExecutionContext, Future}\n+import scala.meta.internal.metals.BuildTargetClasses.Classes\n import scala.meta.internal.metals.MetalsEnrichments._\n-import scala.meta.internal.semanticdb.Scala.Descriptor\n-import scala.meta.internal.semanticdb.Scala.Symbols\n+import scala.meta.internal.semanticdb.Scala.{Descriptor, Symbols}\n \n /**\n  * In-memory index of main class symbols grouped by their enclosing build target\n  */\n final class BuildTargetClasses(\n     buildServer: () => Option[BuildServerConnection]\n )(implicit val ec: ExecutionContext) {\n-  private val index = new TrieMap[b.BuildTargetIdentifier, Classes]()\n+  private val index = TrieMap.empty[b.BuildTargetIdentifier, Classes]\n \n-  def main(target: b.BuildTargetIdentifier): TrieMap[String, b.ScalaMainClass] =\n-    classesOf(target).main\n+  val rebuildIndex: BatchedFunction[b.BuildTargetIdentifier, Unit] =\n+    BatchedFunction.fromFuture(fetchClasses)\n \n-  val onCompiled: BatchedFunction[b.BuildTargetIdentifier, Unit] =\n-    BatchedFunction.fromFuture(fetchMainClassesFor)\n+  def classesOf(target: b.BuildTargetIdentifier): Classes = {\n+    index.getOrElseUpdate(target, new Classes)\n+  }\n \n-  private def fetchMainClassesFor(\n+  private def fetchClasses(\n       targets: Seq[b.BuildTargetIdentifier]\n   ): Future[Unit] = {\n-    targets.foreach { target =>\n-      classesOf(target).clear()\n-    }\n-\n     buildServer() match {\n       case Some(connection) =>\n-        val parameters = new b.ScalaMainClassesParams(targets.asJava)\n-        val task = for {\n-          result <- connection.mainClasses(parameters).asScala\n-          _ = cacheMainClasses(result)\n-        } yield ()\n+        val targetsList = targets.asJava\n \n-        task\n+        val updateMainClasses = connection\n+          .mainClasses(new b.ScalaMainClassesParams(targetsList))\n+          .thenAccept(cacheMainClasses)\n+          .asScala\n+\n+        val updateTestSuites = connection\n+          .testSuites(new b.ScalaTestClassesParams(targetsList))\n+          .thenAccept(cacheTestSuites)\n+          .asScala\n+\n+        for {\n+          _ <- updateMainClasses\n+          _ <- updateTestSuites\n+        } yield ()\n       case None =>\n         Future.successful(())\n     }\n   }\n \n-  private def classesOf(target: b.BuildTargetIdentifier): Classes =\n-    index.getOrElseUpdate(target, new Classes)\n-\n   private def cacheMainClasses(result: b.ScalaMainClassesResult): Unit = {\n-    def createObjectSymbol(className: String): String = {\n-      val symbol = className.replaceAll(\"\\\\.\", \"/\")\n-      val isInsideEmptyPackage = !className.contains(\".\")\n-      if (isInsideEmptyPackage) {\n-        Symbols.Global(Symbols.EmptyPackage, Descriptor.Term(symbol))\n-      } else {\n-        symbol\n-      }\n-    }\n-\n     for {\n       item <- result.getItems.asScala\n       target = item.getTarget\n       aClass <- item.getClasses.asScala\n       objectSymbol = createObjectSymbol(aClass.getClassName)\n-    } classesOf(target).main.put(objectSymbol, aClass)\n+    } classesOf(target).mainClasses.put(objectSymbol, aClass)\n   }\n \n+  private def cacheTestSuites(result: b.ScalaTestClassesResult): Unit = {\n+    for {\n+      item <- result.getItems.asScala\n+      target = item.getTarget\n+      className <- item.getClasses.asScala\n+      objectSymbol = createObjectSymbol(className)\n+    } classesOf(target).testSuites.put(objectSymbol, className)\n+  }\n+\n+  private def createObjectSymbol(className: String): String = {\n+    val symbol = className.replaceAll(\"\\\\.\", \"/\")\n+    val isInsideEmptyPackage = !className.contains(\".\")\n+    if (isInsideEmptyPackage) {\n+      Symbols.Global(Symbols.EmptyPackage, Descriptor.Term(symbol))\n+    } else {\n+      symbol + \".\""
+  },
+  {
+    "id" : "8379b2c9-8c46-4a45-bf31-009bf3ac4062",
+    "prId" : 1466,
+    "comments" : [
+      {
+        "id" : "f6b7d74c-c4ba-4d62-8929-64d4a7e84bb5",
+        "parentId" : null,
+        "author" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "body" : "Could this be simplified to:\r\n```scala\r\ndef findTestClassByName(name: String) = findClassByName(name, _.testClasses.values.find(_ == name))\r\ndef findMainClassByName(name: String) = findClassByName(name, _.mainClasses.values.find(_.getClassName() == name))\r\ndef findClassByName(name: String, f: Classes => Seq[Any]) = {\r\n  index\r\n      .mapValues(f)\r\n      .toList\r\n      .collect {\r\n        case (target, Some(clazz)) => clazz -> target\r\n      }\r\n}\r\n```\r\n```",
+        "createdAt" : "2020-03-18T08:49:04Z",
+        "updatedAt" : "2020-04-03T11:50:57Z",
+        "lastEditedBy" : {
+          "login" : "marek1840",
+          "name" : null,
+          "avatarUrl" : "https://avatars1.githubusercontent.com/u/3709537?u=2bdae30d4b911a57f5cb033e41831a6373de88bb&v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      },
+      {
+        "id" : "e65535db-9216-48f8-9af2-b9fc59e7a013",
+        "parentId" : "f6b7d74c-c4ba-4d62-8929-64d4a7e84bb5",
+        "author" : {
+          "login" : "alekseiAlefirov",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/10850363?v=4"
+        },
+        "body" : "Done",
+        "createdAt" : "2020-03-20T16:54:10Z",
+        "updatedAt" : "2020-04-03T11:50:57Z",
+        "lastEditedBy" : {
+          "login" : "alekseiAlefirov",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/10850363?v=4"
+        },
+        "tags" : [
+          {
+            "value" : "outdated"
+          }
+        ]
+      }
+    ],
+    "commit" : "d72fc182a42fd127dd0593dfbb3028ac615338b9",
+    "line" : null,
+    "diffHunk" : "@@ -28,6 +28,32 @@ final class BuildTargetClasses(\n     index.put(target, new Classes)\n   }\n \n+  def findMainClassByName(\n+      name: String\n+  ): List[(b.ScalaMainClass, b.BuildTargetIdentifier)] = {\n+    index\n+      .mapValues(\n+        _.mainClasses.values.find(_.getClassName() == name)\n+      )\n+      .toList\n+      .collect {\n+        case (target, Some(clazz)) => clazz -> target\n+      }\n+  }\n+\n+  def findTestClassByName(\n+      name: String\n+  ): List[(String, b.BuildTargetIdentifier)] = {\n+    index\n+      .mapValues(\n+        _.testClasses.values.find(_ == name)\n+      )\n+      .toList\n+      .collect {\n+        case (target, Some(clazz)) => clazz -> target\n+      }\n+  }\n+"
+  },
+  {
+    "id" : "5984332c-7a52-4d5e-a525-4dbf96ce8dee",
+    "prId" : 1466,
+    "comments" : [
+      {
+        "id" : "977737c6-e667-446a-be22-2fdea2728d87",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Would `Option` not be enough at least here?",
+        "createdAt" : "2020-03-30T15:13:44Z",
+        "updatedAt" : "2020-04-03T11:50:57Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "b2e6fe67-04d5-46f3-98c2-74b7370c19b6",
+        "parentId" : "977737c6-e667-446a-be22-2fdea2728d87",
+        "author" : {
+          "login" : "alekseiAlefirov",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/10850363?v=4"
+        },
+        "body" : "actually, I've made it a List motivated by your idea to report multiple source targets https://github.com/scalameta/metals/pull/1466#discussion_r384661635",
+        "createdAt" : "2020-03-30T15:56:10Z",
+        "updatedAt" : "2020-04-03T11:50:57Z",
+        "lastEditedBy" : {
+          "login" : "alekseiAlefirov",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/10850363?v=4"
+        },
+        "tags" : [
+        ]
+      },
+      {
+        "id" : "a0be291d-0beb-4ee9-841e-c4c4075622a8",
+        "parentId" : "977737c6-e667-446a-be22-2fdea2728d87",
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "Ach, nvm. I just thought it's `toList` from Option. Nevermind then :sweat_smile: ",
+        "createdAt" : "2020-03-30T16:11:49Z",
+        "updatedAt" : "2020-04-03T11:50:57Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "d72fc182a42fd127dd0593dfbb3028ac615338b9",
+    "line" : 16,
+    "diffHunk" : "@@ -28,6 +28,27 @@ final class BuildTargetClasses(\n     index.put(target, new Classes)\n   }\n \n+  def findMainClassByName(\n+      name: String\n+  ): List[(b.ScalaMainClass, b.BuildTargetIdentifier)] =\n+    findClassesBy(_.mainClasses.values.find(_.getClassName() == name))\n+\n+  def findTestClassByName(\n+      name: String\n+  ): List[(String, b.BuildTargetIdentifier)] =\n+    findClassesBy(_.testClasses.values.find(_ == name))\n+\n+  private def findClassesBy[A](\n+      f: Classes => Option[A]\n+  ): List[(A, b.BuildTargetIdentifier)] = {"
+  },
+  {
+    "id" : "6492b8a9-8139-4496-a25f-6d452d69f5b4",
+    "prId" : 1640,
+    "comments" : [
+      {
+        "id" : "80caf2ae-78f4-440d-9ae8-3da4e686f5b2",
+        "parentId" : null,
+        "author" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "body" : "In case of Scala 3 we get additional reference for Descriptor.Type when using main methods, so we can use that. In the future it could change to a method, but that depends on the changes in Dotty.",
+        "createdAt" : "2020-04-20T14:24:13Z",
+        "updatedAt" : "2020-04-20T14:24:13Z",
+        "lastEditedBy" : {
+          "login" : "tgodzik",
+          "name" : null,
+          "avatarUrl" : "https://avatars0.githubusercontent.com/u/3807253?u=094831e6a696f583ddfd86d3e5923fd8545c543a&v=4"
+        },
+        "tags" : [
+        ]
+      }
+    ],
+    "commit" : "72071e33226d4f770c565ba8cec004944bbad53d",
+    "line" : 19,
+    "diffHunk" : "@@ -87,8 +88,17 @@ final class BuildTargetClasses(\n     for {\n       item <- result.getItems.asScala\n       target = item.getTarget\n+      buildTarget <- buildTargets.scalaTarget(target)\n       aClass <- item.getClasses.asScala\n-      symbol <- createSymbols(aClass.getClassName, List(Descriptor.Term))\n+      descriptors = {\n+        if (ScalaVersions.isScala3Version(buildTarget.scalaVersion))\n+          List(Descriptor.Term, Descriptor.Type)"
+  }
+]
